@@ -115,16 +115,8 @@ CREATE TABLE mensualidades (
     CHECK (importe_estandar >= 0),
     CHECK (importe_a_cobrar >= 0),
     CHECK (importe_cobrado IS NULL OR importe_cobrado >= 0),
-    CHECK (
-        (importe_cobrado IS NULL AND estado = 'PENDIENTE')
-        OR
-        (importe_cobrado IS NOT NULL AND estado = 'PAGADA')
-    ),
-    CHECK (
-        importe_cobrado IS NULL
-        OR importe_cobrado <> importe_estandar
-        OR observacion IS NOT NULL
-    )
+    CHECK ((importe_cobrado IS NULL AND estado = 'PENDIENTE') OR (importe_cobrado IS NOT NULL AND estado = 'PAGADA')),
+    CHECK (importe_cobrado IS NULL OR importe_cobrado <> importe_estandar OR observacion IS NOT NULL)
 );
 
 CREATE TABLE cursos_intensivos (
@@ -152,12 +144,6 @@ CREATE TABLE cursos_intensivos (
     CHECK (importe_continuidad IS NULL OR importe_continuidad >= 0)
 );
 
--- Un alumno no puede tener dos intensivos activos simultáneamente.
-ALTER TABLE cursos_intensivos
-    ADD COLUMN alumno_activo_key CHAR(36)
-    GENERATED ALWAYS AS (CASE WHEN estado IN ('PROGRAMADO','EN_CURSO') THEN alumno_id ELSE NULL END) PERSISTENT,
-    ADD UNIQUE INDEX ux_un_intensivo_activo_por_alumno (alumno_activo_key);
-
 -- Un intensivo solo puede utilizar un horario habilitado para intensivos.
 DELIMITER $$
 CREATE TRIGGER trg_validar_horario_intensivo_insert
@@ -181,6 +167,33 @@ BEGIN
         WHERE h.id = NEW.horario_id AND h.intensivo = TRUE AND h.activo = TRUE
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El horario seleccionado no está habilitado para intensivos';
+    END IF;
+END$$
+
+-- Un alumno no puede tener dos intensivos activos simultáneamente.
+CREATE TRIGGER trg_un_intensivo_activo_insert
+BEFORE INSERT ON cursos_intensivos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado IN ('PROGRAMADO','EN_CURSO') AND EXISTS (
+        SELECT 1 FROM cursos_intensivos ci
+        WHERE ci.alumno_id = NEW.alumno_id AND ci.estado IN ('PROGRAMADO','EN_CURSO')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El alumno ya tiene un intensivo activo';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_un_intensivo_activo_update
+BEFORE UPDATE ON cursos_intensivos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado IN ('PROGRAMADO','EN_CURSO') AND EXISTS (
+        SELECT 1 FROM cursos_intensivos ci
+        WHERE ci.alumno_id = NEW.alumno_id
+          AND ci.estado IN ('PROGRAMADO','EN_CURSO')
+          AND ci.id <> NEW.id
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El alumno ya tiene un intensivo activo';
     END IF;
 END$$
 DELIMITER ;
@@ -243,32 +256,47 @@ CREATE TABLE pagos (
     invalidated_at DATETIME,
     invalidated_by CHAR(36) REFERENCES usuarios(id),
     CHECK (importe >= 0),
-    CHECK (
-        (tipo = 'INSCRIPCION' AND inscripcion_id IS NOT NULL AND mensualidad_id IS NULL AND intensivo_id IS NULL)
-        OR
-        (tipo = 'MENSUALIDAD' AND mensualidad_id IS NOT NULL AND inscripcion_id IS NULL AND intensivo_id IS NULL)
-        OR
-        (tipo = 'INTENSIVO' AND intensivo_id IS NOT NULL AND inscripcion_id IS NULL AND mensualidad_id IS NULL)
-    ),
-    CHECK (
-        (estado = 'VALIDO' AND invalidated_at IS NULL AND invalidated_by IS NULL)
-        OR
-        (estado = 'INVALIDADO' AND invalidated_at IS NOT NULL AND invalidated_by IS NOT NULL AND observacion IS NOT NULL)
-    )
+    CHECK ((tipo = 'INSCRIPCION' AND inscripcion_id IS NOT NULL AND mensualidad_id IS NULL AND intensivo_id IS NULL) OR (tipo = 'MENSUALIDAD' AND mensualidad_id IS NOT NULL AND inscripcion_id IS NULL AND intensivo_id IS NULL) OR (tipo = 'INTENSIVO' AND intensivo_id IS NOT NULL AND inscripcion_id IS NULL AND mensualidad_id IS NULL)),
+    CHECK ((estado = 'VALIDO' AND invalidated_at IS NULL AND invalidated_by IS NULL) OR (estado = 'INVALIDADO' AND invalidated_at IS NOT NULL AND invalidated_by IS NOT NULL AND observacion IS NOT NULL))
 );
 
 -- Solo puede existir un pago VÁLIDO por inscripción, mensualidad o intensivo.
--- Si se corrige un pago, el anterior se INVALIDA y se registra uno nuevo.
-ALTER TABLE pagos
-    ADD COLUMN pago_inscripcion_key CHAR(36)
-    GENERATED ALWAYS AS (CASE WHEN estado = 'VALIDO' AND inscripcion_id IS NOT NULL THEN inscripcion_id ELSE NULL END) PERSISTENT,
-    ADD COLUMN pago_mensualidad_key CHAR(36)
-    GENERATED ALWAYS AS (CASE WHEN estado = 'VALIDO' AND mensualidad_id IS NOT NULL THEN mensualidad_id ELSE NULL END) PERSISTENT,
-    ADD COLUMN pago_intensivo_key CHAR(36)
-    GENERATED ALWAYS AS (CASE WHEN estado = 'VALIDO' AND intensivo_id IS NOT NULL THEN intensivo_id ELSE NULL END) PERSISTENT,
-    ADD UNIQUE INDEX ux_pago_valido_inscripcion (pago_inscripcion_key),
-    ADD UNIQUE INDEX ux_pago_valido_mensualidad (pago_mensualidad_key),
-    ADD UNIQUE INDEX ux_pago_valido_intensivo (pago_intensivo_key);
+-- La corrección se hace invalidando el anterior y registrando uno nuevo.
+DELIMITER $$
+CREATE TRIGGER trg_un_pago_valido_insert
+BEFORE INSERT ON pagos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado = 'VALIDO' THEN
+        IF NEW.inscripcion_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.inscripcion_id = NEW.inscripcion_id AND p.estado = 'VALIDO') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta inscripción';
+        END IF;
+        IF NEW.mensualidad_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id = NEW.mensualidad_id AND p.estado = 'VALIDO') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta mensualidad';
+        END IF;
+        IF NEW.intensivo_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.intensivo_id = NEW.intensivo_id AND p.estado = 'VALIDO') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para este intensivo';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER trg_un_pago_valido_update
+BEFORE UPDATE ON pagos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado = 'VALIDO' THEN
+        IF NEW.inscripcion_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.inscripcion_id = NEW.inscripcion_id AND p.estado = 'VALIDO' AND p.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta inscripción';
+        END IF;
+        IF NEW.mensualidad_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id = NEW.mensualidad_id AND p.estado = 'VALIDO' AND p.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta mensualidad';
+        END IF;
+        IF NEW.intensivo_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.intensivo_id = NEW.intensivo_id AND p.estado = 'VALIDO' AND p.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para este intensivo';
+        END IF;
+    END IF;
+END$$
+DELIMITER ;
 
 CREATE TABLE sesiones (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -286,15 +314,38 @@ CREATE TABLE sesiones (
     CHECK (estado <> 'CANCELADA' OR motivo_cancelacion IS NOT NULL)
 );
 
--- horario_id NULL = cancelación/cierre de bloque AM o PM completo.
--- horario_id con valor = sesión/horario específico.
-ALTER TABLE sesiones
-    ADD COLUMN sesion_bloque_key CHAR(8)
-    GENERATED ALWAYS AS (CASE WHEN horario_id IS NULL THEN CONCAT(DATE_FORMAT(fecha,'%Y-%m-%d'),':',bloque) ELSE NULL END) PERSISTENT,
-    ADD COLUMN sesion_horario_key CHAR(60)
-    GENERATED ALWAYS AS (CASE WHEN horario_id IS NOT NULL THEN CONCAT(DATE_FORMAT(fecha,'%Y-%m-%d'),':',horario_id) ELSE NULL END) PERSISTENT,
-    ADD UNIQUE INDEX ux_sesion_bloque_por_dia (sesion_bloque_key),
-    ADD UNIQUE INDEX ux_sesion_horario_por_dia (sesion_horario_key);
+-- horario_id NULL = bloque AM/PM completo; horario_id con valor = horario específico.
+DELIMITER $$
+CREATE TRIGGER trg_sesion_unica_insert
+BEFORE INSERT ON sesiones
+FOR EACH ROW
+BEGIN
+    IF NEW.horario_id IS NULL THEN
+        IF EXISTS (SELECT 1 FROM sesiones s WHERE s.fecha = NEW.fecha AND s.bloque = NEW.bloque AND s.horario_id IS NULL) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una sesión para este bloque AM/PM';
+        END IF;
+    ELSE
+        IF EXISTS (SELECT 1 FROM sesiones s WHERE s.fecha = NEW.fecha AND s.horario_id = NEW.horario_id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una sesión para este horario';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER trg_sesion_unica_update
+BEFORE UPDATE ON sesiones
+FOR EACH ROW
+BEGIN
+    IF NEW.horario_id IS NULL THEN
+        IF EXISTS (SELECT 1 FROM sesiones s WHERE s.fecha = NEW.fecha AND s.bloque = NEW.bloque AND s.horario_id IS NULL AND s.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una sesión para este bloque AM/PM';
+        END IF;
+    ELSE
+        IF EXISTS (SELECT 1 FROM sesiones s WHERE s.fecha = NEW.fecha AND s.horario_id = NEW.horario_id AND s.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una sesión para este horario';
+        END IF;
+    END IF;
+END$$
+DELIMITER ;
 
 CREATE TABLE historial (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
