@@ -1,0 +1,1 @@
+const menuBtn=document.getElementById('menuBtn');const sidebar=document.getElementById('sidebar');if(menuBtn&&sidebar){menuBtn.addEventListener('click',()=>sidebar.classList.toggle('open'));document.querySelectorAll('.nav-item').forEach(item=>item.addEventListener('click',()=>sidebar.classList.remove('open')))}
