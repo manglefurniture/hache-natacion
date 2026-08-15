@@ -1,77 +1,21 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Panel administrativo de Hache Natación" />
-  <title>Hache Natación · Panel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><meta name="description" content="Panel administrativo de Hache Natación"/><title>Hache Natación · Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/><link rel="stylesheet" href="./styles.css"/>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <div class="brand-mark">H</div>
-        <div><strong>Hache</strong><span>Natación</span></div>
-      </div>
-      <nav class="nav" aria-label="Navegación principal">
-        <a class="nav-item active" href="#dashboard"><span>⌂</span>Dashboard</a>
-        <a class="nav-item" href="#alumnos"><span>◉</span>Alumnos</a>
-        <a class="nav-item" href="#pagos"><span>$</span>Pagos</a>
-        <a class="nav-item" href="#sesiones"><span>◷</span>Sesiones</a>
-        <a class="nav-item" href="#intensivos"><span>≈</span>Intensivos</a>
-        <a class="nav-item" href="#horarios"><span>▦</span>Horarios</a>
-      </nav>
-      <div class="sidebar-footer">
-        <a class="nav-item" href="#configuracion"><span>⚙</span>Configuración</a>
-        <div class="user-mini"><div class="avatar">A</div><div><strong>Administrador</strong><small>Hache Natación</small></div></div>
-      </div>
-    </aside>
-
-    <main class="main" id="dashboard">
-      <header class="topbar">
-        <button class="menu-btn" id="menuBtn" aria-label="Abrir menú">☰</button>
-        <div class="breadcrumb"><span>Hache Natación</span><b>/</b><strong>Dashboard</strong></div>
-        <div class="top-actions"><button class="icon-btn" aria-label="Notificaciones">♢</button><div class="avatar">A</div></div>
-      </header>
-
-      <section class="content">
-        <div class="hero-row">
-          <div><p class="eyebrow">VIERNES · 14 AGOSTO 2026</p><h1>Buenos días, Ariel 👋</h1><p class="muted">Aquí tienes el pulso de Hache Natación.</p></div>
-          <button class="primary-btn">+ Nuevo alumno</button>
-        </div>
-
-        <div class="stats-grid">
-          <article class="stat-card"><div class="stat-icon blue">◎</div><div><span>Alumnos activos</span><strong>0</strong><small>Monteverde</small></div></article>
-          <article class="stat-card"><div class="stat-icon green">$</div><div><span>Pagos del mes</span><strong>$0</strong><small>Agosto 2026</small></div></article>
-          <article class="stat-card"><div class="stat-icon orange">◷</div><div><span>Sesiones hoy</span><strong>0</strong><small>Programadas</small></div></article>
-          <article class="stat-card"><div class="stat-icon purple">≈</div><div><span>Intensivos activos</span><strong>0</strong><small>En curso</small></div></article>
-        </div>
-
-        <div class="dashboard-grid">
-          <section class="panel schedule-panel" id="sesiones">
-            <div class="panel-head"><div><h2>Sesiones de hoy</h2><p>Control operativo de la jornada</p></div><button class="ghost-btn">Ver todas</button></div>
-            <div class="empty-state"><div class="empty-icon">◷</div><h3>Sin sesiones registradas</h3><p>Cuando conectemos la base de datos aparecerán aquí las clases del día.</p><button class="secondary-btn">Programar sesión</button></div>
-          </section>
-
-          <section class="panel alerts-panel" id="pagos">
-            <div class="panel-head"><div><h2>Atención</h2><p>Lo que requiere revisión</p></div></div>
-            <div class="alert-item"><div class="alert-dot orange"></div><div><strong>Mensualidades pendientes</strong><p>Se mostrarán alumnos sin pago del mes actual.</p></div></div>
-            <div class="alert-item"><div class="alert-dot blue"></div><div><strong>Intensivos por terminar</strong><p>Control de continuidad a regular.</p></div></div>
-            <div class="alert-item"><div class="alert-dot green"></div><div><strong>Sin incidencias</strong><p>El panel está listo para recibir datos.</p></div></div>
-          </section>
-        </div>
-
-        <section class="panel" id="alumnos">
-          <div class="panel-head"><div><h2>Alumnos recientes</h2><p>Últimos movimientos de inscripción</p></div><button class="ghost-btn">Ver alumnos</button></div>
-          <div class="table-wrap"><table><thead><tr><th>Alumno</th><th>Plan</th><th>Estado</th><th>Último pago</th><th></th></tr></thead><tbody><tr><td colspan="5"><div class="table-empty">Todavía no hay alumnos cargados.</div></td></tr></tbody></table></div>
-        </section>
-      </section>
-    </main>
-  </div>
-  <script src="./app.js"></script>
-</body>
-</html>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar"><div class="brand"><div class="brand-mark">H</div><div><strong>Hache</strong><span>Natación</span></div></div>
+<nav class="nav" aria-label="Navegación principal"><a class="nav-item active" href="#dashboard"><span>⌂</span>Dashboard</a><a class="nav-item" href="#alumnos"><span>◉</span>Alumnos</a><a class="nav-item" href="#pagos"><span>$</span>Pagos</a><a class="nav-item" href="#sesiones"><span>◷</span>Sesiones</a><a class="nav-item" href="#intensivos"><span>≈</span>Intensivos</a><a class="nav-item" href="#horarios"><span>▦</span>Horarios</a></nav>
+<div class="sidebar-footer"><a class="nav-item" href="#configuracion"><span>⚙</span>Configuración</a><div class="user-mini"><div class="avatar">A</div><div><strong>Administrador</strong><small>Hache Natación</small></div></div></div></aside>
+<main class="main" id="dashboard"><header class="topbar"><button class="menu-btn" id="menuBtn" aria-label="Abrir menú">☰</button><div class="breadcrumb"><span>Hache Natación</span><b>/</b><strong>Dashboard</strong></div><div class="top-actions"><button class="icon-btn" aria-label="Notificaciones">♢</button><div class="avatar">A</div></div></header>
+<section class="content"><div class="hero-row"><div><p class="eyebrow">VIERNES · 14 AGOSTO 2026</p><h1>Buenos días, Ariel 👋</h1><p class="muted">Aquí tienes el pulso de Hache Natación.</p></div><button class="primary-btn" data-new-student>+ Nuevo alumno</button></div>
+<div class="stats-grid"><article class="stat-card"><div class="stat-icon blue">◎</div><div><span>Alumnos activos</span><strong data-student-count>0</strong><small>Monteverde</small></div></article><article class="stat-card"><div class="stat-icon green">$</div><div><span>Pagos del mes</span><strong>$0</strong><small>Agosto 2026</small></div></article><article class="stat-card"><div class="stat-icon orange">◷</div><div><span>Sesiones hoy</span><strong>0</strong><small>Programadas</small></div></article><article class="stat-card"><div class="stat-icon purple">≈</div><div><span>Intensivos activos</span><strong>0</strong><small>En curso</small></div></article></div>
+<div class="dashboard-grid"><section class="panel schedule-panel" id="sesiones"><div class="panel-head"><div><h2>Sesiones de hoy</h2><p>Control operativo de la jornada</p></div><button class="ghost-btn">Ver todas</button></div><div class="empty-state"><div class="empty-icon">◷</div><h3>Sin sesiones registradas</h3><p>Cuando conectemos la base de datos aparecerán aquí las clases del día.</p><button class="secondary-btn">Programar sesión</button></div></section>
+<section class="panel alerts-panel" id="pagos"><div class="panel-head"><div><h2>Atención</h2><p>Lo que requiere revisión</p></div></div><div class="alert-item"><div class="alert-dot orange"></div><div><strong>Mensualidades pendientes</strong><p>Se mostrarán alumnos sin pago del mes actual.</p></div></div><div class="alert-item"><div class="alert-dot blue"></div><div><strong>Intensivos por terminar</strong><p>Control de continuidad a regular.</p></div></div><div class="alert-item"><div class="alert-dot green"></div><div><strong>Sin incidencias</strong><p>El panel está listo para recibir datos.</p></div></div></section></div>
+<section class="panel" id="alumnos"><div class="panel-head"><div><h2>Alumnos recientes</h2><p>Primer flujo funcional de alta local</p></div><button class="ghost-btn" data-new-student>Nuevo alumno</button></div><div class="table-wrap"><table id="studentsTable"><thead><tr><th>Alumno</th><th>Plan</th><th>Estado</th><th>Pago</th><th></th></tr></thead><tbody><tr id="emptyStudents"><td colspan="5"><div class="table-empty">Todavía no hay alumnos cargados. Puedes crear el primero.</div></td></tr></tbody></table></div></section>
+</section></main></div>
+<div class="modal" id="studentModal" role="dialog" aria-modal="true" aria-labelledby="studentModalTitle"><div class="modal-card"><div class="panel-head"><div><h2 id="studentModalTitle">Nuevo alumno</h2><p>Alta inicial · Monteverde</p></div><button class="icon-btn" data-close-modal aria-label="Cerrar">✕</button></div><form id="studentForm"><label>Nombre completo<input name="nombre" required placeholder="Nombre y apellidos"/></label><label>WhatsApp<input name="whatsapp" required placeholder="999 000 0000"/></label><label>Plan<select name="plan"><option>3 sesiones / semana · $1,000</option><option>5 sesiones / semana · $1,200</option></select></label><label class="check-row"><input type="checkbox" name="pago"/> Pago del mes realizado</label><p class="form-note">La ficha conserva el estado administrativo <strong>Activo</strong>. El acceso a clases dependerá del pago del mes correspondiente.</p><div class="modal-actions"><button type="button" class="ghost-btn" data-close-modal>Cancelar</button><button type="submit" class="primary-btn">Crear alumno</button></div></form></div></div>
+<script src="./app.js"></script>
+</body></html>
