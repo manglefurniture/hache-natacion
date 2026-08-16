@@ -4,25 +4,27 @@ header('Content-Type: application/json; charset=utf-8');
 $config=require __DIR__.'/../config/database.php';
 
 function jsonOut(array $data,int $status=200):never{http_response_code($status);echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);exit;}
+function basePagosSql():string{return " FROM pagos p LEFT JOIN mensualidades m ON m.id=p.mensualidad_id LEFT JOIN cursos_intensivos ci ON ci.id=p.intensivo_id LEFT JOIN inscripciones i ON i.id=p.inscripcion_id ";}
+function periodoExpr():string{return "CASE WHEN p.tipo='MENSUALIDAD' AND m.id IS NOT NULL THEN CONCAT(m.anio,'-',LPAD(m.mes,2,'0')) WHEN p.tipo='INTENSIVO' AND ci.id IS NOT NULL THEN DATE_FORMAT(ci.fecha_inicio,'%Y-%m') WHEN p.tipo='INSCRIPCION' AND i.id IS NOT NULL THEN DATE_FORMAT(i.fecha,'%Y-%m') ELSE DATE_FORMAT(p.fecha,'%Y-%m') END";}
 function monthData(PDO $pdo,int $mes,int $anio):array{
-    $inicio=sprintf('%04d-%02d-01',$anio,$mes);
-    $fin=(new DateTimeImmutable($inicio))->modify('+1 month')->format('Y-m-d');
+    $periodo=sprintf('%04d-%02d',$anio,$mes);
 
     $stmt=$pdo->prepare("SELECT COUNT(*) alumnos,SUM(COALESCE(importe_cobrado,0)) total FROM mensualidades WHERE mes=:mes AND anio=:anio AND estado='PAGADA'");
     $stmt->execute([':mes'=>$mes,':anio'=>$anio]);
     $mp=$stmt->fetch();
 
-    $stmt=$pdo->prepare("SELECT tipo,COUNT(*) cantidad,COUNT(DISTINCT alumno_id) alumnos,SUM(importe) total FROM pagos WHERE estado='VALIDO' AND fecha>=:inicio AND fecha<:fin GROUP BY tipo");
-    $stmt->execute([':inicio'=>$inicio,':fin'=>$fin]);
+    $base=basePagosSql();$expr=periodoExpr();
+    $stmt=$pdo->prepare("SELECT p.tipo,COUNT(*) cantidad,COUNT(DISTINCT p.alumno_id) alumnos,SUM(p.importe) total {$base} WHERE p.estado='VALIDO' AND {$expr}=:periodo GROUP BY p.tipo");
+    $stmt->execute([':periodo'=>$periodo]);
     $porTipo=['INSCRIPCION'=>['cantidad'=>0,'alumnos'=>0,'total'=>0.0],'MENSUALIDAD'=>['cantidad'=>0,'alumnos'=>0,'total'=>0.0],'INTENSIVO'=>['cantidad'=>0,'alumnos'=>0,'total'=>0.0]];
     foreach($stmt->fetchAll() as $r)$porTipo[$r['tipo']]=['cantidad'=>(int)$r['cantidad'],'alumnos'=>(int)$r['alumnos'],'total'=>(float)$r['total']];
 
-    $stmt=$pdo->prepare("SELECT metodo,COUNT(*) cantidad,SUM(importe) total FROM pagos WHERE estado='VALIDO' AND fecha>=:inicio AND fecha<:fin GROUP BY metodo ORDER BY total DESC");
-    $stmt->execute([':inicio'=>$inicio,':fin'=>$fin]);
+    $stmt=$pdo->prepare("SELECT p.metodo,COUNT(*) cantidad,SUM(p.importe) total {$base} WHERE p.estado='VALIDO' AND {$expr}=:periodo GROUP BY p.metodo ORDER BY total DESC");
+    $stmt->execute([':periodo'=>$periodo]);
     $metodos=[];foreach($stmt->fetchAll() as $r)$metodos[]=['metodo'=>$r['metodo'],'cantidad'=>(int)$r['cantidad'],'total'=>(float)$r['total']];
 
-    $stmt=$pdo->prepare("SELECT COUNT(*) cantidad,COUNT(DISTINCT alumno_id) alumnos,SUM(importe) total FROM pagos WHERE estado='VALIDO' AND fecha>=:inicio AND fecha<:fin");
-    $stmt->execute([':inicio'=>$inicio,':fin'=>$fin]);$caja=$stmt->fetch();
+    $stmt=$pdo->prepare("SELECT COUNT(*) cantidad,COUNT(DISTINCT p.alumno_id) alumnos,SUM(p.importe) total {$base} WHERE p.estado='VALIDO' AND {$expr}=:periodo");
+    $stmt->execute([':periodo'=>$periodo]);$caja=$stmt->fetch();
 
     return ['periodo'=>['mes'=>$mes,'anio'=>$anio],'mensualidades_periodo'=>['alumnos'=>(int)($mp['alumnos']??0),'total'=>(float)($mp['total']??0)],'caja'=>['cantidad'=>(int)($caja['cantidad']??0),'alumnos'=>(int)($caja['alumnos']??0),'total'=>(float)($caja['total']??0)],'por_tipo'=>$porTipo,'metodos'=>$metodos];
 }
