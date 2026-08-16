@@ -20,12 +20,7 @@ try {
 
     $method = $_SERVER['REQUEST_METHOD'];
 
-    /*
-     * GET /api/alumnos.php
-     * Lista alumnos.
-     */
     if ($method === 'GET') {
-
         $stmt = $pdo->query("
             SELECT
                 a.id,
@@ -43,8 +38,7 @@ try {
                 a.created_at,
                 a.updated_at
             FROM alumnos a
-            LEFT JOIN planes p
-                ON p.id = a.plan_actual_id
+            LEFT JOIN planes p ON p.id = a.plan_actual_id
             ORDER BY a.nombre ASC
         ");
 
@@ -55,29 +49,15 @@ try {
             'total' => count($alumnos),
             'alumnos' => $alumnos
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
         exit;
     }
 
-    /*
-     * POST /api/alumnos.php
-     * Crea un alumno.
-     */
     if ($method === 'POST') {
-
-        $input = json_decode(
-            file_get_contents('php://input'),
-            true
-        );
+        $input = json_decode(file_get_contents('php://input'), true);
 
         if (!is_array($input)) {
             http_response_code(400);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'JSON inválido'
-            ], JSON_UNESCAPED_UNICODE);
-
+            echo json_encode(['ok' => false, 'error' => 'JSON inválido'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
@@ -86,6 +66,7 @@ try {
         $whatsapp = trim((string)($input['whatsapp'] ?? ''));
         $correo = trim((string)($input['correo'] ?? ''));
         $fechaInicio = $input['fecha_inicio'] ?? null;
+        $tipoIngreso = strtoupper(trim((string)($input['tipo_ingreso'] ?? 'REGULAR')));
         $horarioId = $input['horario_preferido_id'] ?? null;
         $planId = $input['plan_actual_id'] ?? null;
         $estado = $input['estado_administrativo'] ?? 'ACTIVO';
@@ -93,147 +74,93 @@ try {
 
         if ($nombre === '') {
             http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'El nombre es obligatorio'
-            ], JSON_UNESCAPED_UNICODE);
-
+            echo json_encode(['ok' => false, 'error' => 'El nombre es obligatorio'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
         if ($fechaNacimiento === null || $fechaNacimiento === '') {
             http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'La fecha de nacimiento es obligatoria'
-            ], JSON_UNESCAPED_UNICODE);
-
+            echo json_encode(['ok' => false, 'error' => 'La fecha de nacimiento es obligatoria'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
         if ($whatsapp === '') {
             http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'El WhatsApp es obligatorio'
-            ], JSON_UNESCAPED_UNICODE);
-
+            echo json_encode(['ok' => false, 'error' => 'El WhatsApp es obligatorio'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
         if ($fechaInicio === null || $fechaInicio === '') {
             http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'La fecha de inicio es obligatoria'
-            ], JSON_UNESCAPED_UNICODE);
-
+            echo json_encode(['ok' => false, 'error' => 'La fecha de inicio es obligatoria'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
-        if ($horarioId === null || $horarioId === '') {
+        if (!in_array($tipoIngreso, ['REGULAR', 'INTENSIVO'], true)) {
             http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'El horario es obligatorio'
-            ], JSON_UNESCAPED_UNICODE);
-
-            exit;
-        }
-
-        if ($planId === null || $planId === '') {
-            http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'El plan es obligatorio'
-            ], JSON_UNESCAPED_UNICODE);
-
+            echo json_encode(['ok' => false, 'error' => 'Tipo de ingreso inválido'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
         if (!in_array($estado, ['ACTIVO', 'BAJA'], true)) {
             http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'Estado administrativo inválido'
-            ], JSON_UNESCAPED_UNICODE);
-
+            echo json_encode(['ok' => false, 'error' => 'Estado administrativo inválido'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
-        /*
-         * Verificar horario.
-         */
-        $stmt = $pdo->prepare("
-            SELECT id
-            FROM horarios
-            WHERE id = :id
-              AND activo = 1
-            LIMIT 1
-        ");
+        if ($tipoIngreso === 'REGULAR') {
+            if ($horarioId === null || $horarioId === '') {
+                http_response_code(422);
+                echo json_encode(['ok' => false, 'error' => 'El horario es obligatorio para alumnos regulares'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
 
-        $stmt->execute([
-            ':id' => $horarioId
-        ]);
+            if ($planId === null || $planId === '') {
+                http_response_code(422);
+                echo json_encode(['ok' => false, 'error' => 'El plan es obligatorio para alumnos regulares'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
 
-        if (!$stmt->fetch()) {
-            http_response_code(422);
+            $stmt = $pdo->prepare("
+                SELECT id
+                FROM horarios
+                WHERE id = :id
+                  AND activo = 1
+                LIMIT 1
+            ");
+            $stmt->execute([':id' => $horarioId]);
 
-            echo json_encode([
-                'ok' => false,
-                'error' => 'El horario seleccionado no existe o está inactivo'
-            ], JSON_UNESCAPED_UNICODE);
+            if (!$stmt->fetch()) {
+                http_response_code(422);
+                echo json_encode(['ok' => false, 'error' => 'El horario seleccionado no existe o está inactivo'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
 
-            exit;
+            $stmt = $pdo->prepare("
+                SELECT id
+                FROM planes
+                WHERE id = :id
+                  AND activo = 1
+                LIMIT 1
+            ");
+            $stmt->execute([':id' => $planId]);
+
+            if (!$stmt->fetch()) {
+                http_response_code(422);
+                echo json_encode(['ok' => false, 'error' => 'El plan seleccionado no existe o está inactivo'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+        } else {
+            $horarioId = null;
+            $planId = null;
         }
 
-        /*
-         * Verificar plan.
-         */
-        $stmt = $pdo->prepare("
-            SELECT id
-            FROM planes
-            WHERE id = :id
-              AND activo = 1
-            LIMIT 1
-        ");
-
-        $stmt->execute([
-            ':id' => $planId
-        ]);
-
-        if (!$stmt->fetch()) {
-            http_response_code(422);
-
-            echo json_encode([
-                'ok' => false,
-                'error' => 'El plan seleccionado no existe o está inactivo'
-            ], JSON_UNESCAPED_UNICODE);
-
-            exit;
-        }
-
-        /*
-         * Generar UUID.
-         */
-        $id = $pdo->query("
-            SELECT UUID()
-        ")->fetchColumn();
+        $id = $pdo->query('SELECT UUID()')->fetchColumn();
 
         if (!$id) {
             throw new RuntimeException('No se pudo generar el UUID del alumno');
         }
 
-        /*
-         * Insertar alumno.
-         */
         $stmt = $pdo->prepare("
             INSERT INTO alumnos (
                 id,
@@ -273,9 +200,6 @@ try {
             ':observaciones' => $observaciones
         ]);
 
-        /*
-         * Recuperar alumno creado.
-         */
         $stmt = $pdo->prepare("
             SELECT
                 a.id,
@@ -293,42 +217,27 @@ try {
                 a.created_at,
                 a.updated_at
             FROM alumnos a
-            LEFT JOIN planes p
-                ON p.id = a.plan_actual_id
+            LEFT JOIN planes p ON p.id = a.plan_actual_id
             WHERE a.id = :id
             LIMIT 1
         ");
-
-        $stmt->execute([
-            ':id' => $id
-        ]);
-
+        $stmt->execute([':id' => $id]);
         $alumno = $stmt->fetch();
 
         http_response_code(201);
-
         echo json_encode([
             'ok' => true,
             'mensaje' => 'Alumno creado correctamente',
+            'tipo_ingreso' => $tipoIngreso,
             'alumno' => $alumno
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
         exit;
     }
 
     http_response_code(405);
-
-    echo json_encode([
-        'ok' => false,
-        'error' => 'Método no permitido'
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => 'Método no permitido'], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-
     http_response_code(500);
-
-    echo json_encode([
-        'ok' => false,
-        'error' => $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
