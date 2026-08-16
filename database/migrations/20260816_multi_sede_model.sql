@@ -29,24 +29,33 @@ ALTER TABLE cursos_intensivos ADD COLUMN IF NOT EXISTS sede_id CHAR(36) NULL AFT
 ALTER TABLE inscripciones ADD COLUMN IF NOT EXISTS sede_id CHAR(36) NULL AFTER id;
 ALTER TABLE mensualidades ADD COLUMN IF NOT EXISTS sede_id CHAR(36) NULL AFTER id;
 ALTER TABLE horarios ADD COLUMN IF NOT EXISTS sede_id CHAR(36) NULL AFTER id;
+ALTER TABLE cierres_mensuales ADD COLUMN IF NOT EXISTS sede_id CHAR(36) NULL AFTER id;
 
 UPDATE alumnos SET sede_id=@monteverde WHERE sede_id IS NULL;
 UPDATE cursos_intensivos SET sede_id=@monteverde WHERE sede_id IS NULL;
 UPDATE inscripciones SET sede_id=@monteverde WHERE sede_id IS NULL;
 UPDATE mensualidades SET sede_id=@monteverde WHERE sede_id IS NULL;
 UPDATE horarios SET sede_id=@monteverde WHERE sede_id IS NULL;
+UPDATE cierres_mensuales SET sede_id=@monteverde WHERE sede_id IS NULL;
 
 ALTER TABLE alumnos MODIFY sede_id CHAR(36) NOT NULL;
 ALTER TABLE cursos_intensivos MODIFY sede_id CHAR(36) NOT NULL;
 ALTER TABLE inscripciones MODIFY sede_id CHAR(36) NOT NULL;
 ALTER TABLE mensualidades MODIFY sede_id CHAR(36) NOT NULL;
 ALTER TABLE horarios MODIFY sede_id CHAR(36) NOT NULL;
+ALTER TABLE cierres_mensuales MODIFY sede_id CHAR(36) NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_alumnos_sede ON alumnos(sede_id);
 CREATE INDEX IF NOT EXISTS idx_cursos_sede ON cursos_intensivos(sede_id);
 CREATE INDEX IF NOT EXISTS idx_inscripciones_sede ON inscripciones(sede_id);
 CREATE INDEX IF NOT EXISTS idx_mensualidades_sede_periodo ON mensualidades(sede_id,anio,mes);
 CREATE INDEX IF NOT EXISTS idx_horarios_sede ON horarios(sede_id);
+
+-- El esquema v1 creó periodo como UNIQUE. Ahora el cierre es único por sede + periodo.
+SET @idx_periodo := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='cierres_mensuales' AND index_name='periodo');
+SET @drop_periodo := IF(@idx_periodo>0,'ALTER TABLE cierres_mensuales DROP INDEX periodo','SELECT 1');
+PREPARE stmt_drop FROM @drop_periodo; EXECUTE stmt_drop; DEALLOCATE PREPARE stmt_drop;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cierres_sede_periodo ON cierres_mensuales(sede_id,periodo);
 
 -- Compatibilidad defensiva: cualquier flujo antiguo que no envíe sede
 -- hereda la sede del alumno o, para catálogos/cursos, Monteverde.
