@@ -1,0 +1,6 @@
+<?php
+declare(strict_types=1);
+header('Content-Type: application/json; charset=utf-8');
+$config=require __DIR__.'/../config/database.php';require_once __DIR__.'/../config/auth.php';auth_require(['ADMIN']);
+$pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+$lim=max(20,min(300,(int)($_GET['limite']??100)));$ent=trim((string)($_GET['entidad']??''));$usuario=trim((string)($_GET['usuario']??''));$desde=trim((string)($_GET['desde']??''));$where=['1=1'];$params=[];if($ent!==''){$where[]='entidad=:e';$params[':e']=$ent;}if($usuario!==''){$where[]='usuario_nombre LIKE :u';$params[':u']='%'.$usuario.'%';}if($desde!==''){$where[]='DATE(created_at)>=:d';$params[':d']=$desde;}$sql="SELECT id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta,ip,created_at FROM auditoria_eventos WHERE ".implode(' AND ',$where)." ORDER BY created_at DESC LIMIT {$lim}";$st=$pdo->prepare($sql);$st->execute($params);echo json_encode(['ok'=>true,'eventos'=>$st->fetchAll()],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
