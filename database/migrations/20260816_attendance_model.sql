@@ -20,8 +20,40 @@ CREATE INDEX idx_asistencia_alumno_fecha ON asistencias (alumno_id, created_at);
 
 -- Las ausencias antiguas asumían un solo alumno por curso. El modelo actual
 -- admite varios alumnos por intensivo, así que la unicidad correcta es alumno+curso+fecha.
-ALTER TABLE ausencias DROP INDEX IF EXISTS intensivo_id;
+DROP TRIGGER IF EXISTS trg_validar_ausencia_intensivo_insert;
+DROP TRIGGER IF EXISTS trg_validar_ausencia_intensivo_update;
+ALTER TABLE ausencias DROP INDEX intensivo_id;
 ALTER TABLE ausencias ADD UNIQUE KEY uq_ausencia_intensivo_alumno_fecha (intensivo_id, alumno_id, fecha);
+
+DELIMITER $$
+CREATE TRIGGER trg_validar_ausencia_intensivo_insert
+BEFORE INSERT ON ausencias
+FOR EACH ROW
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM curso_intensivo_alumnos cia
+        WHERE cia.curso_intensivo_id = NEW.intensivo_id
+          AND cia.alumno_id = NEW.alumno_id
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La ausencia no corresponde al alumno del intensivo';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_validar_ausencia_intensivo_update
+BEFORE UPDATE ON ausencias
+FOR EACH ROW
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM curso_intensivo_alumnos cia
+        WHERE cia.curso_intensivo_id = NEW.intensivo_id
+          AND cia.alumno_id = NEW.alumno_id
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La ausencia no corresponde al alumno del intensivo';
+    END IF;
+END$$
+DELIMITER ;
 
 -- Reposiciones regulares se contabilizan explícitamente y quedan auditables.
 CREATE TABLE IF NOT EXISTS reposiciones_regulares (
