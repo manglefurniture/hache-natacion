@@ -25,6 +25,9 @@ function auth_login(array $user): void
         'usuario' => (string)$user['usuario'],
         'rol' => (string)$user['rol'],
         'alumno_id' => $user['alumno_id'] ?: null,
+        'sede_id' => !empty($user['sede_id']) ? (string)$user['sede_id'] : null,
+        'sede_clave' => !empty($user['sede_clave']) ? (string)$user['sede_clave'] : null,
+        'sede_nombre' => !empty($user['sede_nombre']) ? (string)$user['sede_nombre'] : null,
         'debe_cambiar_password' => !empty($user['debe_cambiar_password']) ? 1 : 0,
     ];
 }
@@ -68,6 +71,29 @@ function auth_require(array $roles = [], bool $allowForcedPassword = false): arr
         exit;
     }
     return $u;
+}
+
+function auth_resolve_sede_clave(?string $requested='MONTEVERDE'): string
+{
+    $u=auth_user();
+    $req=strtoupper(trim((string)($requested ?: 'MONTEVERDE')));
+    if($u && ($u['rol']??'')==='VERIFICADOR'){
+        $own=strtoupper(trim((string)($u['sede_clave']??'')));
+        if($own===''){
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok'=>false,'error'=>'El verificador no tiene una sede asignada'],JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if($req!=='' && $req!==$own){
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok'=>false,'error'=>'No tienes permiso para consultar otra sede'],JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        return $own;
+    }
+    return in_array($req,['MONTEVERDE','PALAPAS'],true)?$req:'MONTEVERDE';
 }
 
 function page_require(array $roles = [], bool $allowForcedPassword = false): array
