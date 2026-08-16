@@ -17,6 +17,7 @@ $horarios = $pdo->query("
     SELECT id, hora_inicio, hora_fin
     FROM horarios
     WHERE activo = 1
+      AND regular = 1
     ORDER BY hora_inicio
 ")->fetchAll();
 
@@ -32,71 +33,41 @@ $planes = $pdo->query("
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Agregar alumno — Hache Natación</title>
-
 <style>
-* {
-    box-sizing: border-box;
-}
-
+* { box-sizing: border-box; }
 body {
     margin: 0;
     font-family: Arial, Helvetica, sans-serif;
     background: #f4f7fb;
     color: #172033;
 }
-
 .contenedor {
     width: min(760px, 92%);
     margin: 40px auto;
 }
-
-.encabezado {
-    margin-bottom: 25px;
-}
-
-.encabezado h1 {
-    margin: 0 0 8px;
-    font-size: 30px;
-}
-
-.encabezado p {
-    margin: 0;
-    color: #667085;
-}
-
+.encabezado { margin-bottom: 25px; }
+.encabezado h1 { margin: 0 0 8px; font-size: 30px; }
+.encabezado p { margin: 0; color: #667085; }
 .card {
     background: white;
     border-radius: 18px;
     padding: 30px;
     box-shadow: 0 8px 30px rgba(0,0,0,.08);
 }
-
 .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 18px;
 }
-
 .campo {
     display: flex;
     flex-direction: column;
     gap: 7px;
 }
-
-.campo.completo {
-    grid-column: 1 / -1;
-}
-
-label {
-    font-weight: 600;
-    font-size: 14px;
-}
-
-input,
-select,
-textarea {
+.campo.completo { grid-column: 1 / -1; }
+label { font-weight: 600; font-size: 14px; }
+input, select, textarea {
     width: 100%;
     padding: 13px 14px;
     border: 1px solid #d0d5dd;
@@ -105,25 +76,23 @@ textarea {
     background: white;
     outline: none;
 }
-
-input:focus,
-select:focus,
-textarea:focus {
+input:focus, select:focus, textarea:focus {
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37,99,235,.12);
 }
-
-textarea {
-    min-height: 100px;
-    resize: vertical;
+textarea { min-height: 100px; resize: vertical; }
+.ayuda {
+    margin-top: 2px;
+    color: #667085;
+    font-size: 13px;
+    line-height: 1.4;
 }
-
+.oculto { display: none !important; }
 .acciones {
     margin-top: 25px;
     display: flex;
     justify-content: flex-end;
 }
-
 button {
     border: 0;
     border-radius: 10px;
@@ -134,16 +103,8 @@ button {
     font-weight: 700;
     cursor: pointer;
 }
-
-button:hover {
-    background: #1d4ed8;
-}
-
-button:disabled {
-    opacity: .6;
-    cursor: wait;
-}
-
+button:hover { background: #1d4ed8; }
+button:disabled { opacity: .6; cursor: wait; }
 #mensaje {
     display: none;
     margin-bottom: 20px;
@@ -151,44 +112,18 @@ button:disabled {
     border-radius: 10px;
     font-weight: 600;
 }
-
-.exito {
-    display: block !important;
-    background: #dcfce7;
-    color: #166534;
-}
-
-.error {
-    display: block !important;
-    background: #fee2e2;
-    color: #991b1b;
-}
-
+.exito { display: block !important; background: #dcfce7; color: #166534; }
+.error { display: block !important; background: #fee2e2; color: #991b1b; }
 @media (max-width: 650px) {
-
-    .grid {
-        grid-template-columns: 1fr;
-    }
-
-    .campo.completo {
-        grid-column: auto;
-    }
-
-    .card {
-        padding: 22px;
-    }
-
-    .encabezado h1 {
-        font-size: 25px;
-    }
+    .grid { grid-template-columns: 1fr; }
+    .campo.completo { grid-column: auto; }
+    .card { padding: 22px; }
+    .encabezado h1 { font-size: 25px; }
 }
 </style>
 </head>
-
 <body>
-
 <div class="contenedor">
-
     <div class="encabezado">
         <h1>Agregar alumno</h1>
         <p>Registra un nuevo alumno en Hache Natación.</p>
@@ -197,406 +132,189 @@ button:disabled {
     <div id="mensaje"></div>
 
     <div class="card">
-
         <form id="formAlumno">
-
             <div class="grid">
+                <div class="campo completo">
+                    <label for="tipo_ingreso">Tipo de ingreso *</label>
+                    <select id="tipo_ingreso" name="tipo_ingreso" required>
+                        <option value="REGULAR">Alumno regular</option>
+                        <option value="INTENSIVO">Curso intensivo</option>
+                    </select>
+                    <div class="ayuda" id="ayudaTipo"></div>
+                </div>
 
                 <div class="campo completo">
                     <label for="nombre">Nombre completo *</label>
-
-                    <input
-                        type="text"
-                        id="nombre"
-                        name="nombre"
-                        required
-                        placeholder="Nombre y apellidos"
-                    >
+                    <input type="text" id="nombre" name="nombre" required placeholder="Nombre y apellidos">
                 </div>
 
                 <div class="campo">
-                    <label for="fecha_nacimiento">
-                        Fecha de nacimiento *
-                    </label>
-
-                    <input
-                        type="date"
-                        id="fecha_nacimiento"
-                        name="fecha_nacimiento"
-                        required
-                    >
+                    <label for="fecha_nacimiento">Fecha de nacimiento *</label>
+                    <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required>
                 </div>
 
                 <div class="campo">
-                    <label for="whatsapp">
-                        WhatsApp *
-                    </label>
-
-                    <input
-                        type="text"
-                        id="whatsapp"
-                        name="whatsapp"
-                        required
-                        placeholder="Ej. 9981234567"
-                    >
+                    <label for="whatsapp">WhatsApp *</label>
+                    <input type="text" id="whatsapp" name="whatsapp" required placeholder="Ej. 9981234567">
                 </div>
 
                 <div class="campo completo">
-                    <label for="correo">
-                        Correo electrónico
-                    </label>
-
-                    <input
-                        type="email"
-                        id="correo"
-                        name="correo"
-                        placeholder="correo@ejemplo.com"
-                    >
+                    <label for="correo">Correo electrónico</label>
+                    <input type="email" id="correo" name="correo" placeholder="correo@ejemplo.com">
                 </div>
 
                 <div class="campo">
-                    <label for="fecha_inicio">
-                        Fecha de inicio *
-                    </label>
-
-                    <input
-                        type="date"
-                        id="fecha_inicio"
-                        name="fecha_inicio"
-                        required
-                    >
+                    <label for="fecha_inicio">Fecha de inicio *</label>
+                    <input type="date" id="fecha_inicio" name="fecha_inicio" required>
                 </div>
 
-                <div class="campo">
-                    <label for="horario_preferido_id">
-                        Horario *
-                    </label>
-
-                    <select
-                        id="horario_preferido_id"
-                        name="horario_preferido_id"
-                        required
-                    >
-                        <option value="">
-                            Seleccionar horario...
-                        </option>
-
+                <div class="campo" id="campoHorario">
+                    <label for="horario_preferido_id">Horario regular *</label>
+                    <select id="horario_preferido_id" name="horario_preferido_id">
+                        <option value="">Seleccionar horario...</option>
                         <?php foreach ($horarios as $horario): ?>
-
                             <option value="<?= htmlspecialchars($horario['id']) ?>">
-
-                                <?= htmlspecialchars(
-                                    substr($horario['hora_inicio'], 0, 5)
-                                ) ?>
-
-                                —
-
-                                <?= htmlspecialchars(
-                                    substr($horario['hora_fin'], 0, 5)
-                                ) ?>
-
+                                <?= htmlspecialchars(substr($horario['hora_inicio'], 0, 5)) ?> — <?= htmlspecialchars(substr($horario['hora_fin'], 0, 5)) ?>
                             </option>
-
                         <?php endforeach; ?>
-
                     </select>
                 </div>
 
-                <div class="campo">
-                    <label for="plan_actual_id">
-                        Plan *
-                    </label>
-
-                    <select
-                        id="plan_actual_id"
-                        name="plan_actual_id"
-                        required
-                    >
-                        <option value="">
-                            Seleccionar plan...
-                        </option>
-
+                <div class="campo" id="campoPlan">
+                    <label for="plan_actual_id">Plan *</label>
+                    <select id="plan_actual_id" name="plan_actual_id">
+                        <option value="">Seleccionar plan...</option>
                         <?php foreach ($planes as $plan): ?>
-
                             <option value="<?= htmlspecialchars($plan['id']) ?>">
-
-                                <?= htmlspecialchars($plan['nombre']) ?>
-
-                                — $<?= number_format(
-                                    (float)$plan['precio'],
-                                    0
-                                ) ?>
-
+                                <?= htmlspecialchars($plan['nombre']) ?> — $<?= number_format((float)$plan['precio'], 0) ?>
                             </option>
-
                         <?php endforeach; ?>
-
                     </select>
                 </div>
 
                 <div class="campo">
-                    <label for="estado_administrativo">
-                        Estado administrativo
-                    </label>
-
-                    <select
-                        id="estado_administrativo"
-                        name="estado_administrativo"
-                    >
-                        <option value="ACTIVO">
-                            Activo
-                        </option>
-
-                        <option value="BAJA">
-                            Baja
-                        </option>
+                    <label for="estado_administrativo">Estado administrativo</label>
+                    <select id="estado_administrativo" name="estado_administrativo">
+                        <option value="ACTIVO">Activo</option>
+                        <option value="BAJA">Baja</option>
                     </select>
                 </div>
 
                 <div class="campo completo">
-                    <label for="observaciones">
-                        Observaciones
-                    </label>
-
-                    <textarea
-                        id="observaciones"
-                        name="observaciones"
-                        placeholder="Notas del alumno..."
-                    ></textarea>
+                    <label for="observaciones">Observaciones</label>
+                    <textarea id="observaciones" name="observaciones" placeholder="Notas del alumno..."></textarea>
                 </div>
-
             </div>
 
             <div class="acciones">
-
-                <button
-                    type="submit"
-                    id="btnGuardar"
-                >
-                    Guardar alumno
-                </button>
-
+                <button type="submit" id="btnGuardar">Guardar alumno</button>
             </div>
-
         </form>
-
     </div>
 </div>
 
-
 <script>
+const parametros = new URLSearchParams(window.location.search);
+const origen = parametros.get('origen');
+const cursoId = parametros.get('curso_id');
 
-// --------------------------------------------------
-// ORIGEN / RETORNO
-// --------------------------------------------------
+const form = document.getElementById('formAlumno');
+const mensaje = document.getElementById('mensaje');
+const boton = document.getElementById('btnGuardar');
+const tipoIngreso = document.getElementById('tipo_ingreso');
+const campoHorario = document.getElementById('campoHorario');
+const campoPlan = document.getElementById('campoPlan');
+const horario = document.getElementById('horario_preferido_id');
+const plan = document.getElementById('plan_actual_id');
+const ayudaTipo = document.getElementById('ayudaTipo');
 
-const parametros =
-    new URLSearchParams(
-        window.location.search
-    );
+function actualizarTipoIngreso() {
+    const esIntensivo = tipoIngreso.value === 'INTENSIVO';
 
-const origen =
-    parametros.get('origen');
+    campoHorario.classList.toggle('oculto', esIntensivo);
+    campoPlan.classList.toggle('oculto', esIntensivo);
 
-const cursoId =
-    parametros.get('curso_id');
+    horario.required = !esIntensivo;
+    plan.required = !esIntensivo;
 
-
-// --------------------------------------------------
-// ELEMENTOS
-// --------------------------------------------------
-
-const form =
-    document.getElementById('formAlumno');
-
-const mensaje =
-    document.getElementById('mensaje');
-
-const boton =
-    document.getElementById('btnGuardar');
-
-
-// --------------------------------------------------
-// GUARDAR ALUMNO
-// --------------------------------------------------
-
-form.addEventListener(
-    'submit',
-    async function(e) {
-
-        e.preventDefault();
-
-        mensaje.className = '';
-        mensaje.style.display = 'none';
-
-        boton.disabled = true;
-        boton.textContent = 'Guardando...';
-
-        const datos = {
-
-            nombre:
-                document
-                    .getElementById('nombre')
-                    .value
-                    .trim(),
-
-            fecha_nacimiento:
-                document
-                    .getElementById('fecha_nacimiento')
-                    .value,
-
-            whatsapp:
-                document
-                    .getElementById('whatsapp')
-                    .value
-                    .trim(),
-
-            correo:
-                document
-                    .getElementById('correo')
-                    .value
-                    .trim(),
-
-            fecha_inicio:
-                document
-                    .getElementById('fecha_inicio')
-                    .value,
-
-            horario_preferido_id:
-                document
-                    .getElementById('horario_preferido_id')
-                    .value,
-
-            plan_actual_id:
-                document
-                    .getElementById('plan_actual_id')
-                    .value,
-
-            estado_administrativo:
-                document
-                    .getElementById('estado_administrativo')
-                    .value,
-
-            observaciones:
-                document
-                    .getElementById('observaciones')
-                    .value
-                    .trim()
-        };
-
-        try {
-
-            const respuesta =
-                await fetch(
-                    '/api/alumnos.php',
-                    {
-                        method: 'POST',
-
-                        headers: {
-                            'Content-Type':
-                                'application/json'
-                        },
-
-                        body:
-                            JSON.stringify(datos)
-                    }
-                );
-
-            const resultado =
-                await respuesta.json();
-
-            if (
-                !respuesta.ok ||
-                !resultado.ok
-            ) {
-
-                throw new Error(
-                    resultado.error ||
-                    'No se pudo crear el alumno'
-                );
-            }
-
-            mensaje.className =
-                'exito';
-
-            mensaje.textContent =
-                '✓ Alumno creado correctamente.';
-
-
-            // --------------------------------------------------
-            // SI VENIMOS DE UN CURSO INTENSIVO
-            // VOLVER AL MISMO CURSO
-            // --------------------------------------------------
-
-            if (
-                origen === 'intensivo' &&
-                cursoId
-            ) {
-
-                /*
-                 * La API puede devolver el ID como:
-                 *
-                 * resultado.alumno.id
-                 * o resultado.id
-                 *
-                 * Admitimos ambos formatos.
-                 */
-
-                const alumnoNuevoId =
-                    resultado.alumno?.id ||
-                    resultado.id ||
-                    '';
-
-                let destino =
-                    '/intensivo-detalle.php?id='
-                    +
-                    encodeURIComponent(cursoId);
-
-                if (alumnoNuevoId) {
-
-                    destino +=
-                        '&alumno_nuevo='
-                        +
-                        encodeURIComponent(
-                            alumnoNuevoId
-                        );
-                }
-
-                window.location.href =
-                    destino;
-
-                return;
-            }
-
-
-            // --------------------------------------------------
-            // COMPORTAMIENTO NORMAL
-            // --------------------------------------------------
-
-            form.reset();
-
-        } catch (error) {
-
-            mensaje.className =
-                'error';
-
-            mensaje.textContent =
-                'Error: '
-                +
-                error.message;
-
-        } finally {
-
-            boton.disabled =
-                false;
-
-            boton.textContent =
-                'Guardar alumno';
-        }
+    if (esIntensivo) {
+        horario.value = '';
+        plan.value = '';
+        ayudaTipo.textContent = 'El alumno se crea sin plan mensual ni horario regular. El horario se asigna dentro del curso intensivo.';
+    } else {
+        ayudaTipo.textContent = 'El alumno regular necesita un plan mensual y un horario regular.';
     }
-);
+}
 
+if (origen === 'intensivo') {
+    tipoIngreso.value = 'INTENSIVO';
+}
+
+actualizarTipoIngreso();
+tipoIngreso.addEventListener('change', actualizarTipoIngreso);
+
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    mensaje.className = '';
+    mensaje.style.display = 'none';
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+
+    const esIntensivo = tipoIngreso.value === 'INTENSIVO';
+
+    const datos = {
+        tipo_ingreso: tipoIngreso.value,
+        nombre: document.getElementById('nombre').value.trim(),
+        fecha_nacimiento: document.getElementById('fecha_nacimiento').value,
+        whatsapp: document.getElementById('whatsapp').value.trim(),
+        correo: document.getElementById('correo').value.trim(),
+        fecha_inicio: document.getElementById('fecha_inicio').value,
+        horario_preferido_id: esIntensivo ? null : horario.value,
+        plan_actual_id: esIntensivo ? null : plan.value,
+        estado_administrativo: document.getElementById('estado_administrativo').value,
+        observaciones: document.getElementById('observaciones').value.trim()
+    };
+
+    try {
+        const respuesta = await fetch('/api/alumnos.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        });
+
+        const resultado = await respuesta.json();
+
+        if (!respuesta.ok || !resultado.ok) {
+            throw new Error(resultado.error || 'No se pudo crear el alumno');
+        }
+
+        mensaje.className = 'exito';
+        mensaje.textContent = '✓ Alumno creado correctamente.';
+
+        if (origen === 'intensivo' && cursoId) {
+            const alumnoNuevoId = resultado.alumno?.id || resultado.id || '';
+            let destino = '/intensivo-detalle.php?id=' + encodeURIComponent(cursoId);
+
+            if (alumnoNuevoId) {
+                destino += '&alumno_nuevo=' + encodeURIComponent(alumnoNuevoId);
+            }
+
+            window.location.href = destino;
+            return;
+        }
+
+        form.reset();
+        tipoIngreso.value = 'REGULAR';
+        actualizarTipoIngreso();
+    } catch (error) {
+        mensaje.className = 'error';
+        mensaje.textContent = 'Error: ' + error.message;
+    } finally {
+        boton.disabled = false;
+        boton.textContent = 'Guardar alumno';
+    }
+});
 </script>
-
 </body>
 </html>
