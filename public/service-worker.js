@@ -1,4 +1,4 @@
-const CACHE_NAME='hache-pwa-v5';
+const CACHE_NAME='hache-pwa-v6';
 const STATIC_ASSETS=['/offline.html','/manifest.webmanifest','/assets/icons/hache-icon.svg'];
 
 self.addEventListener('install',event=>{
@@ -9,6 +9,30 @@ self.addEventListener('install',event=>{
 self.addEventListener('activate',event=>{
   event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE_NAME).map(key=>caches.delete(key)))));
   self.clients.claim();
+});
+
+self.addEventListener('push',event=>{
+  let data={};
+  try{data=event.data?event.data.json():{};}catch(_){data={title:'Hache Natación',body:event.data?event.data.text():'Nueva notificación',url:'/dashboard.php'};}
+  const title=data.title||'Hache Natación';
+  const options={
+    body:data.body||'Tienes una nueva notificación',
+    icon:'/assets/icons/hache-icon.svg',
+    badge:'/assets/icons/hache-icon.svg',
+    tag:data.tag||'hache-notification',
+    renotify:true,
+    data:{url:data.url||'/dashboard.php',...(data.data||{})}
+  };
+  event.waitUntil(self.registration.showNotification(title,options));
+});
+
+self.addEventListener('notificationclick',event=>{
+  event.notification.close();
+  const target=new URL((event.notification.data&&event.notification.data.url)||'/dashboard.php',self.location.origin).href;
+  event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{
+    for(const client of list){if('focus'in client){client.navigate(target);return client.focus();}}
+    return clients.openWindow?clients.openWindow(target):undefined;
+  }));
 });
 
 self.addEventListener('fetch',event=>{
