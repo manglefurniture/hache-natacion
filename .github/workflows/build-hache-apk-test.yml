@@ -44,24 +44,26 @@ jobs:
         shell: bash
         run: |
           mkdir -p android-test/output
-          cp android-test/app/build/outputs/apk/debug/app-debug.apk android-test/output/Hache-Natacion-v0.1-test.apk
+          cp android-test/app/build/outputs/apk/debug/app-debug.apk android-test/output/Hache-Natacion-v0.2.0-debug.apk
 
-      - name: Generate Digital Asset Links
+      - name: Export apksigner
         shell: bash
         run: |
-          APK="android-test/output/Hache-Natacion-v0.1-test.apk"
-          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          FP_RAW=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
-          test -n "$FP_RAW"
-          FP=$(echo "$FP_RAW" | sed 's/../&:/g;s/:$//' | tr '[:lower:]' '[:upper:]')
-          printf '[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"mx.hachenatacion.app","sha256_cert_fingerprints":["%s"]}}]\n' "$FP" > android-test/output/assetlinks.json
-          echo "$FP" > android-test/output/SHA256-FINGERPRINT.txt
+          mkdir -p android-test/signing-tool/lib
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" android-test/signing-tool/
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" android-test/signing-tool/lib/
+          chmod +x android-test/signing-tool/apksigner
 
       - name: Upload APK package
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hache-natacion-apk-test
+          name: hache-natacion-apk-debug
           path: android-test/output/*
-          if-no-files-found: error
           retention-days: 30
+
+      - name: Upload signing tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apksigner-35
+          path: android-test/signing-tool/**
+          retention-days: 1
