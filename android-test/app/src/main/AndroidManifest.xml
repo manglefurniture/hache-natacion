@@ -5,11 +5,20 @@
         android:allowBackup="true"
         android:label="Hache Natación"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Translucent.NoTitleBar">
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity">
 
         <meta-data
             android:name="asset_statements"
             android:resource="@string/assetStatements" />
+
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.customtabs.trusted.MANAGE_SPACE_URL"
+                android:value="@string/launchUrl" />
+        </activity>
 
         <activity
             android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
