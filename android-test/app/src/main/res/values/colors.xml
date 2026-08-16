@@ -1,4 +1,5 @@
 <resources>
     <color name="colorPrimary">#123B5D</color>
     <color name="navigationColor">#123B5D</color>
+    <color name="iconBackground">#071B31</color>
 </resources>
