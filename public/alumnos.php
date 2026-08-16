@@ -7,291 +7,42 @@ $pdo = new PDO(
     "mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",
     $config['user'],
     $config['password'],
-    [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
 );
 
+$mesActual = (int)date('n');
+$anioActual = (int)date('Y');
+
 $sql = "
-    SELECT
-        a.id,
-        a.nombre,
-        a.fecha_nacimiento,
-        a.whatsapp,
-        a.correo,
-        a.fecha_inicio,
-        a.estado_administrativo,
-        a.observaciones,
-        h.hora_inicio,
-        h.hora_fin,
-        p.nombre AS plan_nombre,
-        p.sesiones_semana,
-        p.precio
-    FROM alumnos a
-    LEFT JOIN horarios h ON h.id = a.horario_preferido_id
-    LEFT JOIN planes p ON p.id = a.plan_actual_id
-    ORDER BY a.nombre ASC
-";
+SELECT a.id,a.nombre,a.whatsapp,a.correo,a.fecha_inicio,a.estado_administrativo,
+       h.hora_inicio,h.hora_fin,p.nombre AS plan_nombre,p.sesiones_semana,p.precio,
+       m.estado AS mensualidad_estado,m.fecha_pago,
+       EXISTS(
+          SELECT 1 FROM curso_intensivo_alumnos cia
+          INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
+          WHERE cia.alumno_id=a.id AND ci.estado IN ('PROGRAMADO','EN_CURSO')
+       ) AS intensivo_activo
+FROM alumnos a
+LEFT JOIN horarios h ON h.id=a.horario_preferido_id
+LEFT JOIN planes p ON p.id=a.plan_actual_id
+LEFT JOIN mensualidades m ON m.alumno_id=a.id AND m.mes=:mes AND m.anio=:anio
+ORDER BY a.nombre ASC";
+$stmt=$pdo->prepare($sql); $stmt->execute([':mes'=>$mesActual,':anio'=>$anioActual]); $alumnos=$stmt->fetchAll();
 
-$alumnos = $pdo->query($sql)->fetchAll();
-
-function e(?string $valor): string
-{
-    return htmlspecialchars($valor ?? '', ENT_QUOTES, 'UTF-8');
-}
-
-function hora(string $hora): string
-{
-    return date('H:i', strtotime($hora));
+function e(?string $v): string { return htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8'); }
+function hora(string $h): string { return date('H:i', strtotime($h)); }
+function acceso(array $a): array {
+    if ($a['estado_administrativo'] !== 'ACTIVO') return ['BAJA','baja'];
+    if ((int)$a['intensivo_activo'] === 1) return ['INTENSIVO','intensivo'];
+    if (empty($a['plan_nombre'])) return ['SIN PLAN','pendiente'];
+    if (($a['mensualidad_estado'] ?? '') === 'PAGADA') return ['PUEDE TOMAR CLASE','acceso'];
+    return ['SIN DERECHO A CLASE','sin-acceso'];
 }
 ?>
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control de Alumnos — Hache Natación</title>
-
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #f3f6fa;
-            color: #172033;
-        }
-
-        .contenedor {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 35px 25px;
-        }
-
-        h1 {
-            margin: 0 0 8px;
-            font-size: 32px;
-        }
-
-        .subtitulo {
-            color: #64748b;
-            margin-bottom: 30px;
-        }
-
-        .tabla-contenedor {
-            background: white;
-            border-radius: 18px;
-            padding: 20px;
-            overflow-x: auto;
-            box-shadow: 0 4px 18px rgba(0,0,0,.06);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1000px;
-        }
-
-        th {
-            text-align: left;
-            padding: 14px;
-            background: #f8fafc;
-            color: #475569;
-            font-size: 13px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        td {
-            padding: 15px 14px;
-            border-bottom: 1px solid #edf2f7;
-            vertical-align: middle;
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        .nombre {
-            font-weight: bold;
-        }
-
-        .secundario {
-            color: #64748b;
-            font-size: 13px;
-            margin-top: 4px;
-        }
-
-        .estado {
-            display: inline-block;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .activo {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .baja {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .plan {
-            font-weight: bold;
-        }
-
-        .precio {
-            color: #64748b;
-            font-size: 13px;
-            margin-top: 3px;
-        }
-
-        .vacio {
-            text-align: center;
-            padding: 50px;
-            color: #64748b;
-        }
-
-        .contador {
-            margin-bottom: 15px;
-            color: #64748b;
-            font-size: 14px;
-        }
-    </style>
-</head>
-
-<body>
-
-<div class="contenedor">
-
-    <h1>Control de Alumnos</h1>
-
-    <div class="subtitulo">
-        Hache Natación — alumnos registrados
-    </div>
-
-    <div class="contador">
-        <?= count($alumnos) ?> alumno<?= count($alumnos) === 1 ? '' : 's' ?> registrado<?= count($alumnos) === 1 ? '' : 's' ?>
-    </div>
-
-    <div class="tabla-contenedor">
-
-        <?php if (!$alumnos): ?>
-
-            <div class="vacio">
-                No hay alumnos registrados todavía.
-            </div>
-
-        <?php else: ?>
-
-            <table>
-
-                <thead>
-                    <tr>
-                        <th>Alumno</th>
-                        <th>WhatsApp</th>
-                        <th>Fecha de inicio</th>
-                        <th>Horario</th>
-                        <th>Plan</th>
-                        <th>Estado</th>
-            <th>Acciones</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                <?php foreach ($alumnos as $alumno): ?>
-
-                    <tr>
-
-                        <td>
-                            <div class="nombre">
-                                <?= e($alumno['nombre']) ?>
-                            </div>
-
-                            <?php if (!empty($alumno['correo'])): ?>
-                                <div class="secundario">
-                                    <?= e($alumno['correo']) ?>
-                                </div>
-                            <?php endif; ?>
-                        </td>
-
-                        <td>
-                            <?= e($alumno['whatsapp']) ?>
-                        </td>
-
-                        <td>
-                            <?= !empty($alumno['fecha_inicio'])
-                                ? date('d/m/Y', strtotime($alumno['fecha_inicio']))
-                                : '—' ?>
-                        </td>
-
-                        <td>
-                            <?php if ($alumno['hora_inicio'] && $alumno['hora_fin']): ?>
-                                <?= hora($alumno['hora_inicio']) ?>
-                                –
-                                <?= hora($alumno['hora_fin']) ?>
-                            <?php else: ?>
-                                —
-                            <?php endif; ?>
-                        </td>
-
-                        <td>
-                            <?php if ($alumno['plan_nombre']): ?>
-
-                                <div class="plan">
-                                    <?= e($alumno['plan_nombre']) ?>
-                                </div>
-
-                                <div class="precio">
-                                    <?= (int)$alumno['sesiones_semana'] ?> sesiones/semana ·
-                                    $<?= number_format((float)$alumno['precio'], 0) ?>
-                                </div>
-
-                            <?php else: ?>
-                                —
-                            <?php endif; ?>
-                        </td>
-
-                        <td>
-
-                            <?php if ($alumno['estado_administrativo'] === 'ACTIVO'): ?>
-
-                                <span class="estado activo">
-                                    ACTIVO
-                                </span>
-
-                            <?php else: ?>
-
-                                <span class="estado baja">
-                                    BAJA
-                                </span>
-
-                            <?php endif; ?>
-
-                        </td>
-            <td><a href="ficha-alumno.php?id=<?= urlencode($alumno["id"]) ?>">Ver ficha</a></td>
-
-                    </tr>
-
-                <?php endforeach; ?>
-
-                </tbody>
-
-            </table>
-
-        <?php endif; ?>
-
-    </div>
-
-</div>
-
-</body>
-</html>
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Control de Alumnos — Hache Natación</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fa;color:#172033}.contenedor{max-width:1400px;margin:auto;padding:35px 25px}h1{margin:0 0 8px;font-size:32px}.subtitulo,.contador{color:#64748b}.subtitulo{margin-bottom:25px}.contador{margin-bottom:15px;font-size:14px}.tabla-contenedor{background:#fff;border-radius:18px;padding:16px;overflow-x:auto;box-shadow:0 4px 18px rgba(0,0,0,.06)}table{width:100%;border-collapse:collapse;min-width:900px}th{text-align:left;padding:12px;background:#f8fafc;color:#475569;font-size:12px;border-bottom:1px solid #e2e8f0}td{padding:13px 12px;border-bottom:1px solid #edf2f7;vertical-align:middle}.nombre a{font-weight:800;color:#172033;text-decoration:none}.nombre a:hover{text-decoration:underline}.secundario,.precio{color:#64748b;font-size:12px;margin-top:4px}.estado,.derecho{display:inline-block;padding:6px 9px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}.activo,.acceso{background:#dcfce7;color:#166534}.baja,.sin-acceso{background:#fee2e2;color:#991b1b}.pendiente{background:#fef3c7;color:#92400e}.intensivo{background:#dbeafe;color:#1e40af}.plan{font-weight:700}.vacio{text-align:center;padding:50px;color:#64748b}
+@media(max-width:650px){.contenedor{padding:72px 0 18px}h1,.subtitulo,.contador{margin-left:14px;margin-right:14px}h1{font-size:25px}.subtitulo{font-size:13px;margin-bottom:18px}.tabla-contenedor{border-radius:0;padding:0;box-shadow:none}table{min-width:720px}th{padding:10px 8px}td{padding:11px 8px;font-size:13px}.secundario,.precio{font-size:11px}}
+</style></head><body><div class="contenedor"><h1>Control de Alumnos</h1><div class="subtitulo">Hache Natación — <?= sprintf('%02d/%d',$mesActual,$anioActual) ?></div><div class="contador"><?= count($alumnos) ?> alumno<?= count($alumnos)===1?'':'s' ?> registrado<?= count($alumnos)===1?'':'s' ?></div><div class="tabla-contenedor">
+<?php if(!$alumnos): ?><div class="vacio">No hay alumnos registrados todavía.</div><?php else: ?><table><thead><tr><th>Alumno</th><th>WhatsApp</th><th>Horario</th><th>Plan</th><th>Estado</th><th>Acceso a clase</th></tr></thead><tbody>
+<?php foreach($alumnos as $a): $der=acceso($a); ?><tr><td><div class="nombre"><a href="ficha-alumno.php?id=<?= urlencode($a['id']) ?>"><?= e($a['nombre']) ?></a></div><?php if($a['correo']): ?><div class="secundario"><?= e($a['correo']) ?></div><?php endif; ?></td><td><?= e($a['whatsapp']) ?></td><td><?= $a['hora_inicio']&&$a['hora_fin']?hora($a['hora_inicio']).'–'.hora($a['hora_fin']):'—' ?></td><td><?php if($a['plan_nombre']): ?><div class="plan"><?= e($a['plan_nombre']) ?></div><div class="precio"><?= (int)$a['sesiones_semana'] ?> sesiones · $<?= number_format((float)$a['precio'],0) ?></div><?php else: ?>—<?php endif; ?></td><td><span class="estado <?= $a['estado_administrativo']==='ACTIVO'?'activo':'baja' ?>"><?= e($a['estado_administrativo']) ?></span></td><td><span class="derecho <?= $der[1] ?>"><?= $der[0] ?></span><?php if($der[0]==='SIN DERECHO A CLASE'): ?><div class="secundario"><a href="pagos.php?alumno_id=<?= urlencode($a['id']) ?>&tipo=MENSUALIDAD">Registrar mensualidad</a></div><?php endif; ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?></div></div></body></html>
