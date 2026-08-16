@@ -1,0 +1,120 @@
+/* Responsive hardening: phone cards + desktop menu safe area */
+@media (min-width:901px){
+  .contenedor>h1,.container>h1,.wrap>h1{margin-left:58px!important;}
+  .header{padding-left:76px!important;}
+}
+
+html.hache-touch-ui body{overflow-x:hidden!important;}
+html.hache-touch-ui .container,
+html.hache-touch-ui .contenedor,
+html.hache-touch-ui .wrap{
+  width:100%!important;
+  max-width:none!important;
+  margin-left:0!important;
+  margin-right:0!important;
+  padding-top:78px!important;
+  padding-left:12px!important;
+  padding-right:12px!important;
+}
+html.hache-touch-ui .container>h1,
+html.hache-touch-ui .contenedor>h1,
+html.hache-touch-ui .wrap>h1{margin-left:0!important;font-size:24px!important;}
+
+html.hache-touch-ui .tabs{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:8px!important;
+  overflow:visible!important;
+  margin-left:0!important;
+  margin-right:0!important;
+}
+html.hache-touch-ui .tabs .tab{
+  width:100%!important;
+  min-width:0!important;
+  white-space:normal!important;
+  padding:10px 9px!important;
+  font-size:12px!important;
+  line-height:1.2!important;
+}
+html.hache-touch-ui .tabs .tab:nth-child(3){grid-column:1/-1!important;}
+
+html.hache-touch-ui .table-container,
+html.hache-touch-ui .tabla-contenedor{
+  width:100%!important;
+  overflow:visible!important;
+  padding:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+html.hache-touch-ui table.hache-responsive-table{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  border:0!important;
+  background:transparent!important;
+  table-layout:auto!important;
+}
+html.hache-touch-ui table.hache-responsive-table thead{display:none!important;}
+html.hache-touch-ui table.hache-responsive-table tbody{
+  display:grid!important;
+  width:100%!important;
+  gap:10px!important;
+}
+html.hache-touch-ui table.hache-responsive-table tbody tr{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  width:100%!important;
+  min-width:0!important;
+  gap:0 12px!important;
+  padding:12px 13px!important;
+  margin:0!important;
+  background:#fff!important;
+  border:1px solid #e5eaf0!important;
+  border-radius:14px!important;
+  box-shadow:0 3px 12px rgba(15,23,42,.045)!important;
+}
+html.hache-touch-ui table.hache-responsive-table tbody td{
+  display:block!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:100%!important;
+  padding:7px 0!important;
+  border:0!important;
+  font-size:13px!important;
+  line-height:1.35!important;
+  white-space:normal!important;
+  word-break:break-word!important;
+  overflow:visible!important;
+}
+html.hache-touch-ui table.hache-responsive-table tbody td::before{
+  content:attr(data-label);
+  display:block!important;
+  margin-bottom:3px!important;
+  color:#64748b!important;
+  font-size:10px!important;
+  font-weight:800!important;
+  letter-spacing:.045em!important;
+  text-transform:uppercase!important;
+}
+html.hache-touch-ui table.hache-responsive-table tbody td:first-child{
+  grid-column:1/-1!important;
+  padding-top:1px!important;
+  padding-bottom:9px!important;
+  margin-bottom:2px!important;
+  border-bottom:1px solid #eef2f7!important;
+}
+html.hache-touch-ui table.hache-responsive-table tbody td:first-child::before{display:none!important;}
+html.hache-touch-ui table.hache-responsive-table tbody td:first-child,
+html.hache-touch-ui table.hache-responsive-table tbody td:first-child a{font-size:15px!important;font-weight:800!important;}
+html.hache-touch-ui table.hache-responsive-table tbody td:last-child:nth-child(odd){grid-column:1/-1!important;}
+html.hache-touch-ui table.hache-responsive-table .editable{max-width:100%!important;flex-wrap:wrap!important;}
+html.hache-touch-ui table.hache-responsive-table .estado,
+html.hache-touch-ui table.hache-responsive-table .derecho,
+html.hache-touch-ui table.hache-responsive-table .sin-plan-tag{white-space:normal!important;}
+
+@media (max-width:520px){
+  html.hache-touch-ui table.hache-responsive-table tbody tr{gap:0 10px!important;padding:11px 12px!important;}
+  html.hache-touch-ui table.hache-responsive-table tbody td{font-size:12px!important;}
+}
