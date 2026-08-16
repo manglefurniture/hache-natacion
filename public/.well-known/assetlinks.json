@@ -1,1 +1,1 @@
-[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"mx.hachenatacion.app","sha256_cert_fingerprints":["8E:53:60:CD:21:40:D8:E3:F6:44:EE:53:0A:89:3F:E9:BB:07:68:86:F1:C4:99:C4:DE:F8:7C:81:20:0F:CF:59"]}}]
+[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"mx.hachenatacion.app","sha256_cert_fingerprints":["48:D8:16:06:AB:B3:DB:34:8B:96:0F:EF:39:E7:B7:73:8A:3A:B4:E1:22:64:31:67:CE:41:36:CB:95:CC:F9:63"]}}]
