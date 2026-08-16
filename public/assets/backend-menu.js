@@ -1,5 +1,5 @@
 (async function(){
-const ASSET_VERSION='20260816-1555';
+const ASSET_VERSION='20260816-1608';
 const fix=document.createElement('link');fix.rel='stylesheet';fix.href=`/assets/responsive-fixes.css?v=${ASSET_VERSION}`;document.head.appendChild(fix);
 const path=location.pathname;let data={};
 try{const r=await fetch('/api/sesion.php',{credentials:'same-origin'}),d=await r.json();if(d.autenticado&&d.usuario){data=d.usuario;sessionStorage.setItem('hache_usuario',JSON.stringify(data));}}catch(e){try{data=JSON.parse(sessionStorage.getItem('hache_usuario')||'{}')}catch(_){}}
@@ -23,5 +23,6 @@ function esMovil(){return innerWidth<=900||/Android|iPhone|iPad|iPod|Mobile/i.te
 const helpers={'/intensivo-detalle.php':['/assets/intensivo-flow.js'],'/pagos.php':['/assets/pagos-flow-v2.js','/assets/filtros-pagos.js'],'/ficha-alumno.php':['/assets/ficha-alumno-flow.js','/assets/ficha-timeline.js'],'/sesiones.php':['/assets/asistencia-laborables.js','/assets/asistencia-avisos.js'],'/alumnos.php':['/assets/alumnos-quick-plan.js','/assets/filtros-alumnos.js']};
 (helpers[path]||[]).forEach(src=>{const s=document.createElement('script');s.src=`${src}?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)});
 const searchable=new Set(['/pagos.php','/sesiones.php','/ausencias.php','/intensivo-detalle.php','/usuarios.php','/comisiones-proa.php']);if(searchable.has(path)){const s=document.createElement('script');s.src=`/assets/person-search.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
+const contextual=new Set(['/pagos.php','/sesiones.php','/ausencias.php','/intensivo-detalle.php','/usuarios.php','/comisiones-proa.php']);if(contextual.has(path)){const s=document.createElement('script');s.src=`/assets/contextual-links.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
 const siteAware=new Set(['/dashboard.php','/alertas.php','/alumnos.php','/agregar-alumno.php','/pagos.php','/resumen-financiero.php','/reportes.php','/intensivos.php','/intensivo-detalle.php','/sesiones.php','/ausencias.php','/horarios.php']);if(siteAware.has(path)){const s=document.createElement('script');s.src=`/assets/sede-context.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
 })();
