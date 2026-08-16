@@ -6,7 +6,7 @@ $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$
 function out(array $d,int $c=200):never{http_response_code($c);echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
 try{
  $hoy=new DateTimeImmutable('today');$mes=(int)$hoy->format('n');$anio=(int)$hoy->format('Y');$alertas=[];
- $st=$pdo->prepare("SELECT COUNT(*) FROM alumnos a WHERE a.estado_administrativo='ACTIVO' AND a.plan_actual_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM mensualidades m WHERE m.alumno_id=a.id AND m.mes=:m AND m.anio=:a AND m.estado='PAGADA')");$st->execute([':m'=>$mes,':a'=>$anio]);$sinPago=(int)$st->fetchColumn();
+ $st=$pdo->prepare("SELECT COUNT(*) FROM alumnos a WHERE a.estado_administrativo='ACTIVO' AND a.plan_actual_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM mensualidades m WHERE m.alumno_id=a.id AND m.mes=:m AND m.anio=:a AND m.estado='PAGADA') AND NOT EXISTS(SELECT 1 FROM curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=a.id AND ci.estado IN ('PROGRAMADO','EN_CURSO'))");$st->execute([':m'=>$mes,':a'=>$anio]);$sinPago=(int)$st->fetchColumn();
  if($sinPago>0)$alertas[]=['tipo'=>'PAGO','nivel'=>'ALTA','titulo'=>"{$sinPago} alumno".($sinPago===1?'':'s')." sin mensualidad del mes",'detalle'=>'Revisar pagos pendientes antes de permitir acceso a clase.','href'=>'/alumnos.php?alerta=sin_pago'];
  $manana=$hoy->modify('+1 day')->format('Y-m-d');
  $st=$pdo->prepare("SELECT COUNT(*) FROM avisos_ausencia WHERE estado='ACTIVO' AND :f BETWEEN fecha_desde AND fecha_hasta");$st->execute([':f'=>$manana]);$aus=(int)$st->fetchColumn();
