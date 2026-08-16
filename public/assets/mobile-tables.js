@@ -1,16 +1,20 @@
 (function(){
+  const mobile=window.matchMedia('(max-width: 750px)');
+
+  function headers(table){
+    return [...table.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+  }
+
   function prepararTabla(table){
-    if(table.dataset.hacheResponsive==='1') return;
-    const headers=[...table.querySelectorAll('thead th')].map(th=>th.textContent.trim());
-    if(!headers.length) return;
-    table.dataset.hacheResponsive='1';
-    table.classList.add('hache-responsive-table');
+    const labels=headers(table);
+    if(!labels.length) return;
     table.querySelectorAll('tbody tr').forEach(tr=>{
       [...tr.children].forEach((td,i)=>{
-        if(td.tagName!=='TD') return;
-        td.dataset.label=headers[i]||'';
+        if(td.tagName==='TD') td.dataset.label=labels[i]||'';
       });
     });
+    table.dataset.hacheResponsive='1';
+    table.classList.toggle('hache-responsive-table',mobile.matches);
   }
 
   function preparar(root=document){
@@ -18,6 +22,8 @@
   }
 
   preparar();
+  mobile.addEventListener?.('change',()=>preparar());
+
   const obs=new MutationObserver(muts=>{
     muts.forEach(m=>m.addedNodes.forEach(n=>{
       if(n.nodeType!==1) return;
