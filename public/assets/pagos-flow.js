@@ -1,123 +1,35 @@
 (function(){
-    if (window.location.pathname !== '/pagos.php') return;
+if(window.location.pathname!=='/pagos.php')return;
+const params=new URLSearchParams(location.search),prefAlumno=params.get('alumno_id'),prefTipo=params.get('tipo'),cursoId=params.get('curso_id');
+const originalFetch=window.fetch.bind(window);let contexto=null;
+const getUser=()=>{try{return JSON.parse(sessionStorage.getItem('hache_usuario')||'{}')}catch(e){return{}}};
+const money=v=>Number(v||0).toLocaleString('es-MX',{style:'currency',currency:'MXN'});
 
-    const params = new URLSearchParams(window.location.search);
-    const alumnoId = params.get('alumno_id');
-    const tipo = params.get('tipo');
-    const cursoId = params.get('curso_id');
+function caja(){let x=document.getElementById('hache-pago-contexto');if(!x){x=document.createElement('div');x.id='hache-pago-contexto';x.style.cssText='display:none;margin:0 0 14px;padding:11px 12px;border-radius:9px;font-size:13px;line-height:1.45';const f=document.getElementById('formMessage');if(f)f.insertAdjacentElement('afterend',x);}return x;}
+function aviso(html,tipo='info'){const x=caja();x.style.display='block';x.style.background=tipo==='error'?'#fee2e2':tipo==='warn'?'#fef3c7':'#e0f2fe';x.style.color=tipo==='error'?'#991b1b':tipo==='warn'?'#92400e':'#075985';x.innerHTML=html;}
+function limpiarAviso(){const x=caja();x.style.display='none';x.innerHTML='';}
 
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async function(input, init){
-        const url = typeof input === 'string' ? input : (input && input.url) || '';
-        if (cursoId && url.includes('/api/pagos.php') && init && String(init.method || 'GET').toUpperCase() === 'POST' && init.body) {
-            try {
-                const body = JSON.parse(init.body);
-                if (body.tipo === 'INTENSIVO') {
-                    body.curso_intensivo_id = cursoId;
-                    init = Object.assign({}, init, { body: JSON.stringify(body) });
-                }
-            } catch(e) {}
-        }
-        return originalFetch(input, init);
-    };
+async function cargarContexto(){const alumno=document.getElementById('alumno_id'),tipo=document.getElementById('tipo');if(!alumno?.value){contexto=null;limpiarAviso();return;}const r=await originalFetch('/api/pago-contexto.php?alumno_id='+encodeURIComponent(alumno.value));const d=await r.json();if(!d.ok)return;contexto=d;renderContexto(tipo?.value||'');}
+function renderContexto(tipo){limpiarAviso();if(!contexto)return;const submit=document.querySelector('#formPago button[type="submit"]');if(submit)submit.disabled=false;
+ if(tipo==='INSCRIPCION'&&!contexto.inscripcion_permitida){aviso('Este alumno ya tiene una inscripción reciente. La próxima inscripción puede cobrarse a partir del <b>'+new Date(contexto.proxima_inscripcion+'T12:00:00').toLocaleDateString('es-MX')+'</b>.','error');if(submit)submit.disabled=true;return;}
+ if(tipo==='MENSUALIDAD'&&contexto.mensualidad_actual?.estado==='PAGADA'){aviso('La mensualidad de este mes <b>ya está pagada</b>.','error');if(submit)submit.disabled=true;return;}
+ if(tipo==='MENSUALIDAD'&&contexto.mensualidades_pendientes?.length){const p=contexto.mensualidades_pendientes[0];aviso('Ojo: existe una mensualidad anterior pendiente ('+String(p.mes).padStart(2,'0')+'/'+p.anio+').','warn');}
+ if(tipo==='MENSUALIDAD'&&contexto.intensivo_activo){aviso('Este alumno también tiene un curso intensivo activo. Verifica que realmente deseas cobrar mensualidad regular.','warn');}
+}
 
-    async function obtenerAlumno(id){
-        const r = await originalFetch('/api/alumnos.php');
-        const d = await r.json();
-        if(!d.ok) throw new Error(d.error || 'No se pudo cargar el alumno');
-        return (d.alumnos || []).find(a => a.id === id) || null;
-    }
+function detectarCambioPlan(){const tipo=document.getElementById('tipo'),importe=document.getElementById('importe');if(!contexto||tipo?.value!=='MENSUALIDAD'||!importe?.value)return null;const valor=Number(importe.value),actual=contexto.alumno?.plan_actual_id;return (contexto.planes||[]).filter(p=>p.id!==actual&&Math.abs(Number(p.precio)-valor)<0.01);}
+function mostrarCoincidencia(){document.getElementById('hache-cambio-plan')?.remove();const matches=detectarCambioPlan();if(!matches?.length)return;const imp=document.getElementById('importe');const g=document.createElement('div');g.id='hache-cambio-plan';g.className='form-group';if(matches.length===1){g.innerHTML='<div style="padding:10px 12px;border-radius:8px;background:#e0f2fe;color:#075985;font-size:13px">El importe coincide con <b>'+matches[0].nombre+'</b>. Al registrar te preguntaré si deseas cambiar el plan del alumno.</div>';g.dataset.planId=matches[0].id;}else{g.innerHTML='<label>El importe coincide con varios planes. Si deseas cambiarlo, elige cuál:</label><select id="hache-plan-coincidente"><option value="">Mantener plan actual</option>'+matches.map(p=>'<option value="'+p.id+'">'+p.nombre+' · '+money(p.precio)+'</option>').join('')+'</select>';}
+imp.closest('.form-group')?.insertAdjacentElement('afterend',g);}
 
-    async function obtenerPlanes(){
-        const r = await originalFetch('/api/planes.php');
-        const d = await r.json();
-        if(!d.ok) throw new Error(d.error || 'No se pudieron cargar los planes');
-        return d.planes || [];
-    }
+window.fetch=async function(input,init){let url=typeof input==='string'?input:(input&&input.url)||'';const method=String(init?.method||'GET').toUpperCase();if(url.includes('/api/pagos.php')&&method==='POST'&&init?.body){try{const body=JSON.parse(init.body);if(body.tipo==='INTENSIVO'&&cursoId)body.curso_intensivo_id=cursoId;if(body.tipo==='MENSUALIDAD'){const matches=detectarCambioPlan();let planId=document.getElementById('hache-plan-coincidente')?.value||document.getElementById('hache-cambio-plan')?.dataset.planId||'';if(planId&&matches?.some(p=>p.id===planId)){const p=matches.find(x=>x.id===planId);if(confirm('El importe coincide con '+p.nombre+' ('+money(p.precio)+'). ¿Cambiar el plan del alumno y registrar el pago?'))body.cambiar_plan_id=planId;}}
+ init=Object.assign({},init,{body:JSON.stringify(body)});url='/api/pagos-smart.php';input=url;}catch(e){}
+}return originalFetch(input,init);};
 
-    async function sugerirPlanSiHaceFalta(){
-        const alumnoSelect = document.getElementById('alumno_id');
-        const tipoSelect = document.getElementById('tipo');
-        const importe = document.getElementById('importe');
-        if(!alumnoSelect || !tipoSelect) return;
+async function sugerirPlanSinPlan(){const alumno=document.getElementById('alumno_id'),tipo=document.getElementById('tipo'),importe=document.getElementById('importe');document.getElementById('hache-asignar-plan')?.remove();if(!contexto||!alumno?.value||tipo?.value!=='MENSUALIDAD'||contexto.alumno?.plan_actual_id)return;const grupo=document.createElement('div');grupo.id='hache-asignar-plan';grupo.className='form-group';grupo.innerHTML='<label>Este alumno no tiene plan activo. Asignar plan</label><select id="hache_plan_sugerido"><option value="">Seleccionar plan...</option>'+(contexto.planes||[]).map(p=>'<option value="'+p.id+'" data-precio="'+p.precio+'">'+p.nombre+' · '+p.sesiones_semana+' sesiones/semana · '+money(p.precio)+'</option>').join('')+'</select><div style="margin-top:7px;font-size:12px;color:#64748b">Se actualizará la ficha del alumno y este pago usará el nuevo plan.</div>';tipo.closest('.form-group')?.insertAdjacentElement('afterend',grupo);grupo.querySelector('select').addEventListener('change',async function(){if(!this.value)return;const r=await originalFetch('/api/asignar-plan.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alumno_id:alumno.value,plan_id:this.value})});const d=await r.json();if(!r.ok||!d.ok){alert(d.error||'No se pudo asignar');return;}if(importe)importe.value=d.plan.precio;await cargarContexto();grupo.innerHTML='<div style="padding:11px;border-radius:8px;background:#dcfce7;color:#166534;font-weight:700">Plan asignado: '+d.plan.nombre+'</div>';});}
 
-        const id = alumnoSelect.value;
-        const esMensualidad = tipoSelect.value === 'MENSUALIDAD';
-        const existente = document.getElementById('hache-asignar-plan');
+async function invalidarPago(id,folio){const motivo=prompt('Motivo para invalidar el pago #'+folio+':');if(!motivo)return;const u=getUser();if(!u.id){alert('Sesión administrativa no disponible');return;}if(!confirm('El pago quedará en el historial como INVALIDADO. ¿Continuar?'))return;const r=await originalFetch('/api/invalidar-pago.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pago_id:id,motivo,usuario_id:u.id})});const d=await r.json();if(!r.ok||!d.ok){alert(d.error||'No se pudo invalidar');return;}location.reload();}
+async function agregarAccionesPagos(){const r=await originalFetch('/api/pagos.php'),d=await r.json();if(!d.ok)return;let n=0;const timer=setInterval(()=>{n++;const table=document.querySelector('#pagosBody')?.closest('table'),rows=[...document.querySelectorAll('#pagosBody tr')];if(!table||rows.length!==(d.pagos||[]).length){if(n>40)clearInterval(timer);return;}clearInterval(timer);const hr=table.querySelector('thead tr');if(hr&&!hr.querySelector('[data-hache-accion]')){const th=document.createElement('th');th.dataset.hacheAccion='1';th.textContent='Acción';hr.appendChild(th);}rows.forEach((tr,i)=>{if(tr.querySelector('[data-hache-accion]'))return;const p=d.pagos[i],td=document.createElement('td');td.dataset.hacheAccion='1';if(p.estado==='VALIDO'){const b=document.createElement('button');b.type='button';b.textContent='Invalidar';b.style.cssText='border:0;border-radius:7px;padding:7px 9px;background:#fee2e2;color:#991b1b;font-weight:700;cursor:pointer';b.onclick=()=>invalidarPago(p.id,p.folio);td.appendChild(b);}else td.textContent='—';tr.appendChild(td);});},100);}
 
-        if(!id || !esMensualidad){ if(existente) existente.remove(); return; }
-
-        const alumno = await obtenerAlumno(id);
-        if(!alumno || alumno.plan_actual_id){ if(existente) existente.remove(); return; }
-        if(existente) return;
-
-        const planes = await obtenerPlanes();
-        const grupo = document.createElement('div');
-        grupo.id = 'hache-asignar-plan';
-        grupo.className = 'form-group';
-        grupo.innerHTML = '<label for="hache_plan_sugerido">Este alumno no tiene plan activo. Asignar plan</label>' +
-          '<select id="hache_plan_sugerido"><option value="">Seleccionar plan...</option>' +
-          planes.map(p => `<option value="${p.id}" data-precio="${p.precio}">${p.nombre} · ${p.sesiones_semana} sesiones/semana · $${Number(p.precio).toLocaleString('es-MX')}</option>`).join('') +
-          '</select><div style="margin-top:7px;font-size:12px;color:#64748b">El plan se asignará al alumno y se usará para esta mensualidad.</div>';
-
-        const tipoGroup = tipoSelect.closest('.form-group');
-        if(tipoGroup) tipoGroup.insertAdjacentElement('afterend', grupo);
-
-        document.getElementById('hache_plan_sugerido').addEventListener('change', async function(){
-            if(!this.value) return;
-            this.disabled = true;
-            try{
-                const r = await originalFetch('/api/asignar-plan.php', {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({alumno_id:id, plan_id:this.value})
-                });
-                const d = await r.json();
-                if(!r.ok || !d.ok) throw new Error(d.error || 'No se pudo asignar el plan');
-
-                const opt = alumnoSelect.selectedOptions[0];
-                if(opt) opt.dataset.planPrecio = d.plan.precio;
-                if(importe) importe.value = d.plan.precio;
-                grupo.innerHTML = `<div style="padding:11px 12px;border-radius:8px;background:#e5f6ec;color:#18733b;font-weight:700">Plan asignado: ${d.plan.nombre}</div>`;
-            }catch(e){
-                this.disabled = false;
-                alert(e.message || 'No se pudo asignar el plan');
-            }
-        });
-    }
-
-    function aplicarPrefill(){
-        const alumno=document.getElementById('alumno_id');
-        const tipoSelect=document.getElementById('tipo');
-        const importe=document.getElementById('importe');
-        const modal=document.getElementById('modalPago');
-        if(!alumno||!tipoSelect||!modal)return false;
-
-        if(alumnoId)alumno.value=alumnoId;
-        if(tipo)tipoSelect.value=tipo;
-        if(alumnoId&&alumno.value!==alumnoId)return false;
-
-        alumno.dispatchEvent(new Event('change',{bubbles:true}));
-        tipoSelect.dispatchEvent(new Event('change',{bubbles:true}));
-        if(tipo==='INTENSIVO'&&importe&&!importe.value)importe.value='1200';
-        modal.style.display='flex';
-        sugerirPlanSiHaceFalta().catch(console.error);
-        return true;
-    }
-
-    function enganchar(){
-        const alumno=document.getElementById('alumno_id');
-        const tipoSelect=document.getElementById('tipo');
-        if(!alumno||!tipoSelect)return false;
-        alumno.addEventListener('change',()=>sugerirPlanSiHaceFalta().catch(console.error));
-        tipoSelect.addEventListener('change',()=>sugerirPlanSiHaceFalta().catch(console.error));
-        return true;
-    }
-
-    let intentos=0; const timer=setInterval(function(){
-        intentos++;
-        if(enganchar()){
-            clearInterval(timer);
-            if(alumnoId||tipo||cursoId) aplicarPrefill();
-        } else if(intentos>50) clearInterval(timer);
-    },120);
+function enganchar(){const a=document.getElementById('alumno_id'),t=document.getElementById('tipo'),i=document.getElementById('importe'),m=document.getElementById('modalPago');if(!a||!t||!i||!m)return false;const refrescar=async()=>{await cargarContexto();await sugerirPlanSinPlan();mostrarCoincidencia();};a.addEventListener('change',()=>refrescar().catch(console.error));t.addEventListener('change',()=>refrescar().catch(console.error));i.addEventListener('input',mostrarCoincidencia);if(prefAlumno)a.value=prefAlumno;if(prefTipo)t.value=prefTipo;if(prefAlumno||prefTipo||cursoId){a.dispatchEvent(new Event('change',{bubbles:true}));t.dispatchEvent(new Event('change',{bubbles:true}));m.style.display='flex';}refrescar().catch(console.error);return true;}
+let tries=0,timer=setInterval(()=>{tries++;if(enganchar()||tries>50)clearInterval(timer);},120);agregarAccionesPagos().catch(console.error);
 })();
