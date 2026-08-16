@@ -41,6 +41,10 @@ body.hache-menu-open #hache-menu-panel{transform:translateX(0)}body.hache-menu-o
   .header h1{font-size:var(--hache-page-title)!important}
   .container>h1,.contenedor>h1,.wrap h1{font-size:var(--hache-page-title)!important;margin-top:0!important}
 
+  .tabs{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;overflow:visible!important;margin-left:0!important;margin-right:0!important}
+  .tabs .tab{width:100%!important;min-width:0!important;white-space:normal!important;padding:10px 9px!important;font-size:12px!important;line-height:1.2!important}
+  .tabs .tab:nth-child(3){grid-column:1/-1!important}
+
   .top-bar{gap:10px!important;margin-bottom:14px!important}.card,.tabla-contenedor,.course-card{border-radius:12px!important;width:100%!important}.table-container,.tabla-contenedor{width:100%!important;overflow:visible!important}.course-info{grid-template-columns:1fr 1fr!important;gap:8px!important}.info-item{padding:10px!important}.hache-flow-box{padding:16px;border-radius:14px}.hache-flow-actions{flex-direction:column-reverse}.hache-flow-btn{width:100%}
 
   table.hache-responsive-table{display:block!important;width:100%!important;min-width:0!important;border:0!important;background:transparent!important}
