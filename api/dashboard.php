@@ -13,6 +13,8 @@ try{
  $intensivos=(int)$pdo->query("SELECT COUNT(*) FROM cursos_intensivos WHERE estado IN ('PROGRAMADO','EN_CURSO')")->fetchColumn();
  $avisos=(int)$pdo->query("SELECT COUNT(*) FROM avisos_ausencia WHERE estado='ACTIVO' AND CURDATE() BETWEEN fecha_desde AND fecha_hasta")->fetchColumn();
  $repos=(int)$pdo->query("SELECT COUNT(*) FROM reposiciones_regulares WHERE estado='DISPONIBLE'")->fetchColumn();
+ $sinPagoSt=$pdo->prepare("SELECT COUNT(*) FROM alumnos a WHERE a.estado_administrativo='ACTIVO' AND a.plan_actual_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM mensualidades m WHERE m.alumno_id=a.id AND m.mes=:m AND m.anio=:a AND m.estado='PAGADA')");$sinPagoSt->execute([':m'=>$mes,':a'=>$anio]);$sinPago=(int)$sinPagoSt->fetchColumn();
+ $alertas=($sinPago>0?1:0)+($avisos>0?1:0)+($repos>0?1:0);
  $st=$pdo->prepare("SELECT h.hora_inicio,h.hora_fin,COUNT(DISTINCT a.id) alumnos FROM horarios h LEFT JOIN alumnos a ON a.horario_preferido_id=h.id AND a.estado_administrativo='ACTIVO' WHERE h.activo=1 GROUP BY h.id,h.hora_inicio,h.hora_fin HAVING alumnos>0 ORDER BY h.hora_inicio");$st->execute();$horarios=$st->fetchAll();
- out(['ok'=>true,'fecha'=>$hoy,'alumnos_activos'=>$alumnos,'pendientes'=>$pend,'mensualidades'=>['cantidad'=>(int)$mens['c'],'total'=>(float)$mens['total']],'caja'=>['cantidad'=>(int)$caja['c'],'total'=>(float)$caja['total']],'intensivos'=>$intensivos,'avisos_hoy'=>$avisos,'reposiciones'=>$repos,'horarios'=>$horarios]);
+ out(['ok'=>true,'fecha'=>$hoy,'alumnos_activos'=>$alumnos,'pendientes'=>$pend,'mensualidades'=>['cantidad'=>(int)$mens['c'],'total'=>(float)$mens['total']],'caja'=>['cantidad'=>(int)$caja['c'],'total'=>(float)$caja['total']],'intensivos'=>$intensivos,'avisos_hoy'=>$avisos,'reposiciones'=>$repos,'sin_pago_mes'=>$sinPago,'alertas'=>$alertas,'horarios'=>$horarios]);
 }catch(Throwable $e){out(['ok'=>false,'error'=>$e->getMessage()],500);}
