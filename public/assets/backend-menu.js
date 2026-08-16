@@ -10,7 +10,7 @@ const groups=[
  {id:'inicio',label:'Inicio',icon:'⌂',items:[['/dashboard.php','⌂','Dashboard'],['/alertas.php','⚑','Centro de alertas']]},
  {id:'alumnos',label:'Alumnos',icon:'👥',items:[['/alumnos.php','👥','Control de alumnos'],['/agregar-alumno.php','➕','Nuevo alumno','ADMIN']]},
  {id:'operacion',label:'Operación',icon:'✓',items:[['/sesiones.php','✓','Asistencia'],['/ausencias.php','↺','Ausencias y reposiciones'],['/horarios.php','🕒','Horarios'],['/intensivos.php','🏊','Cursos intensivos']]},
- {id:'finanzas',label:'Finanzas',icon:'💳',items:[['/pagos.php','💳','Pagos'],['/resumen-financiero.php','📊','Resumen financiero'],['/reportes.php','▤','Reportes'],['/cierres-mensuales.php','▣','Cierre mensual','ADMIN'],['/comisiones-proa.php','◆','Comisiones PROA','ADMIN']]},
+ {id:'finanzas',label:'Finanzas',icon:'💳',items:[['/pagos.php','💳','Pagos'],['/resumen-financiero.php','📊','Resumen financiero'],['/reportes.php','▤','Reportes'],['/exportaciones.php','⇩','Exportaciones'],['/cierres-mensuales.php','▣','Cierre mensual','ADMIN'],['/comisiones-proa.php','◆','Comisiones PROA','ADMIN']]},
  {id:'sistema',label:'Sistema',icon:'⚙',items:[['/mensajes.php','✉','Mensajes'],['/configuracion.php','⚙','Configuración'],['/usuarios.php','♟','Usuarios','ADMIN'],['/auditoria.php','◎','Auditoría','ADMIN'],['/estado-sistema.php','◉','Estado del sistema','ADMIN']]}
 ];
 function itemPermitido(x){return !x[3]||x[3]===role}
