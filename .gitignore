@@ -6,6 +6,7 @@
 
 # Credenciales locales del servidor
 config/database.local.php
+config/push-keys.php
 
 # Respaldos y temporales
 *.bak
