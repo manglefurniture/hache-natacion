@@ -25,8 +25,8 @@ try {
     $stmt=$pdo->prepare("SELECT id,estado,fecha_pago,importe_cobrado FROM mensualidades WHERE alumno_id=:id AND mes=:mes AND anio=:anio LIMIT 1");
     $stmt->execute([':id'=>$alumnoId,':mes'=>(int)date('n'),':anio'=>(int)date('Y')]); $mensualidadActual=$stmt->fetch() ?: null;
 
-    $stmt=$pdo->prepare("SELECT mes,anio,estado,importe_a_cobrar FROM mensualidades WHERE alumno_id=:id AND estado='PENDIENTE' AND (anio<:anio OR (anio=:anio AND mes<:mes)) ORDER BY anio DESC,mes DESC LIMIT 3");
-    $stmt->execute([':id'=>$alumnoId,':anio'=>(int)date('Y'),':mes'=>(int)date('n')]); $pendientes=$stmt->fetchAll();
+    $stmt=$pdo->prepare("SELECT mes,anio,estado,importe_a_cobrar FROM mensualidades WHERE alumno_id=:id AND estado='PENDIENTE' AND (anio<:anio1 OR (anio=:anio2 AND mes<:mes)) ORDER BY anio DESC,mes DESC LIMIT 3");
+    $stmt->execute([':id'=>$alumnoId,':anio1'=>(int)date('Y'),':anio2'=>(int)date('Y'),':mes'=>(int)date('n')]); $pendientes=$stmt->fetchAll();
 
     $stmt=$pdo->prepare("SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:id AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1");
     $stmt->execute([':id'=>$alumnoId]); $intensivo=$stmt->fetch() ?: null;
