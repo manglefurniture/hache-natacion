@@ -11,7 +11,7 @@ const groups=[
  {id:'inicio',label:'Inicio',icon:'⌂',items:[['/dashboard.php','⌂','Dashboard']]},
  {id:'alumnos',label:'Alumnos',icon:'👥',items:[['/alumnos.php','👥','Control de alumnos'],['/agregar-alumno.php','➕','Nuevo alumno','ADMIN']]},
  {id:'operacion',label:'Operación',icon:'✓',items:[['/sesiones.php','✓','Asistencia'],['/ausencias.php','↺','Ausencias y reposiciones'],['/horarios.php','🕒','Horarios'],['/intensivos.php','🏊','Cursos intensivos']]},
- {id:'finanzas',label:'Finanzas',icon:'💳',items:[['/pagos.php','💳','Pagos'],['/resumen-financiero.php','📊','Resumen financiero'],['/reportes.php','▤','Reportes']]},
+ {id:'finanzas',label:'Finanzas',icon:'💳',items:[['/pagos.php','💳','Pagos'],['/resumen-financiero.php','📊','Resumen financiero'],['/reportes.php','▤','Reportes'],['/comisiones-proa.php','◆','Comisiones PROA','ADMIN']]},
  {id:'sistema',label:'Sistema',icon:'⚙',items:[['/mensajes.php','✉','Mensajes'],['/configuracion.php','⚙','Configuración'],['/usuarios.php','♟','Usuarios','ADMIN']]}
 ];
 
