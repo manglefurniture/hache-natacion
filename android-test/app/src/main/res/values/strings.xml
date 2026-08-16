@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Hache Natación</string>
+    <string name="launchUrl">https://hache.162-243-32-80.sslip.io/</string>
+    <string name="assetStatements">[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://hache.162-243-32-80.sslip.io"}}]</string>
+</resources>
