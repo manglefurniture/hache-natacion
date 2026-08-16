@@ -1,4 +1,4 @@
-const CACHE_NAME='hache-pwa-v3';
+const CACHE_NAME='hache-pwa-v4';
 const STATIC_ASSETS=['/offline.html','/manifest.webmanifest','/assets/icons/hache-icon.svg'];
 
 self.addEventListener('install',event=>{
@@ -16,7 +16,6 @@ self.addEventListener('fetch',event=>{
   if(request.method!=='GET') return;
   const url=new URL(request.url);
   if(url.origin!==self.location.origin) return;
-  // Nunca cachear API, sesiones ni datos administrativos dinámicos.
   if(url.pathname.startsWith('/api/')) return;
 
   if(request.mode==='navigate'){
@@ -24,7 +23,6 @@ self.addEventListener('fetch',event=>{
     return;
   }
 
-  // JS/CSS network-first para que web, PWA y Android reciban los cambios al momento.
   if(url.pathname.startsWith('/assets/') && !url.pathname.startsWith('/assets/icons/')){
     event.respondWith(fetch(request,{cache:'no-store'}).catch(()=>caches.match(request)));
     return;
