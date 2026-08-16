@@ -40,18 +40,28 @@ jobs:
         working-directory: android-test
         run: gradle assembleDebug --stacktrace
 
-      - name: Prepare APK and Digital Asset Links
+      - name: Prepare APK
         shell: bash
         run: |
           mkdir -p android-test/output
           cp android-test/app/build/outputs/apk/debug/app-debug.apk android-test/output/Hache-Natacion-v0.1-test.apk
-          FP=$(keytool -list -v -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android | awk '/SHA256:/{print $2; exit}')
+
+      - name: Generate Digital Asset Links
+        shell: bash
+        run: |
+          APK="android-test/output/Hache-Natacion-v0.1-test.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          FP_RAW=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
+          test -n "$FP_RAW"
+          FP=$(echo "$FP_RAW" | sed 's/../&:/g;s/:$//' | tr '[:lower:]' '[:upper:]')
           printf '[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"mx.hachenatacion.app","sha256_cert_fingerprints":["%s"]}}]\n' "$FP" > android-test/output/assetlinks.json
           echo "$FP" > android-test/output/SHA256-FINGERPRINT.txt
 
       - name: Upload APK package
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hache-natacion-apk-test
           path: android-test/output/*
+          if-no-files-found: error
           retention-days: 30
