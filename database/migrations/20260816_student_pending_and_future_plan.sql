@@ -14,7 +14,18 @@ ALTER TABLE alumnos
         (plan_programado_id IS NOT NULL AND plan_programado_desde IS NOT NULL)
     );
 
--- Al entrar a un intensivo, el alumno deja de operar como regular.
+-- Los alumnos que ya están en un intensivo activo dejan de operar como regulares.
+UPDATE alumnos a
+INNER JOIN curso_intensivo_alumnos cia ON cia.alumno_id = a.id
+INNER JOIN cursos_intensivos ci ON ci.id = cia.curso_intensivo_id
+SET a.plan_actual_id = NULL,
+    a.horario_preferido_id = NULL,
+    a.plan_programado_id = NULL,
+    a.plan_programado_desde = NULL,
+    a.updated_at = NOW()
+WHERE ci.estado IN ('PROGRAMADO','EN_CURSO');
+
+-- Y los nuevos ingresos a intensivo se convierten automáticamente.
 DROP TRIGGER IF EXISTS trg_cia_convertir_a_intensivo;
 DELIMITER $$
 CREATE TRIGGER trg_cia_convertir_a_intensivo
