@@ -1,0 +1,7 @@
+(function(){
+if(location.pathname!=='/alumnos.php')return;
+let planes=null;
+async function cargarPlanes(){if(planes)return planes;const r=await fetch('/api/planes.php'),d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'No se pudieron cargar los planes');planes=d.planes||[];return planes;}
+async function asignar(btn){try{const ps=await cargarPlanes();if(!ps.length){alert('No hay planes activos disponibles.');return;}const actual=btn.dataset.name||'alumno';const opciones=ps.map((p,i)=>`${i+1}. ${p.nombre} · ${Number(p.sesiones_semana)} sesiones · $${Number(p.precio).toLocaleString('es-MX')}`).join('\n');const elegido=prompt(`Asignar plan a ${actual}:\n\n${opciones}\n\nEscribe el número del plan:`);if(elegido===null)return;const idx=Number(elegido)-1;if(!Number.isInteger(idx)||idx<0||idx>=ps.length){alert('Selección inválida.');return;}const p=ps[idx];if(!confirm(`¿Asignar ${p.nombre} a ${actual}?`))return;btn.disabled=true;const r=await fetch('/api/asignar-plan.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alumno_id:btn.dataset.id,plan_id:p.id})}),d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'No se pudo asignar el plan');location.reload();}catch(e){alert(e.message)}finally{btn.disabled=false}}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-quick-plan]');if(b)asignar(b)});
+})();
