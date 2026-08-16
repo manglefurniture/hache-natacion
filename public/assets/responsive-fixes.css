@@ -75,8 +75,9 @@ html.hache-touch-ui table.hache-responsive-table tbody tr{
   border-radius:14px!important;
   box-shadow:0 3px 12px rgba(15,23,42,.045)!important;
 }
-/* Filters must always win over the responsive card display rule. */
+/* All filtering layers must win over the responsive card display rule. */
 html.hache-touch-ui table.hache-responsive-table tbody tr.hache-filter-hidden,
+html.hache-touch-ui table.hache-responsive-table tbody tr.hache-person-hidden,
 html.hache-touch-ui table.hache-responsive-table tbody tr[hidden]{display:none!important;}
 html.hache-touch-ui table.hache-responsive-table tbody td{
   display:block!important;
