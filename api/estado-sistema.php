@@ -1,0 +1,6 @@
+<?php
+declare(strict_types=1);
+header('Content-Type: application/json; charset=utf-8');
+$config=require __DIR__.'/../config/database.php';require_once __DIR__.'/../config/auth.php';auth_require(['ADMIN']);
+$pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+$version=(string)($pdo->query("SELECT valor FROM configuracion WHERE clave='version_app' LIMIT 1")->fetchColumn()?:'1.0');$db=(string)$pdo->query('SELECT VERSION()')->fetchColumn();$counts=[];foreach(['alumnos','pagos','mensualidades','cursos_intensivos','usuarios','auditoria_eventos','cierres_mensuales'] as $t){try{$counts[$t]=(int)$pdo->query("SELECT COUNT(*) FROM {$t}")->fetchColumn();}catch(Throwable $e){$counts[$t]=null;}}$commit='';$head=__DIR__.'/../.git/HEAD';if(is_file($head)){$v=trim((string)file_get_contents($head));if(str_starts_with($v,'ref: ')){$ref=__DIR__.'/../.git/'.substr($v,5);if(is_file($ref))$commit=substr(trim((string)file_get_contents($ref)),0,10);}else $commit=substr($v,0,10);}echo json_encode(['ok'=>true,'version_app'=>$version,'php'=>PHP_VERSION,'mariadb'=>$db,'commit'=>$commit?:'no disponible','server_time'=>date('c'),'counts'=>$counts],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
