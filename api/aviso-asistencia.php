@@ -1,0 +1,5 @@
+<?php
+declare(strict_types=1);
+header('Content-Type: application/json; charset=utf-8');
+$config=require __DIR__.'/../config/database.php';
+try{$pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);$sid=(string)($_GET['sesion_id']??'');$aid=(string)($_GET['alumno_id']??'');$st=$pdo->prepare("SELECT aa.id,aa.motivo,aa.fecha_desde,aa.fecha_hasta FROM sesiones s JOIN avisos_ausencia aa ON aa.alumno_id=:a AND aa.estado='ACTIVO' AND s.fecha BETWEEN aa.fecha_desde AND aa.fecha_hasta WHERE s.id=:s ORDER BY aa.created_at DESC LIMIT 1");$st->execute([':a'=>$aid,':s'=>$sid]);$x=$st->fetch();echo json_encode(['ok'=>true,'justificada'=>(bool)$x,'aviso'=>$x?:null],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);}catch(Throwable $e){http_response_code(500);echo json_encode(['ok'=>false,'error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}
