@@ -4,8 +4,141 @@
     const params = new URLSearchParams(window.location.search);
     const cursoId = params.get('id');
     const alumnoNuevoId = params.get('alumno_nuevo');
+    let alumnosCursoActuales = [];
 
     if (!cursoId) return;
+
+    function crearModalContinuidad(){
+        if(document.getElementById('hache-continuidad-modal')) return;
+
+        document.body.insertAdjacentHTML('beforeend', `
+            <div id="hache-continuidad-modal" class="hache-flow-modal" aria-hidden="true">
+                <div class="hache-flow-box">
+                    <div class="hache-flow-head">
+                        <div>
+                            <strong id="hache-continuidad-titulo">Continuidad</strong>
+                            <div class="hache-flow-sub">Decide si el alumno pasa a mensualidad regular.</div>
+                        </div>
+                        <button type="button" id="hache-continuidad-cerrar" class="hache-flow-close">×</button>
+                    </div>
+                    <div id="hache-continuidad-error" class="hache-flow-error"></div>
+                    <form id="hache-continuidad-form">
+                        <input type="hidden" id="hache-continuidad-alumno">
+                        <label class="hache-flow-label" for="hache-continua">¿Continúa como alumno regular?</label>
+                        <select id="hache-continua" class="hache-flow-control">
+                            <option value="1">Sí, continúa</option>
+                            <option value="0">No continúa</option>
+                        </select>
+                        <div id="hache-continuidad-datos">
+                            <label class="hache-flow-label" for="hache-plan">Plan</label>
+                            <select id="hache-plan" class="hache-flow-control"></select>
+                            <label class="hache-flow-label" for="hache-horario">Horario regular</label>
+                            <select id="hache-horario" class="hache-flow-control"></select>
+                            <label class="hache-flow-label" for="hache-importe">Importe de continuidad</label>
+                            <input id="hache-importe" type="number" min="0" step="0.01" class="hache-flow-control">
+                        </div>
+                        <label class="hache-flow-label" for="hache-observacion">Observación</label>
+                        <textarea id="hache-observacion" class="hache-flow-control" rows="3"></textarea>
+                        <div class="hache-flow-actions">
+                            <button type="button" id="hache-continuidad-cancelar" class="hache-flow-btn hache-flow-btn-secondary">Cancelar</button>
+                            <button type="submit" class="hache-flow-btn hache-flow-btn-primary">Guardar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `);
+
+        const modal = document.getElementById('hache-continuidad-modal');
+        const cerrar = ()=>{ modal.classList.remove('is-open'); modal.setAttribute('aria-hidden','true'); };
+        document.getElementById('hache-continuidad-cerrar').addEventListener('click', cerrar);
+        document.getElementById('hache-continuidad-cancelar').addEventListener('click', cerrar);
+        modal.addEventListener('click', e=>{ if(e.target===modal) cerrar(); });
+        document.getElementById('hache-continua').addEventListener('change', actualizarVisibilidadContinuidad);
+        document.getElementById('hache-plan').addEventListener('change', actualizarImportePlan);
+        document.getElementById('hache-continuidad-form').addEventListener('submit', guardarContinuidad);
+    }
+
+    function actualizarVisibilidadContinuidad(){
+        const continua = document.getElementById('hache-continua').value === '1';
+        document.getElementById('hache-continuidad-datos').style.display = continua ? 'block' : 'none';
+    }
+
+    function actualizarImportePlan(){
+        const option = document.getElementById('hache-plan').selectedOptions[0];
+        if(option && option.dataset.precio){
+            document.getElementById('hache-importe').value = option.dataset.precio;
+        }
+    }
+
+    async function abrirContinuidad(alumno){
+        crearModalContinuidad();
+        const error = document.getElementById('hache-continuidad-error');
+        error.style.display='none';
+
+        const resp = await fetch('/api/continuidad-intensivo.php?curso_id='+encodeURIComponent(cursoId)+'&alumno_id='+encodeURIComponent(alumno.alumno_id));
+        const data = await resp.json();
+        if(!data.ok){ alert(data.error || 'No se pudo cargar la continuidad'); return; }
+
+        document.getElementById('hache-continuidad-titulo').textContent = 'Continuidad · ' + (alumno.alumno_nombre || 'Alumno');
+        document.getElementById('hache-continuidad-alumno').value = alumno.alumno_id;
+        document.getElementById('hache-continua').value = data.relacion.continua_regular === 0 || data.relacion.continua_regular === '0' ? '0' : '1';
+
+        const plan = document.getElementById('hache-plan');
+        plan.innerHTML = '<option value="">Seleccionar plan...</option>';
+        (data.planes||[]).forEach(p=>{
+            const o=document.createElement('option');
+            o.value=p.id;
+            o.textContent=p.nombre+' · $'+Number(p.precio||0).toLocaleString('es-MX');
+            o.dataset.precio=p.precio;
+            if((data.relacion.plan_continuidad_id || data.relacion.plan_actual_id)===p.id) o.selected=true;
+            plan.appendChild(o);
+        });
+
+        const horario = document.getElementById('hache-horario');
+        horario.innerHTML = '<option value="">Seleccionar horario...</option>';
+        (data.horarios||[]).forEach(h=>{
+            const o=document.createElement('option');
+            o.value=h.id;
+            o.textContent=(h.hora_inicio||'').substring(0,5)+' - '+(h.hora_fin||'').substring(0,5);
+            if(data.relacion.horario_preferido_id===h.id) o.selected=true;
+            horario.appendChild(o);
+        });
+
+        document.getElementById('hache-importe').value = data.relacion.importe_continuidad || plan.selectedOptions[0]?.dataset.precio || '';
+        document.getElementById('hache-observacion').value = data.relacion.observacion_continuidad || '';
+        actualizarVisibilidadContinuidad();
+
+        const modal=document.getElementById('hache-continuidad-modal');
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden','false');
+    }
+
+    async function guardarContinuidad(e){
+        e.preventDefault();
+        const error=document.getElementById('hache-continuidad-error');
+        error.style.display='none';
+        const continua=document.getElementById('hache-continua').value==='1';
+
+        const payload={
+            curso_id:cursoId,
+            alumno_id:document.getElementById('hache-continuidad-alumno').value,
+            continua_regular:continua,
+            plan_id:continua?document.getElementById('hache-plan').value:null,
+            horario_id:continua?document.getElementById('hache-horario').value:null,
+            importe_continuidad:continua?document.getElementById('hache-importe').value:null,
+            observacion_continuidad:document.getElementById('hache-observacion').value.trim()
+        };
+
+        try{
+            const resp=await fetch('/api/continuidad-intensivo.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+            const data=await resp.json();
+            if(!resp.ok || !data.ok) throw new Error(data.error || 'No se pudo guardar');
+            document.getElementById('hache-continuidad-modal').classList.remove('is-open');
+            await cargarDatos();
+            const msg=document.getElementById('message');
+            if(msg){ msg.textContent=continua?'Alumno convertido a regular.':'Continuidad registrada.'; msg.className='message success'; msg.style.display='block'; }
+        }catch(err){ error.textContent=err.message; error.style.display='block'; }
+    }
 
     async function cargarDatos() {
         const [cursoResp, alumnosResp] = await Promise.all([
@@ -15,41 +148,32 @@
 
         const cursoData = await cursoResp.json();
         const alumnosData = await alumnosResp.json();
-
         if (!cursoData.ok || !alumnosData.ok) return;
 
-        const inscritos = new Set((cursoData.alumnos || []).map(a => a.alumno_id));
+        alumnosCursoActuales = cursoData.alumnos || [];
+        const inscritos = new Set(alumnosCursoActuales.map(a => a.alumno_id));
         const candidatos = (alumnosData.alumnos || []).filter(a => !inscritos.has(a.id));
         const select = document.getElementById('alumno_id');
 
         if (select) {
             const valorActual = alumnoNuevoId || select.value;
             select.innerHTML = '<option value="">Seleccionar alumno...</option>';
-
             candidatos.forEach(alumno => {
                 const option = document.createElement('option');
                 option.value = alumno.id;
                 option.textContent = alumno.nombre;
                 select.appendChild(option);
             });
-
-            if (valorActual && candidatos.some(a => a.id === valorActual)) {
-                select.value = valorActual;
-            }
+            if (valorActual && candidatos.some(a => a.id === valorActual)) select.value = valorActual;
 
             let ayuda = document.getElementById('hache-intensivo-candidatos');
             if (!ayuda) {
                 ayuda = document.createElement('div');
                 ayuda.id = 'hache-intensivo-candidatos';
-                ayuda.style.marginTop = '8px';
-                ayuda.style.fontSize = '12px';
-                ayuda.style.color = '#64748b';
+                ayuda.className = 'hache-flow-help';
                 select.insertAdjacentElement('afterend', ayuda);
             }
-
-            ayuda.textContent = candidatos.length === 1
-                ? '1 alumno disponible para agregar.'
-                : candidatos.length + ' alumnos disponibles para agregar.';
+            ayuda.textContent = candidatos.length === 1 ? '1 alumno disponible para agregar.' : candidatos.length + ' alumnos disponibles para agregar.';
 
             if (alumnoNuevoId && select.value === alumnoNuevoId) {
                 const modal = document.getElementById('modalAlumno');
@@ -57,80 +181,67 @@
             }
         }
 
-        agregarAccionesPago(cursoData.alumnos || []);
+        agregarAcciones(alumnosCursoActuales);
     }
 
-    function agregarAccionesPago(alumnos) {
+    function agregarAcciones(alumnos) {
         let intentos = 0;
         const timer = setInterval(() => {
             intentos++;
             const tabla = document.querySelector('#alumnosBody')?.closest('table');
             const tbody = document.getElementById('alumnosBody');
-
-            if (!tabla || !tbody) {
-                if (intentos > 40) clearInterval(timer);
-                return;
-            }
+            if (!tabla || !tbody) { if (intentos > 40) clearInterval(timer); return; }
 
             const filas = Array.from(tbody.querySelectorAll('tr'));
-            if (alumnos.length && filas.length !== alumnos.length) {
-                if (intentos > 40) clearInterval(timer);
-                return;
-            }
-
+            if (alumnos.length && filas.length !== alumnos.length) { if (intentos > 40) clearInterval(timer); return; }
             clearInterval(timer);
 
             const encabezado = tabla.querySelector('thead tr');
-            if (encabezado && !encabezado.querySelector('[data-hache-pago]')) {
+            if (encabezado && !encabezado.querySelector('[data-hache-acciones]')) {
                 const th = document.createElement('th');
-                th.dataset.hachePago = '1';
-                th.textContent = 'Pago';
+                th.dataset.hacheAcciones = '1';
+                th.textContent = 'Acciones';
                 encabezado.appendChild(th);
             }
 
             filas.forEach((fila, index) => {
-                if (fila.querySelector('[data-hache-pago]')) return;
-                const alumno = alumnos[index];
-                if (!alumno) return;
+                let td=fila.querySelector('[data-hache-acciones]');
+                const alumno=alumnos[index];
+                if(!alumno) return;
+                if(!td){ td=document.createElement('td'); td.dataset.hacheAcciones='1'; fila.appendChild(td); }
+                td.innerHTML='';
+                const wrap=document.createElement('div');
+                wrap.className='hache-row-actions';
 
-                const td = document.createElement('td');
-                td.dataset.hachePago = '1';
+                const pagar=document.createElement('a');
+                pagar.href='/pagos.php?alumno_id='+encodeURIComponent(alumno.alumno_id)+'&tipo=INTENSIVO&curso_id='+encodeURIComponent(cursoId);
+                pagar.className='hache-mini-action';
+                pagar.textContent='Pagar';
 
-                const link = document.createElement('a');
-                link.href = '/pagos.php?alumno_id=' + encodeURIComponent(alumno.alumno_id)
-                    + '&tipo=INTENSIVO&curso_id=' + encodeURIComponent(cursoId);
-                link.textContent = 'Pagar';
-                link.style.display = 'inline-block';
-                link.style.padding = '8px 12px';
-                link.style.borderRadius = '8px';
-                link.style.background = '#1976a8';
-                link.style.color = '#fff';
-                link.style.textDecoration = 'none';
-                link.style.fontWeight = '700';
-                link.style.fontSize = '13px';
+                const continuidad=document.createElement('button');
+                continuidad.type='button';
+                continuidad.className='hache-mini-action hache-mini-action-secondary';
+                continuidad.textContent=alumno.continua_regular===1 || alumno.continua_regular==='1' ? 'Regular ✓' : (alumno.continua_regular===0 || alumno.continua_regular==='0' ? 'No continúa' : 'Continuidad');
+                continuidad.addEventListener('click',()=>abrirContinuidad(alumno));
 
-                td.appendChild(link);
-                fila.appendChild(td);
+                wrap.append(pagar,continuidad);
+                td.appendChild(wrap);
             });
-        }, 100);
+        },100);
     }
 
     function iniciar() {
+        crearModalContinuidad();
         let intentos = 0;
         const timer = setInterval(() => {
             intentos++;
             if (document.getElementById('alumno_id')) {
                 clearInterval(timer);
                 cargarDatos().catch(console.error);
-            } else if (intentos > 40) {
-                clearInterval(timer);
-            }
+            } else if (intentos > 40) clearInterval(timer);
         }, 100);
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', iniciar, { once: true });
-    } else {
-        iniciar();
-    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar, { once: true });
+    else iniciar();
 })();
