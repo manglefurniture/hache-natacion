@@ -4,9 +4,23 @@ declare(strict_types=1);
 
 $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
 $baseName = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+$currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: $scriptName;
 
-// No alterar login, endpoints API ni respuestas no visuales.
-if ($baseName === 'index.php' || str_starts_with($scriptName, '/api/')) {
+// No alterar login, endpoints API ni formularios públicos.
+$publicPages = [
+    '/registro.php',
+    '/monteverde-regular.php',
+    '/monteverde-intensivo.php',
+    '/palapas-regular.php',
+    '/palapas-intensivo.php',
+    '/inscripcion-intensivo.php',
+];
+
+if (
+    $baseName === 'index.php' ||
+    str_starts_with($scriptName, '/api/') ||
+    in_array($currentPath, $publicPages, true)
+) {
     return;
 }
 
@@ -17,7 +31,6 @@ if (!$u) {
     exit;
 }
 
-$currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: $scriptName;
 if (!empty($u['debe_cambiar_password']) && $currentPath !== '/cambiar-password.php') {
     header('Location: /cambiar-password.php');
     exit;
