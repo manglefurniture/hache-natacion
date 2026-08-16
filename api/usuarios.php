@@ -8,17 +8,23 @@ $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$
 function out(array $d,int $c=200):never{http_response_code($c);echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
 try{
  if($_SERVER['REQUEST_METHOD']==='GET'){
-  $rows=$pdo->query("SELECT u.id,u.usuario,u.rol,u.activo,u.debe_cambiar_password,u.alumno_id,u.last_login,a.nombre alumno_nombre FROM usuarios u LEFT JOIN alumnos a ON a.id=u.alumno_id ORDER BY u.rol,u.usuario")->fetchAll();
+  $rows=$pdo->query("SELECT u.id,u.usuario,u.rol,u.activo,u.debe_cambiar_password,u.alumno_id,u.sede_id,u.last_login,a.nombre alumno_nombre,s.clave sede_clave,s.nombre sede_nombre FROM usuarios u LEFT JOIN alumnos a ON a.id=u.alumno_id LEFT JOIN sedes s ON s.id=u.sede_id ORDER BY u.rol,u.usuario")->fetchAll();
   $alumnos=$pdo->query("SELECT a.id,a.nombre FROM alumnos a WHERE NOT EXISTS(SELECT 1 FROM usuarios u WHERE u.alumno_id=a.id AND u.rol='ALUMNO') ORDER BY a.nombre")->fetchAll();
-  out(['ok'=>true,'usuarios'=>$rows,'alumnos_disponibles'=>$alumnos]);
+  $sedes=$pdo->query("SELECT id,clave,nombre FROM sedes WHERE activo=1 ORDER BY nombre")->fetchAll();
+  out(['ok'=>true,'usuarios'=>$rows,'alumnos_disponibles'=>$alumnos,'sedes'=>$sedes]);
  }
  if($_SERVER['REQUEST_METHOD']!=='POST')out(['ok'=>false,'error'=>'Método no permitido'],405);
  $in=json_decode(file_get_contents('php://input'),true)?:[];$accion=strtoupper((string)($in['accion']??''));
  if($accion==='CREAR'){
-  $usuario=trim((string)($in['usuario']??''));$password=(string)($in['password']??'');$rol=strtoupper((string)($in['rol']??''));$alumno=$in['alumno_id']??null;
+  $usuario=trim((string)($in['usuario']??''));$password=(string)($in['password']??'');$rol=strtoupper((string)($in['rol']??''));$alumno=$in['alumno_id']??null;$sedeId=trim((string)($in['sede_id']??''));
   if($usuario===''||strlen($password)<6||!in_array($rol,['ADMIN','VERIFICADOR','ALUMNO'],true))out(['ok'=>false,'error'=>'Datos de usuario inválidos. La contraseña debe tener al menos 6 caracteres.'],422);
-  if($rol==='ALUMNO'&&!$alumno)out(['ok'=>false,'error'=>'Un usuario ALUMNO debe vincularse a un alumno'],422);if($rol!=='ALUMNO')$alumno=null;
-  $forzar=$rol==='ALUMNO'?1:0;$st=$pdo->prepare("INSERT INTO usuarios(usuario,password_hash,rol,activo,debe_cambiar_password,alumno_id) VALUES(:u,:p,:r,1,:f,:a)");$st->execute([':u'=>$usuario,':p'=>password_hash($password,PASSWORD_DEFAULT),':r'=>$rol,':f'=>$forzar,':a'=>$alumno]);out(['ok'=>true]);
+  if($rol==='ALUMNO'&&!$alumno)out(['ok'=>false,'error'=>'Un usuario ALUMNO debe vincularse a un alumno'],422);
+  if($rol==='VERIFICADOR'){
+    if($sedeId==='')out(['ok'=>false,'error'=>'La sede es obligatoria para un verificador'],422);
+    $st=$pdo->prepare("SELECT id FROM sedes WHERE id=:id AND activo=1 LIMIT 1");$st->execute([':id'=>$sedeId]);if(!$st->fetch())out(['ok'=>false,'error'=>'Sede inválida'],422);
+  }else{$sedeId=null;}
+  if($rol!=='ALUMNO')$alumno=null;
+  $forzar=$rol==='ALUMNO'?1:0;$st=$pdo->prepare("INSERT INTO usuarios(usuario,password_hash,rol,activo,debe_cambiar_password,alumno_id,sede_id) VALUES(:u,:p,:r,1,:f,:a,:s)");$st->execute([':u'=>$usuario,':p'=>password_hash($password,PASSWORD_DEFAULT),':r'=>$rol,':f'=>$forzar,':a'=>$alumno,':s'=>$sedeId]);out(['ok'=>true]);
  }
  if($accion==='ESTADO'){$id=(string)($in['id']??'');$activo=!empty($in['activo'])?1:0;if($id===$me['id']&&!$activo)out(['ok'=>false,'error'=>'No puedes desactivar tu propio usuario'],422);$st=$pdo->prepare("UPDATE usuarios SET activo=:a WHERE id=:id");$st->execute([':a'=>$activo,':id'=>$id]);out(['ok'=>true]);}
  if($accion==='PASSWORD'){$id=(string)($in['id']??'');$password=(string)($in['password']??'');if(strlen($password)<6)out(['ok'=>false,'error'=>'La contraseña debe tener al menos 6 caracteres'],422);$st=$pdo->prepare("UPDATE usuarios SET password_hash=:p,debe_cambiar_password=1 WHERE id=:id");$st->execute([':p'=>password_hash($password,PASSWORD_DEFAULT),':id'=>$id]);out(['ok'=>true]);}
