@@ -47,3 +47,33 @@ CREATE INDEX IF NOT EXISTS idx_cursos_sede ON cursos_intensivos(sede_id);
 CREATE INDEX IF NOT EXISTS idx_inscripciones_sede ON inscripciones(sede_id);
 CREATE INDEX IF NOT EXISTS idx_mensualidades_sede_periodo ON mensualidades(sede_id,anio,mes);
 CREATE INDEX IF NOT EXISTS idx_horarios_sede ON horarios(sede_id);
+
+-- Compatibilidad defensiva: cualquier flujo antiguo que no envíe sede
+-- hereda la sede del alumno o, para catálogos/cursos, Monteverde.
+DROP TRIGGER IF EXISTS trg_alumnos_sede_default;
+DROP TRIGGER IF EXISTS trg_inscripciones_sede_inherit;
+DROP TRIGGER IF EXISTS trg_mensualidades_sede_inherit;
+DROP TRIGGER IF EXISTS trg_intensivos_sede_default;
+DROP TRIGGER IF EXISTS trg_horarios_sede_default;
+DELIMITER $$
+CREATE TRIGGER trg_alumnos_sede_default BEFORE INSERT ON alumnos FOR EACH ROW
+BEGIN
+  IF NEW.sede_id IS NULL OR NEW.sede_id='' THEN SET NEW.sede_id=(SELECT id FROM sedes WHERE clave='MONTEVERDE' LIMIT 1); END IF;
+END$$
+CREATE TRIGGER trg_inscripciones_sede_inherit BEFORE INSERT ON inscripciones FOR EACH ROW
+BEGIN
+  IF NEW.sede_id IS NULL OR NEW.sede_id='' THEN SET NEW.sede_id=(SELECT sede_id FROM alumnos WHERE id=NEW.alumno_id LIMIT 1); END IF;
+END$$
+CREATE TRIGGER trg_mensualidades_sede_inherit BEFORE INSERT ON mensualidades FOR EACH ROW
+BEGIN
+  IF NEW.sede_id IS NULL OR NEW.sede_id='' THEN SET NEW.sede_id=(SELECT sede_id FROM alumnos WHERE id=NEW.alumno_id LIMIT 1); END IF;
+END$$
+CREATE TRIGGER trg_intensivos_sede_default BEFORE INSERT ON cursos_intensivos FOR EACH ROW
+BEGIN
+  IF NEW.sede_id IS NULL OR NEW.sede_id='' THEN SET NEW.sede_id=(SELECT id FROM sedes WHERE clave='MONTEVERDE' LIMIT 1); END IF;
+END$$
+CREATE TRIGGER trg_horarios_sede_default BEFORE INSERT ON horarios FOR EACH ROW
+BEGIN
+  IF NEW.sede_id IS NULL OR NEW.sede_id='' THEN SET NEW.sede_id=(SELECT id FROM sedes WHERE clave='MONTEVERDE' LIMIT 1); END IF;
+END$$
+DELIMITER ;
