@@ -18,6 +18,34 @@ CREATE TABLE IF NOT EXISTS asistencias (
 
 CREATE INDEX idx_asistencia_alumno_fecha ON asistencias (alumno_id, created_at);
 
+-- Garantiza una sola sesión por fecha+horario. Se añade solo si no hay
+-- duplicados históricos y si el índice todavía no existe.
+SET @sesiones_dup := (
+    SELECT COUNT(*)
+    FROM (
+        SELECT fecha, horario_id
+        FROM sesiones
+        WHERE horario_id IS NOT NULL
+        GROUP BY fecha, horario_id
+        HAVING COUNT(*) > 1
+    ) d
+);
+SET @sesiones_idx := (
+    SELECT COUNT(*)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = 'sesiones'
+      AND index_name = 'uq_sesion_fecha_horario'
+);
+SET @sql_sesiones := IF(
+    @sesiones_dup = 0 AND @sesiones_idx = 0,
+    'ALTER TABLE sesiones ADD UNIQUE KEY uq_sesion_fecha_horario (fecha, horario_id)',
+    'SELECT 1'
+);
+PREPARE stmt_sesiones FROM @sql_sesiones;
+EXECUTE stmt_sesiones;
+DEALLOCATE PREPARE stmt_sesiones;
+
 -- Las ausencias antiguas asumían un solo alumno por curso. El modelo actual
 -- admite varios alumnos por intensivo, así que la unicidad correcta es alumno+curso+fecha.
 DROP TRIGGER IF EXISTS trg_validar_ausencia_intensivo_insert;
