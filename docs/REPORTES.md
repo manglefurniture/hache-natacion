@@ -11,26 +11,26 @@ El PDF nunca debe estar codificado para una sede específica. Debe resolverse po
 - Encabezado `Hache Natación`.
 - Nombre de la sede y periodo claramente visibles.
 - Azul institucional oscuro, fondos blancos/gris muy claro y tipografía limpia.
-- Resumen ejecutivo primero; detalle después.
+- Resumen ejecutivo primero; detalle financiero agrupado después.
 - Importes en MXN.
 - Fecha/hora de generación en zona `America/Cancun`.
 - Nombre de archivo: `Hache_Natacion_Reporte_<SEDE>_<AAAA-MM>.pdf`.
 
-## Contenido mínimo del reporte mensual
+## Contenido del reporte mensual
 
-1. Total cobrado.
-2. Mensualidades.
-3. Inscripciones.
-4. Cursos intensivos.
-5. Participación de Hache y del socio de la sede.
-6. Mínimo contractual, cuando exista, y estado alcanzado/pendiente.
-7. Asistencia del periodo.
-8. Detalle de movimientos válidos.
-9. Nota de reglas financieras utilizadas.
+1. Resumen: total cobrado, mensualidades, inscripciones e intensivos.
+2. Participación de Hache y del socio de la sede.
+3. Mínimo contractual, cuando exista, y estado alcanzado/pendiente.
+4. Bloque **Nuevas inscripciones**: una fila por alumno, mostrando únicamente nombre, importe de inscripción e importe de mensualidad del mismo periodo.
+5. Bloque **Mensualidades**: alumnos regulares que pagaron mensualidad y no aparecen como nueva inscripción del periodo; mostrar únicamente nombre e importe de mensualidad.
+6. Bloque **Cursos intensivos**: separar los alumnos por fecha de inicio del curso; dentro de cada fecha mostrar únicamente nombre e importe pagado por intensivo.
+7. Nota breve de las reglas financieras utilizadas.
+
+El PDF es un documento de lectura y liquidación. No debe mostrar folio, método de pago ni otros campos técnicos que no sean necesarios para entender la liquidación. El CSV conserva el detalle completo para auditoría.
 
 ## Regla para Palapas y futuras sedes
 
-Palapas debe usar el mismo generador y la misma estructura visual. Sus porcentajes, nombre de socio, mínimo contractual y cualquier regla financiera deben salir de la configuración de la sede, nunca escribirse directamente en la plantilla PDF.
+Palapas debe usar el mismo generador, la misma estructura visual y los mismos tres bloques financieros. Sus porcentajes, nombre de socio, mínimo contractual y cualquier regla financiera deben salir de la configuración de la sede, nunca escribirse directamente en la plantilla PDF.
 
 Las futuras sedes deben heredar esta misma regla.
 
