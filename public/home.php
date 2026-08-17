@@ -11,6 +11,7 @@ declare(strict_types=1);
   <title>Hache Natación</title>
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/home-v1.css">
+  <style>.hero,.photo-break{background-image:url('/assets/hero-monteverde-v2.webp')}</style>
 </head>
 <body>
   <header class="hero" id="inicio">
