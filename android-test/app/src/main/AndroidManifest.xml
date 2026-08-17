@@ -13,13 +13,22 @@
             android:name="asset_statements"
             android:resource="@string/assetStatements" />
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="@string/providerAuthority"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepaths" />
+        </provider>
+
         <activity
             android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
             android:exported="false" />
 
         <activity
             android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
-            android:alwaysRetainTaskState="true"
             android:exported="true"
             android:label="Hache Natación">
 
@@ -34,6 +43,22 @@
             <meta-data
                 android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
                 android:resource="@color/navigationColor" />
+
+            <meta-data
+                android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE"
+                android:resource="@drawable/ic_launcher_foreground" />
+
+            <meta-data
+                android:name="android.support.customtabs.trusted.SPLASH_SCREEN_BACKGROUND_COLOR"
+                android:resource="@color/colorPrimary" />
+
+            <meta-data
+                android:name="android.support.customtabs.trusted.SPLASH_SCREEN_FADE_OUT_DURATION"
+                android:value="250" />
+
+            <meta-data
+                android:name="android.support.customtabs.trusted.FILE_PROVIDER_AUTHORITY"
+                android:value="@string/providerAuthority" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
