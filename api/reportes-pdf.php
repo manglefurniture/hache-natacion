@@ -58,4 +58,17 @@ $html='<!doctype html><html lang="es"><head><meta charset="utf-8"><style>
 <div class="section"><div class="block-title"><h3>Cursos intensivos</h3><span>'.count($intensivos).' alumno'.(count($intensivos)===1?'':'s').'</span></div><div class="intro">Alumnos separados según la fecha de inicio de su curso intensivo.</div>'.$intensiveHtml.'</div>
 <div class="foot"><b>Hache Natación</b> · Liquidación generada por el sistema administrativo. El PDF prioriza lectura y presentación; el CSV conserva el detalle completo para auditoría.</div>
 </body></html>';
-$options=new Options();$options->set('isRemoteEnabled',false);$options->set('isHtml5ParserEnabled',true);$options->set('defaultFont','DejaVu Sans');$pdf=new Dompdf($options);$pdf->loadHtml($html,'UTF-8');$pdf->setPaper('A4','portrait');$pdf->render();$filename='Hache_Natacion_Reporte_'.preg_replace('/[^A-Za-z0-9_-]/','_',strtoupper($clave)).'_'.$periodo.'.pdf';$pdf->stream($filename,['Attachment'=>true]);
+$options=new Options();$options->set('isRemoteEnabled',false);$options->set('isHtml5ParserEnabled',true);$options->set('defaultFont','DejaVu Sans');$pdf=new Dompdf($options);$pdf->loadHtml($html,'UTF-8');$pdf->setPaper('A4','portrait');$pdf->render();
+$filename='Hache_Natacion_Reporte_'.preg_replace('/[^A-Za-z0-9_-]/','_',strtoupper($clave)).'_'.$periodo.'.pdf';
+$output=$pdf->output();
+while(ob_get_level()>0){ob_end_clean();}
+header('Content-Type: application/pdf');
+header('Content-Disposition: attachment; filename="'.$filename.'"; filename*=UTF-8\'\''.rawurlencode($filename));
+header('Content-Length: '.strlen($output));
+header('Content-Transfer-Encoding: binary');
+header('Accept-Ranges: bytes');
+header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+echo $output;
+exit;
