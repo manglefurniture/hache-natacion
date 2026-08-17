@@ -4,7 +4,7 @@
   "short_name": "Hache",
   "description": "Gestión administrativa y portal de alumnos de Hache Natación",
   "lang": "es-MX",
-  "start_url": "/",
+  "start_url": "/dashboard.php",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
