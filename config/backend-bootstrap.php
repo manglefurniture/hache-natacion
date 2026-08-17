@@ -8,6 +8,7 @@ $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: $script
 
 // No alterar login, endpoints API ni formularios públicos.
 $publicPages = [
+    '/home.php',
     '/registro.php',
     '/monteverde-regular.php',
     '/monteverde-intensivo.php',
