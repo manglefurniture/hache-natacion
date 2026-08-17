@@ -1,0 +1,11 @@
+(()=>{
+if(window.__hacheDiagInstalled)return;window.__hacheDiagInstalled=true;
+const endpoint='/api/diagnostico.php';
+const device=()=>/Android/i.test(navigator.userAgent||'')?'Android':(/iPhone|iPad|iPod/i.test(navigator.userAgent||'')?'iOS':'Desktop');
+const path=v=>{try{return new URL(v,location.origin).pathname}catch(_){return String(v||'').split('?')[0].slice(0,190)}};
+const send=(payload)=>{try{const body=JSON.stringify({...payload,pagina:location.pathname,dispositivo:device()});if(navigator.sendBeacon){const ok=navigator.sendBeacon(endpoint,new Blob([body],{type:'application/json'}));if(ok)return;}fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body,credentials:'same-origin',keepalive:true}).catch(()=>{});}catch(_){}};
+window.addEventListener('error',e=>{send({tipo:'JS_ERROR',nivel:'ERROR',mensaje:String(e.message||'Error JS').slice(0,500),recurso:path(e.filename||''),detalle:[e.filename,e.lineno,e.colno].filter(Boolean).join(':')});});
+window.addEventListener('unhandledrejection',e=>{const r=e.reason;send({tipo:'PROMISE_ERROR',nivel:'ERROR',mensaje:String((r&&r.message)||r||'Promise rechazada').slice(0,500),detalle:String((r&&r.stack)||'').slice(0,3000)});});
+const rawFetch=window.fetch.bind(window);window.fetch=async function(input,init){const url=typeof input==='string'?input:(input&&input.url)||'';if(url.includes(endpoint))return rawFetch(input,init);const start=performance.now();try{const res=await rawFetch(input,init);const ms=Math.round(performance.now()-start);if(url.includes('/api/'))send({tipo:res.ok?'API_TIMING':'HTTP_ERROR',nivel:res.ok?(ms>1500?'WARN':'INFO'):'ERROR',recurso:path(url),duracion_ms:ms,status_http:res.status,mensaje:res.ok?(ms>1500?'API lenta':null):'HTTP '+res.status});return res;}catch(err){const ms=Math.round(performance.now()-start);if(url.includes('/api/'))send({tipo:'HTTP_ERROR',nivel:'ERROR',recurso:path(url),duracion_ms:ms,mensaje:String((err&&err.message)||'Fallo de red').slice(0,500)});throw err;}};
+addEventListener('load',()=>{setTimeout(()=>{try{const nav=performance.getEntriesByType('navigation')[0];if(nav){const ms=Math.round(nav.loadEventEnd||performance.now());send({tipo:'PAGE_TIMING',nivel:ms>3000?'WARN':'INFO',duracion_ms:ms,mensaje:ms>3000?'Carga de página lenta':null});}}catch(_){}},0);});
+})();
