@@ -1,4 +1,13 @@
-<!DOCTYPE html>
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../config/auth.php';
+$u=auth_user();
+if($u){
+  if(!empty($u['debe_cambiar_password'])){header('Location: /cambiar-password.php');exit;}
+  header('Location: '.(($u['rol']??'')==='ALUMNO'?'/mi-cuenta.php':'/dashboard.php'));
+  exit;
+}
+?><!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
