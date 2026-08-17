@@ -22,7 +22,8 @@ try{
     $pdo->beginTransaction();
     $st=$pdo->prepare("UPDATE pagos SET importe=:importe,metodo=:metodo,fecha=:fecha,observacion=:obs WHERE id=:id");$st->execute([':importe'=>$importeDec,':metodo'=>$metodo,':fecha'=>$fechaSql,':obs'=>$observacion!==''?$observacion:null,':id'=>$pagoId]);
     if($old['tipo']==='MENSUALIDAD'&&!empty($old['mensualidad_id'])){
-        $st=$pdo->prepare("UPDATE mensualidades SET importe_a_cobrar=:importe,importe_cobrado=:importe,fecha_pago=:fecha,observacion=:obs,updated_at=NOW() WHERE id=:id");$st->execute([':importe'=>$importeDec,':fecha'=>$fechaSql,':obs'=>$observacion!==''?$observacion:null,':id'=>$old['mensualidad_id']]);
+        $st=$pdo->prepare("UPDATE mensualidades SET importe_a_cobrar=:importe_cobrar,importe_cobrado=:importe_cobrado,fecha_pago=:fecha,observacion=:obs,updated_at=NOW() WHERE id=:id");
+        $st->execute([':importe_cobrar'=>$importeDec,':importe_cobrado'=>$importeDec,':fecha'=>$fechaSql,':obs'=>$observacion!==''?$observacion:null,':id'=>$old['mensualidad_id']]);
     }elseif($old['tipo']==='INSCRIPCION'&&!empty($old['inscripcion_id'])){
         $st=$pdo->prepare("UPDATE inscripciones SET importe=:importe,fecha=:fecha,observacion=:obs WHERE id=:id");$st->execute([':importe'=>$importeDec,':fecha'=>$fechaDia,':obs'=>$observacion!==''?$observacion:null,':id'=>$old['inscripcion_id']]);
     }
