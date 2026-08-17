@@ -53,6 +53,7 @@ ob_start(static function (string $html): string {
     }
 
     $css = '<link rel="stylesheet" href="/assets/backend-menu.css">';
+    $diag = '<script src="/assets/diagnostico.js?v=20260817-1"></script>';
     $js = '<script src="/assets/backend-menu.js" defer></script>';
 
     if (stripos($html, '/assets/backend-menu.css') === false) {
@@ -60,6 +61,14 @@ ob_start(static function (string $html): string {
             $html = preg_replace('/<\/head>/i', $css . "\n</head>", $html, 1) ?? $html;
         } else {
             $html = $css . $html;
+        }
+    }
+
+    if (stripos($html, '/assets/diagnostico.js') === false) {
+        if (stripos($html, '</head>') !== false) {
+            $html = preg_replace('/<\/head>/i', $diag . "\n</head>", $html, 1) ?? $html;
+        } else {
+            $html = $diag . $html;
         }
     }
 
