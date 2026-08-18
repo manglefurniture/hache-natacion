@@ -1,5 +1,5 @@
 (async function(){
-const ASSET_VERSION='20260817-2035';
+const ASSET_VERSION='20260818-0945';
 const fix=document.createElement('link');fix.rel='stylesheet';fix.href=`/assets/responsive-fixes.css?v=${ASSET_VERSION}`;document.head.appendChild(fix);
 const path=location.pathname;let data={};
 try{const r=await fetch('/api/sesion.php',{credentials:'same-origin'}),d=await r.json();if(d.autenticado&&d.usuario){data=d.usuario;sessionStorage.setItem('hache_usuario',JSON.stringify(data));}}catch(e){try{data=JSON.parse(sessionStorage.getItem('hache_usuario')||'{}')}catch(_){}}
