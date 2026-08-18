@@ -1,24 +1,36 @@
 (function(){
 'use strict';
-function hideEmbeddedMenu(d,w){
+function cleanEmbeddedShell(frame){
+  let d,w;
+  try{d=frame.contentDocument;w=frame.contentWindow;}catch(e){return;}
+  if(!d||!w)return;
   const candidates=[...d.querySelectorAll('button,a,[role="button"],div')];
   candidates.forEach(el=>{
     let cs,r;
     try{cs=w.getComputedStyle(el);r=el.getBoundingClientRect();}catch(e){return;}
     const label=((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.textContent||'')).toLowerCase();
     const menuLike=/menú|menu|navegaci/.test(label);
-    const geometric=(cs.position==='fixed'||cs.position==='absolute')&&r.left>=0&&r.left<120&&r.top>=0&&r.top<180&&r.width>=40&&r.width<=110&&r.height>=40&&r.height<=110;
-    const bars=el.querySelectorAll('span').length>=3;
-    if(menuLike||(geometric&&bars)) el.style.setProperty('display','none','important');
+    const geometric=(cs.position==='fixed'||cs.position==='absolute')&&r.left>=0&&r.left<120&&r.top>=0&&r.top<190&&r.width>=40&&r.width<=115&&r.height>=40&&r.height<=115;
+    const bars=el.querySelectorAll(':scope > span').length>=3;
+    if(menuLike||(geometric&&bars))el.style.setProperty('display','none','important');
   });
+  if(!d.getElementById('finance-embedded-shell-style')){
+    const s=d.createElement('style');
+    s.id='finance-embedded-shell-style';
+    s.textContent=`
+      body{padding-top:0!important}
+      .wrap{padding-top:20px!important}
+      .menu-btn,.menu-button,.hamburger,.nav-toggle,.sidebar-toggle,[aria-label*="menú" i],[aria-label*="menu" i]{display:none!important}
+      @media(max-width:760px){.wrap{padding-top:18px!important}}
+    `;
+    d.head.appendChild(s);
+  }
 }
-function enhance(frame){
+function enhanceProa(frame){
   let d,w;
   try{d=frame.contentDocument;w=frame.contentWindow;}catch(e){return;}
   if(!d)return;
-  hideEmbeddedMenu(d,w);
-  setTimeout(()=>hideEmbeddedMenu(d,w),250);
-  setTimeout(()=>hideEmbeddedMenu(d,w),900);
+  cleanEmbeddedShell(frame);
   if(d.getElementById('proa-quick-entry-style'))return;
   const panels=[...d.querySelectorAll('section.panel')];
   const entry=panels.find(p=>p.querySelector('h2')?.textContent.includes('Registrar conciliación'));
@@ -54,6 +66,12 @@ function enhance(frame){
   if(form)form.addEventListener('focusin',()=>{entry.dataset.editing='1'});
   if(matrix&&entry.nextElementSibling!==matrix)entry.insertAdjacentElement('afterend',matrix);
 }
-function wire(){document.querySelectorAll('iframe.proa-frame').forEach(f=>{f.addEventListener('load',()=>enhance(f));if(f.contentDocument?.readyState==='complete')enhance(f);});}
+function process(frame){
+  cleanEmbeddedShell(frame);
+  setTimeout(()=>cleanEmbeddedShell(frame),150);
+  setTimeout(()=>cleanEmbeddedShell(frame),700);
+  if(frame.classList.contains('proa-frame'))enhanceProa(frame);
+}
+function wire(){document.querySelectorAll('iframe.frame').forEach(f=>{f.addEventListener('load',()=>process(f));if(f.contentDocument?.readyState==='complete')process(f);});}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire);else wire();
 })();
