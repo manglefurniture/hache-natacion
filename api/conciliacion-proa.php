@@ -29,26 +29,30 @@ function obligation(PDO $pdo,string $ym):array{
     $st=$pdo->prepare($sql);$st->execute([':d'=>$start,':h'=>$end]);$r=$st->fetch()?:[];
     $mens=(float)($r['mensualidades']??0);$int=(float)($r['intensivos']??0);$ins=(float)($r['inscripciones']??0);
     return [
-      'mensualidades'=>$mens,
-      'intensivos'=>$int,
-      'inscripciones'=>$ins,
-      'proa_mensualidades'=>$mens*.5,
-      'proa_intensivos'=>$int*.5,
-      'proa_inscripciones'=>$ins,
+      'mensualidades'=>$mens,'intensivos'=>$int,'inscripciones'=>$ins,
+      'proa_mensualidades'=>$mens*.5,'proa_intensivos'=>$int*.5,'proa_inscripciones'=>$ins,
       'total_proa'=>($mens*.5)+($int*.5)+$ins,
     ];
 }
+function automaticCommissions(PDO $pdo,string $ym):array{
+    $periodo=$ym.'-01';
+    $st=$pdo->prepare("SELECT id,periodo,alumno_proa_nombre,importe,observacion,created_at FROM comisiones_proa WHERE periodo=:p ORDER BY alumno_proa_nombre,created_at");
+    $st->execute([':p'=>$periodo]);$rows=$st->fetchAll();$total=0.0;
+    foreach($rows as &$r){$r['importe']=(float)$r['importe'];$total+=(float)$r['importe'];}unset($r);
+    return ['rows'=>$rows,'total'=>$total];
+}
 function movementEffect(string $tipo,float $importe):float{
-    return $tipo==='COMISION_RECIBIDA_PROA' ? $importe : -$importe;
+    if($tipo==='COMISION_RECIBIDA_PROA')return 0.0; // legado: ya no impacta; la fuente oficial es comisiones_proa
+    return -$importe;
 }
 try{
     $method=$_SERVER['REQUEST_METHOD']??'GET';
     if($method==='GET'){
         $ym=(string)($_GET['periodo']??date('Y-m'));[$start,$end]=monthRange($ym);
-        $base=obligation($pdo,$ym);
+        $base=obligation($pdo,$ym);$auto=automaticCommissions($pdo,$ym);
         $st=$pdo->prepare("SELECT m.id,m.fecha,m.tipo,m.importe,m.alumno_nombre,m.referencia,m.observacion,m.estado,m.created_at,m.anulado_at,m.motivo_anulacion,u.usuario created_by_usuario,ua.usuario anulado_by_usuario FROM conciliacion_proa_movimientos m LEFT JOIN usuarios u ON u.id=m.created_by LEFT JOIN usuarios ua ON ua.id=m.anulado_by WHERE m.fecha>=:d AND m.fecha<:h ORDER BY m.fecha DESC,m.created_at DESC");
         $st->execute([':d'=>$start,':h'=>$end]);$rows=$st->fetchAll();
-        $entregado=0.0;$directos=0.0;$comisiones=0.0;$efectivo=0.0;$transferencias=0.0;
+        $entregado=0.0;$directos=0.0;$efectivo=0.0;$transferencias=0.0;
         foreach($rows as &$row){
             $row['importe']=(float)$row['importe'];
             $row['impacto']=$row['estado']==='ACTIVO'?movementEffect((string)$row['tipo'],(float)$row['importe']):0.0;
@@ -56,11 +60,11 @@ try{
             if($row['tipo']==='EFECTIVO_A_PROA'){$efectivo+=(float)$row['importe'];$entregado+=(float)$row['importe'];}
             elseif($row['tipo']==='TRANSFERENCIA_A_PROA'){$transferencias+=(float)$row['importe'];$entregado+=(float)$row['importe'];}
             elseif($row['tipo']==='PAGO_DIRECTO_PROA')$directos+=(float)$row['importe'];
-            elseif($row['tipo']==='COMISION_RECIBIDA_PROA')$comisiones+=(float)$row['importe'];
         }unset($row);
+        $comisiones=(float)$auto['total'];
         $saldo=$base['total_proa']+$comisiones-$entregado-$directos;
         $situacion=abs($saldo)<0.005?'CUADRADO':($saldo>0?'HACHE_DEBE_PROA':'PROA_DEBE_HACHE');
-        out(['ok'=>true,'periodo'=>$ym,'sede'=>'MONTEVERDE','base'=>$base,'resumen'=>[
+        out(['ok'=>true,'periodo'=>$ym,'sede'=>'MONTEVERDE','base'=>$base,'comisiones_automaticas'=>$auto['rows'],'resumen'=>[
             'efectivo_a_proa'=>$efectivo,'transferencias_a_proa'=>$transferencias,'entregado_a_proa'=>$entregado,
             'pagos_directos_proa'=>$directos,'comisiones_recibidas'=>$comisiones,'saldo'=>$saldo,'situacion'=>$situacion
         ],'movimientos'=>$rows]);
@@ -76,17 +80,14 @@ try{
         if($st->rowCount()!==1)out(['ok'=>false,'error'=>'Movimiento no encontrado o ya anulado'],404);
         out(['ok'=>true]);
     }
-    $tipos=['EFECTIVO_A_PROA','TRANSFERENCIA_A_PROA','PAGO_DIRECTO_PROA','COMISION_RECIBIDA_PROA'];
+    $tipos=['EFECTIVO_A_PROA','TRANSFERENCIA_A_PROA','PAGO_DIRECTO_PROA'];
     $tipo=strtoupper(trim((string)($in['tipo']??'')));$importe=(float)($in['importe']??0);
     $fecha=trim((string)($in['fecha']??''));$alumno=trim((string)($in['alumno_nombre']??''));
     $ref=trim((string)($in['referencia']??''));$obs=trim((string)($in['observacion']??''));
-    if(!in_array($tipo,$tipos,true))out(['ok'=>false,'error'=>'Tipo de movimiento inválido'],422);
+    if(!in_array($tipo,$tipos,true))out(['ok'=>false,'error'=>'Tipo de movimiento inválido. Las comisiones PROA se cargan automáticamente.'],422);
     if($importe<=0)out(['ok'=>false,'error'=>'El importe debe ser mayor que cero'],422);
     if($fecha==='')$fecha=date('Y-m-d H:i:s');
-    else{
-        $dt=DateTimeImmutable::createFromFormat('Y-m-d\TH:i',$fecha)?:DateTimeImmutable::createFromFormat('Y-m-d H:i:s',$fecha);
-        if(!$dt)out(['ok'=>false,'error'=>'Fecha inválida'],422);$fecha=$dt->format('Y-m-d H:i:s');
-    }
+    else{$dt=DateTimeImmutable::createFromFormat('Y-m-d\TH:i',$fecha)?:DateTimeImmutable::createFromFormat('Y-m-d H:i:s',$fecha);if(!$dt)out(['ok'=>false,'error'=>'Fecha inválida'],422);$fecha=$dt->format('Y-m-d H:i:s');}
     if($tipo==='PAGO_DIRECTO_PROA'&&$alumno==='')out(['ok'=>false,'error'=>'Indica el alumno que pagó directamente en PROA'],422);
     $id=(string)$pdo->query('SELECT UUID()')->fetchColumn();
     $st=$pdo->prepare("INSERT INTO conciliacion_proa_movimientos(id,fecha,tipo,importe,alumno_nombre,referencia,observacion,created_by) VALUES(:id,:f,:t,:i,:a,:r,:o,:u)");
