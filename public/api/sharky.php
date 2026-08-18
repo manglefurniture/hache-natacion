@@ -77,7 +77,7 @@ CLASES REGULARES
 - En el plan de 5 clases por semana no hay reposiciones.
 
 INSCRIPCIÓN
-- Monteverde: $300 MXN.
+- Monteverde: $500 MXN.
 - Palapas: $400 MXN.
 - No confundas inscripción con mensualidad o costo del curso.
 
