@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS conciliacion_proa_movimientos (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  fecha DATETIME NOT NULL,
+  tipo VARCHAR(40) NOT NULL,
+  importe DECIMAL(12,2) NOT NULL,
+  alumno_nombre VARCHAR(180) NULL,
+  referencia VARCHAR(180) NULL,
+  observacion TEXT NULL,
+  estado ENUM('ACTIVO','ANULADO') NOT NULL DEFAULT 'ACTIVO',
+  created_by CHAR(36) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  anulado_by CHAR(36) NULL,
+  anulado_at DATETIME NULL,
+  motivo_anulacion VARCHAR(255) NULL,
+  INDEX idx_cpm_fecha_estado (fecha, estado),
+  INDEX idx_cpm_tipo (tipo),
+  CONSTRAINT fk_cpm_created_by FOREIGN KEY (created_by) REFERENCES usuarios(id),
+  CONSTRAINT fk_cpm_anulado_by FOREIGN KEY (anulado_by) REFERENCES usuarios(id),
+  CONSTRAINT chk_cpm_importe CHECK (importe > 0),
+  CONSTRAINT chk_cpm_tipo CHECK (tipo IN ('EFECTIVO_A_PROA','TRANSFERENCIA_A_PROA','PAGO_DIRECTO_PROA','COMISION_RECIBIDA_PROA'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
