@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+Disallow: /index.php
+Disallow: /dashboard.php
+Disallow: /alumnos.php
+Disallow: /agregar-alumno.php
+Disallow: /pagos.php
+Disallow: /sesiones.php
+Disallow: /intensivos.php
+Disallow: /intensivo-detalle.php
+Disallow: /auditoria.php
+Disallow: /alertas.php
+Disallow: /configuracion.php
+Disallow: /cierres-mensuales.php
+Disallow: /comisiones-proa.php
+Disallow: /conciliacion-proa.php
+Disallow: /mi-cuenta.php
+Disallow: /cambiar-password.php
+Disallow: /api/
+Disallow: /registro.php
+Disallow: /inscripcion-intensivo.php
+
+Sitemap: https://hnatacion.com/sitemap.xml
