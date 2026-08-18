@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $raw = file_get_contents('php://input');
 $data = json_decode($raw ?: '', true);
 $message = trim((string)($data['message'] ?? ''));
+$history = is_array($data['history'] ?? null) ? $data['history'] : [];
 
 if ($message === '') {
     http_response_code(422);
@@ -20,15 +21,11 @@ if ($message === '') {
     exit;
 }
 
-if (mb_strlen($message) > 700) {
-    $message = mb_substr($message, 0, 700);
-}
+if (mb_strlen($message) > 700) $message = mb_substr($message, 0, 700);
 
 $keyFile = '/etc/hache-openai.env';
 $key = is_readable($keyFile) ? trim((string)file_get_contents($keyFile)) : '';
-if (str_starts_with($key, 'OPENAI_API_KEY=')) {
-    $key = trim(substr($key, strlen('OPENAI_API_KEY=')));
-}
+if (str_starts_with($key, 'OPENAI_API_KEY=')) $key = trim(substr($key, strlen('OPENAI_API_KEY=')));
 
 if (!str_starts_with($key, 'sk-')) {
     http_response_code(503);
@@ -53,12 +50,25 @@ Reglas:
 - No des consejos médicos ni de seguridad acuática que sustituyan supervisión profesional.
 - Responde normalmente en 2 a 5 frases y ve al punto.
 - Preséntate como Sharky solo cuando tenga sentido; no repitas tu nombre en cada respuesta.
+- Mantén el contexto de la conversación: interpreta respuestas breves como “Monteverde”, “sí”, “por la mañana” o similares según los mensajes anteriores.
+- Usa texto plano. No uses Markdown ni asteriscos para negritas.
 TXT;
+
+$input = [];
+foreach (array_slice($history, -10) as $turn) {
+    if (!is_array($turn)) continue;
+    $role = ($turn['role'] ?? '') === 'assistant' ? 'assistant' : (($turn['role'] ?? '') === 'user' ? 'user' : '');
+    $content = trim((string)($turn['content'] ?? ''));
+    if ($role && $content !== '') {
+        $input[] = ['role' => $role, 'content' => mb_substr($content, 0, 1000)];
+    }
+}
+$input[] = ['role' => 'user', 'content' => $message];
 
 $payload = json_encode([
     'model' => 'gpt-5.4-nano',
     'instructions' => $instructions,
-    'input' => $message,
+    'input' => $input,
     'max_output_tokens' => 220,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -68,13 +78,9 @@ curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_CONNECTTIMEOUT => 8,
     CURLOPT_TIMEOUT => 25,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . $key,
-    ],
+    CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
     CURLOPT_POSTFIELDS => $payload,
 ]);
-
 $response = curl_exec($ch);
 $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError = curl_error($ch);
@@ -85,7 +91,6 @@ if ($response === false || $curlError !== '') {
     echo json_encode(['ok' => false, 'error' => 'Sharky perdió la conexión por un momento. Intenta otra vez.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-
 $result = json_decode($response, true);
 if ($status < 200 || $status >= 300 || !is_array($result)) {
     error_log('Sharky OpenAI HTTP ' . $status);
@@ -93,21 +98,16 @@ if ($status < 200 || $status >= 300 || !is_array($result)) {
     echo json_encode(['ok' => false, 'error' => 'Sharky no pudo responder ahora mismo. Intenta de nuevo.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-
 $answer = '';
 foreach (($result['output'] ?? []) as $item) {
     foreach (($item['content'] ?? []) as $content) {
-        if (($content['type'] ?? '') === 'output_text' && isset($content['text'])) {
-            $answer .= (string)$content['text'];
-        }
+        if (($content['type'] ?? '') === 'output_text' && isset($content['text'])) $answer .= (string)$content['text'];
     }
 }
 $answer = trim($answer);
-
 if ($answer === '') {
     http_response_code(502);
     echo json_encode(['ok' => false, 'error' => 'Sharky se quedó pensando demasiado. Prueba otra pregunta.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-
 echo json_encode(['ok' => true, 'answer' => $answer], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
