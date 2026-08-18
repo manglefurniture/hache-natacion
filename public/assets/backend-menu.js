@@ -1,5 +1,5 @@
 (async function(){
-const ASSET_VERSION='20260818-0945';
+const ASSET_VERSION='20260818-1015';
 const fix=document.createElement('link');fix.rel='stylesheet';fix.href=`/assets/responsive-fixes.css?v=${ASSET_VERSION}`;document.head.appendChild(fix);
 const path=location.pathname;let data={};
 try{const r=await fetch('/api/sesion.php',{credentials:'same-origin'}),d=await r.json();if(d.autenticado&&d.usuario){data=d.usuario;sessionStorage.setItem('hache_usuario',JSON.stringify(data));}}catch(e){try{data=JSON.parse(sessionStorage.getItem('hache_usuario')||'{}')}catch(_){}}
@@ -25,4 +25,5 @@ const helpers={'/intensivo-detalle.php':['/assets/intensivo-flow.js'],'/pagos.ph
 const searchable=new Set(['/pagos.php','/sesiones.php','/ausencias.php','/intensivo-detalle.php','/usuarios.php','/comisiones-proa.php']);if(searchable.has(path)){const s=document.createElement('script');s.src=`/assets/person-search.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
 const contextual=new Set(['/pagos.php','/sesiones.php','/ausencias.php','/intensivo-detalle.php','/usuarios.php','/comisiones-proa.php']);if(contextual.has(path)){const s=document.createElement('script');s.src=`/assets/contextual-links.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
 const siteAware=new Set(['/dashboard.php','/alertas.php','/alumnos.php','/agregar-alumno.php','/pagos.php','/resumen-financiero.php','/reportes.php','/finanzas.php','/intensivos.php','/intensivo-detalle.php','/sesiones.php','/ausencias.php','/horarios.php']);if(siteAware.has(path)){const s=document.createElement('script');s.src=`/assets/sede-context.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
+const compact=document.createElement('script');compact.src=`/assets/compact-ui.js?v=${ASSET_VERSION}`;compact.defer=true;document.body.appendChild(compact);
 })();
