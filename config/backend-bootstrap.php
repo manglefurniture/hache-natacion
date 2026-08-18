@@ -6,11 +6,13 @@ $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
 $baseName = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: $scriptName;
 
-// No alterar login, endpoints API ni formularios públicos.
+// No alterar login, endpoints API ni formularios/páginas públicas.
 $publicPages = [
     '/',
     '/home.php',
     '/registro.php',
+    '/curso-intensivo.php',
+    '/clases-regulares.php',
     '/monteverde-regular.php',
     '/monteverde-intensivo.php',
     '/palapas-regular.php',
