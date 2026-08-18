@@ -11,96 +11,30 @@ declare(strict_types=1);
   <title>Hache Natación</title>
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/home-v1.css">
-  <style>.hero,.photo-break{background-image:url('/assets/hero-monteverde-v2.webp')}</style>
+  <style>.hero,.photo-break{background-image:url('/assets/a_bright_sunlit_outdoor_swimming_pool_scene_in_a.png')}</style>
 </head>
 <body>
   <header class="hero" id="inicio">
     <nav class="topbar" aria-label="Navegación principal">
-      <a class="brand" href="#inicio" aria-label="Hache Natación, inicio">
-        <span class="brand-mark">H</span>
-        <span class="brand-name">H NATACIÓN</span>
-      </a>
-      <div class="desktop-nav">
-        <a href="#programas">Programas</a>
-        <a href="#sedes">Sedes</a>
-        <a href="#metodo">Cómo trabajamos</a>
-        <a class="access" href="/index.php">Iniciar sesión</a>
-      </div>
-      <button class="menu-button" id="menuButton" type="button" aria-expanded="false" aria-controls="mobileMenu" aria-label="Abrir menú">
-        <span></span><span></span><span></span>
-      </button>
+      <a class="brand" href="#inicio" aria-label="Hache Natación, inicio"><span class="brand-mark">H</span><span class="brand-name">H NATACIÓN</span></a>
+      <div class="desktop-nav"><a href="#programas">Programas</a><a href="#sedes">Sedes</a><a href="#metodo">Cómo trabajamos</a><a class="access" href="/index.php">Iniciar sesión</a></div>
+      <button class="menu-button" id="menuButton" type="button" aria-expanded="false" aria-controls="mobileMenu" aria-label="Abrir menú"><span></span><span></span><span></span></button>
     </nav>
-
-    <div class="mobile-menu" id="mobileMenu" hidden>
-      <a href="#programas">Programas</a>
-      <a href="#sedes">Sedes</a>
-      <a href="#metodo">Cómo trabajamos</a>
-      <a href="/index.php">Iniciar sesión</a>
-    </div>
-
+    <div class="mobile-menu" id="mobileMenu" hidden><a href="#programas">Programas</a><a href="#sedes">Sedes</a><a href="#metodo">Cómo trabajamos</a><a href="/index.php">Iniciar sesión</a></div>
     <div class="hero-shade"></div>
-    <div class="hero-content">
-      <p class="eyebrow">HACHE NATACIÓN · CANCÚN</p>
-      <h1>Tu nivel cambia.<br>Tu confianza también.</h1>
-      <p class="hero-copy">Empieza, mejora y sigue avanzando en el agua.</p>
-      <a class="primary-cta" href="#programas">Encuentra tu programa <span aria-hidden="true">→</span></a>
-    </div>
+    <div class="hero-content"><p class="eyebrow">HACHE NATACIÓN · CANCÚN</p><h1>Tu nivel cambia.<br>Tu confianza también.</h1><p class="hero-copy">Empieza, mejora y sigue avanzando en el agua.</p><a class="primary-cta" href="#programas">Encuentra tu programa <span aria-hidden="true">→</span></a></div>
     <a class="scroll-cue" href="#programas" aria-label="Descubre los programas"><span>Descubre</span><b>↓</b></a>
   </header>
-
   <main>
-    <section class="programs" id="programas">
-      <div class="section-heading">
-        <p class="eyebrow dark">TU PUNTO DE PARTIDA</p>
-        <h2>¿Dónde estás hoy?</h2>
-        <p>No necesitas saber qué curso elegir. Cuéntanos desde dónde empiezas y te guiamos.</p>
-      </div>
-
-      <div class="path-grid">
-        <article class="path-card"><div class="path-number">01</div><h3>Estoy comenzando</h3><p>Nunca he nadado o todavía no me siento seguro en el agua.</p><strong>Curso intensivo</strong></article>
-        <article class="path-card"><div class="path-number">02</div><h3>Tengo bases y quiero mejorar</h3><p>Puedo desenvolverme en el agua, pero quiero mejorar técnica, respiración y seguridad.</p><strong>Curso intensivo</strong></article>
-        <article class="path-card featured"><div class="path-number">03</div><h3>Ya sé nadar</h3><p>Quiero continuar desarrollando técnica, resistencia y diferentes estilos.</p><strong>Clases regulares</strong></article>
-      </div>
-    </section>
-
+    <section class="programs" id="programas"><div class="section-heading"><p class="eyebrow dark">TU PUNTO DE PARTIDA</p><h2>¿Dónde estás hoy?</h2><p>No necesitas saber qué curso elegir. Cuéntanos desde dónde empiezas y te guiamos.</p></div><div class="path-grid"><article class="path-card"><div class="path-number">01</div><h3>Estoy comenzando</h3><p>Nunca he nadado o todavía no me siento seguro en el agua.</p><strong>Curso intensivo</strong></article><article class="path-card"><div class="path-number">02</div><h3>Tengo bases y quiero mejorar</h3><p>Puedo desenvolverme en el agua, pero quiero mejorar técnica, respiración y seguridad.</p><strong>Curso intensivo</strong></article><article class="path-card featured"><div class="path-number">03</div><h3>Ya sé nadar</h3><p>Quiero continuar desarrollando técnica, resistencia y diferentes estilos.</p><strong>Clases regulares</strong></article></div></section>
     <section class="photo-break" id="sedes" aria-label="Sede Monteverde"><div class="photo-copy"><p class="eyebrow">NUESTRAS SEDES</p><h2>Espacios reales.<br>Trabajo real.</h2><p>Monteverde y Palapas · Cancún.</p></div></section>
-
-    <section class="method" id="metodo">
-      <div class="section-heading align-left"><p class="eyebrow dark">CÓMO TRABAJAMOS</p><h2>Aprender a nadar también es ganar confianza.</h2></div>
-      <div class="method-grid">
-        <div><span>01</span><h3>Progresión</h3><p>Avanzamos desde tu nivel real, sin saltarnos etapas.</p></div>
-        <div><span>02</span><h3>Técnica</h3><p>Construimos una base que te permita nadar mejor y con mayor seguridad.</p></div>
-        <div><span>03</span><h3>Continuidad</h3><p>Del primer contacto con el agua al perfeccionamiento de tu natación.</p></div>
-      </div>
-    </section>
+    <section class="method" id="metodo"><div class="section-heading align-left"><p class="eyebrow dark">CÓMO TRABAJAMOS</p><h2>Aprender a nadar también es ganar confianza.</h2></div><div class="method-grid"><div><span>01</span><h3>Progresión</h3><p>Avanzamos desde tu nivel real, sin saltarnos etapas.</p></div><div><span>02</span><h3>Técnica</h3><p>Construimos una base que te permita nadar mejor y con mayor seguridad.</p></div><div><span>03</span><h3>Continuidad</h3><p>Del primer contacto con el agua al perfeccionamiento de tu natación.</p></div></div></section>
   </main>
-
   <button class="hachi" type="button" aria-label="Hachi, asistente virtual próximamente" title="Hachi · Próximamente"><span>H</span><small>Próximamente</small></button>
-
   <script>
-    const button = document.getElementById('menuButton');
-    const menu = document.getElementById('mobileMenu');
-    let menuOpen = false;
-
-    function setMenu(open) {
-      menuOpen = open;
-      button.setAttribute('aria-expanded', String(open));
-      button.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
-      menu.hidden = !open;
-      document.body.classList.toggle('menu-open', open);
-    }
-
-    button.addEventListener('click', (event) => {
-      event.stopPropagation();
-      setMenu(!menuOpen);
-    });
-
-    menu.addEventListener('click', event => event.stopPropagation());
-    menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => setMenu(false)));
-    document.addEventListener('click', () => { if (menuOpen) setMenu(false); });
-    window.addEventListener('scroll', () => { if (menuOpen) setMenu(false); }, { passive: true });
-    window.addEventListener('touchmove', () => { if (menuOpen) setMenu(false); }, { passive: true });
-    window.addEventListener('keydown', event => { if (event.key === 'Escape' && menuOpen) setMenu(false); });
+    const button=document.getElementById('menuButton'),menu=document.getElementById('mobileMenu');let menuOpen=false;
+    function setMenu(open){menuOpen=open;button.setAttribute('aria-expanded',String(open));button.setAttribute('aria-label',open?'Cerrar menú':'Abrir menú');menu.hidden=!open;document.body.classList.toggle('menu-open',open)}
+    button.addEventListener('click',e=>{e.stopPropagation();setMenu(!menuOpen)});menu.addEventListener('click',e=>e.stopPropagation());menu.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>setMenu(false)));document.addEventListener('click',()=>{if(menuOpen)setMenu(false)});window.addEventListener('scroll',()=>{if(menuOpen)setMenu(false)},{passive:true});window.addEventListener('touchmove',()=>{if(menuOpen)setMenu(false)},{passive:true});window.addEventListener('keydown',e=>{if(e.key==='Escape'&&menuOpen)setMenu(false)});
   </script>
 </body>
 </html>
