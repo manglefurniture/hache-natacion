@@ -1,5 +1,5 @@
 (async function(){
-const ASSET_VERSION='20260816-1635';
+const ASSET_VERSION='20260817-2035';
 const fix=document.createElement('link');fix.rel='stylesheet';fix.href=`/assets/responsive-fixes.css?v=${ASSET_VERSION}`;document.head.appendChild(fix);
 const path=location.pathname;let data={};
 try{const r=await fetch('/api/sesion.php',{credentials:'same-origin'}),d=await r.json();if(d.autenticado&&d.usuario){data=d.usuario;sessionStorage.setItem('hache_usuario',JSON.stringify(data));}}catch(e){try{data=JSON.parse(sessionStorage.getItem('hache_usuario')||'{}')}catch(_){}}
@@ -11,7 +11,7 @@ const groups=[
  {id:'inicio',label:'Inicio',icon:'⌂',items:[['/dashboard.php','⌂','Dashboard'],['/alertas.php','⚑','Centro de alertas']]},
  {id:'alumnos',label:'Alumnos',icon:'👥',items:[['/alumnos.php','👥','Control de alumnos'],['/agregar-alumno.php','➕','Nuevo alumno','ADMIN']]},
  {id:'operacion',label:'Operación',icon:'✓',items:[['/sesiones.php','✓','Asistencia'],['/ausencias.php','↺','Ausencias y reposiciones'],['/horarios.php','🕒','Horarios'],['/intensivos.php','🏊','Cursos intensivos']]},
- {id:'finanzas',label:'Finanzas',icon:'💳',items:[['/pagos.php','💳','Pagos'],['/resumen-financiero.php','📊','Resumen financiero'],['/reportes.php','▤','Reportes'],['/exportaciones.php','⇩','Exportaciones'],['/cierres-mensuales.php','▣','Cierre mensual','ADMIN'],['/comisiones-proa.php','◆','Comisiones PROA','ADMIN']]},
+ {id:'finanzas',label:'Finanzas',icon:'💳',items:[['/finanzas.php','📊','Centro financiero'],['/pagos.php','💳','Pagos'],['/exportaciones.php','⇩','Exportaciones'],['/cierres-mensuales.php','▣','Cierre mensual','ADMIN'],['/comisiones-proa.php','◆','Comisiones PROA','ADMIN']]},
  {id:'sistema',label:'Sistema',icon:'⚙',items:[['/mensajes.php','✉','Mensajes'],['/notificaciones.php','🔔','Notificaciones','ADMIN'],['/configuracion.php','⚙','Configuración'],['/usuarios.php','♟','Usuarios','ADMIN'],['/auditoria.php','◎','Auditoría','ADMIN'],['/estado-sistema.php','◉','Estado del sistema','ADMIN']]}
 ];
 function itemPermitido(x){return !x[3]||x[3]===role}
@@ -24,5 +24,5 @@ const helpers={'/intensivo-detalle.php':['/assets/intensivo-flow.js'],'/pagos.ph
 (helpers[path]||[]).forEach(src=>{const s=document.createElement('script');s.src=`${src}?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)});
 const searchable=new Set(['/pagos.php','/sesiones.php','/ausencias.php','/intensivo-detalle.php','/usuarios.php','/comisiones-proa.php']);if(searchable.has(path)){const s=document.createElement('script');s.src=`/assets/person-search.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
 const contextual=new Set(['/pagos.php','/sesiones.php','/ausencias.php','/intensivo-detalle.php','/usuarios.php','/comisiones-proa.php']);if(contextual.has(path)){const s=document.createElement('script');s.src=`/assets/contextual-links.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
-const siteAware=new Set(['/dashboard.php','/alertas.php','/alumnos.php','/agregar-alumno.php','/pagos.php','/resumen-financiero.php','/reportes.php','/intensivos.php','/intensivo-detalle.php','/sesiones.php','/ausencias.php','/horarios.php']);if(siteAware.has(path)){const s=document.createElement('script');s.src=`/assets/sede-context.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
+const siteAware=new Set(['/dashboard.php','/alertas.php','/alumnos.php','/agregar-alumno.php','/pagos.php','/resumen-financiero.php','/reportes.php','/finanzas.php','/intensivos.php','/intensivo-detalle.php','/sesiones.php','/ausencias.php','/horarios.php']);if(siteAware.has(path)){const s=document.createElement('script');s.src=`/assets/sede-context.js?v=${ASSET_VERSION}`;s.defer=true;document.body.appendChild(s)}
 })();
