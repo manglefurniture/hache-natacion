@@ -1,0 +1,33 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../config/auth.php';
+auth_require(['ADMIN','VERIFICADOR']);
+$autoload=__DIR__.'/../vendor/autoload.php';if(!is_file($autoload)){http_response_code(503);exit('Generador PDF no instalado.');}require_once $autoload;
+use Dompdf\Dompdf;use Dompdf\Options;
+$config=require __DIR__.'/../config/database.php';
+$pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+function esc($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}function money($v){return '$'.number_format((float)$v,2,'.',',');}
+$tipo=strtolower(trim((string)($_GET['tipo']??'pagos')));$clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));
+$st=$pdo->prepare("SELECT * FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$sede=$st->fetch();if(!$sede){http_response_code(422);exit('Sede inválida');}
+$sedeId=$sede['id'];$desde=trim((string)($_GET['desde']??''));$hasta=trim((string)($_GET['hasta']??''));$cursoId=trim((string)($_GET['curso_id']??''));$horario=trim((string)($_GET['horario']??''));
+$title='Reporte personalizado';$subtitle='Consulta operativa';$headers=[];$rows=[];$total=null;
+if($tipo==='pagos'){
+ $title='Reporte de pagos';$w=["a.sede_id=:s","p.estado='VALIDO'"];$pa=[':s'=>$sedeId];
+ if($desde!==''){$w[]='DATE(p.fecha)>=:d';$pa[':d']=$desde;}if($hasta!==''){$w[]='DATE(p.fecha)<=:h';$pa[':h']=$hasta;}
+ $sql="SELECT p.folio,a.nombre,p.tipo,p.importe,p.metodo,p.fecha FROM pagos p JOIN alumnos a ON a.id=p.alumno_id WHERE ".implode(' AND ',$w)." ORDER BY p.fecha,p.folio";$st=$pdo->prepare($sql);$st->execute($pa);$data=$st->fetchAll();$headers=['Folio','Alumno','Tipo','Importe','Método','Fecha'];foreach($data as $r){$rows[]=[(string)$r['folio'],$r['nombre'],$r['tipo'],money($r['importe']),str_replace('_',' ',$r['metodo']),$r['fecha']];$total=($total??0)+(float)$r['importe'];}
+ $subtitle='Pagos válidos'.($desde||$hasta?' del periodo seleccionado':'');
+}elseif($tipo==='intensivo'){
+ $title='Reporte de curso intensivo';$w=['ci.sede_id=:s'];$pa=[':s'=>$sedeId];if($cursoId!==''){$w[]='ci.id=:c';$pa[':c']=$cursoId;}if($desde!==''){$w[]='ci.fecha_inicio>=:d';$pa[':d']=$desde;}if($hasta!==''){$w[]='ci.fecha_inicio<=:h';$pa[':h']=$hasta;}
+ $sql="SELECT ci.fecha_inicio,ci.fecha_fin,a.nombre,COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0) importe FROM cursos_intensivos ci JOIN curso_intensivo_alumnos cia ON cia.curso_intensivo_id=ci.id JOIN alumnos a ON a.id=cia.alumno_id LEFT JOIN pagos p ON p.intensivo_id=ci.id AND p.alumno_id=a.id WHERE ".implode(' AND ',$w)." GROUP BY ci.id,ci.fecha_inicio,ci.fecha_fin,a.id,a.nombre ORDER BY ci.fecha_inicio,a.nombre";$st=$pdo->prepare($sql);$st->execute($pa);$data=$st->fetchAll();$headers=['Inicio','Fin','Alumno','Pago intensivo'];foreach($data as $r){$rows[]=[$r['fecha_inicio'],$r['fecha_fin'],$r['nombre'],money($r['importe'])];$total=($total??0)+(float)$r['importe'];}
+ $subtitle='Alumnos y cobros asociados al curso intensivo';
+}elseif($tipo==='horario'){
+ $title='Reporte de alumnos por horario';$w=['a.sede_id=:s'];$pa=[':s'=>$sedeId];if($horario!==''){$w[]='TIME_FORMAT(h.hora_inicio,\'%H:%i\')=:hora';$pa[':hora']=$horario;}
+ $sql="SELECT a.nombre,p.nombre plan,TIME_FORMAT(h.hora_inicio,'%H:%i') inicio,TIME_FORMAT(h.hora_fin,'%H:%i') fin,a.estado_administrativo FROM alumnos a LEFT JOIN planes p ON p.id=a.plan_actual_id LEFT JOIN horarios h ON h.id=a.horario_preferido_id WHERE ".implode(' AND ',$w)." ORDER BY h.hora_inicio,a.nombre";$st=$pdo->prepare($sql);$st->execute($pa);$data=$st->fetchAll();$headers=['Alumno','Plan','Horario','Estado'];foreach($data as $r){$rows[]=[$r['nombre'],$r['plan']?:'—',($r['inicio']?:'—').' - '.($r['fin']?:'—'),$r['estado_administrativo']];}
+ $subtitle='Listado de alumnos'.($horario!==''?' del horario '.$horario:' por horario');
+}else{http_response_code(422);exit('Tipo de reporte inválido');}
+$generated=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('d/m/Y H:i');
+$ths='';foreach($headers as $h){$ths.='<th>'.esc($h).'</th>';}$trs='';foreach($rows as $row){$trs.='<tr>';foreach($row as $cell){$trs.='<td>'.esc($cell).'</td>';}$trs.='</tr>';}if($trs==='')$trs='<tr><td colspan="'.max(1,count($headers)).'" class="empty">Sin resultados para los filtros seleccionados.</td></tr>';
+$filters=[];if($desde)$filters[]='Desde: '.esc($desde);if($hasta)$filters[]='Hasta: '.esc($hasta);if($cursoId)$filters[]='Curso: '.esc($cursoId);if($horario)$filters[]='Horario: '.esc($horario);$filterLine=$filters?implode(' · ',$filters):'Sin filtros adicionales';
+$totalBox=$total!==null?'<div class="total"><span>Total</span><b>'.money($total).'</b></div>':'';
+$html='<!doctype html><html><head><meta charset="utf-8"><style>@page{margin:28px 34px}body{font-family:DejaVu Sans,Arial,sans-serif;color:#172033;font-size:10px}.brand{background:#123b5d;color:#fff;padding:22px 24px;border-radius:14px}.brand h1{margin:0;font-size:24px}.brand p{margin:4px 0 0;color:#dbe8f1}.meta{margin:12px 0 18px;color:#64748b}.title h2{font-size:19px;margin:0 0 4px}.title p{margin:0 0 12px;color:#64748b}.filters{background:#f8fafc;border:1px solid #e5eaf0;padding:9px 11px;border-radius:9px;margin-bottom:12px}.detail{width:100%;border-collapse:collapse}.detail th{background:#eef3f7;color:#526174;text-transform:uppercase;font-size:8px;letter-spacing:.4px;padding:7px;text-align:left}.detail td{border-bottom:1px solid #e8edf2;padding:7px}.empty{text-align:center;color:#64748b;padding:16px}.total{margin-top:12px;text-align:right}.total span{color:#64748b;margin-right:10px}.total b{font-size:16px}.foot{margin-top:18px;border-top:1px solid #e1e7ec;padding-top:8px;color:#7a8796;font-size:8.5px}</style></head><body><div class="brand"><h1>Hache Natación</h1><p>'.esc($sede['nombre']).'</p></div><div class="meta">Generado: '.$generated.'</div><div class="title"><h2>'.esc($title).'</h2><p>'.esc($subtitle).'</p></div><div class="filters">'.$filterLine.'</div><table class="detail"><thead><tr>'.$ths.'</tr></thead><tbody>'.$trs.'</tbody></table>'.$totalBox.'<div class="foot">Reporte generado desde el Centro Financiero de Hache Natación.</div></body></html>';
+$options=new Options();$options->set('isRemoteEnabled',true);$dompdf=new Dompdf($options);$dompdf->loadHtml($html,'UTF-8');$dompdf->setPaper('A4','portrait');$dompdf->render();$dompdf->stream('hache-reporte-'.date('Ymd-His').'.pdf',['Attachment'=>true]);
