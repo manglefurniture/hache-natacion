@@ -62,7 +62,7 @@ try{
             elseif($row['tipo']==='PAGO_DIRECTO_PROA')$directos+=(float)$row['importe'];
         }unset($row);
         $comisiones=(float)$auto['total'];
-        $saldo=$base['total_proa']+$comisiones-$entregado-$directos;
+        $saldo=$base['total_proa']-$comisiones-$entregado-$directos;
         $situacion=abs($saldo)<0.005?'CUADRADO':($saldo>0?'HACHE_DEBE_PROA':'PROA_DEBE_HACHE');
         out(['ok'=>true,'periodo'=>$ym,'sede'=>'MONTEVERDE','base'=>$base,'comisiones_automaticas'=>$auto['rows'],'resumen'=>[
             'efectivo_a_proa'=>$efectivo,'transferencias_a_proa'=>$transferencias,'entregado_a_proa'=>$entregado,
