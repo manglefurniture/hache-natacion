@@ -1,9 +1,25 @@
 (function(){
 'use strict';
+function hideEmbeddedMenu(d,w){
+  const candidates=[...d.querySelectorAll('button,a,[role="button"],div')];
+  candidates.forEach(el=>{
+    let cs,r;
+    try{cs=w.getComputedStyle(el);r=el.getBoundingClientRect();}catch(e){return;}
+    const label=((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.textContent||'')).toLowerCase();
+    const menuLike=/menú|menu|navegaci/.test(label);
+    const geometric=(cs.position==='fixed'||cs.position==='absolute')&&r.left>=0&&r.left<120&&r.top>=0&&r.top<180&&r.width>=40&&r.width<=110&&r.height>=40&&r.height<=110;
+    const bars=el.querySelectorAll('span').length>=3;
+    if(menuLike||(geometric&&bars)) el.style.setProperty('display','none','important');
+  });
+}
 function enhance(frame){
   let d,w;
   try{d=frame.contentDocument;w=frame.contentWindow;}catch(e){return;}
-  if(!d||d.getElementById('proa-quick-entry-style'))return;
+  if(!d)return;
+  hideEmbeddedMenu(d,w);
+  setTimeout(()=>hideEmbeddedMenu(d,w),250);
+  setTimeout(()=>hideEmbeddedMenu(d,w),900);
+  if(d.getElementById('proa-quick-entry-style'))return;
   const panels=[...d.querySelectorAll('section.panel')];
   const entry=panels.find(p=>p.querySelector('h2')?.textContent.includes('Registrar conciliación'));
   const matrix=panels.find(p=>p.querySelector('h2')?.textContent.includes('Cómo se forma la obligación'));
