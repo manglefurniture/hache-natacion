@@ -30,6 +30,19 @@ try{
     $id=trim((string)($in['id']??''));if($id==='')out(['ok'=>false,'error'=>'ID obligatorio'],422);
     $st=$pdo->prepare("DELETE FROM comisiones_proa WHERE id=:id");$st->execute([':id'=>$id]);out(['ok'=>true]);
   }
+  if($accion==='EDITAR'){
+    $id=trim((string)($in['id']??''));$nombre=trim((string)($in['alumno_proa_nombre']??''));$importe=(float)($in['importe']??0);$obs=trim((string)($in['observacion']??''));$fecha=trim((string)($in['fecha']??''));
+    if($id===''||$nombre===''||$importe<=0)out(['ok'=>false,'error'=>'ID, nombre e importe válido son obligatorios'],422);
+    if($fecha!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$fecha))out(['ok'=>false,'error'=>'Fecha inválida'],422);
+    $st=$pdo->prepare("SELECT periodo FROM comisiones_proa WHERE id=:id LIMIT 1");$st->execute([':id'=>$id]);$row=$st->fetch();if(!$row)out(['ok'=>false,'error'=>'Comisión no encontrada'],404);
+    if($fecha!==''&&substr($fecha,0,7)!==substr((string)$row['periodo'],0,7))out(['ok'=>false,'error'=>'La fecha debe permanecer dentro del mismo periodo'],422);
+    if($fecha===''){
+      $st=$pdo->prepare("UPDATE comisiones_proa SET alumno_proa_nombre=:n,importe=:i,observacion=:o WHERE id=:id");$st->execute([':n'=>$nombre,':i'=>$importe,':o'=>$obs!==''?$obs:null,':id'=>$id]);
+    }else{
+      $st=$pdo->prepare("UPDATE comisiones_proa SET alumno_proa_nombre=:n,importe=:i,observacion=:o,created_at=CONCAT(:f,' ',TIME(created_at)) WHERE id=:id");$st->execute([':n'=>$nombre,':i'=>$importe,':o'=>$obs!==''?$obs:null,':f'=>$fecha,':id'=>$id]);
+    }
+    out(['ok'=>true]);
+  }
   $ym=(string)($in['periodo']??'');$periodo=monthStart($ym);$prev=(new DateTimeImmutable($periodo))->modify('-1 month')->format('Y-m');
   $prevData=proaForMonth($pdo,$prev);if($prevData['aporte_proa']<$minimo)out(['ok'=>false,'error'=>'Las comisiones de este mes no están habilitadas: el mes anterior no alcanzó el mínimo PROA.'],422);
   $nombre=trim((string)($in['alumno_proa_nombre']??''));$importe=(float)($in['importe']??0);$obs=trim((string)($in['observacion']??''));
