@@ -36,7 +36,7 @@ if (!$u) {
 }
 
 if (!empty($u['debe_cambiar_password']) && $currentPath !== '/cambiar-password.php') {
-    header('Location: /');
+    header('Location: /cambiar-password.php');
     exit;
 }
 if ($u['rol'] === 'ALUMNO' && !in_array($currentPath, ['/mi-cuenta.php','/cambiar-password.php'], true)) {
