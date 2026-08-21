@@ -81,6 +81,7 @@ ob_start(static function (string $html): string {
     $css = '<link rel="stylesheet" href="/assets/backend-menu.css">';
     $diag = '<script src="/assets/diagnostico.js?v=20260817-1"></script>';
     $js = '<script src="/assets/backend-menu.js" defer></script>';
+    $oblig = '<script src="/assets/obligaciones-alumnos.js?v=20260821-1" defer></script>';
 
     if (stripos($html, '/assets/backend-menu.css') === false) {
         if (stripos($html, '</head>') !== false) {
@@ -103,6 +104,14 @@ ob_start(static function (string $html): string {
             $html = preg_replace('/<\/body>/i', $js . "\n</body>", $html, 1) ?? $html;
         } else {
             $html .= $js;
+        }
+    }
+
+    if (stripos($html, '/assets/obligaciones-alumnos.js') === false) {
+        if (stripos($html, '</body>') !== false) {
+            $html = preg_replace('/<\/body>/i', $oblig . "\n</body>", $html, 1) ?? $html;
+        } else {
+            $html .= $oblig;
         }
     }
 
