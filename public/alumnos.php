@@ -1,8 +1,14 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../config/auth.php';
 $config = require __DIR__ . '/../config/database.php';
 $pdo = new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 $pdo->exec("UPDATE alumnos SET plan_actual_id=plan_programado_id,plan_programado_id=NULL,plan_programado_desde=NULL,updated_at=NOW() WHERE plan_programado_id IS NOT NULL AND plan_programado_desde IS NOT NULL AND plan_programado_desde<=CURDATE()");
+$sedeClave=auth_active_sede_clave();
+$stSede=$pdo->prepare("SELECT id FROM sedes WHERE clave=:clave AND activo=1 LIMIT 1");
+$stSede->execute([':clave'=>$sedeClave]);
+$sedeId=$stSede->fetchColumn();
+if(!$sedeId){throw new RuntimeException('Sede activa inválida');}
 $mesActual=(int)date('n');$anioActual=(int)date('Y');
 $sql="SELECT a.id,a.nombre,a.whatsapp,a.correo,a.fecha_inicio,a.estado_administrativo,a.horario_preferido_id,a.plan_actual_id,h.hora_inicio,h.hora_fin,p.nombre plan_nombre,p.sesiones_semana,p.precio,m.estado mensualidad_estado,m.fecha_pago,
 EXISTS(SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=a.id AND ci.estado IN ('PROGRAMADO','EN_CURSO')) intensivo_activo,
@@ -13,8 +19,8 @@ EXISTS(SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci
 (SELECT EXISTS(SELECT 1 FROM pagos pg WHERE pg.alumno_id=a.id AND pg.intensivo_id=ci.id AND pg.tipo='INTENSIVO' AND pg.estado='VALIDO') FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=a.id AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1) intensivo_pagado,
 (SELECT hi.hora_inicio FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id LEFT JOIN horarios hi ON hi.id=cia.horario_id WHERE cia.alumno_id=a.id AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1) intensivo_hora_inicio,
 (SELECT hi.hora_fin FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id LEFT JOIN horarios hi ON hi.id=cia.horario_id WHERE cia.alumno_id=a.id AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1) intensivo_hora_fin
-FROM alumnos a LEFT JOIN horarios h ON h.id=a.horario_preferido_id LEFT JOIN planes p ON p.id=a.plan_actual_id LEFT JOIN mensualidades m ON m.alumno_id=a.id AND m.mes=:mes AND m.anio=:anio ORDER BY a.nombre";
-$stmt=$pdo->prepare($sql);$stmt->execute([':mes'=>$mesActual,':anio'=>$anioActual]);$alumnos=$stmt->fetchAll();
+FROM alumnos a LEFT JOIN horarios h ON h.id=a.horario_preferido_id LEFT JOIN planes p ON p.id=a.plan_actual_id LEFT JOIN mensualidades m ON m.alumno_id=a.id AND m.mes=:mes AND m.anio=:anio WHERE a.sede_id=:sede ORDER BY a.nombre";
+$stmt=$pdo->prepare($sql);$stmt->execute([':mes'=>$mesActual,':anio'=>$anioActual,':sede'=>$sedeId]);$alumnos=$stmt->fetchAll();
 $intensivos=array_values(array_filter($alumnos,fn($a)=>(int)$a['intensivo_activo']===1));
 $sinPlan=array_values(array_filter($alumnos,fn($a)=>(int)$a['intensivo_activo']!==1 && empty($a['plan_actual_id'])));
 $regulares=array_values(array_filter($alumnos,fn($a)=>(int)$a['intensivo_activo']!==1 && !empty($a['plan_actual_id'])));
