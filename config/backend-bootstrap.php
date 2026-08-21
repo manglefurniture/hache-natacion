@@ -51,6 +51,28 @@ if ($u['rol'] === 'VERIFICADOR') {
     }
 }
 
+// Mantener el estado administrativo alineado con las reglas reales de acceso.
+// Regular: inscripción cubierta + mensualidad vigente. Monteverde exenta inscripción
+// cuando el alumno viene de continuidad de intensivo; Palapas no.
+if (in_array($u['rol'], ['ADMIN','VERIFICADOR'], true)) {
+    try {
+        require_once __DIR__ . '/reglas-acceso.php';
+        $cfg = require __DIR__ . '/database.php';
+        $pdoReglas = new PDO(
+            "mysql:host={$cfg['host']};dbname={$cfg['dbname']};charset={$cfg['charset']}",
+            $cfg['user'],
+            $cfg['password'],
+            [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
+        );
+        $sedeClaveReglas = auth_resolve_sede_clave(null);
+        $stReglas = $pdoReglas->prepare("SELECT id FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");
+        $stReglas->execute([':c'=>$sedeClaveReglas]);
+        if ($sedeIdReglas = $stReglas->fetchColumn()) regla_reconciliar_sede($pdoReglas,(string)$sedeIdReglas);
+    } catch (Throwable $e) {
+        // La reconciliación no debe romper la navegación; los endpoints de pago vuelven a validar.
+    }
+}
+
 ob_start(static function (string $html): string {
     if (stripos($html, '<html') === false || stripos($html, '<body') === false) {
         return $html;
