@@ -20,14 +20,16 @@ function auth_user(): ?array
 function auth_login(array $user): void
 {
     session_regenerate_id(true);
+    $sedeClave = !empty($user['sede_clave']) ? strtoupper((string)$user['sede_clave']) : null;
     $_SESSION['hache_usuario'] = [
         'id' => (string)$user['id'],
         'usuario' => (string)$user['usuario'],
         'rol' => (string)$user['rol'],
         'alumno_id' => $user['alumno_id'] ?: null,
         'sede_id' => !empty($user['sede_id']) ? (string)$user['sede_id'] : null,
-        'sede_clave' => !empty($user['sede_clave']) ? (string)$user['sede_clave'] : null,
+        'sede_clave' => $sedeClave,
         'sede_nombre' => !empty($user['sede_nombre']) ? (string)$user['sede_nombre'] : null,
+        'sede_activa' => (($user['rol'] ?? '') === 'VERIFICADOR' && in_array($sedeClave, ['MONTEVERDE','PALAPAS'], true)) ? $sedeClave : 'MONTEVERDE',
         'debe_cambiar_password' => !empty($user['debe_cambiar_password']) ? 1 : 0,
     ];
 }
@@ -73,27 +75,44 @@ function auth_require(array $roles = [], bool $allowForcedPassword = false): arr
     return $u;
 }
 
-function auth_resolve_sede_clave(?string $requested='MONTEVERDE'): string
+function auth_active_sede_clave(): string
 {
-    $u=auth_user();
-    $req=strtoupper(trim((string)($requested ?: 'MONTEVERDE')));
-    if($u && ($u['rol']??'')==='VERIFICADOR'){
-        $own=strtoupper(trim((string)($u['sede_clave']??'')));
-        if($own===''){
-            http_response_code(403);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok'=>false,'error'=>'El verificador no tiene una sede asignada'],JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        if($req!=='' && $req!==$own){
-            http_response_code(403);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok'=>false,'error'=>'No tienes permiso para consultar otra sede'],JSON_UNESCAPED_UNICODE);
-            exit;
-        }
+    $u = auth_user();
+    if (!$u) return 'MONTEVERDE';
+    if (($u['rol'] ?? '') === 'VERIFICADOR') {
+        $own = strtoupper(trim((string)($u['sede_clave'] ?? '')));
+        return in_array($own, ['MONTEVERDE','PALAPAS'], true) ? $own : 'MONTEVERDE';
+    }
+    $active = strtoupper(trim((string)($u['sede_activa'] ?? 'MONTEVERDE')));
+    return in_array($active, ['MONTEVERDE','PALAPAS'], true) ? $active : 'MONTEVERDE';
+}
+
+function auth_set_active_sede(string $clave): string
+{
+    $u = auth_user();
+    if (!$u) {
+        throw new RuntimeException('Sesión no iniciada');
+    }
+    $clave = strtoupper(trim($clave));
+    if (!in_array($clave, ['MONTEVERDE','PALAPAS'], true)) {
+        throw new InvalidArgumentException('Sede inválida');
+    }
+    if (($u['rol'] ?? '') === 'VERIFICADOR') {
+        $own = strtoupper(trim((string)($u['sede_clave'] ?? '')));
+        if ($clave !== $own) throw new RuntimeException('No tienes permiso para cambiar de sede');
+        $_SESSION['hache_usuario']['sede_activa'] = $own;
         return $own;
     }
-    return in_array($req,['MONTEVERDE','PALAPAS'],true)?$req:'MONTEVERDE';
+    $_SESSION['hache_usuario']['sede_activa'] = $clave;
+    return $clave;
+}
+
+function auth_resolve_sede_clave(?string $requested = null): string
+{
+    $u = auth_user();
+    if ($u) return auth_active_sede_clave();
+    $req = strtoupper(trim((string)$requested));
+    return in_array($req, ['MONTEVERDE','PALAPAS'], true) ? $req : 'MONTEVERDE';
 }
 
 function page_require(array $roles = [], bool $allowForcedPassword = false): array
