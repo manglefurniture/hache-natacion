@@ -4,6 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
+require_once __DIR__.'/../config/telefono.php';
 $config = require __DIR__ . '/../config/database.php';
 
 function out(array $d,int $c=200):never{http_response_code($c);echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);exit;}
@@ -23,8 +24,10 @@ try {
     $admin=auth_require(['ADMIN']);
     if($method!=='POST')out(['ok'=>false,'error'=>'Método no permitido'],405);
     $input=json_decode(file_get_contents('php://input'),true);if(!is_array($input))out(['ok'=>false,'error'=>'JSON inválido'],400);
-    $nombre=trim((string)($input['nombre']??''));$fechaNacimiento=trim((string)($input['fecha_nacimiento']??''));$whatsapp=trim((string)($input['whatsapp']??''));$correo=trim((string)($input['correo']??''));$fechaInicio=trim((string)($input['fecha_inicio']??''));$tipoIngreso=strtoupper(trim((string)($input['tipo_ingreso']??'REGULAR')));$horarioId=$input['horario_preferido_id']??null;$planId=$input['plan_actual_id']??null;$observaciones=$input['observaciones']??null;$sedeClave=auth_resolve_sede_clave((string)($input['sede']??''));$s=sede($pdo,$sedeClave);$cicloPago=strtoupper(trim((string)($input['ciclo_pago']??'')));
-    if($nombre==='')out(['ok'=>false,'error'=>'El nombre es obligatorio'],422);if($whatsapp==='')out(['ok'=>false,'error'=>'El WhatsApp es obligatorio'],422);if($fechaInicio==='')out(['ok'=>false,'error'=>'La fecha de inicio es obligatoria'],422);if(!in_array($tipoIngreso,['REGULAR','INTENSIVO'],true))out(['ok'=>false,'error'=>'Tipo de ingreso inválido'],422);
+    $nombre=trim((string)($input['nombre']??''));$fechaNacimiento=trim((string)($input['fecha_nacimiento']??''));$whatsappNacional=trim((string)($input['whatsapp']??''));$whatsappPais=strtoupper(trim((string)($input['whatsapp_pais']??'MX')));$correo=trim((string)($input['correo']??''));$fechaInicio=trim((string)($input['fecha_inicio']??''));$tipoIngreso=strtoupper(trim((string)($input['tipo_ingreso']??'REGULAR')));$horarioId=$input['horario_preferido_id']??null;$planId=$input['plan_actual_id']??null;$observaciones=$input['observaciones']??null;$sedeClave=auth_resolve_sede_clave((string)($input['sede']??''));$s=sede($pdo,$sedeClave);$cicloPago=strtoupper(trim((string)($input['ciclo_pago']??'')));
+    if($nombre==='')out(['ok'=>false,'error'=>'El nombre es obligatorio'],422);if($whatsappNacional==='')out(['ok'=>false,'error'=>'El WhatsApp es obligatorio'],422);if($fechaInicio==='')out(['ok'=>false,'error'=>'La fecha de inicio es obligatoria'],422);if(!in_array($tipoIngreso,['REGULAR','INTENSIVO'],true))out(['ok'=>false,'error'=>'Tipo de ingreso inválido'],422);
+    try{$whatsapp=telefono_normalizar($whatsappPais,$whatsappNacional);}catch(InvalidArgumentException $e){out(['ok'=>false,'error'=>$e->getMessage()],422);}
+    $dup=$pdo->prepare("SELECT id,nombre FROM alumnos WHERE whatsapp=:w LIMIT 1");$dup->execute([':w'=>$whatsapp]);if($exist=$dup->fetch())out(['ok'=>false,'error'=>'Ese WhatsApp ya pertenece a '.$exist['nombre'].'.'],409);
     $planPrecio=null;
     if($s['clave']==='PALAPAS'&&$tipoIngreso==='REGULAR'){if(!in_array($cicloPago,['P1','P15'],true))out(['ok'=>false,'error'=>'Selecciona si el alumno regular de Palapas es P1 o P15'],422);}else{$cicloPago=null;}
     if($tipoIngreso==='REGULAR'){
