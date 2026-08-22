@@ -6,9 +6,10 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="index,follow">
+  <meta name="robots" content="noindex,follow">
   <meta name="description" content="Política de privacidad de Hache Natación para el sitio web, formularios y atención por WhatsApp.">
   <title>Política de privacidad | Hache Natación</title>
+  <link rel="canonical" href="https://hnatacion.com/privacidad/">
   <style>
     :root {
       --bg: #071521;
@@ -102,7 +103,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <p class="meta"><strong>Última actualización:</strong> 21 de agosto de 2026.</p>
   </div>
 
-  <footer>© <?php echo date('Y'); ?> Hache Natación. Todos los derechos reservados.</footer>
+  <footer><a href="/">← Volver a Hache Natación</a><br>© <?php echo date('Y'); ?> Hache Natación. Todos los derechos reservados.</footer>
 </main>
 </body>
 </html>
