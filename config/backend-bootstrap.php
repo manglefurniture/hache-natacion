@@ -5,6 +5,14 @@ declare(strict_types=1);
 $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
 $baseName = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: $scriptName;
+$requestHost = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+$requestHost = explode(':', $requestHost, 2)[0];
+
+if ($requestHost === 'www.hnatacion.com') {
+    $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '/');
+    header('Location: https://hnatacion.com' . ($requestUri !== '' ? $requestUri : '/'), true, 301);
+    exit;
+}
 
 $publicPages = [
     '/', '/home.php', '/registro.php', '/curso-intensivo.php', '/clases-regulares.php',
@@ -13,6 +21,10 @@ $publicPages = [
 ];
 
 if ($baseName === 'index.php' || str_starts_with($scriptName, '/api/') || in_array($currentPath, $publicPages, true)) return;
+
+if (!headers_sent()) {
+    header('X-Robots-Tag: noindex, nofollow, noarchive');
+}
 
 require_once __DIR__ . '/auth.php';
 $u = auth_user();
