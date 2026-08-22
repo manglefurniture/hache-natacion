@@ -18,6 +18,37 @@ function regla_periodo_regular_actual(string $sedeClave, ?string $cicloPago, ?Da
     return ['mes'=>(int)$inicio->format('n'),'anio'=>(int)$inicio->format('Y'),'inicio'=>$inicio->format('Y-m-d'),'fin'=>$fin->format('Y-m-d')];
 }
 
+function regla_asegurar_tabla_negocio(PDO $pdo): void
+{
+    static $ok=false;
+    if($ok) return;
+    $pdo->exec("CREATE TABLE IF NOT EXISTS alumno_reglas_negocio (
+        alumno_id CHAR(36) PRIMARY KEY,
+        inscripcion_historica_cubierta TINYINT(1) NOT NULL DEFAULT 0,
+        nota VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_alumno_reglas_negocio_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE CASCADE
+    )");
+    $ok=true;
+}
+
+function regla_inscripcion_historica_cubierta(PDO $pdo,string $alumnoId): bool
+{
+    regla_asegurar_tabla_negocio($pdo);
+    $st=$pdo->prepare("SELECT inscripcion_historica_cubierta FROM alumno_reglas_negocio WHERE alumno_id=:a LIMIT 1");
+    $st->execute([':a'=>$alumnoId]);
+    return (bool)$st->fetchColumn();
+}
+
+function regla_marcar_inscripcion_historica(PDO $pdo,string $alumnoId,bool $cubierta,?string $nota=null): void
+{
+    regla_asegurar_tabla_negocio($pdo);
+    $st=$pdo->prepare("INSERT INTO alumno_reglas_negocio(alumno_id,inscripcion_historica_cubierta,nota) VALUES(:a,:c,:n)
+        ON DUPLICATE KEY UPDATE inscripcion_historica_cubierta=VALUES(inscripcion_historica_cubierta),nota=VALUES(nota),updated_at=NOW()");
+    $st->execute([':a'=>$alumnoId,':c'=>$cubierta?1:0,':n'=>$nota]);
+}
+
 function regla_es_continuidad_intensivo_monteverde(PDO $pdo,string $alumnoId,string $sedeId): bool
 {
     $st=$pdo->prepare("SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.sede_id=:s AND cia.continua_regular=1 LIMIT 1");
@@ -27,6 +58,7 @@ function regla_es_continuidad_intensivo_monteverde(PDO $pdo,string $alumnoId,str
 
 function regla_inscripcion_regular_cubierta(PDO $pdo,string $alumnoId,string $sedeId,string $sedeClave): bool
 {
+    if(regla_inscripcion_historica_cubierta($pdo,$alumnoId)) return true;
     if(strtoupper($sedeClave)==='MONTEVERDE' && regla_es_continuidad_intensivo_monteverde($pdo,$alumnoId,$sedeId)) return true;
     $st=$pdo->prepare("SELECT 1 FROM pagos p INNER JOIN inscripciones i ON i.id=p.inscripcion_id WHERE p.alumno_id=:a AND i.sede_id=:s AND p.tipo='INSCRIPCION' AND p.estado='VALIDO' LIMIT 1");
     $st->execute([':a'=>$alumnoId,':s'=>$sedeId]);
@@ -61,11 +93,12 @@ function regla_recalcular_alumno_regular(PDO $pdo,string $alumnoId): array
     $st=$pdo->prepare("SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.estado IN ('PROGRAMADO','EN_CURSO') LIMIT 1");
     $st->execute([':a'=>$alumnoId,':s'=>$a['sede_id']]);
     if($st->fetchColumn()) return ['aplica'=>false,'intensivo_activo'=>true];
+    $historica=regla_inscripcion_historica_cubierta($pdo,$alumnoId);
     $ins=regla_inscripcion_regular_cubierta($pdo,$alumnoId,(string)$a['sede_id'],(string)$a['sede_clave']);
     $men=regla_mensualidad_regular_cubierta($pdo,$alumnoId,(string)$a['sede_id'],(string)$a['sede_clave'],$a['ciclo_pago']);
     $estado=($ins && $men)?'ACTIVO':'PENDIENTE';
     if($a['estado_administrativo']!==$estado){$up=$pdo->prepare("UPDATE alumnos SET estado_administrativo=:e,updated_at=NOW() WHERE id=:a AND estado_administrativo<>'BAJA'");$up->execute([':e'=>$estado,':a'=>$alumnoId]);}
-    return ['aplica'=>true,'inscripcion_cubierta'=>$ins,'mensualidad_cubierta'=>$men,'estado'=>$estado,'inscripcion_exenta'=>strtoupper((string)$a['sede_clave'])==='MONTEVERDE'&&regla_es_continuidad_intensivo_monteverde($pdo,$alumnoId,(string)$a['sede_id'])];
+    return ['aplica'=>true,'inscripcion_cubierta'=>$ins,'mensualidad_cubierta'=>$men,'estado'=>$estado,'inscripcion_historica'=>$historica,'inscripcion_exenta'=>strtoupper((string)$a['sede_clave'])==='MONTEVERDE'&&regla_es_continuidad_intensivo_monteverde($pdo,$alumnoId,(string)$a['sede_id'])];
 }
 
 function regla_reconciliar_sede(PDO $pdo,string $sedeId): void
