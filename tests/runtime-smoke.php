@@ -63,8 +63,13 @@ function smokeAssert(bool $condition, string $message): void
 function smokeUuid(PDO $pdo): string { return (string)$pdo->query('SELECT UUID()')->fetchColumn(); }
 function smokeJson(array $response, array $statuses, string $label): array
 {
-    smokeAssert(in_array($response['status'], $statuses, true), $label . ' · HTTP ' . $response['status']);
     $decoded = json_decode($response['body'], true);
+    if (!in_array($response['status'], $statuses, true)) {
+        $detail = is_array($decoded) && is_string($decoded['error'] ?? null)
+            ? ' · ' . $decoded['error']
+            : ' · respuesta: ' . preg_replace('/\s+/', ' ', substr($response['body'], 0, 240));
+        throw new SmokeFailure($label . ' · HTTP ' . $response['status'] . $detail);
+    }
     if (!is_array($decoded)) throw new SmokeFailure($label . ' devolvió JSON inválido: ' . substr($response['body'], 0, 240));
     return $decoded;
 }
@@ -252,6 +257,14 @@ try {
         smokeSwitchSite($baseUrl, $adminCookie, $siteKey);
         $dashboard = smokeJson(smokeRequest($baseUrl, 'GET', '/api/dashboard.php', $adminCookie), [200], "{$siteKey}: dashboard ADMIN");
         smokeAssert(($dashboard['ok'] ?? false) === true, "{$siteKey}: dashboard responde correctamente");
+
+        $registration = smokeJson(smokeRequest($baseUrl, 'POST', '/api/pagos-smart.php', $adminCookie, [
+            'alumno_id' => $fixture['regular_student'], 'tipo' => 'INSCRIPCION',
+            'importe' => 500, 'metodo' => 'EFECTIVO',
+            'fecha' => $classDate->format('Y-m-d') . ' 11:55:00',
+            'observacion' => 'Inscripción de smoke test autenticado', 'sede' => $siteKey,
+        ]), [200], "{$siteKey}: registrar inscripción");
+        smokeAssert(($registration['ok'] ?? false) === true && !empty($registration['pago']['id']), "{$siteKey}: inscripción válida creada");
 
         $payPayload = [
             'alumno_id' => $fixture['regular_student'], 'tipo' => 'MENSUALIDAD',
