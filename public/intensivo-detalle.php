@@ -1,3 +1,8 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../config/auth.php';
+page_require(['ADMIN','VERIFICADOR']);
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -561,6 +566,12 @@ const formMessage =
 const linkNuevoAlumno =
     document.getElementById('linkNuevoAlumno');
 
+function escaparHtml(valor) {
+    return String(valor ?? '').replace(/[&<>'"]/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[caracter]);
+}
+
 
 // --------------------------------------------------
 // ENLACE A NUEVO ALUMNO
@@ -870,14 +881,14 @@ async function cargarCurso() {
 
             tr.innerHTML = `
                 <td>
-                    ${alumno.alumno_nombre ?? ''}
+                    ${escaparHtml(alumno.alumno_nombre)}
                 </td>
 
                 <td>
-                    ${formatearHorario(
+                    ${escaparHtml(formatearHorario(
                         alumno.hora_inicio,
                         alumno.hora_fin
-                    )}
+                    ))}
                 </td>
 
                 <td>
@@ -983,42 +994,6 @@ form.addEventListener(
             formMessage
         );
 
-        const usuarioGuardado =
-            sessionStorage.getItem(
-                'hache_usuario'
-            );
-
-        if (!usuarioGuardado) {
-
-            mostrarMensaje(
-                formMessage,
-                'La sesión administrativa no está disponible.',
-                'error'
-            );
-
-            return;
-        }
-
-        let usuario;
-
-        try {
-
-            usuario =
-                JSON.parse(
-                    usuarioGuardado
-                );
-
-        } catch (error) {
-
-            mostrarMensaje(
-                formMessage,
-                'La sesión administrativa no es válida.',
-                'error'
-            );
-
-            return;
-        }
-
         const datos = {
 
             curso_intensivo_id:
@@ -1037,10 +1012,7 @@ form.addEventListener(
                     )
                     .value
                     .trim()
-                || null,
-
-            created_by:
-                usuario.id
+                || null
         };
 
         if (

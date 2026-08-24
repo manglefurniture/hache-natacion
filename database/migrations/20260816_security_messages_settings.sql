@@ -33,6 +33,5 @@ CREATE TABLE IF NOT EXISTS configuracion (
 
 INSERT INTO configuracion(clave,valor,descripcion) VALUES
  ('nombre_app','Hache Natación','Nombre visible de la aplicación'),
- ('dias_clase','1,2,3,4,5','Días lectivos ISO: lunes=1 ... domingo=7'),
- ('password_temporal','123456','Contraseña temporal para nuevas cuentas de alumno')
+ ('dias_clase','1,2,3,4,5','Días lectivos ISO: lunes=1 ... domingo=7')
 ON DUPLICATE KEY UPDATE descripcion=VALUES(descripcion);

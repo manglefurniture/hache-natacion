@@ -12,4 +12,8 @@ try {
     $st=$pdo->prepare("SELECT p.id,p.nombre,p.sesiones_semana,p.precio,s.clave sede_clave FROM planes p INNER JOIN sedes s ON s.id=p.sede_id WHERE p.activo=1 AND s.clave=:s ORDER BY p.sesiones_semana,p.precio,p.nombre");
     $st->execute([':s'=>$clave]);
     echo json_encode(['ok'=>true,'sede'=>$clave,'planes'=>$st->fetchAll()],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
-} catch (Throwable $e) {http_response_code(500);echo json_encode(['ok'=>false,'error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}
+} catch (Throwable $e) {
+    error_log('api/planes.php: '.$e->getMessage());
+    http_response_code(500);
+    echo json_encode(['ok'=>false,'error'=>'No se pudieron cargar los planes.'],JSON_UNESCAPED_UNICODE);
+}

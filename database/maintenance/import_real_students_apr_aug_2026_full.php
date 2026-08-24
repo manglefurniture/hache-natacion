@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 
 $config = require __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/passwords.php';
 $apply = in_array('--apply', $argv ?? [], true);
 $baseImporter = __DIR__ . '/import_real_students_apr_aug_2026.php';
 
@@ -72,13 +73,19 @@ try {
 
     $admin=$pdo->query("SELECT id,usuario FROM usuarios WHERE rol='ADMIN' AND activo=1 ORDER BY created_at,id LIMIT 1")->fetch();
     if(!$admin) fullFail('No existe ADMIN activo.');
-    $intensiveHorario=(string)$pdo->query("SELECT id FROM horarios WHERE activo=1 AND intensivo=1 AND hora_inicio='08:00:00' AND hora_fin='09:00:00' LIMIT 1")->fetchColumn();
+    $monteverdeId=(string)$pdo->query("SELECT id FROM sedes WHERE clave='MONTEVERDE' AND activo=1 LIMIT 1")->fetchColumn();
+    if(!$monteverdeId) fullFail('No existe la sede MONTEVERDE activa.');
+    $st=$pdo->prepare("SELECT id FROM horarios WHERE sede_id=:s AND activo=1 AND intensivo=1 AND hora_inicio='08:00:00' AND hora_fin='09:00:00' LIMIT 1");
+    $st->execute([':s'=>$monteverdeId]);
+    $intensiveHorario=(string)$st->fetchColumn();
     if(!$intensiveHorario) fullFail('No existe horario intensivo 08:00–09:00.');
     $methodType=(string)$pdo->query("SHOW COLUMNS FROM pagos LIKE 'metodo'")->fetch()['Type'];
     if(!str_contains($methodType,'NO_REGISTRADO')) fullFail('Falta migración NO_REGISTRADO.');
-    $passwordTemporal=(string)($pdo->query("SELECT valor FROM configuracion WHERE clave='password_temporal' LIMIT 1")->fetchColumn() ?: '123456');
-
     $currentStudents=(int)$pdo->query('SELECT COUNT(*) FROM alumnos')->fetchColumn();
+    $st=$pdo->prepare("SELECT COUNT(*) FROM alumnos WHERE sede_id<>:s");
+    $st->execute([':s'=>$monteverdeId]);
+    $otherSiteStudents=(int)$st->fetchColumn();
+    if($otherSiteStudents>0) fullFail('Este importador histórico solo admite una base sin alumnos fuera de MONTEVERDE.');
     if(!$apply && !in_array($currentStudents,[0,61,109],true)) fullFail("La base tiene {$currentStudents} alumnos; estado no esperado para esta importación.");
 
     echo "===== SIMULACIÓN IMPORTACIÓN COMPLETA =====\n";
@@ -113,12 +120,14 @@ try {
     $pdo->beginTransaction();
 
     $students=[];
-    foreach($pdo->query("SELECT id,nombre FROM alumnos")->fetchAll() as $r) $students[$r['nombre']]=$r['id'];
+    $st=$pdo->prepare("SELECT id,nombre FROM alumnos WHERE sede_id=:s");
+    $st->execute([':s'=>$monteverdeId]);
+    foreach($st->fetchAll() as $r) $students[$r['nombre']]=$r['id'];
 
-    $insertStudent=$pdo->prepare("INSERT INTO alumnos(id,nombre,fecha_nacimiento,whatsapp,correo,fecha_inicio,horario_preferido_id,plan_actual_id,estado_administrativo,observaciones) VALUES(:id,:n,NULL,'9981231234',NULL,:fi,NULL,NULL,:estado,:o)");
+    $insertStudent=$pdo->prepare("INSERT INTO alumnos(id,sede_id,nombre,fecha_nacimiento,whatsapp,correo,fecha_inicio,horario_preferido_id,plan_actual_id,estado_administrativo,observaciones) VALUES(:id,:s,:n,NULL,'9981231234',NULL,:fi,NULL,NULL,:estado,:o)");
     $insertUser=$pdo->prepare("INSERT INTO usuarios(id,usuario,password_hash,rol,activo,debe_cambiar_password,alumno_id) VALUES(:id,:u,:ph,'ALUMNO',1,1,:a)");
-    $findCourse=$pdo->prepare("SELECT id,fecha_fin FROM cursos_intensivos WHERE fecha_inicio=:fi LIMIT 1");
-    $insertCourse=$pdo->prepare("INSERT INTO cursos_intensivos(id,fecha_inicio,fecha_fin,precio,estado,observaciones,created_by) VALUES(:id,:fi,:ff,1200,:e,:o,:u)");
+    $findCourse=$pdo->prepare("SELECT id,fecha_fin FROM cursos_intensivos WHERE sede_id=:s AND fecha_inicio=:fi LIMIT 1");
+    $insertCourse=$pdo->prepare("INSERT INTO cursos_intensivos(id,sede_id,fecha_inicio,fecha_fin,precio,estado,observaciones,created_by) VALUES(:id,:s,:fi,:ff,1200,:e,:o,:u)");
     $updateCourse=$pdo->prepare("UPDATE cursos_intensivos SET estado=:e,observaciones=:o WHERE id=:id");
     $findParticipant=$pdo->prepare("SELECT 1 FROM curso_intensivo_alumnos WHERE curso_intensivo_id=:c AND alumno_id=:a LIMIT 1");
     $insertParticipant=$pdo->prepare("INSERT INTO curso_intensivo_alumnos(id,curso_intensivo_id,alumno_id,horario_id,observaciones,created_by) VALUES(:id,:c,:a,:h,:o,:u)");
@@ -130,22 +139,22 @@ try {
     foreach($courses as $start=>$names){
         $startD=new DateTimeImmutable($start); $end=$startD->modify('+18 days')->format('Y-m-d');
         $state=courseState($start,$end,$today);
-        $findCourse->execute([':fi'=>$start]); $course=$findCourse->fetch();
+        $findCourse->execute([':s'=>$monteverdeId,':fi'=>$start]); $course=$findCourse->fetch();
         if($course){
             $cid=$course['id'];
             $updateCourse->execute([':e'=>$state,':o'=>'Curso intensivo real reconstruido desde bitácoras históricas. Horario normalizado a 08:00–09:00.',':id'=>$cid]);
         }else{
             $cid=fullUuid($pdo);$createdCourses++;
-            $insertCourse->execute([':id'=>$cid,':fi'=>$start,':ff'=>$end,':e'=>$state,':o'=>'Curso intensivo real reconstruido desde bitácoras históricas. Horario normalizado a 08:00–09:00.',':u'=>$admin['id']]);
+            $insertCourse->execute([':id'=>$cid,':s'=>$monteverdeId,':fi'=>$start,':ff'=>$end,':e'=>$state,':o'=>'Curso intensivo real reconstruido desde bitácoras históricas. Horario normalizado a 08:00–09:00.',':u'=>$admin['id']]);
         }
 
         foreach($names as $name){
             if(!isset($students[$name])){
                 $sid=fullUuid($pdo);$students[$name]=$sid;$createdStudents++;
                 $studentState=$state==='EN_CURSO'?'ACTIVO':'BAJA';
-                $insertStudent->execute([':id'=>$sid,':n'=>$name,':fi'=>$start,':estado'=>$studentState,':o'=>$state==='EN_CURSO'?'Alumno en curso intensivo activo. Importado desde bitácora real; WhatsApp provisional.':'Alumno histórico: completó curso intensivo y no registra continuidad regular. Importado desde bitácoras reales; WhatsApp provisional.']);
+                $insertStudent->execute([':id'=>$sid,':s'=>$monteverdeId,':n'=>$name,':fi'=>$start,':estado'=>$studentState,':o'=>$state==='EN_CURSO'?'Alumno en curso intensivo activo. Importado desde bitácora real; WhatsApp provisional.':'Alumno histórico: completó curso intensivo y no registra continuidad regular. Importado desde bitácoras reales; WhatsApp provisional.']);
                 $user=fullUniqueUser($pdo,$name);
-                $insertUser->execute([':id'=>fullUuid($pdo),':u'=>$user,':ph'=>password_hash($passwordTemporal,PASSWORD_DEFAULT),':a'=>$sid]);
+                $insertUser->execute([':id'=>fullUuid($pdo),':u'=>$user,':ph'=>password_hash(password_temporal_segura(),PASSWORD_DEFAULT),':a'=>$sid]);
             }
             $sid=$students[$name];
             $findParticipant->execute([':c'=>$cid,':a'=>$sid]);

@@ -5,11 +5,39 @@ declare(strict_types=1);
 // Compuerta central de seguridad para los endpoints de la API.
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 if (str_starts_with($uri, '/api/')) {
-    $publicApi = ['/api/login.php','/api/health.php','/api/sesion.php','/api/cambiar-password.php'];
+    if (!headers_sent()) {
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: DENY');
+        header('Referrer-Policy: no-referrer');
+        header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+        header('Cache-Control: no-store, max-age=0');
+    }
+    if (!defined('HACHE_API_ERROR_FILTER')) {
+        define('HACHE_API_ERROR_FILTER', true);
+        ob_start(static function (string $body): string {
+            if (http_response_code() < 500 || $body === '') return $body;
+            $isJson = false;
+            foreach (headers_list() as $header) {
+                if (stripos($header, 'Content-Type:') === 0 && stripos($header, 'json') !== false) {
+                    $isJson = true;
+                    break;
+                }
+            }
+            if (!$isJson) return $body;
+            $payload = json_decode($body, true);
+            if (!is_array($payload) || !array_key_exists('error', $payload)) return $body;
+            error_log('Hache API error [' . ($_SERVER['REQUEST_URI'] ?? '') . ']: ' . (string)$payload['error']);
+            $payload['error'] = 'No se pudo completar la operación. Intenta nuevamente.';
+            return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $body;
+        });
+    }
+    $publicApi = ['/api/login.php','/api/health.php','/api/sesion.php','/api/cambiar-password.php','/api/alumno-por-whatsapp.php'];
     if (!in_array($uri, $publicApi, true)) {
         require_once __DIR__ . '/auth.php';
         if ($uri === '/api/portal-alumno.php') {
             auth_require(['ALUMNO']);
+        } elseif ($uri === '/api/diagnostico.php') {
+            auth_require(['ADMIN','VERIFICADOR']);
         } else {
             $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
             if (in_array($method, ['GET','HEAD'], true)) auth_require(['ADMIN','VERIFICADOR']);

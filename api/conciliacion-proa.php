@@ -1,21 +1,186 @@
 <?php
 declare(strict_types=1);
+
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 $me=auth_require(['ADMIN']);
 $config=require __DIR__.'/../config/database.php';
-$pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
-function out(array $data,int $code=200):never{http_response_code($code);echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
-function monthRange(string $ym):array{if(!preg_match('/^\d{4}-\d{2}$/',$ym))throw new InvalidArgumentException('Periodo inválido');$start=$ym.'-01 00:00:00';$end=(new DateTimeImmutable($ym.'-01'))->modify('first day of next month')->format('Y-m-d').' 00:00:00';return[$start,$end];}
-function obligation(PDO $pdo,string $ym):array{[$start,$end]=monthRange($ym);[$year,$month]=array_map('intval',explode('-',$ym));
-$mensSql="SELECT COALESCE(SUM(p.importe),0) total FROM pagos p INNER JOIN mensualidades m ON m.id=p.mensualidad_id INNER JOIN alumnos a ON a.id=p.alumno_id INNER JOIN sedes s ON s.id=a.sede_id WHERE p.estado='VALIDO' AND p.tipo='MENSUALIDAD' AND s.clave='MONTEVERDE' AND m.mes=:mes AND m.anio=:anio";$st=$pdo->prepare($mensSql);$st->execute([':mes'=>$month,':anio'=>$year]);$mens=(float)$st->fetchColumn();
-$otrosSql="SELECT COALESCE(SUM(CASE WHEN p.tipo='INTENSIVO' THEN p.importe ELSE 0 END),0) intensivos,COALESCE(SUM(CASE WHEN p.tipo='INSCRIPCION' THEN p.importe ELSE 0 END),0) inscripciones FROM pagos p INNER JOIN alumnos a ON a.id=p.alumno_id INNER JOIN sedes s ON s.id=a.sede_id WHERE p.estado='VALIDO' AND s.clave='MONTEVERDE' AND p.fecha>=:d AND p.fecha<:h";$st=$pdo->prepare($otrosSql);$st->execute([':d'=>$start,':h'=>$end]);$r=$st->fetch()?:[];$int=(float)($r['intensivos']??0);$ins=(float)($r['inscripciones']??0);return['mensualidades'=>$mens,'intensivos'=>$int,'inscripciones'=>$ins,'proa_mensualidades'=>$mens*.5,'proa_intensivos'=>$int*.5,'proa_inscripciones'=>$ins,'total_proa'=>($mens*.5)+($int*.5)+$ins];}
-function automaticCommissions(PDO $pdo,string $ym):array{$periodo=$ym.'-01';$st=$pdo->prepare("SELECT id,periodo,alumno_proa_nombre,importe,observacion,created_at FROM comisiones_proa WHERE periodo=:p ORDER BY alumno_proa_nombre,created_at");$st->execute([':p'=>$periodo]);$rows=$st->fetchAll();$total=0.0;foreach($rows as &$r){$r['importe']=(float)$r['importe'];$total+=(float)$r['importe'];}unset($r);return['rows'=>$rows,'total'=>$total];}
-function movementEffect(string $tipo,float $importe):float{return $tipo==='COMISION_RECIBIDA_PROA'?0.0:-$importe;}
-try{$method=$_SERVER['REQUEST_METHOD']??'GET';
-if($method==='GET'){$ym=(string)($_GET['periodo']??date('Y-m'));[$start,$end]=monthRange($ym);$base=obligation($pdo,$ym);$auto=automaticCommissions($pdo,$ym);$st=$pdo->prepare("SELECT m.id,m.fecha,m.tipo,m.importe,m.alumno_nombre,m.referencia,m.observacion,m.estado,m.created_at,m.anulado_at,m.motivo_anulacion,u.usuario created_by_usuario,ua.usuario anulado_by_usuario FROM conciliacion_proa_movimientos m LEFT JOIN usuarios u ON u.id=m.created_by LEFT JOIN usuarios ua ON ua.id=m.anulado_by WHERE m.fecha>=:d AND m.fecha<:h ORDER BY m.fecha DESC,m.created_at DESC");$st->execute([':d'=>$start,':h'=>$end]);$rows=$st->fetchAll();$entregado=0.0;$directos=0.0;$efectivo=0.0;$transferencias=0.0;foreach($rows as &$row){$row['importe']=(float)$row['importe'];$row['impacto']=$row['estado']==='ACTIVO'?movementEffect((string)$row['tipo'],(float)$row['importe']):0.0;if($row['estado']!=='ACTIVO')continue;if($row['tipo']==='EFECTIVO_A_PROA'){$efectivo+=(float)$row['importe'];$entregado+=(float)$row['importe'];}elseif($row['tipo']==='TRANSFERENCIA_A_PROA'){$transferencias+=(float)$row['importe'];$entregado+=(float)$row['importe'];}elseif($row['tipo']==='PAGO_DIRECTO_PROA')$directos+=(float)$row['importe'];}unset($row);$comisiones=(float)$auto['total'];$saldo=$base['total_proa']-$comisiones-$entregado-$directos;$situacion=abs($saldo)<.005?'CUADRADO':($saldo>0?'HACHE_DEBE_PROA':'PROA_DEBE_HACHE');out(['ok'=>true,'periodo'=>$ym,'sede'=>'MONTEVERDE','base'=>$base,'comisiones_automaticas'=>$auto['rows'],'resumen'=>['efectivo_a_proa'=>$efectivo,'transferencias_a_proa'=>$transferencias,'entregado_a_proa'=>$entregado,'pagos_directos_proa'=>$directos,'comisiones_recibidas'=>$comisiones,'saldo'=>$saldo,'situacion'=>$situacion],'movimientos'=>$rows]);}
-if($method!=='POST')out(['ok'=>false,'error'=>'Método no permitido'],405);$in=json_decode(file_get_contents('php://input'),true)?:[];$accion=strtoupper(trim((string)($in['accion']??'CREAR')));if($accion==='ANULAR'){$id=trim((string)($in['id']??''));$motivo=trim((string)($in['motivo']??''));if($id===''||$motivo==='')out(['ok'=>false,'error'=>'ID y motivo de anulación son obligatorios'],422);$st=$pdo->prepare("UPDATE conciliacion_proa_movimientos SET estado='ANULADO',anulado_by=:u,anulado_at=NOW(),motivo_anulacion=:m WHERE id=:id AND estado='ACTIVO'");$st->execute([':u'=>$me['id'],':m'=>$motivo,':id'=>$id]);if($st->rowCount()!==1)out(['ok'=>false,'error'=>'Movimiento no encontrado o ya anulado'],404);out(['ok'=>true]);}
-$tipos=['EFECTIVO_A_PROA','TRANSFERENCIA_A_PROA','PAGO_DIRECTO_PROA'];$tipo=strtoupper(trim((string)($in['tipo']??'')));$importe=(float)($in['importe']??0);$fecha=trim((string)($in['fecha']??''));$alumno=trim((string)($in['alumno_nombre']??''));$alumnoId=trim((string)($in['alumno_id']??''));$ref=trim((string)($in['referencia']??''));$obs=trim((string)($in['observacion']??''));if(!in_array($tipo,$tipos,true))out(['ok'=>false,'error'=>'Tipo de movimiento inválido. Las comisiones PROA se cargan automáticamente.'],422);if($importe<=0)out(['ok'=>false,'error'=>'El importe debe ser mayor que cero'],422);if($fecha==='')$fecha=date('Y-m-d H:i:s');else{$dt=DateTimeImmutable::createFromFormat('Y-m-d\TH:i',$fecha)?:DateTimeImmutable::createFromFormat('Y-m-d H:i:s',$fecha);if(!$dt)out(['ok'=>false,'error'=>'Fecha inválida'],422);$fecha=$dt->format('Y-m-d H:i:s');}
-if($tipo==='PAGO_DIRECTO_PROA'){if($alumnoId==='')out(['ok'=>false,'error'=>'Selecciona un alumno de la lista'],422);$st=$pdo->prepare("SELECT a.id,a.nombre FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id WHERE a.id=:id AND s.clave='MONTEVERDE' LIMIT 1");$st->execute([':id'=>$alumnoId]);$real=$st->fetch();if(!$real)out(['ok'=>false,'error'=>'El alumno seleccionado no existe en Monteverde'],422);$alumno=(string)$real['nombre'];}
-$id=(string)$pdo->query('SELECT UUID()')->fetchColumn();$st=$pdo->prepare("INSERT INTO conciliacion_proa_movimientos(id,fecha,tipo,importe,alumno_nombre,referencia,observacion,created_by) VALUES(:id,:f,:t,:i,:a,:r,:o,:u)");$st->execute([':id'=>$id,':f'=>$fecha,':t'=>$tipo,':i'=>$importe,':a'=>$alumno!==''?$alumno:null,':r'=>$ref!==''?$ref:null,':o'=>$obs!==''?$obs:null,':u'=>$me['id']]);out(['ok'=>true,'id'=>$id],201);
-}catch(InvalidArgumentException $e){out(['ok'=>false,'error'=>$e->getMessage()],422);}catch(PDOException $e){if(str_contains($e->getMessage(),'conciliacion_proa_movimientos'))out(['ok'=>false,'error'=>'Falta instalar la tabla de conciliación PROA. Ejecuta el migrador incluido en el despliegue.'],503);out(['ok'=>false,'error'=>'Error de base de datos'],500);}catch(Throwable $e){out(['ok'=>false,'error'=>$e->getMessage()],500);}
+$pdo=new PDO(
+    "mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",
+    $config['user'],
+    $config['password'],
+    [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
+);
+
+function out(array $data,int $status=200):never
+{
+    http_response_code($status);
+    echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function monthRange(string $period):array
+{
+    if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$period))throw new InvalidArgumentException('Periodo inválido');
+    $date=DateTimeImmutable::createFromFormat('!Y-m-d',$period.'-01');
+    if(!$date||$date->format('Y-m')!==$period)throw new InvalidArgumentException('Periodo inválido');
+    return [$date->format('Y-m-d').' 00:00:00',$date->modify('+1 month')->format('Y-m-d').' 00:00:00'];
+}
+
+function monteverdeSite(PDO $pdo):array
+{
+    $stmt=$pdo->query("SELECT id,porcentaje_mensualidad_socio,porcentaje_intensivo_socio,porcentaje_inscripcion_socio FROM sedes WHERE clave='MONTEVERDE' AND activo=1 LIMIT 1");
+    $site=$stmt->fetch();
+    if(!$site)throw new RuntimeException('La sede Monteverde no está configurada');
+    return $site;
+}
+
+function obligation(PDO $pdo,string $period):array
+{
+    [$start,$end]=monthRange($period);
+    [$year,$month]=array_map('intval',explode('-',$period));
+    $site=monteverdeSite($pdo);
+    $stmt=$pdo->prepare("SELECT COALESCE(SUM(p.importe),0) FROM pagos p INNER JOIN mensualidades m ON m.id=p.mensualidad_id WHERE p.estado='VALIDO' AND p.tipo='MENSUALIDAD' AND m.sede_id=:site AND m.mes=:month AND m.anio=:year");
+    $stmt->execute([':site'=>$site['id'],':month'=>$month,':year'=>$year]);
+    $monthly=(float)$stmt->fetchColumn();
+    $stmt=$pdo->prepare("SELECT COALESCE(SUM(CASE WHEN p.tipo='INTENSIVO' AND ci.sede_id=:int_site THEN p.importe ELSE 0 END),0) intensivos,COALESCE(SUM(CASE WHEN p.tipo='INSCRIPCION' AND i.sede_id=:enr_site THEN p.importe ELSE 0 END),0) inscripciones FROM pagos p LEFT JOIN cursos_intensivos ci ON ci.id=p.intensivo_id LEFT JOIN inscripciones i ON i.id=p.inscripcion_id WHERE p.estado='VALIDO' AND p.fecha>=:start AND p.fecha<:end AND ((p.tipo='INTENSIVO' AND ci.sede_id=:int_site_filter) OR (p.tipo='INSCRIPCION' AND i.sede_id=:enr_site_filter))");
+    $stmt->execute([
+        ':int_site'=>$site['id'],':enr_site'=>$site['id'],
+        ':start'=>$start,':end'=>$end,
+        ':int_site_filter'=>$site['id'],':enr_site_filter'=>$site['id'],
+    ]);
+    $other=$stmt->fetch()?:[];
+    $intensives=(float)($other['intensivos']??0);
+    $enrollments=(float)($other['inscripciones']??0);
+    $monthlyPartner=$monthly*((float)$site['porcentaje_mensualidad_socio']/100);
+    $intensivePartner=$intensives*((float)$site['porcentaje_intensivo_socio']/100);
+    $enrollmentPartner=$enrollments*((float)$site['porcentaje_inscripcion_socio']/100);
+    return [
+        'mensualidades'=>$monthly,
+        'intensivos'=>$intensives,
+        'inscripciones'=>$enrollments,
+        'proa_mensualidades'=>$monthlyPartner,
+        'proa_intensivos'=>$intensivePartner,
+        'proa_inscripciones'=>$enrollmentPartner,
+        'total_proa'=>$monthlyPartner+$intensivePartner+$enrollmentPartner,
+    ];
+}
+
+function automaticCommissions(PDO $pdo,string $period):array
+{
+    $stmt=$pdo->prepare('SELECT id,periodo,alumno_proa_nombre,importe,observacion,created_at FROM comisiones_proa WHERE periodo=:period ORDER BY alumno_proa_nombre,created_at');
+    $stmt->execute([':period'=>$period.'-01']);
+    $rows=$stmt->fetchAll();
+    $total=0.0;
+    foreach($rows as &$row){
+        $row['importe']=(float)$row['importe'];
+        $total+=(float)$row['importe'];
+    }
+    unset($row);
+    return ['rows'=>$rows,'total'=>$total];
+}
+
+function movementEffect(string $type,float $amount):float
+{
+    return $type==='COMISION_RECIBIDA_PROA'?0.0:-$amount;
+}
+
+function exactMovementDate(string $value):string
+{
+    foreach(['Y-m-d\TH:i','Y-m-d H:i:s'] as $format){
+        $date=DateTimeImmutable::createFromFormat('!'.$format,$value);
+        if($date&&$date->format($format)===$value)return $date->format('Y-m-d H:i:s');
+    }
+    throw new InvalidArgumentException('Fecha inválida');
+}
+
+try{
+    $method=$_SERVER['REQUEST_METHOD']??'GET';
+    if($method==='GET'){
+        $period=trim((string)($_GET['periodo']??date('Y-m')));
+        [$start,$end]=monthRange($period);
+        $base=obligation($pdo,$period);
+        $automatic=automaticCommissions($pdo,$period);
+        $stmt=$pdo->prepare('SELECT m.id,m.fecha,m.tipo,m.importe,m.alumno_nombre,m.referencia,m.observacion,m.estado,m.created_at,m.anulado_at,m.motivo_anulacion,u.usuario created_by_usuario,ua.usuario anulado_by_usuario FROM conciliacion_proa_movimientos m LEFT JOIN usuarios u ON u.id=m.created_by LEFT JOIN usuarios ua ON ua.id=m.anulado_by WHERE m.fecha>=:start AND m.fecha<:end ORDER BY m.fecha DESC,m.created_at DESC');
+        $stmt->execute([':start'=>$start,':end'=>$end]);
+        $rows=$stmt->fetchAll();
+        $delivered=$direct=0.0;
+        $cash=$transfers=0.0;
+        foreach($rows as &$row){
+            $row['importe']=(float)$row['importe'];
+            $row['impacto']=$row['estado']==='ACTIVO'?movementEffect((string)$row['tipo'],(float)$row['importe']):0.0;
+            if($row['estado']!=='ACTIVO')continue;
+            if($row['tipo']==='EFECTIVO_A_PROA'){$cash+=(float)$row['importe'];$delivered+=(float)$row['importe'];}
+            elseif($row['tipo']==='TRANSFERENCIA_A_PROA'){$transfers+=(float)$row['importe'];$delivered+=(float)$row['importe'];}
+            elseif($row['tipo']==='PAGO_DIRECTO_PROA')$direct+=(float)$row['importe'];
+        }
+        unset($row);
+        $commissions=(float)$automatic['total'];
+        $balance=$base['total_proa']-$commissions-$delivered-$direct;
+        $situation=abs($balance)<.005?'CUADRADO':($balance>0?'HACHE_DEBE_PROA':'PROA_DEBE_HACHE');
+        out([
+            'ok'=>true,'periodo'=>$period,'sede'=>'MONTEVERDE','base'=>$base,
+            'comisiones_automaticas'=>$automatic['rows'],
+            'resumen'=>[
+                'efectivo_a_proa'=>$cash,'transferencias_a_proa'=>$transfers,
+                'entregado_a_proa'=>$delivered,'pagos_directos_proa'=>$direct,
+                'comisiones_recibidas'=>$commissions,'saldo'=>$balance,'situacion'=>$situation,
+            ],
+            'movimientos'=>$rows,
+        ]);
+    }
+    if($method!=='POST')out(['ok'=>false,'error'=>'Método no permitido'],405);
+    $input=json_decode(file_get_contents('php://input'),true);
+    if(!is_array($input))out(['ok'=>false,'error'=>'Solicitud JSON inválida'],400);
+    $action=strtoupper(trim((string)($input['accion']??'CREAR')));
+    if($action==='ANULAR'){
+        $id=trim((string)($input['id']??''));
+        $reason=trim((string)($input['motivo']??''));
+        if($id===''||$reason==='')out(['ok'=>false,'error'=>'ID y motivo de anulación son obligatorios'],422);
+        if(mb_strlen($reason)>255)out(['ok'=>false,'error'=>'El motivo de anulación no puede exceder 255 caracteres'],422);
+        $stmt=$pdo->prepare("UPDATE conciliacion_proa_movimientos SET estado='ANULADO',anulado_by=:user,anulado_at=NOW(),motivo_anulacion=:reason WHERE id=:id AND estado='ACTIVO'");
+        $stmt->execute([':user'=>$me['id'],':reason'=>$reason,':id'=>$id]);
+        if($stmt->rowCount()!==1)out(['ok'=>false,'error'=>'Movimiento no encontrado o ya anulado'],404);
+        out(['ok'=>true]);
+    }
+    if($action!=='CREAR')out(['ok'=>false,'error'=>'Acción inválida'],422);
+    $allowed=['EFECTIVO_A_PROA','TRANSFERENCIA_A_PROA','PAGO_DIRECTO_PROA'];
+    $type=strtoupper(trim((string)($input['tipo']??'')));
+    $amount=filter_var($input['importe']??null,FILTER_VALIDATE_FLOAT);
+    $date=trim((string)($input['fecha']??''));
+    $student=trim((string)($input['alumno_nombre']??''));
+    $studentId=trim((string)($input['alumno_id']??''));
+    $reference=trim((string)($input['referencia']??''));
+    $observation=trim((string)($input['observacion']??''));
+    if(!in_array($type,$allowed,true))out(['ok'=>false,'error'=>'Tipo de movimiento inválido. Las comisiones PROA se cargan automáticamente.'],422);
+    if($amount===false||$amount<=0||$amount>9999999.99)out(['ok'=>false,'error'=>'El importe debe ser mayor que cero y estar dentro del límite permitido'],422);
+    if(mb_strlen($student)>180||mb_strlen($reference)>180||mb_strlen($observation)>2000)out(['ok'=>false,'error'=>'Uno de los textos excede la longitud permitida'],422);
+    $date=$date===''?date('Y-m-d H:i:s'):exactMovementDate($date);
+    if($type==='PAGO_DIRECTO_PROA'){
+        if($studentId==='')out(['ok'=>false,'error'=>'Selecciona un alumno de la lista'],422);
+        $stmt=$pdo->prepare("SELECT a.id,a.nombre FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id WHERE a.id=:id AND s.clave='MONTEVERDE' LIMIT 1");
+        $stmt->execute([':id'=>$studentId]);
+        $real=$stmt->fetch();
+        if(!$real)out(['ok'=>false,'error'=>'El alumno seleccionado no existe en Monteverde'],422);
+        $student=(string)$real['nombre'];
+    }else{
+        $student='';
+    }
+    $id=(string)$pdo->query('SELECT UUID()')->fetchColumn();
+    $stmt=$pdo->prepare('INSERT INTO conciliacion_proa_movimientos(id,fecha,tipo,importe,alumno_nombre,referencia,observacion,created_by) VALUES(:id,:date,:type,:amount,:student,:reference,:observation,:user)');
+    $stmt->execute([
+        ':id'=>$id,':date'=>$date,':type'=>$type,':amount'=>$amount,
+        ':student'=>$student!==''?$student:null,':reference'=>$reference!==''?$reference:null,
+        ':observation'=>$observation!==''?$observation:null,':user'=>$me['id'],
+    ]);
+    out(['ok'=>true,'id'=>$id],201);
+}catch(InvalidArgumentException $e){
+    out(['ok'=>false,'error'=>$e->getMessage()],422);
+}catch(PDOException $e){
+    if(str_contains($e->getMessage(),'conciliacion_proa_movimientos'))out(['ok'=>false,'error'=>'Falta instalar la tabla de conciliación PROA. Ejecuta el migrador incluido en el despliegue.'],503);
+    error_log('[conciliacion-proa] '.$e->getMessage());
+    out(['ok'=>false,'error'=>'Error de base de datos'],500);
+}catch(Throwable $e){
+    error_log('[conciliacion-proa] '.$e->getMessage());
+    out(['ok'=>false,'error'=>'No se pudo procesar la conciliación'],500);
+}

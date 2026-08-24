@@ -20,6 +20,7 @@ declare(strict_types=1);
  */
 
 $config = require __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/passwords.php';
 $apply = in_array('--apply', $argv ?? [], true);
 
 function fail(string $message): never {
@@ -195,19 +196,24 @@ try {
     $admin = $pdo->query("SELECT id,usuario FROM usuarios WHERE rol='ADMIN' AND activo=1 ORDER BY created_at,id LIMIT 1")->fetch();
     if (!$admin) fail('No existe un usuario ADMIN activo para created_by.');
 
+    $monteverdeId=(string)$pdo->query("SELECT id FROM sedes WHERE clave='MONTEVERDE' AND activo=1 LIMIT 1")->fetchColumn();
+    if(!$monteverdeId) fail('No existe la sede MONTEVERDE activa.');
+
     $planByPrice = [];
-    foreach ($pdo->query("SELECT id,precio FROM planes WHERE activo=1")->fetchAll() as $p) $planByPrice[(int)round((float)$p['precio'])] = $p['id'];
+    $st=$pdo->prepare("SELECT id,precio FROM planes WHERE sede_id=:s AND activo=1");
+    $st->execute([':s'=>$monteverdeId]);
+    foreach ($st->fetchAll() as $p) $planByPrice[(int)round((float)$p['precio'])] = $p['id'];
     foreach ([1000,1200] as $price) if (empty($planByPrice[$price])) fail("No existe plan activo de {$price}.");
 
-    $st=$pdo->query("SELECT id FROM horarios WHERE activo=1 AND regular=1 AND hora_inicio='07:00:00' AND hora_fin='08:00:00' LIMIT 1");
+    $st=$pdo->prepare("SELECT id FROM horarios WHERE sede_id=:s AND activo=1 AND regular=1 AND hora_inicio='07:00:00' AND hora_fin='08:00:00' LIMIT 1");
+    $st->execute([':s'=>$monteverdeId]);
     $regularHorario=(string)$st->fetchColumn(); if(!$regularHorario) fail('No existe horario regular activo 07:00–08:00.');
-    $st=$pdo->query("SELECT id FROM horarios WHERE activo=1 AND intensivo=1 AND hora_inicio='08:00:00' AND hora_fin='09:00:00' LIMIT 1");
+    $st=$pdo->prepare("SELECT id FROM horarios WHERE sede_id=:s AND activo=1 AND intensivo=1 AND hora_inicio='08:00:00' AND hora_fin='09:00:00' LIMIT 1");
+    $st->execute([':s'=>$monteverdeId]);
     $intensiveHorario=(string)$st->fetchColumn(); if(!$intensiveHorario) fail('No existe horario intensivo activo 08:00–09:00.');
 
     $methodCol=(string)$pdo->query("SHOW COLUMNS FROM pagos LIKE 'metodo'")->fetch()['Type'];
     if (!str_contains($methodCol,'NO_REGISTRADO')) fail('Falta aplicar la migración de método NO_REGISTRADO.');
-
-    $passwordTemporal=(string)($pdo->query("SELECT valor FROM configuracion WHERE clave='password_temporal' LIMIT 1")->fetchColumn() ?: '123456');
 
     echo "===== SIMULACIÓN IMPORTACIÓN REAL =====\n";
     echo 'Modo: '.($apply?'APLICAR CAMBIOS':'SOLO LECTURA')."\n";
@@ -239,13 +245,13 @@ try {
     foreach ($courses as $d=>$names) foreach ($names as $name) $first[$name]=isset($first[$name])?min($first[$name],$d):$d;
 
     $studentIds=[]; $usernames=[];
-    $insertStudent=$pdo->prepare("INSERT INTO alumnos(id,nombre,fecha_nacimiento,whatsapp,correo,fecha_inicio,horario_preferido_id,plan_actual_id,estado_administrativo,observaciones) VALUES(:id,:n,NULL,'9981231234',NULL,:fi,:h,:p,'ACTIVO',:o)");
+    $insertStudent=$pdo->prepare("INSERT INTO alumnos(id,sede_id,nombre,fecha_nacimiento,whatsapp,correo,fecha_inicio,horario_preferido_id,plan_actual_id,estado_administrativo,observaciones) VALUES(:id,:s,:n,NULL,'9981231234',NULL,:fi,:h,:p,'ACTIVO',:o)");
     $insertUser=$pdo->prepare("INSERT INTO usuarios(id,usuario,password_hash,rol,activo,debe_cambiar_password,alumno_id) VALUES(:id,:u,:ph,'ALUMNO',1,1,:a)");
     foreach (array_keys($allStudents) as $name) {
         $id=uuid($pdo); $studentIds[$name]=$id;
         $isRegular=array_key_exists($name,$currentRegular);
         $insertStudent->execute([
-            ':id'=>$id, ':n'=>$name, ':fi'=>$first[$name]??'2026-08-01',
+            ':id'=>$id, ':s'=>$monteverdeId, ':n'=>$name, ':fi'=>$first[$name]??'2026-08-01',
             ':h'=>$isRegular?$regularHorario:null,
             ':p'=>$isRegular?$planByPrice[$currentRegular[$name]]:null,
             ':o'=>$isRegular
@@ -253,11 +259,11 @@ try {
                 : 'Importado desde bitácora real agosto 2026. Alumno en curso intensivo activo; WhatsApp provisional.'
         ]);
         $u=usuarioUnico($pdo,$name); $usernames[$name]=$u;
-        $insertUser->execute([':id'=>uuid($pdo),':u'=>$u,':ph'=>password_hash($passwordTemporal,PASSWORD_DEFAULT),':a'=>$id]);
+        $insertUser->execute([':id'=>uuid($pdo),':u'=>$u,':ph'=>password_hash(password_temporal_segura(),PASSWORD_DEFAULT),':a'=>$id]);
     }
 
     // Mensualidades + pago asociado.
-    $insMens=$pdo->prepare("INSERT INTO mensualidades(id,alumno_id,mes,anio,plan_id,importe_estandar,importe_a_cobrar,importe_cobrado,estado,observacion,fecha_pago,created_by) VALUES(:id,:a,:m,:y,:p,:std,:due,:paid,'PAGADA',:o,:f,:u)");
+    $insMens=$pdo->prepare("INSERT INTO mensualidades(id,sede_id,alumno_id,mes,anio,plan_id,importe_estandar,importe_a_cobrar,importe_cobrado,estado,observacion,fecha_pago,created_by) VALUES(:id,:s,:a,:m,:y,:p,:std,:due,:paid,'PAGADA',:o,:f,:u)");
     $insPayMonthly=$pdo->prepare("INSERT INTO pagos(id,alumno_id,mensualidad_id,tipo,importe,metodo,fecha,estado,observacion,created_by) VALUES(:id,:a,:mid,'MENSUALIDAD',:imp,'NO_REGISTRADO',:f,'VALIDO',:o,:u)");
     foreach ($monthly as $r) {
         [$ym,$name,$amount]=$r; $override=$r[3]??null; $note=$r[4]??null;
@@ -265,28 +271,28 @@ try {
         $std=$planPrice; [$year,$month]=array_map('intval',explode('-',$ym)); $f=ymDate($ym);
         $obs='Importación histórica real. Fecha exacta y método de pago no registrados.' . ($note?' '.$note.'.':'');
         $mid=uuid($pdo);
-        $insMens->execute([':id'=>$mid,':a'=>$studentIds[$name],':m'=>$month,':y'=>$year,':p'=>$planByPrice[$planPrice],':std'=>$std,':due'=>$amount,':paid'=>$amount,':o'=>$obs,':f'=>$f,':u'=>$admin['id']]);
+        $insMens->execute([':id'=>$mid,':s'=>$monteverdeId,':a'=>$studentIds[$name],':m'=>$month,':y'=>$year,':p'=>$planByPrice[$planPrice],':std'=>$std,':due'=>$amount,':paid'=>$amount,':o'=>$obs,':f'=>$f,':u'=>$admin['id']]);
         $insPayMonthly->execute([':id'=>uuid($pdo),':a'=>$studentIds[$name],':mid'=>$mid,':imp'=>$amount,':f'=>$f,':o'=>$obs,':u'=>$admin['id']]);
     }
 
     // Inscripciones + pago asociado.
-    $insReg=$pdo->prepare("INSERT INTO inscripciones(id,alumno_id,fecha,origen,importe,observacion,created_by) VALUES(:id,:a,:f,'REGULAR',:imp,:o,:u)");
+    $insReg=$pdo->prepare("INSERT INTO inscripciones(id,sede_id,alumno_id,fecha,origen,importe,observacion,created_by) VALUES(:id,:s,:a,:f,'REGULAR',:imp,:o,:u)");
     $insPayReg=$pdo->prepare("INSERT INTO pagos(id,alumno_id,inscripcion_id,tipo,importe,metodo,fecha,estado,observacion,created_by) VALUES(:id,:a,:iid,'INSCRIPCION',:imp,'NO_REGISTRADO',:f,'VALIDO',:o,:u)");
     foreach ($inscriptions as [$ym,$name,$amount]) {
         $f=ymDate($ym); $obs='Inscripción histórica real importada. Fecha exacta y método de pago no registrados.';
         $iid=uuid($pdo);
-        $insReg->execute([':id'=>$iid,':a'=>$studentIds[$name],':f'=>substr($f,0,10),':imp'=>$amount,':o'=>$obs,':u'=>$admin['id']]);
+        $insReg->execute([':id'=>$iid,':s'=>$monteverdeId,':a'=>$studentIds[$name],':f'=>substr($f,0,10),':imp'=>$amount,':o'=>$obs,':u'=>$admin['id']]);
         $insPayReg->execute([':id'=>uuid($pdo),':a'=>$studentIds[$name],':iid'=>$iid,':imp'=>$amount,':f'=>$f,':o'=>$obs,':u'=>$admin['id']]);
     }
 
     // Intensivos + participantes + pagos.
-    $insCourse=$pdo->prepare("INSERT INTO cursos_intensivos(id,fecha_inicio,fecha_fin,precio,estado,observaciones,created_by) VALUES(:id,:fi,:ff,1200,:e,:o,:u)");
+    $insCourse=$pdo->prepare("INSERT INTO cursos_intensivos(id,sede_id,fecha_inicio,fecha_fin,precio,estado,observaciones,created_by) VALUES(:id,:s,:fi,:ff,1200,:e,:o,:u)");
     $insParticipant=$pdo->prepare("INSERT INTO curso_intensivo_alumnos(id,curso_intensivo_id,alumno_id,horario_id,continua_regular,plan_continuidad_id,importe_continuidad,observacion_continuidad,observaciones,created_by) VALUES(:id,:c,:a,:h,:cont,:p,:imp,:oc,:o,:u)");
     $insPayInt=$pdo->prepare("INSERT INTO pagos(id,alumno_id,intensivo_id,tipo,importe,metodo,fecha,estado,observacion,created_by) VALUES(:id,:a,:c,'INTENSIVO',1200,'NO_REGISTRADO',:f,'VALIDO',:o,:u)");
     foreach ($courses as $start=>$names) {
         $startD=new DateTimeImmutable($start); $end=$startD->modify('+18 days')->format('Y-m-d');
         $active=$start>='2026-08-01'; $cid=uuid($pdo);
-        $insCourse->execute([':id'=>$cid,':fi'=>$start,':ff'=>$end,':e'=>$active?'EN_CURSO':'TERMINADO',':o'=>$active?'Curso intensivo real agosto 2026.':'Curso histórico parcial: se conservaron participantes que forman parte de la base actual.',':u'=>$admin['id']]);
+        $insCourse->execute([':id'=>$cid,':s'=>$monteverdeId,':fi'=>$start,':ff'=>$end,':e'=>$active?'EN_CURSO':'TERMINADO',':o'=>$active?'Curso intensivo real agosto 2026.':'Curso histórico parcial: se conservaron participantes que forman parte de la base actual.',':u'=>$admin['id']]);
         foreach ($names as $name) {
             $cont=isset($continuity[$name]); $planId=null; $contAmount=null; $contObs=null;
             if ($cont) {

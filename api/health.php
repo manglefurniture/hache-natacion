@@ -18,11 +18,11 @@ try {
         ]
     );
 
+    $pdo->query('SELECT 1')->fetchColumn();
+
     echo json_encode([
         'ok' => true,
         'application' => 'Hache Natación API',
-        'database' => $pdo->query('SELECT DATABASE()')->fetchColumn(),
-        'user' => $pdo->query('SELECT CURRENT_USER()')->fetchColumn(),
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (Throwable $e) {

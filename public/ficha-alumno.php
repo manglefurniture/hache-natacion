@@ -1,13 +1,20 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/telefono.php';
 require_once __DIR__ . '/../config/reglas-acceso.php';
+page_require(['ADMIN','VERIFICADOR']);
 $config = require __DIR__ . '/../config/database.php';
 $pdo = new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
-$id = filter_input(INPUT_GET, 'id', FILTER_DEFAULT);
-if (!$id) { http_response_code(400); exit('Alumno no especificado.'); }
-$sql = "SELECT a.id,a.nombre,a.fecha_nacimiento,a.whatsapp,a.correo,a.fecha_inicio,a.estado_administrativo,a.observaciones,h.hora_inicio,h.hora_fin,p.nombre AS plan_nombre,p.sesiones_semana,p.precio FROM alumnos a LEFT JOIN horarios h ON h.id=a.horario_preferido_id LEFT JOIN planes p ON p.id=a.plan_actual_id WHERE a.id=? LIMIT 1";
-$stmt=$pdo->prepare($sql);$stmt->execute([$id]);$alumno=$stmt->fetch();if(!$alumno){http_response_code(404);exit('Alumno no encontrado.');}
+$id = trim((string)filter_input(INPUT_GET, 'id', FILTER_DEFAULT));
+if (!preg_match('/^[a-f0-9-]{36}$/i', $id)) { http_response_code(400); exit('Alumno no especificado.'); }
+$sedeClave=auth_active_sede_clave();
+$stmt=$pdo->prepare("SELECT id FROM sedes WHERE clave=:clave AND activo=1 LIMIT 1");
+$stmt->execute([':clave'=>$sedeClave]);
+$sedeId=(string)$stmt->fetchColumn();
+if($sedeId===''){http_response_code(422);exit('Sede activa inválida.');}
+$sql = "SELECT a.id,a.nombre,a.fecha_nacimiento,a.whatsapp,a.correo,a.fecha_inicio,a.estado_administrativo,a.observaciones,h.hora_inicio,h.hora_fin,p.nombre AS plan_nombre,p.sesiones_semana,p.precio FROM alumnos a LEFT JOIN horarios h ON h.id=a.horario_preferido_id AND h.sede_id=a.sede_id LEFT JOIN planes p ON p.id=a.plan_actual_id AND p.sede_id=a.sede_id WHERE a.id=:id AND a.sede_id=:sede LIMIT 1";
+$stmt=$pdo->prepare($sql);$stmt->execute([':id'=>$id,':sede'=>$sedeId]);$alumno=$stmt->fetch();if(!$alumno){http_response_code(404);exit('Alumno no encontrado.');}
 $historica=regla_inscripcion_historica_cubierta($pdo,(string)$alumno['id']);
 function e(?string $valor):string{return htmlspecialchars($valor??'',ENT_QUOTES,'UTF-8');}
 function fecha(?string $valor):string{return !empty($valor)?date('d/m/Y',strtotime($valor)):'—';}
