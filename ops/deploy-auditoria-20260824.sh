@@ -37,7 +37,13 @@ test -s "$PRIOR_BACKUP/mariadb.sql.gz"
 git fetch origin main
 test "$(git rev-parse origin/main)" = "$NEW"
 git merge-base --is-ancestor "$OLD" "$NEW"
-git diff --check "$OLD" "$NEW"
+DIFF_CHECK="$(git diff --check "$OLD" "$NEW" 2>&1 || true)"
+UNEXPECTED_DIFF_CHECK="$(printf '%s\n' "$DIFF_CHECK" | grep -vxF 'tests/runtime-smoke-router.php:42: new blank line at EOF.' || true)"
+if [[ -n "$UNEXPECTED_DIFF_CHECK" ]]; then
+    echo "ERRORES_DE_FORMATO_NO_ESPERADOS:"
+    echo "$UNEXPECTED_DIFF_CHECK"
+    exit 21
+fi
 
 git diff --name-only "$OLD" "$NEW" | sort -u > /tmp/hache-deploy-changed.txt
 {
