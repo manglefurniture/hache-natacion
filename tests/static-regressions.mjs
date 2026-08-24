@@ -490,7 +490,11 @@ test('las migraciones de intensivos conservan delimitadores estructurales', () =
 test('la migración de intensivos completa checks en tablas preexistentes', () => {
   const source = read('database/migrations/20260815_group_intensive_model.sql');
   for (const constraint of ['chk_cia_reposiciones', 'chk_cia_importe_continuidad', 'chk_cia_continuidad_plan']) {
-    assert.match(source, new RegExp(`constraint_name='${constraint}'`));
+    if (constraint === 'chk_cia_importe_continuidad') {
+      assert.match(source, /constraint_name IN \('chk_cia_importe_continuidad','chk_cia_importe'\)/);
+    } else {
+      assert.match(source, new RegExp(`constraint_name='${constraint}'`));
+    }
     assert.match(source, new RegExp(`ADD CONSTRAINT ${constraint} CHECK`));
   }
 });

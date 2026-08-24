@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS curso_intensivo_alumnos (
     CONSTRAINT fk_cia_horario FOREIGN KEY (horario_id) REFERENCES horarios(id),
     CONSTRAINT fk_cia_plan_continuidad FOREIGN KEY (plan_continuidad_id) REFERENCES planes(id),
     CONSTRAINT fk_cia_created_by FOREIGN KEY (created_by) REFERENCES usuarios(id),
-    CONSTRAINT chk_cia_reposiciones_justificadas CHECK (reposiciones_justificadas BETWEEN 0 AND 5),
+    CONSTRAINT chk_cia_reposiciones CHECK (reposiciones_justificadas BETWEEN 0 AND 5),
     CONSTRAINT chk_cia_importe_continuidad CHECK (importe_continuidad IS NULL OR importe_continuidad >= 0),
     CONSTRAINT chk_cia_continuidad_plan CHECK (continua_regular IS NULL OR continua_regular=FALSE OR plan_continuidad_id IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -70,7 +70,9 @@ DEALLOCATE PREPARE stmt_chk_cia_reposiciones;
 SET @has_chk_cia_importe := (
     SELECT COUNT(*) FROM information_schema.table_constraints
     WHERE table_schema=DATABASE() AND table_name='curso_intensivo_alumnos'
-      AND constraint_name='chk_cia_importe_continuidad'
+      -- Algunas instalaciones anteriores ya tienen exactamente la misma
+      -- regla con el nombre legado chk_cia_importe. No dupliquemos el CHECK.
+      AND constraint_name IN ('chk_cia_importe_continuidad','chk_cia_importe')
 );
 SET @add_chk_cia_importe := IF(
     @has_chk_cia_importe=0,
