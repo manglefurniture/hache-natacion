@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 APP=/var/www/hache-natacion
 OLD=65d5e0aaaa5f8ebe4b24e1fd15e913011f037a4a
-NEW=ae6fe76ee3b4ee245550c9786aafad36e7f48780
+NEW=f7e88dfb2fd2b05dc6d0234d7b2971fcd081cc25
 PRIOR_BACKUP=/var/backups/hache-natacion/20260824-190703
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/var/backups/hache-natacion/deploy-${STAMP}"
@@ -92,6 +92,7 @@ MIGRATIONS=(
     database/migrations/20260816_security_messages_settings.sql
     database/migrations/20260819_palapas_finanzas.sql
     database/migrations/20260822_integrity_support.sql
+    database/migrations/20260824_repair_intensive_schedule_site.sql
 )
 for migration in "${MIGRATIONS[@]}"; do
     echo "Aplicando ${migration}"
