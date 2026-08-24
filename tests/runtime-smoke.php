@@ -224,7 +224,7 @@ try {
         2 => ['file', $logFile, 'a'],
     ];
     $server = proc_open(
-        [PHP_BINARY, '-d', 'display_errors=0', '-d', 'log_errors=1', '-S', '127.0.0.1:' . $port, '-t', $root . '/public', $root . '/tests/runtime-smoke-router.php'],
+        [PHP_BINARY, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=' . $logFile, '-S', '127.0.0.1:' . $port, '-t', $root . '/public', $root . '/tests/runtime-smoke-router.php'],
         $descriptor,
         $pipes,
         $root
@@ -279,6 +279,9 @@ try {
         $attendance = smokeJson(smokeRequest($baseUrl, 'GET', '/api/asistencia.php?fecha=' . $classDate->format('Y-m-d') . '&sede=' . $siteKey, $adminCookie), [200], "{$siteKey}: generar/listar sesiones");
         $session = smokeFindStudentSession($attendance, $fixture['regular_student']);
         smokeAssert($session !== null, "{$siteKey}: alumno regular aparece en su sesión");
+        $attendanceRepeat = smokeJson(smokeRequest($baseUrl, 'GET', '/api/asistencia.php?fecha=' . $classDate->format('Y-m-d') . '&sede=' . $siteKey, $adminCookie), [200], "{$siteKey}: volver a listar sesiones existentes");
+        $repeatedSession = smokeFindStudentSession($attendanceRepeat, $fixture['regular_student']);
+        smokeAssert(($repeatedSession['id'] ?? null) === $session['id'], "{$siteKey}: generar sesiones es idempotente");
         $absence = smokeJson(smokeRequest($baseUrl, 'POST', '/api/asistencia.php', $adminCookie, [
             'accion' => 'ASISTENCIA', 'sede' => $siteKey, 'sesion_id' => $session['id'],
             'alumno_id' => $fixture['regular_student'], 'estado' => 'AUSENTE_JUSTIFICADA', 'observacion' => 'Smoke reposición',

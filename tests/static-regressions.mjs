@@ -121,6 +121,7 @@ test('la asistencia bloquea la sesión antes de validar que siga abierta', () =>
 
 test('la generación concurrente de sesiones es idempotente', () => {
   includes('api/sesiones.php', 'INSERT IGNORE INTO sesiones');
+  includes('api/sesiones.php', 'WHERE NOT EXISTS (SELECT 1 FROM sesiones existente');
   includes('database/migrations/20260816_attendance_model.sql', 'uq_sesion_fecha_horario');
 });
 

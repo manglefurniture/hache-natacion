@@ -11,7 +11,7 @@ function fechaLaborable(string $fecha):DateTimeImmutable{$d=DateTimeImmutable::c
 function generarSesiones(PDO $pdo,string $fecha,string $uid,string $sedeId):int{
  $sql="SELECT DISTINCT h.id,h.hora_inicio FROM horarios h WHERE h.sede_id=:s AND h.activo=1 AND (EXISTS(SELECT 1 FROM alumnos a WHERE a.sede_id=:sa AND a.horario_preferido_id=h.id AND a.estado_administrativo IN ('ACTIVO','PENDIENTE')) OR EXISTS(SELECT 1 FROM curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.horario_id=h.id AND ci.sede_id=:sc AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND :f BETWEEN ci.fecha_inicio AND ci.fecha_fin)) ORDER BY h.hora_inicio";
  $st=$pdo->prepare($sql);$st->execute([':s'=>$sedeId,':sa'=>$sedeId,':sc'=>$sedeId,':f'=>$fecha]);$horarios=$st->fetchAll();$n=0;
- foreach($horarios as $h){$bloque=((int)substr((string)$h['hora_inicio'],0,2)<12)?'AM':'PM';$q=$pdo->prepare("INSERT IGNORE INTO sesiones(fecha,bloque,horario_id,created_by) VALUES(:f,:b,:h,:u)");$q->execute([':f'=>$fecha,':b'=>$bloque,':h'=>$h['id'],':u'=>$uid]);$n+=$q->rowCount();}
+ foreach($horarios as $h){$bloque=((int)substr((string)$h['hora_inicio'],0,2)<12)?'AM':'PM';$q=$pdo->prepare("INSERT IGNORE INTO sesiones(fecha,bloque,horario_id,created_by) SELECT :f,:b,:h,:u WHERE NOT EXISTS (SELECT 1 FROM sesiones existente WHERE existente.fecha=:ef AND existente.horario_id=:eh)");$q->execute([':f'=>$fecha,':b'=>$bloque,':h'=>$h['id'],':u'=>$uid,':ef'=>$fecha,':eh'=>$h['id']]);$n+=$q->rowCount();}
  return $n;
 }
 function alumnosSesion(PDO $pdo,array $s,string $fecha,string $sedeId):array{
