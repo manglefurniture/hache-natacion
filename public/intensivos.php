@@ -1,3 +1,8 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../config/auth.php';
+page_require(['ADMIN','VERIFICADOR']);
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -637,6 +642,21 @@ function formatearPrecio(valor) {
         );
 }
 
+function escaparHtml(valor) {
+
+    return String(valor ?? '')
+        .replace(
+            /[&<>"']/g,
+            caracter => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[caracter]
+        );
+}
+
 
 function formatearEstado(estado) {
 
@@ -721,11 +741,11 @@ async function cargarIntensivos() {
 
             tr.innerHTML = `
                 <td>
-                    ${curso.fecha_inicio ?? ''}
+                    ${escaparHtml(curso.fecha_inicio ?? '')}
                 </td>
 
                 <td>
-                    ${curso.fecha_fin ?? ''}
+                    ${escaparHtml(curso.fecha_fin ?? '')}
                 </td>
 
                 <td>
@@ -745,12 +765,18 @@ async function cargarIntensivos() {
                 <td>
                     <button
                         class="btn btn-secondary btn-small"
-                        onclick="abrirCurso('${curso.id}')"
+                        data-curso-id="${escaparHtml(curso.id)}"
                     >
                         Ver alumnos
                     </button>
                 </td>
             `;
+
+            tr.querySelector('[data-curso-id]')
+                ?.addEventListener(
+                    'click',
+                    () => abrirCurso(curso.id)
+                );
 
             intensivosBody.appendChild(tr);
         });
@@ -860,51 +886,6 @@ form.addEventListener(
 
         ocultarMensaje(formMessage);
 
-        const usuarioGuardado =
-            sessionStorage.getItem(
-                'hache_usuario'
-            );
-
-        if (!usuarioGuardado) {
-
-            mostrarMensaje(
-                formMessage,
-                'La sesión administrativa no está disponible.',
-                'error'
-            );
-
-            return;
-        }
-
-        let usuario;
-
-        try {
-
-            usuario =
-                JSON.parse(usuarioGuardado);
-
-        } catch (error) {
-
-            mostrarMensaje(
-                formMessage,
-                'La sesión administrativa no es válida.',
-                'error'
-            );
-
-            return;
-        }
-
-        if (!usuario.id) {
-
-            mostrarMensaje(
-                formMessage,
-                'La sesión administrativa no contiene un usuario válido.',
-                'error'
-            );
-
-            return;
-        }
-
         const datos = {
 
             fecha_inicio:
@@ -919,10 +900,7 @@ form.addEventListener(
                 document
                     .getElementById('observaciones')
                     .value
-                    .trim() || null,
-
-            created_by:
-                usuario.id
+                    .trim() || null
         };
 
         if (

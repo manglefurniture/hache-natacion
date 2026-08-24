@@ -2,11 +2,13 @@
 declare(strict_types=1);
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
+    $httpsDirect=!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $httpsForwarded=strtolower(trim((string)($_SERVER['HTTP_X_FORWARDED_PROTO']??'')))==='https';
     session_name('hache_session');
     session_start([
         'cookie_httponly' => true,
         'cookie_samesite' => 'Lax',
-        'cookie_secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'cookie_secure' => $httpsDirect || $httpsForwarded,
         'use_strict_mode' => true,
     ]);
 }
@@ -19,25 +21,102 @@ function auth_user(): ?array
 
 function auth_login(array $user): void
 {
+    $role=strtoupper(trim((string)($user['rol']??'')));
+    if(!in_array($role,['ADMIN','VERIFICADOR','ALUMNO'],true))throw new InvalidArgumentException('Rol de usuario inválido');
     session_regenerate_id(true);
+    unset($_SESSION['hache_csrf'],$_SESSION['hache_reconciliada']);
     $sedeClave = !empty($user['sede_clave']) ? strtoupper((string)$user['sede_clave']) : null;
     $_SESSION['hache_usuario'] = [
         'id' => (string)$user['id'],
         'usuario' => (string)$user['usuario'],
-        'rol' => (string)$user['rol'],
+        'rol' => $role,
         'alumno_id' => $user['alumno_id'] ?: null,
         'sede_id' => !empty($user['sede_id']) ? (string)$user['sede_id'] : null,
         'sede_clave' => $sedeClave,
         'sede_nombre' => !empty($user['sede_nombre']) ? (string)$user['sede_nombre'] : null,
-        'sede_activa' => (($user['rol'] ?? '') === 'VERIFICADOR' && in_array($sedeClave, ['MONTEVERDE','PALAPAS'], true)) ? $sedeClave : 'MONTEVERDE',
+        'sede_activa' => ($role === 'VERIFICADOR' && in_array($sedeClave, ['MONTEVERDE','PALAPAS'], true)) ? $sedeClave : 'MONTEVERDE',
         'debe_cambiar_password' => !empty($user['debe_cambiar_password']) ? 1 : 0,
+        'auth_checked_at' => time(),
     ];
+    $_SESSION['hache_password_fingerprint']=hash('sha256',(string)($user['password_hash']??''));
 }
 
 function auth_refresh_password_flag(bool $mustChange): void
 {
     if (isset($_SESSION['hache_usuario']) && is_array($_SESSION['hache_usuario'])) {
         $_SESSION['hache_usuario']['debe_cambiar_password'] = $mustChange ? 1 : 0;
+        $_SESSION['hache_usuario']['auth_checked_at'] = time();
+    }
+}
+
+function auth_refresh_password_fingerprint(string $passwordHash): void
+{
+    $_SESSION['hache_password_fingerprint']=hash('sha256',$passwordHash);
+    if(isset($_SESSION['hache_usuario'])&&is_array($_SESSION['hache_usuario']))$_SESSION['hache_usuario']['auth_checked_at']=time();
+}
+
+function auth_csrf_token(): string
+{
+    $token = $_SESSION['hache_csrf'] ?? null;
+    if (!is_string($token) || strlen($token) !== 64) {
+        $token = bin2hex(random_bytes(32));
+        $_SESSION['hache_csrf'] = $token;
+    }
+    return $token;
+}
+
+function auth_csrf_validate(?string $token): bool
+{
+    $expected = $_SESSION['hache_csrf'] ?? null;
+    return is_string($expected) && is_string($token) && hash_equals($expected, $token);
+}
+
+function auth_revalidate_user(bool $force=false): ?array
+{
+    static $checkedThisRequest=false;
+    $u=auth_user();
+    if(!$u || $checkedThisRequest)return $u;
+    $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
+    $mutation=!in_array($method,['GET','HEAD','OPTIONS'],true);
+    $last=(int)($u['auth_checked_at']??0);
+    if(!$force && !$mutation && $last>0 && (time()-$last)<60)return $u;
+    $checkedThisRequest=true;
+    try{
+        $local=__DIR__.'/database.local.php';
+        $cfg=is_file($local)?require $local:[
+            'host'=>getenv('DB_HOST')?:'127.0.0.1',
+            'dbname'=>getenv('DB_NAME')?:'hache_natacion',
+            'user'=>getenv('DB_USER')?:'',
+            'password'=>getenv('DB_PASS')?:'',
+            'charset'=>getenv('DB_CHARSET')?:'utf8mb4',
+        ];
+        $pdo=new PDO(
+            "mysql:host={$cfg['host']};dbname={$cfg['dbname']};charset={$cfg['charset']}",
+            $cfg['user'],$cfg['password'],
+            [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
+        );
+        $st=$pdo->prepare("SELECT u.id,u.usuario,u.password_hash,u.rol,u.activo,u.alumno_id,u.sede_id,u.debe_cambiar_password,s.clave sede_clave,s.nombre sede_nombre,s.activo sede_activo FROM usuarios u LEFT JOIN sedes s ON s.id=u.sede_id WHERE u.id=:id LIMIT 1");
+        $st->execute([':id'=>(string)$u['id']]);$fresh=$st->fetch();
+        if(!$fresh || !(bool)$fresh['activo']){auth_logout();return null;}
+        $role=strtoupper((string)$fresh['rol']);$ownSite=!empty($fresh['sede_clave'])?strtoupper((string)$fresh['sede_clave']):null;
+        if(!in_array($role,['ADMIN','VERIFICADOR','ALUMNO'],true)||($role==='ALUMNO'&&empty($fresh['alumno_id']))||($role==='VERIFICADOR'&&(!in_array($ownSite,['MONTEVERDE','PALAPAS'],true)||(int)($fresh['sede_activo']??0)!==1))){auth_logout();return null;}
+        $fingerprint=hash('sha256',(string)$fresh['password_hash']);$storedFingerprint=$_SESSION['hache_password_fingerprint']??null;
+        if(is_string($storedFingerprint)&&!hash_equals($storedFingerprint,$fingerprint)){auth_logout();return null;}
+        $active=strtoupper((string)($u['sede_activa']??'MONTEVERDE'));
+        if($role==='VERIFICADOR')$active=in_array($ownSite,['MONTEVERDE','PALAPAS'],true)?$ownSite:'MONTEVERDE';
+        elseif(!in_array($active,['MONTEVERDE','PALAPAS'],true))$active='MONTEVERDE';
+        $_SESSION['hache_usuario']=[
+            'id'=>(string)$fresh['id'],'usuario'=>(string)$fresh['usuario'],'rol'=>$role,
+            'alumno_id'=>$fresh['alumno_id']?:null,'sede_id'=>$fresh['sede_id']?:null,
+            'sede_clave'=>$ownSite,'sede_nombre'=>$fresh['sede_nombre']?:null,'sede_activa'=>$active,
+            'debe_cambiar_password'=>!empty($fresh['debe_cambiar_password'])?1:0,'auth_checked_at'=>time(),
+        ];
+        $_SESSION['hache_password_fingerprint']=$fingerprint;
+        return $_SESSION['hache_usuario'];
+    }catch(Throwable $e){
+        error_log('Hache revalidación de sesión: '.$e->getMessage());
+        auth_logout();
+        return null;
     }
 }
 
@@ -53,7 +132,7 @@ function auth_logout(): void
 
 function auth_require(array $roles = [], bool $allowForcedPassword = false): array
 {
-    $u = auth_user();
+    $u = auth_revalidate_user();
     if (!$u) {
         http_response_code(401);
         header('Content-Type: application/json; charset=utf-8');
@@ -97,6 +176,7 @@ function auth_set_active_sede(string $clave): string
     if (!in_array($clave, ['MONTEVERDE','PALAPAS'], true)) {
         throw new InvalidArgumentException('Sede inválida');
     }
+    if(!in_array((string)($u['rol']??''),['ADMIN','VERIFICADOR'],true))throw new RuntimeException('No tienes permiso para cambiar de sede');
     if (($u['rol'] ?? '') === 'VERIFICADOR') {
         $own = strtoupper(trim((string)($u['sede_clave'] ?? '')));
         if ($clave !== $own) throw new RuntimeException('No tienes permiso para cambiar de sede');
@@ -117,7 +197,7 @@ function auth_resolve_sede_clave(?string $requested = null): string
 
 function page_require(array $roles = [], bool $allowForcedPassword = false): array
 {
-    $u = auth_user();
+    $u = auth_revalidate_user();
     if (!$u) {
         header('Location: /');
         exit;

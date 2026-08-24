@@ -1,3 +1,8 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../config/auth.php';
+page_require(['ADMIN','VERIFICADOR']);
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -432,6 +437,12 @@ const formPago = document.getElementById('formPago');
 const message = document.getElementById('message');
 const formMessage = document.getElementById('formMessage');
 
+function escaparHtml(valor) {
+    return String(valor ?? '').replace(/[&<>'"]/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[caracter]);
+}
+
 
 // --------------------------------------------------
 // FECHA ACTUAL
@@ -522,12 +533,12 @@ async function cargarPagos() {
                 : '<span class="badge badge-invalid">Invalidado</span>';
 
             tr.innerHTML = `
-                <td>${pago.folio ?? ''}</td>
-                <td>${pago.alumno_nombre ?? pago.alumno_id ?? ''}</td>
-                <td>${formatearTipo(pago.tipo)}</td>
-                <td>${importe}</td>
-                <td>${formatearMetodo(pago.metodo)}</td>
-                <td>${fecha}</td>
+                <td>${escaparHtml(pago.folio)}</td>
+                <td>${escaparHtml(pago.alumno_nombre ?? pago.alumno_id)}</td>
+                <td>${escaparHtml(formatearTipo(pago.tipo))}</td>
+                <td>${escaparHtml(importe)}</td>
+                <td>${escaparHtml(formatearMetodo(pago.metodo))}</td>
+                <td>${escaparHtml(fecha)}</td>
                 <td>${estado}</td>
             `;
 
@@ -705,22 +716,6 @@ formPago.addEventListener('submit', async function(e) {
 
     ocultarMensaje(formMessage);
 
-    const usuarioGuardado =
-        sessionStorage.getItem('hache_usuario');
-
-    if (!usuarioGuardado) {
-
-        mostrarMensaje(
-            formMessage,
-            'La sesión administrativa no está disponible.',
-            'error'
-        );
-
-        return;
-    }
-
-    const usuario = JSON.parse(usuarioGuardado);
-
     const alumnoId = alumnoSelect.value;
     const tipo = tipoSelect.value;
     const importe = importeInput.value;
@@ -746,8 +741,7 @@ formPago.addEventListener('submit', async function(e) {
         importe: importe,
         metodo: metodo,
         fecha: fecha.replace('T', ' ') + ':00',
-        observacion: observacion || null,
-        created_by: usuario.id
+        observacion: observacion || null
     };
 
     try {

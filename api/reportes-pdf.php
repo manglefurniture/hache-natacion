@@ -22,7 +22,7 @@ function esc(string $v):string{return htmlspecialchars($v,ENT_QUOTES,'UTF-8');}
 function monthName(string $periodo):string{[$y,$m]=array_map('intval',explode('-',$periodo));$meses=[1=>'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];return ($meses[$m]??$periodo).' '.$y;}
 function dateLabel(string $fecha):string{$meses=[1=>'enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];$d=new DateTimeImmutable($fecha);return (int)$d->format('j').' de '.$meses[(int)$d->format('n')].' de '.$d->format('Y');}
 
-$periodo=(string)($_GET['periodo']??date('Y-m'));if(!preg_match('/^\d{4}-\d{2}$/',$periodo))$periodo=date('Y-m');
+$periodo=(string)($_GET['periodo']??date('Y-m'));if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$periodo)){http_response_code(422);exit('Periodo inválido');}
 $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));
 $st=$pdo->prepare("SELECT * FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$sede=$st->fetch();if(!$sede){http_response_code(422);exit('Sede inválida');}
 $sedeId=$sede['id'];[$anio,$mes]=array_map('intval',explode('-',$periodo));$desde=$periodo.'-01';$hasta=(new DateTimeImmutable($desde))->modify('last day of this month')->format('Y-m-d');

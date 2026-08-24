@@ -3,6 +3,29 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+require_once __DIR__ . '/../../config/rate-limit.php';
+
+function sharky_openai_key(): string
+{
+    $fromEnvironment=trim((string)(getenv('OPENAI_API_KEY')?:''));
+    if($fromEnvironment!=='')return $fromEnvironment;
+    $path='/etc/hache-openai.env';
+    if(!is_readable($path))return '';
+    $lines=file($path,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
+    if(!is_array($lines))return '';
+    foreach($lines as $line){
+        $line=trim((string)$line);
+        if($line===''||str_starts_with($line,'#'))continue;
+        if(str_starts_with($line,'sk-'))return $line; // compatibilidad con el archivo original
+        if(str_starts_with($line,'export '))$line=trim(substr($line,7));
+        if(!str_starts_with($line,'OPENAI_API_KEY='))continue;
+        $value=trim(substr($line,strlen('OPENAI_API_KEY=')));
+        if(strlen($value)>=2&&(($value[0]==='"'&&str_ends_with($value,'"'))||($value[0]==="'"&&str_ends_with($value,"'"))))$value=substr($value,1,-1);
+        return trim($value);
+    }
+    return '';
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -10,8 +33,27 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+$rate=security_rate_limit_record('sharky-public',security_rate_limit_client_ip(),30,300);
+if(!$rate['allowed']){
+    header('Retry-After: '.max(1,(int)$rate['retry_after']));
+    http_response_code(429);
+    echo json_encode(['ok'=>false,'error'=>'Sharky recibió demasiados mensajes seguidos. Espera unos minutos e intenta otra vez.'],JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if((int)($_SERVER['CONTENT_LENGTH']??0)>32768){
+    http_response_code(413);
+    echo json_encode(['ok'=>false,'error'=>'El mensaje es demasiado grande.'],JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $raw = file_get_contents('php://input');
 $data = json_decode($raw ?: '', true);
+$data = is_array($data) ? $data : null;
+if($data===null){
+    http_response_code(400);
+    echo json_encode(['ok'=>false,'error'=>'La solicitud no tiene un formato válido.'],JSON_UNESCAPED_UNICODE);
+    exit;
+}
 $message = trim((string)($data['message'] ?? ''));
 $history = is_array($data['history'] ?? null) ? $data['history'] : [];
 
@@ -22,9 +64,7 @@ if ($message === '') {
 }
 if (mb_strlen($message) > 700) $message = mb_substr($message, 0, 700);
 
-$keyFile = '/etc/hache-openai.env';
-$key = is_readable($keyFile) ? trim((string)file_get_contents($keyFile)) : '';
-if (str_starts_with($key, 'OPENAI_API_KEY=')) $key = trim(substr($key, strlen('OPENAI_API_KEY=')));
+$key = sharky_openai_key();
 if (!str_starts_with($key, 'sk-')) {
     http_response_code(503);
     echo json_encode(['ok' => false, 'error' => 'Sharky no puede conectarse ahora mismo.'], JSON_UNESCAPED_UNICODE);
@@ -81,7 +121,7 @@ CLASES REGULARES
 - En el plan de 5 clases por semana no hay reposiciones.
 
 INSCRIPCIÓN
-- Monteverde: $500 MXN.
+- Monteverde: $300 MXN.
 - Palapas: $400 MXN.
 - No confundas inscripción con mensualidad o costo del curso.
 

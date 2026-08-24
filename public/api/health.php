@@ -5,24 +5,20 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-require_once dirname(__DIR__, 2) . '/config/database.php';
-
 try {
-    $pdo = db();
+    $pdo = require dirname(__DIR__, 2) . '/config/pdo.php';
     $pdo->query('SELECT 1');
 
     http_response_code(200);
     echo json_encode([
         'ok' => true,
-        'app' => 'Hache Natación',
-        'database' => 'connected',
-        'time' => date(DATE_ATOM),
+        'application' => 'Hache Natación API',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
+    error_log('[public-health] '.$e->getMessage());
     http_response_code(503);
     echo json_encode([
         'ok' => false,
-        'app' => 'Hache Natación',
-        'database' => 'unavailable',
+        'error' => 'Service unavailable',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }

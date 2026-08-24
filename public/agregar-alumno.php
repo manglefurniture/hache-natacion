@@ -1,5 +1,7 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../config/auth.php';
+page_require(['ADMIN']);
 $config = require __DIR__ . '/../config/database.php';
 $pdo = new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 $horarios=$pdo->query("SELECT h.id,h.hora_inicio,h.hora_fin,s.clave sede_clave FROM horarios h INNER JOIN sedes s ON s.id=h.sede_id WHERE h.activo=1 AND h.regular=1 ORDER BY s.clave,h.hora_inicio")->fetchAll();

@@ -1,0 +1,7 @@
+{
+  "name": "hache-natacion-quality",
+  "private": true,
+  "scripts": {
+    "test": "node tests/static-regressions.mjs && node tests/check-js-syntax.mjs"
+  }
+}
