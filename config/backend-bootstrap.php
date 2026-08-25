@@ -47,7 +47,7 @@ if (in_array($u['rol'], ['ADMIN','VERIFICADOR'], true)) {
     try {
         require_once __DIR__ . '/intensivos-estado.php';
         $sedeClaveIntensivos = auth_resolve_sede_clave(null);
-        $hoyIntensivos = date('Y-m-d');
+        $hoyIntensivos = intensivo_hoy_operativo()->format('Y-m-d');
         $intensivosReconciliados = $_SESSION['hache_intensivos_reconciliados'][$sedeClaveIntensivos] ?? null;
         if ($intensivosReconciliados !== $hoyIntensivos) {
             $cfgIntensivos = require __DIR__ . '/database.php';
