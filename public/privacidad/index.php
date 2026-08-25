@@ -50,7 +50,9 @@ header('Content-Type: text/html; charset=UTF-8');
   <div class="card">
     <section>
       <h2>1. Responsable del tratamiento</h2>
-      <p>Hache Natación es responsable del tratamiento de los datos personales recopilados a través de sus canales digitales y de atención. Para ejercer derechos o realizar consultas relacionadas con privacidad, puedes utilizar los medios de contacto publicados en <a href="https://hnatacion.com/">hnatacion.com</a>.</p>
+      <p><strong>Ariel Fernandez</strong>, operando bajo la marca <strong>Hache Natación</strong>, es responsable del tratamiento de los datos personales recopilados a través de sus canales digitales y de atención.</p>
+      <p><strong>Domicilio:</strong> Av. Palenque #121, SM 29, C.P. 77508, Benito Juárez, Quintana Roo, México.</p>
+      <p>Para ejercer derechos de acceso, rectificación, cancelación u oposición (ARCO), solicitar la eliminación de datos cuando proceda o realizar consultas relacionadas con privacidad, puedes escribir a <a href="mailto:privacidad@hnatacion.com">privacidad@hnatacion.com</a>.</p>
     </section>
 
     <section>
@@ -87,7 +89,7 @@ header('Content-Type: text/html; charset=UTF-8');
 
     <section>
       <h2>7. Derechos sobre tus datos</h2>
-      <p>Puedes solicitar acceso, rectificación, cancelación u oposición al tratamiento de tus datos, así como pedir que dejemos de utilizar tu información para fines de seguimiento. También puedes solicitar la eliminación de la información asociada a tus conversaciones, salvo cuando exista una obligación legal de conservarla.</p>
+      <p>Puedes solicitar acceso, rectificación, cancelación u oposición al tratamiento de tus datos (derechos ARCO), así como pedir que dejemos de utilizar tu información para fines de seguimiento. También puedes solicitar la eliminación de la información asociada a tus conversaciones, salvo cuando exista una obligación legal de conservarla. Las solicitudes pueden enviarse a <a href="mailto:privacidad@hnatacion.com">privacidad@hnatacion.com</a>.</p>
     </section>
 
     <section>
@@ -100,7 +102,7 @@ header('Content-Type: text/html; charset=UTF-8');
       <p>Podemos actualizar esta política cuando cambien nuestros servicios, procesos o requisitos legales. La versión vigente estará siempre disponible en esta página.</p>
     </section>
 
-    <p class="meta"><strong>Última actualización:</strong> 21 de agosto de 2026.</p>
+    <p class="meta"><strong>Última actualización:</strong> 25 de agosto de 2026.</p>
   </div>
 
   <footer><a href="/">← Volver a Hache Natación</a><br>© <?php echo date('Y'); ?> Hache Natación. Todos los derechos reservados.</footer>
