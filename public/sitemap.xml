@@ -41,4 +41,31 @@
       <image:loc>https://hnatacion.com/assets/seo/alberca-palapas-protudec-cancun.webp</image:loc>
     </image:image>
   </url>
+  <url>
+    <loc>https://hnatacion.com/monteverde.php</loc>
+    <lastmod>2026-08-24</lastmod>
+    <image:image>
+      <image:loc>https://hnatacion.com/assets/seo/alberca-proa-monteverde-cancun.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://hnatacion.com/assets/seo/clase-natacion-monteverde-cancun.webp</image:loc>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://hnatacion.com/palapas-protudec.php</loc>
+    <lastmod>2026-08-24</lastmod>
+    <image:image>
+      <image:loc>https://hnatacion.com/assets/seo/alberca-palapas-protudec-cancun.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://hnatacion.com/assets/seo/clase-natacion-palapas-protudec-cancun.webp</image:loc>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://hnatacion.com/metodologia.php</loc>
+    <lastmod>2026-08-24</lastmod>
+    <image:image>
+      <image:loc>https://hnatacion.com/assets/seo/clases-natacion-adultos-cancun.jpg</image:loc>
+    </image:image>
+  </url>
 </urlset>

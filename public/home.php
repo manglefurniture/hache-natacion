@@ -192,7 +192,7 @@ declare(strict_types=1);
     <div class="desktop-nav">
       <a href="#programas">Programas</a>
       <a href="#sedes">Sedes</a>
-      <a href="#metodo">Cómo trabajamos</a>
+      <a href="/metodologia.php">Cómo trabajamos</a>
       <a href="#preguntas">Preguntas</a>
       <a class="access" href="/index.php">Iniciar sesión</a>
     </div>
@@ -203,7 +203,7 @@ declare(strict_types=1);
   <div class="mobile-menu" id="mobileMenu" hidden>
     <a href="#programas">Programas</a>
     <a href="#sedes">Sedes</a>
-    <a href="#metodo">Cómo trabajamos</a>
+    <a href="/metodologia.php">Cómo trabajamos</a>
     <a href="#preguntas">Preguntas</a>
     <a href="/index.php">Iniciar sesión</a>
   </div>
@@ -258,7 +258,7 @@ declare(strict_types=1);
     <article class="venue">
       <div class="venue-title">
         <div><span>SEDE 01</span><h3>PROA · Monteverde</h3></div>
-        <p>Un espacio amplio para aprender, entrenar y seguir mejorando.</p>
+        <p>Un espacio amplio para aprender, entrenar y seguir mejorando. <a href="/monteverde.php"><strong>Conoce la sede PROA Monteverde →</strong></a></p>
       </div>
       <div class="venue-gallery">
         <figure class="wide"><img src="/assets/seo/alberca-proa-monteverde-cancun.webp" alt="Alberca con carrileras de PROA Monteverde en Cancún" width="1400" height="785" loading="lazy" decoding="async"></figure>
@@ -272,7 +272,7 @@ declare(strict_types=1);
     <article class="venue venue-alt">
       <div class="venue-title">
         <div><span>SEDE 02</span><h3>Palapas · Protudec</h3></div>
-        <p>Una alberca cercana y funcional donde cada clase se convierte en progreso.</p>
+        <p>Una alberca cercana y funcional donde cada clase se convierte en progreso. <a href="/palapas-protudec.php"><strong>Conoce la sede Palapas Protudec →</strong></a></p>
       </div>
       <div class="venue-gallery">
         <figure class="wide"><img src="/assets/seo/alberca-palapas-protudec-cancun.webp" alt="Alberca de Palapas Protudec para clases de natación en Cancún" width="807" height="1400" loading="lazy" decoding="async"></figure>
@@ -288,7 +288,7 @@ declare(strict_types=1);
     <div class="section-heading align-left">
       <p class="eyebrow dark">CÓMO TRABAJAMOS</p>
       <h2>Aprender a nadar también es ganar confianza.</h2>
-      <p>El proceso se adapta a la experiencia de cada alumno, desde el primer contacto con el agua hasta el perfeccionamiento de técnica y estilos.</p>
+      <p>El proceso se adapta a la experiencia de cada alumno, desde el primer contacto con el agua hasta el perfeccionamiento de técnica y estilos. <a href="/metodologia.php"><strong>Conoce cómo trabajamos →</strong></a></p>
     </div>
     <div class="method-grid">
       <div><span>01</span><h3>Progresión</h3><p>Avanzamos desde tu nivel real, sin saltarnos etapas.</p></div>
@@ -350,7 +350,9 @@ declare(strict_types=1);
   <nav class="footer-nav" aria-label="Enlaces del sitio">
     <a href="/curso-intensivo.php">Curso intensivo</a>
     <a href="/clases-regulares.php">Clases regulares</a>
-    <a href="#sedes">Sedes</a>
+    <a href="/monteverde.php">PROA Monteverde</a>
+    <a href="/palapas-protudec.php">Palapas Protudec</a>
+    <a href="/metodologia.php">Cómo trabajamos</a>
     <a href="#preguntas">Preguntas frecuentes</a>
   </nav>
   <div class="footer-contact">
