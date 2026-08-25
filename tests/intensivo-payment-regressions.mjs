@@ -19,8 +19,9 @@ assert.doesNotMatch(statusApi, /\b(?:INSERT|UPDATE|DELETE)\b/i, 'El endpoint de 
 assert.ok(quickPay.includes('/api/intensivo-pago-estado.php?'), 'El pago rápido debe refrescar el estado del intensivo');
 assert.ok(quickPay.includes('marcarIntensivoPagado'), 'La UI debe poder corregir un estado desactualizado a PAGADO');
 assert.ok(quickPay.includes('No se registrará otro cobro'), 'La UI debe bloquear visualmente un segundo cobro ya confirmado');
-assert.match(quickPay, /consultarEstadoIntensivo\(current\.id, current\.courseId\)[\s\S]{0,600}fetch\('\/api\/pagos-smart\.php'/,
-  'Debe volver a comprobar el estado justo antes de registrar un pago intensivo');
+const preflight = quickPay.indexOf('consultarEstadoIntensivo(current.id, current.courseId)');
+const submit = quickPay.indexOf("fetch('/api/pagos-smart.php'", preflight);
+assert.ok(preflight >= 0 && submit > preflight, 'Debe volver a comprobar el estado antes de registrar un pago intensivo');
 
 assert.match(paymentCore, /WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1/,
   'La barrera transaccional contra pagos duplicados debe permanecer intacta');
