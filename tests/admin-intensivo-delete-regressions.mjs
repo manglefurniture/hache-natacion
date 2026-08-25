@@ -24,7 +24,8 @@ assert.match(intensivo, /La ventana de inscripción de este curso cerró/);
 
 assert.match(gestion, /password_verify\(\$password,\$hash\)/);
 assert.match(gestion, /periodos_cerrados_alumno/);
-assert.match(gestion, /borrar_por_alumno\(\$pdo,'pagos'/);
+assert.match(gestion, /foreach\(\['pagos','reposiciones_regulares','asistencias'/);
+assert.match(gestion, /\$n=borrar_por_alumno\(\$pdo,\$tabla,\$alumnoId\)/);
 assert.match(gestion, /DELETE FROM alumnos WHERE id=:id AND sede_id=:s/);
 assert.match(ficha, /Tu contraseña de administrador/);
 assert.match(ficha, /accion:'ELIMINAR'/);
