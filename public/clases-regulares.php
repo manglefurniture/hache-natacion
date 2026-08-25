@@ -126,7 +126,7 @@ declare(strict_types=1);
   <img class="hero-media" src="/assets/seo/alberca-palapas-protudec-cancun.webp" alt="Alberca Palapas Protudec donde se imparten clases regulares de natación en Cancún" width="807" height="1400" fetchpriority="high" decoding="async">
   <div class="hero-inner">
     <div class="eyebrow">Adultos y adolescentes +12 · Cancún</div>
-    <h1>Clases regulares de natación.<br>Seguir avanzando.</h1>
+    <h1>Clases regulares de natación para adultos en Cancún.<br>Seguir avanzando.</h1>
     <p>Continuidad semanal para desarrollar técnica, respiración, resistencia y estilos de acuerdo con tu nivel.</p>
     <div class="hero-actions">
       <a class="btn primary" href="#inscripcion">Quiero inscribirme →</a>
@@ -231,7 +231,7 @@ declare(strict_types=1);
   <div><strong>H NATACIÓN</strong><br><small>Cancún · Quintana Roo</small></div>
   <nav aria-label="Más información">
     <a href="/">Inicio</a>
-    <a href="/curso-intensivo.php">Curso intensivo</a>
+    <a href="/curso-intensivo.php">Curso intensivo de natación</a>
     <a href="/#sedes">Sedes</a>
     <a href="/privacidad/">Privacidad</a>
   </nav>

@@ -126,7 +126,7 @@ declare(strict_types=1);
   <img class="hero-media" src="/assets/seo/alberca-proa-monteverde-cancun.webp" alt="Alberca PROA Monteverde donde se imparte el curso intensivo de natación en Cancún" width="1400" height="785" fetchpriority="high" decoding="async">
   <div class="hero-inner">
     <div class="eyebrow">Adultos y adolescentes +12 · Cancún</div>
-    <h1>Curso intensivo de natación.<br>Una base que se queda.</h1>
+    <h1>Curso intensivo de natación para adultos en Cancún.<br>Una base que se queda.</h1>
     <p>Un programa concentrado para comenzar desde cero o mejorar técnica, respiración y seguridad en el agua.</p>
     <div class="hero-actions">
       <a class="btn primary" href="#inscripcion">Quiero inscribirme →</a>
@@ -222,7 +222,7 @@ declare(strict_types=1);
   <div><strong>H NATACIÓN</strong><br><small>Cancún · Quintana Roo</small></div>
   <nav aria-label="Más información">
     <a href="/">Inicio</a>
-    <a href="/clases-regulares.php">Clases regulares</a>
+    <a href="/clases-regulares.php">Clases regulares de natación</a>
     <a href="/#sedes">Sedes</a>
     <a href="/privacidad/">Privacidad</a>
   </nav>

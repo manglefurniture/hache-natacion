@@ -55,4 +55,11 @@ assert.equal((home.match(/Ver curso intensivo de natación →/g) || []).length,
 assert.match(home, /Ver clases regulares de natación →/);
 assert.match(home, /<meta name="description" content="Clases de natación en Cancún para adultos y adolescentes desde 12 años\./);
 
+assert.match(intensive, /<title>Curso intensivo de natación para adultos en Cancún \| Hache<\/title>/);
+assert.match(regular, /<title>Clases de natación para adultos en Cancún \| Plan regular<\/title>/);
+assert.match(intensive, /<h1>Curso intensivo de natación para adultos en Cancún\.<br>Una base que se queda\.<\/h1>/);
+assert.match(regular, /<h1>Clases regulares de natación para adultos en Cancún\.<br>Seguir avanzando\.<\/h1>/);
+assert.match(intensive, /<a href="\/clases-regulares\.php">Clases regulares de natación<\/a>/);
+assert.match(regular, /<a href="\/curso-intensivo\.php">Curso intensivo de natación<\/a>/);
+
 console.log('✓ regresiones SEO verificadas');
