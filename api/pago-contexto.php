@@ -66,12 +66,13 @@ try{
         WHERE alumno_id=:a AND sede_id=:s AND estado='PENDIENTE' AND periodo_fin<:pi ORDER BY periodo_inicio DESC LIMIT 3");
     $st->execute([':a'=>$alumnoId,':s'=>$sedeId,':pi'=>$periodo['inicio']]);$pendientes=$st->fetchAll();
 
+    $hoyIntensivo=intensivo_hoy_operativo()->format('Y-m-d');
     $intensivoSql="SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,
         EXISTS(SELECT 1 FROM pagos pg WHERE pg.alumno_id=cia.alumno_id AND pg.intensivo_id=ci.id AND pg.tipo='INTENSIVO' AND pg.estado='VALIDO') AS pagado
         FROM curso_intensivo_alumnos cia
         INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
-        WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=CURDATE()";
-    $intensivoParams=[':a'=>$alumnoId,':s'=>$sedeId];
+        WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=:hoy";
+    $intensivoParams=[':a'=>$alumnoId,':s'=>$sedeId,':hoy'=>$hoyIntensivo];
     if($cursoId!==''){$intensivoSql.=" AND ci.id=:c";$intensivoParams[':c']=$cursoId;}
     $intensivoSql.=" ORDER BY ci.fecha_inicio DESC LIMIT 1";
     $st=$pdo->prepare($intensivoSql);$st->execute($intensivoParams);$intensivo=$st->fetch()?:null;
