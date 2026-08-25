@@ -7,16 +7,16 @@ declare(strict_types=1);
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#062a45">
-  <title>Clases de natación para adultos en Cancún | Hache</title>
-  <meta name="description" content="Clases de natación para adultos y adolescentes desde 12 años en Cancún. Aprende desde cero o mejora técnica en Monteverde y Palapas Protudec.">
+  <title>Clases de natación en Cancún para adultos | Hache Natación</title>
+  <meta name="description" content="Clases de natación en Cancún para adultos y adolescentes desde 12 años. Aprende desde cero o mejora técnica en PROA Monteverde y Palapas Protudec.">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="canonical" href="https://hnatacion.com/">
 
   <meta property="og:locale" content="es_MX">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Hache Natación">
-  <meta property="og:title" content="Clases de natación para adultos en Cancún | Hache">
-  <meta property="og:description" content="Aprende desde cero o mejora tu técnica con clases para adultos y adolescentes desde 12 años en Cancún.">
+  <meta property="og:title" content="Clases de natación en Cancún para adultos | Hache Natación">
+  <meta property="og:description" content="Clases de natación en Cancún para adultos y adolescentes desde 12 años. Empieza desde cero o mejora tu técnica.">
   <meta property="og:url" content="https://hnatacion.com/">
   <meta property="og:image" content="https://hnatacion.com/assets/seo/clases-natacion-adultos-cancun.jpg">
   <meta property="og:image:width" content="1672">
@@ -24,8 +24,8 @@ declare(strict_types=1);
   <meta property="og:image:alt" content="Alberca con carrileras de Hache Natación en Cancún">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Clases de natación para adultos en Cancún | Hache">
-  <meta name="twitter:description" content="Aprende desde cero o mejora tu técnica con clases para adultos y adolescentes desde 12 años en Cancún.">
+  <meta name="twitter:title" content="Clases de natación en Cancún para adultos | Hache Natación">
+  <meta name="twitter:description" content="Clases de natación en Cancún para adultos y adolescentes desde 12 años. Empieza desde cero o mejora tu técnica.">
   <meta name="twitter:image" content="https://hnatacion.com/assets/seo/clases-natacion-adultos-cancun.jpg">
   <meta name="twitter:image:alt" content="Alberca con carrileras de Hache Natación en Cancún">
 
@@ -120,8 +120,8 @@ declare(strict_types=1);
         "@type": "WebPage",
         "@id": "https://hnatacion.com/#webpage",
         "url": "https://hnatacion.com/",
-        "name": "Clases de natación para adultos en Cancún | Hache",
-        "description": "Clases de natación para adultos y adolescentes desde 12 años en Cancún.",
+        "name": "Clases de natación en Cancún para adultos | Hache Natación",
+        "description": "Clases de natación en Cancún para adultos y adolescentes desde 12 años.",
         "inLanguage": "es-MX",
         "isPartOf": {
           "@id": "https://hnatacion.com/#website"
@@ -210,7 +210,7 @@ declare(strict_types=1);
   <div class="hero-shade"></div>
   <div class="hero-content">
     <p class="eyebrow">HACHE NATACIÓN · CANCÚN</p>
-    <h1>Tu nivel cambia.<br>Tu confianza también.</h1>
+    <h1>Clases de natación para adultos en Cancún.<br>Tu confianza también.</h1>
     <p class="hero-copy">Clases de natación para adultos y adolescentes desde 12 años. Empieza desde cero o mejora tu técnica en Cancún.</p>
     <a class="primary-cta" href="#programas">Encuentra tu programa <span aria-hidden="true">→</span></a>
   </div>
@@ -231,19 +231,19 @@ declare(strict_types=1);
         <div class="path-number">01</div>
         <h3>Estoy comenzando</h3>
         <p>Nunca he nadado o todavía no me siento seguro en el agua.</p>
-        <strong>Ver curso intensivo →</strong>
+        <strong>Ver curso intensivo de natación →</strong>
       </a>
       <a class="path-card" href="/curso-intensivo.php" aria-label="Ver curso intensivo de natación para mejorar">
         <div class="path-number">02</div>
         <h3>Tengo bases y quiero mejorar</h3>
         <p>Puedo desenvolverme en el agua, pero quiero mejorar técnica, respiración y seguridad.</p>
-        <strong>Ver curso intensivo →</strong>
+        <strong>Ver curso intensivo de natación →</strong>
       </a>
       <a class="path-card featured" href="/clases-regulares.php" aria-label="Ver clases regulares de natación">
         <div class="path-number">03</div>
         <h3>Ya sé nadar</h3>
         <p>Quiero continuar desarrollando técnica, resistencia y diferentes estilos.</p>
-        <strong>Ver clases regulares →</strong>
+        <strong>Ver clases regulares de natación →</strong>
       </a>
     </div>
   </section>
