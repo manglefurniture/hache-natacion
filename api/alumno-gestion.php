@@ -33,7 +33,7 @@ function periodos_cerrados_alumno(PDO $pdo,string $alumnoId,string $sedeId):arra
     }
     if(!$periodos)return [];
     $cerrados=[];$st=$pdo->prepare("SELECT cerrado_at FROM cierres_mensuales WHERE sede_id=:s AND periodo=:p LIMIT 1 FOR UPDATE");
-    foreach($periodos as $periodo=>$pagos){$st->execute([':s'=>$sedeId,':p'=>$periodo.'-01']);$cerradoAt=$st->fetchColumn();if($cerradoAt===false)continue;foreach($pagos as $p){if((string)$p['created_at']<=(string)$cerradoAt&&($p['invalidated_at']===null||(string)$p['invalidated_at']>(string)$cerradoAt)){$cerrados[]=$periodo;break;}}}
+    foreach($periodos as $periodo=>$pagos){$st->execute([':s'=>$sedeId,':p'=>$periodo.'-01']);$cerradoAt=$st->fetchColumn();if($cerradoAt===false)continue;foreach($pagos as $p){if((string)$p['created_at']<=(string)$cerradoAt&&($p['invalidated_at']===null||(string)$p['invalidated_at']>=(string)$cerradoAt)){$cerrados[]=$periodo;break;}}}
     sort($cerrados);return $cerrados;
 }
 function borrar_suscripciones_usuario(PDO $pdo,array $usuarios):int

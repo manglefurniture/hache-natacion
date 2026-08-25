@@ -61,6 +61,12 @@ assert.ok(preflight >= 0 && submit > preflight, 'Debe volver a comprobar el esta
 assert.ok(quickPay.includes('const target = current'), 'El pago rápido debe congelar el objetivo antes de esperar');
 assert.ok(quickPay.includes('const pagado = await consultarEstadoIntensivo(target.id, target.courseId)'), 'La comprobación debe usar el objetivo congelado');
 assert.ok(quickPay.includes('if (current !== target) return;'), 'La operación debe abortar si el modal cambia durante la espera');
+assert.ok(quickPay.includes('let inFlight = null;'), 'El pago rápido debe conservar un bloqueo mientras el POST está pendiente');
+assert.ok(quickPay.includes('if (inFlight) return;'), 'Un segundo pago no debe iniciar mientras el primero sigue en vuelo');
+assert.ok(quickPay.includes('inFlight = target;'), 'El bloqueo debe quedar asociado al objetivo inmutable de la primera operación');
+assert.ok(quickPay.includes('document.getElementById(\'hqp-save\').disabled = inFlight !== null;'), 'Al abrir B durante A pendiente, B debe permanecer deshabilitado');
+assert.ok(quickPay.includes("if (current !== target) return;\n\n      close();"), 'La respuesta de A no debe cerrar el modal de B');
+assert.ok(quickPay.includes('if (inFlight === target) {'), 'Solo la operación dueña del bloqueo puede liberarlo');
 
 // La regla temporal debe ser única, acotada por sede y usar explícitamente la fecha operativa de Cancún.
 assert.ok(statusRules.includes('function intensivo_hoy_operativo'));
