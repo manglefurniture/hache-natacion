@@ -2,12 +2,17 @@
 
 declare(strict_types=1);
 
+function intensivo_hoy_operativo(?DateTimeImmutable $referencia = null): DateTimeImmutable
+{
+    return $referencia ?? new DateTimeImmutable('today', new DateTimeZone('America/Cancun'));
+}
+
 function intensivo_estado_por_fechas(
     string $fechaInicio,
     string $fechaFin,
     ?DateTimeImmutable $referencia = null
 ): string {
-    $hoy = ($referencia ?? new DateTimeImmutable('today'))->format('Y-m-d');
+    $hoy = intensivo_hoy_operativo($referencia)->format('Y-m-d');
 
     if ($hoy < $fechaInicio) {
         return 'PROGRAMADO';
@@ -25,7 +30,7 @@ function intensivos_reconciliar_estados_sede(
     string $sedeId,
     ?DateTimeImmutable $referencia = null
 ): int {
-    $hoy = ($referencia ?? new DateTimeImmutable('today'))->format('Y-m-d');
+    $hoy = intensivo_hoy_operativo($referencia)->format('Y-m-d');
 
     $sql = "UPDATE cursos_intensivos
         SET estado = CASE
