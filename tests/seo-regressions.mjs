@@ -15,7 +15,7 @@ const llms = read('public/llms.txt');
 const bootstrap = read('config/backend-bootstrap.php');
 const login = read('public/index.php');
 
-assert.match(home, /<title>Clases de natación para adultos en Cancún \| Hache<\/title>/);
+assert.match(home, /<title>Clases de natación en Cancún para adultos \| Hache Natación<\/title>/);
 assert.match(home, /<link rel="canonical" href="https:\/\/hnatacion\.com\/">/);
 assert.match(intensive, /<link rel="canonical" href="https:\/\/hnatacion\.com\/curso-intensivo\.php">/);
 assert.match(regular, /<link rel="canonical" href="https:\/\/hnatacion\.com\/clases-regulares\.php">/);
@@ -49,5 +49,10 @@ assert.match(llms, /^# Hache Natación/m);
 assert.match(llms, /\[Hache Natación\]\(https:\/\/hnatacion\.com\/\)/);
 assert.match(llms, /\[Curso intensivo de natación para adultos en Cancún\]\(https:\/\/hnatacion\.com\/curso-intensivo\.php\)/);
 assert.match(llms, /\[Clases regulares de natación para adultos en Cancún\]\(https:\/\/hnatacion\.com\/clases-regulares\.php\)/);
+
+assert.match(home, /<h1>Clases de natación para adultos en Cancún\.<br>Tu confianza también\.<\/h1>/);
+assert.equal((home.match(/Ver curso intensivo de natación →/g) || []).length, 2);
+assert.match(home, /Ver clases regulares de natación →/);
+assert.match(home, /<meta name="description" content="Clases de natación en Cancún para adultos y adolescentes desde 12 años\./);
 
 console.log('✓ regresiones SEO verificadas');
