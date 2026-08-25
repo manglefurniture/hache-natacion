@@ -5,6 +5,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/reglas-acceso.php';
+require_once __DIR__ . '/../config/intensivos-estado.php';
 $config = require __DIR__ . '/../config/database.php';
 
 try {
@@ -28,8 +29,10 @@ try {
         $stmt=$pdo->prepare("SELECT id,sede_id,fecha_inicio,fecha_fin,precio,estado,observaciones,created_at FROM cursos_intensivos WHERE id=:id AND sede_id=:s LIMIT 1");
         $stmt->execute([':id'=>$cursoId,':s'=>$sedeId]);$curso=$stmt->fetch();
         if(!$curso){http_response_code(404);echo json_encode(['ok'=>false,'error'=>'El curso intensivo no existe']);exit;}
-        $stmt=$pdo->prepare("SELECT cia.id AS inscripcion_intensivo_id,cia.curso_intensivo_id,cia.alumno_id,a.nombre AS alumno_nombre,cia.horario_id,h.hora_inicio,h.hora_fin,cia.reposiciones_justificadas,cia.reposiciones_cancelacion,cia.continua_regular,cia.plan_continuidad_id,cia.importe_continuidad,cia.observacion_continuidad,cia.observaciones,cia.created_at FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id INNER JOIN horarios h ON h.id=cia.horario_id AND h.sede_id=ci.sede_id WHERE cia.curso_intensivo_id=:curso_id AND ci.sede_id=:s ORDER BY h.hora_inicio,a.nombre");
+        $curso['estado']=intensivo_estado_por_fechas((string)$curso['fecha_inicio'],(string)$curso['fecha_fin']);
+        $stmt=$pdo->prepare("SELECT cia.id AS inscripcion_intensivo_id,cia.curso_intensivo_id,cia.alumno_id,a.nombre AS alumno_nombre,cia.horario_id,h.hora_inicio,h.hora_fin,cia.reposiciones_justificadas,cia.reposiciones_cancelacion,cia.continua_regular,cia.plan_continuidad_id,cia.importe_continuidad,cia.observacion_continuidad,cia.observaciones,cia.created_at,EXISTS(SELECT 1 FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=cia.curso_intensivo_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO') AS intensivo_pagado FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id INNER JOIN horarios h ON h.id=cia.horario_id AND h.sede_id=ci.sede_id WHERE cia.curso_intensivo_id=:curso_id AND ci.sede_id=:s ORDER BY h.hora_inicio,a.nombre");
         $stmt->execute([':curso_id'=>$cursoId,':s'=>$sedeId]);$alumnosCurso=$stmt->fetchAll();
+        foreach($alumnosCurso as &$alumnoCurso){$alumnoCurso['intensivo_pagado']=(int)($alumnoCurso['intensivo_pagado']??0)===1;}unset($alumnoCurso);
         $stmt=$pdo->prepare("SELECT id,hora_inicio,hora_fin FROM horarios WHERE sede_id=:s AND activo=1 AND intensivo=1 ORDER BY hora_inicio");$stmt->execute([':s'=>$sedeId]);$horarios=$stmt->fetchAll();
         echo json_encode(['ok'=>true,'curso'=>$curso,'total_alumnos'=>count($alumnosCurso),'alumnos'=>$alumnosCurso,'horarios'=>$horarios],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);exit;
     }
@@ -40,6 +43,7 @@ try {
         $cursoId=trim((string)($input['curso_intensivo_id']??''));
         $alumnoId=trim((string)($input['alumno_id']??''));
         if($cursoId===''||$alumnoId===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Curso y alumno son obligatorios']);exit;}
+        intensivos_reconciliar_estados_sede($pdo,$sedeId);
         $pdo->beginTransaction();
         $stmt=$pdo->prepare("SELECT cia.id,ci.estado FROM curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id WHERE cia.curso_intensivo_id=:c AND cia.alumno_id=:a AND ci.sede_id=:s LIMIT 1 FOR UPDATE");
         $stmt->execute([':c'=>$cursoId,':a'=>$alumnoId,':s'=>$sedeId]);$rel=$stmt->fetch();
@@ -60,6 +64,7 @@ try {
         if($alumnoId===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Selecciona un alumno']);exit;}
         if($horarioId===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Selecciona un horario']);exit;}
         if(mb_strlen($observaciones)>1000){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Las observaciones no pueden exceder 1000 caracteres']);exit;}
+        intensivos_reconciliar_estados_sede($pdo,$sedeId);
         $pdo->beginTransaction();
         // El bloqueo por alumno serializa altas concurrentes y vuelve atómica la
         // regla de que una persona solo puede pertenecer a un intensivo activo.
