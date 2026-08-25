@@ -129,6 +129,7 @@
       };
       if (current.type === 'INTENSIVO' && current.courseId) body.curso_intensivo_id = current.courseId;
 
+      const currentType = current.type;
       const response = await fetch('/api/pagos-smart.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +139,7 @@
       if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo registrar el pago');
 
       close();
-      const concepto = current?.type === 'MENSUALIDAD' ? 'mensualidad · ' + (data.periodo_mensualidad?.etiqueta || label) : current?.type === 'INSCRIPCION' ? 'inscripción' : 'curso intensivo';
+      const concepto = currentType === 'MENSUALIDAD' ? 'mensualidad · ' + (data.periodo_mensualidad?.etiqueta || label) : currentType === 'INSCRIPCION' ? 'inscripción' : 'curso intensivo';
       alert('Pago registrado: ' + money(amount) + ' · ' + concepto);
       location.reload();
     } catch (error) {
