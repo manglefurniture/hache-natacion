@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
+require_once __DIR__.'/../config/periodos-financieros.php';
 $user=auth_require(['ADMIN']);
 $config=require __DIR__.'/../config/database.php';
 $pdo=new PDO(
@@ -19,12 +20,11 @@ function out(array $data,int $status=200):never
     exit;
 }
 
-function validMonth(string $period):string
+function exactDate(string $value):string
 {
-    if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$period))throw new InvalidArgumentException('Periodo inválido');
-    $date=DateTimeImmutable::createFromFormat('!Y-m-d',$period.'-01');
-    if(!$date||$date->format('Y-m')!==$period)throw new InvalidArgumentException('Periodo inválido');
-    return $period;
+    $date=DateTimeImmutable::createFromFormat('!Y-m-d',$value);
+    if(!$date||$date->format('Y-m-d')!==$value)throw new InvalidArgumentException('Fecha de cierre inválida');
+    return $value;
 }
 
 function activeSite(PDO $pdo):array
@@ -39,20 +39,10 @@ function activeSite(PDO $pdo):array
 
 function calculateClose(PDO $pdo,string $period,array $site):array
 {
-    [$year,$month]=array_map('intval',explode('-',$period));
-    $start=$period.'-01';
-    $end=(new DateTimeImmutable($start))->modify('last day of this month')->format('Y-m-d');
-    $sql="SELECT COUNT(*) pagos,COALESCE(SUM(p.importe),0) total,COALESCE(SUM(CASE WHEN p.tipo='MENSUALIDAD' THEN p.importe ELSE 0 END),0) mens,COALESCE(SUM(CASE WHEN p.tipo='INSCRIPCION' THEN p.importe ELSE 0 END),0) ins,COALESCE(SUM(CASE WHEN p.tipo='INTENSIVO' THEN p.importe ELSE 0 END),0) ints FROM pagos p LEFT JOIN mensualidades m ON m.id=p.mensualidad_id LEFT JOIN cursos_intensivos ci ON ci.id=p.intensivo_id LEFT JOIN inscripciones i ON i.id=p.inscripcion_id WHERE p.estado='VALIDO' AND ((p.tipo='MENSUALIDAD' AND m.sede_id=:s_m AND m.mes=:mes AND m.anio=:anio) OR (p.tipo='INTENSIVO' AND ci.sede_id=:s_ci AND ci.fecha_inicio BETWEEN :d_ci AND :h_ci) OR (p.tipo='INSCRIPCION' AND i.sede_id=:s_i AND i.fecha BETWEEN :d_i AND :h_i))";
-    $stmt=$pdo->prepare($sql);
-    $stmt->execute([
-        ':s_m'=>$site['id'],':mes'=>$month,':anio'=>$year,
-        ':s_ci'=>$site['id'],':d_ci'=>$start,':h_ci'=>$end,
-        ':s_i'=>$site['id'],':d_i'=>$start,':h_i'=>$end,
-    ]);
-    $row=$stmt->fetch();
-    $monthly=(float)$row['mens'];
-    $intensives=(float)$row['ints'];
-    $enrollments=(float)$row['ins'];
+    $totals=financiero_totales($pdo,$site,$period);
+    $monthly=(float)$totals['mensualidades_total'];
+    $intensives=(float)$totals['intensivos_total'];
+    $enrollments=(float)$totals['inscripciones_total'];
     $monthlyShare=(float)$site['porcentaje_mensualidad_socio']/100;
     $intensiveShare=(float)$site['porcentaje_intensivo_socio']/100;
     $enrollmentShare=(float)$site['porcentaje_inscripcion_socio']/100;
@@ -61,10 +51,11 @@ function calculateClose(PDO $pdo,string $period,array $site):array
     $minimum=$site['minimo_mensual_socio']!==null?(float)$site['minimo_mensual_socio']:0.0;
     return [
         'periodo'=>$period,
+        'rango'=>$totals['rango'],
         'sede'=>$site['clave'],
         'socio_nombre'=>$site['socio'],
-        'total'=>(float)$row['total'],
-        'pagos'=>(int)$row['pagos'],
+        'total'=>(float)$totals['total'],
+        'pagos'=>(int)$totals['pagos_count'],
         'mensualidades'=>$monthly,
         'inscripciones'=>$enrollments,
         'intensivos'=>$intensives,
@@ -76,20 +67,47 @@ function calculateClose(PDO $pdo,string $period,array $site):array
     ];
 }
 
+function closedPeriod(PDO $pdo,string $siteId,string $period):array|false
+{
+    $stmt=$pdo->prepare('SELECT c.*,u.usuario cerrado_por_usuario FROM cierres_mensuales c JOIN usuarios u ON u.id=c.cerrado_por WHERE c.sede_id=:site AND c.periodo=:period LIMIT 1');
+    $stmt->execute([':site'=>$siteId,':period'=>$period.'-01']);
+    return $stmt->fetch();
+}
+
 try{
     $site=activeSite($pdo);
     $method=$_SERVER['REQUEST_METHOD']??'GET';
     if($method==='GET'){
-        $period=validMonth(trim((string)($_GET['periodo']??date('Y-m'))));
+        $period=financiero_validar_periodo(trim((string)($_GET['periodo']??date('Y-m'))));
         $current=calculateClose($pdo,$period,$site);
-        $stmt=$pdo->prepare('SELECT c.*,u.usuario cerrado_por_usuario FROM cierres_mensuales c JOIN usuarios u ON u.id=c.cerrado_por WHERE c.sede_id=:site AND c.periodo=:period LIMIT 1');
-        $stmt->execute([':site'=>$site['id'],':period'=>$period.'-01']);
-        out(['ok'=>true,'sede'=>['clave'=>$site['clave'],'nombre'=>$site['nombre'],'socio'=>$site['socio']],'actual'=>$current,'cierre'=>$stmt->fetch()?:null]);
+        out(['ok'=>true,'sede'=>['clave'=>$site['clave'],'nombre'=>$site['nombre'],'socio'=>$site['socio']],'actual'=>$current,'cierre'=>closedPeriod($pdo,(string)$site['id'],$period)?:null]);
     }
     if($method!=='POST')out(['ok'=>false,'error'=>'Método no permitido'],405);
     $input=json_decode(file_get_contents('php://input'),true);
     if(!is_array($input))out(['ok'=>false,'error'=>'JSON inválido'],400);
-    $period=validMonth(trim((string)($input['periodo']??'')));
+    $period=financiero_validar_periodo(trim((string)($input['periodo']??'')));
+    $action=strtoupper(trim((string)($input['accion']??'CERRAR')));
+
+    if($action==='PERIODO'){
+        if(closedPeriod($pdo,(string)$site['id'],$period))out(['ok'=>false,'error'=>'No se puede modificar el rango de un mes ya cerrado.'],409);
+        $close=exactDate(trim((string)($input['fecha_cierre']??'')));
+        $calendarEnd=(new DateTimeImmutable($period.'-01'))->modify('last day of this month')->format('Y-m-d');
+        $currentRange=financiero_rango($pdo,(string)$site['id'],$period);
+        if($close<$currentRange['inicio']||$close>$calendarEnd)out(['ok'=>false,'error'=>'La fecha de cierre debe estar entre el inicio del periodo y el último día de su mes nominal.'],422);
+        $nextPeriod=financiero_periodo_siguiente($period);
+        $nextRange=financiero_rango($pdo,(string)$site['id'],$nextPeriod);
+        $nextStart=(new DateTimeImmutable($close))->modify('+1 day')->format('Y-m-d');
+        if($nextStart>$nextRange['cierre'])out(['ok'=>false,'error'=>'El cierre dejaría inválido el periodo siguiente.'],422);
+
+        $pdo->beginTransaction();
+        $stmt=$pdo->prepare('INSERT INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre,updated_by) VALUES(:s,:p,:i,:c,:u) ON DUPLICATE KEY UPDATE fecha_inicio=VALUES(fecha_inicio),fecha_cierre=VALUES(fecha_cierre),updated_by=VALUES(updated_by),updated_at=NOW()');
+        $stmt->execute([':s'=>$site['id'],':p'=>$period.'-01',':i'=>$currentRange['inicio'],':c'=>$close,':u'=>$user['id']]);
+        $stmt->execute([':s'=>$site['id'],':p'=>$nextPeriod.'-01',':i'=>$nextStart,':c'=>$nextRange['cierre'],':u'=>$user['id']]);
+        $pdo->commit();
+        out(['ok'=>true,'mensaje'=>'Periodo financiero actualizado','rango'=>financiero_rango($pdo,(string)$site['id'],$period),'siguiente'=>financiero_rango($pdo,(string)$site['id'],$nextPeriod)]);
+    }
+
+    if($action!=='CERRAR')out(['ok'=>false,'error'=>'Acción inválida'],422);
     $observation=trim((string)($input['observacion']??''));
     if(mb_strlen($observation)>1000)out(['ok'=>false,'error'=>'La observación no puede exceder 1000 caracteres'],422);
     $pdo->beginTransaction();
@@ -111,15 +129,15 @@ try{
     $pdo->commit();
     out(['ok'=>true,'mensaje'=>'Mes cerrado correctamente para '.$site['nombre'],'cierre'=>$current],201);
 }catch(InvalidArgumentException $e){
-    if($pdo->inTransaction())$pdo->rollBack();
+    if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();
     out(['ok'=>false,'error'=>$e->getMessage()],422);
 }catch(PDOException $e){
-    if($pdo->inTransaction())$pdo->rollBack();
+    if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();
     if((string)$e->getCode()==='23000')out(['ok'=>false,'error'=>'Ese mes ya está cerrado para esta sede.'],409);
     error_log('[cierres-mensuales] '.$e->getMessage());
     out(['ok'=>false,'error'=>'No se pudo guardar el cierre mensual'],500);
 }catch(Throwable $e){
-    if($pdo->inTransaction())$pdo->rollBack();
+    if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();
     error_log('[cierres-mensuales] '.$e->getMessage());
     out(['ok'=>false,'error'=>'No se pudo procesar el cierre mensual'],500);
 }
