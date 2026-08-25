@@ -45,6 +45,30 @@ if ($u['rol'] === 'VERIFICADOR') {
 
 if ($u['rol'] === 'ADMIN') {
     try {
+        require_once __DIR__ . '/intensivos-estado.php';
+        $sedeClaveIntensivos = auth_resolve_sede_clave(null);
+        $hoyIntensivos = intensivo_hoy_operativo()->format('Y-m-d');
+        $intensivosReconciliados = $_SESSION['hache_intensivos_reconciliados'][$sedeClaveIntensivos] ?? null;
+        if ($intensivosReconciliados !== $hoyIntensivos) {
+            $cfgIntensivos = require __DIR__ . '/database.php';
+            $pdoIntensivos = new PDO(
+                "mysql:host={$cfgIntensivos['host']};dbname={$cfgIntensivos['dbname']};charset={$cfgIntensivos['charset']}",
+                $cfgIntensivos['user'],
+                $cfgIntensivos['password'],
+                [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
+            );
+            $stIntensivos = $pdoIntensivos->prepare("SELECT id FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");
+            $stIntensivos->execute([':c'=>$sedeClaveIntensivos]);
+            if ($sedeIdIntensivos = $stIntensivos->fetchColumn()) {
+                intensivos_reconciliar_estados_sede($pdoIntensivos,(string)$sedeIdIntensivos);
+                $_SESSION['hache_intensivos_reconciliados'][$sedeClaveIntensivos] = $hoyIntensivos;
+            }
+        }
+    } catch (Throwable $e) { error_log('Hache estados intensivos: '.$e->getMessage()); }
+}
+
+if ($u['rol'] === 'ADMIN') {
+    try {
         require_once __DIR__ . '/reglas-acceso.php';
         $sedeClaveReglas = auth_resolve_sede_clave(null);
         $hoyReglas = date('Y-m-d');
@@ -65,7 +89,7 @@ ob_start(static function (string $html): string {
     if (stripos($html, '<html') === false || stripos($html, '<body') === false) return $html;
     $css = '<link rel="stylesheet" href="/assets/backend-menu.css">';
     $diag = '<script src="/assets/diagnostico.js?v=20260817-1"></script>';
-    $js = '<script src="/assets/backend-menu.js" defer></script>';
+    $js = '<script src="/assets/backend-menu.js?v=20260825-2" defer></script>';
     $oblig = '<script src="/assets/obligaciones-alumnos.js?v=20260821-1" defer></script>';
     $phone = '<script src="/assets/telefono-internacional.js?v=20260821-1" defer></script>';
     foreach ([['/assets/backend-menu.css',$css,'</head>'],['/assets/diagnostico.js',$diag,'</head>'],['/assets/backend-menu.js',$js,'</body>'],['/assets/obligaciones-alumnos.js',$oblig,'</body>'],['/assets/telefono-internacional.js',$phone,'</body>']] as [$needle,$tag,$close]) {

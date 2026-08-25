@@ -4,6 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
+require_once __DIR__.'/../config/intensivos-estado.php';
 $me=auth_require(['ADMIN','VERIFICADOR']);
 $config=require __DIR__.'/../config/database.php';
 
@@ -28,6 +29,7 @@ try{
     if($me['rol']==='ADMIN')regla_promover_planes_programados_sede($pdo,$sedeId);
 
     $alumnoId=trim((string)($_GET['alumno_id']??''));
+    $cursoId=trim((string)($_GET['curso_id']??''));
     $mes=(int)($_GET['mes']??date('n'));$anio=(int)($_GET['anio']??date('Y'));
     if($alumnoId==='')pago_contexto_out(['ok'=>false,'error'=>'alumno_id es obligatorio'],422);
     if($mes<1||$mes>12||$anio<2000||$anio>2100)pago_contexto_out(['ok'=>false,'error'=>'Periodo inválido'],422);
@@ -64,10 +66,20 @@ try{
         WHERE alumno_id=:a AND sede_id=:s AND estado='PENDIENTE' AND periodo_fin<:pi ORDER BY periodo_inicio DESC LIMIT 3");
     $st->execute([':a'=>$alumnoId,':s'=>$sedeId,':pi'=>$periodo['inicio']]);$pendientes=$st->fetchAll();
 
-    $st=$pdo->prepare("SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado FROM curso_intensivo_alumnos cia
+    $hoyIntensivo=intensivo_hoy_operativo()->format('Y-m-d');
+    $intensivoSql="SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,
+        EXISTS(SELECT 1 FROM pagos pg WHERE pg.alumno_id=cia.alumno_id AND pg.intensivo_id=ci.id AND pg.tipo='INTENSIVO' AND pg.estado='VALIDO') AS pagado
+        FROM curso_intensivo_alumnos cia
         INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
-        WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1");
-    $st->execute([':a'=>$alumnoId,':s'=>$sedeId]);$intensivo=$st->fetch()?:null;
+        WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=:hoy";
+    $intensivoParams=[':a'=>$alumnoId,':s'=>$sedeId,':hoy'=>$hoyIntensivo];
+    if($cursoId!==''){$intensivoSql.=" AND ci.id=:c";$intensivoParams[':c']=$cursoId;}
+    $intensivoSql.=" ORDER BY ci.fecha_inicio DESC LIMIT 1";
+    $st=$pdo->prepare($intensivoSql);$st->execute($intensivoParams);$intensivo=$st->fetch()?:null;
+    if($intensivo){
+        $intensivo['estado']=intensivo_estado_por_fechas((string)$intensivo['fecha_inicio'],(string)$intensivo['fecha_fin']);
+        $intensivo['pagado']=(int)($intensivo['pagado']??0)===1;
+    }
 
     $inscripcionPermitida=true;$proximaInscripcion=null;
     if($ultimaInscripcion){
