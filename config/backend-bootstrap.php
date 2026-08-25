@@ -43,7 +43,7 @@ if ($u['rol'] === 'VERIFICADOR') {
     if (in_array($currentPath, $adminOnly, true)) { header('Location: /dashboard.php'); exit; }
 }
 
-if (in_array($u['rol'], ['ADMIN','VERIFICADOR'], true)) {
+if ($u['rol'] === 'ADMIN') {
     try {
         require_once __DIR__ . '/intensivos-estado.php';
         $sedeClaveIntensivos = auth_resolve_sede_clave(null);
