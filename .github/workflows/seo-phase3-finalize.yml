@@ -1,0 +1,78 @@
+name: SEO Phase 3 Finalize
+
+on:
+  push:
+    branches:
+      - seo/fase-3-local-confianza-20260824
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-seo-local:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: seo/fase-3-local-confianza-20260824
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Aplicar ajustes finales de SEO local
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          home_path = Path('public/home.php')
+          home = home_path.read_text()
+
+          replacements = [
+              ('href="#metodo"', 'href="/metodologia.php"', 2),
+              ('<p>Un espacio amplio para aprender, entrenar y seguir mejorando.</p>', '<p>Un espacio amplio para aprender, entrenar y seguir mejorando. <a href="/monteverde.php"><strong>Conoce la sede PROA Monteverde →</strong></a></p>', 1),
+              ('<p>Una alberca cercana y funcional donde cada clase se convierte en progreso.</p>', '<p>Una alberca cercana y funcional donde cada clase se convierte en progreso. <a href="/palapas-protudec.php"><strong>Conoce la sede Palapas Protudec →</strong></a></p>', 1),
+              ('<p>El proceso se adapta a la experiencia de cada alumno, desde el primer contacto con el agua hasta el perfeccionamiento de técnica y estilos.</p>', '<p>El proceso se adapta a la experiencia de cada alumno, desde el primer contacto con el agua hasta el perfeccionamiento de técnica y estilos. <a href="/metodologia.php"><strong>Conoce cómo trabajamos →</strong></a></p>', 1),
+              ('    <a href="#sedes">Sedes</a>\n    <a href="#preguntas">Preguntas frecuentes</a>', '    <a href="/monteverde.php">PROA Monteverde</a>\n    <a href="/palapas-protudec.php">Palapas Protudec</a>\n    <a href="/metodologia.php">Cómo trabajamos</a>\n    <a href="#preguntas">Preguntas frecuentes</a>', 1),
+          ]
+
+          for old, new, expected in replacements:
+              count = home.count(old)
+              if count != expected:
+                  raise SystemExit(f'home.php: se esperaban {expected} coincidencias de {old!r} y aparecieron {count}')
+              home = home.replace(old, new)
+          home_path.write_text(home)
+
+          for filename in ['public/monteverde.php', 'public/palapas-protudec.php']:
+              path = Path(filename)
+              text = path.read_text()
+              same_as = '''\n        ,"sameAs": []'''
+              # Eliminar el bloque sameAs solo si coincide con los dos perfiles heredados.
+              pattern_same = re.compile(r',\n        "sameAs": \[\n          "https://www\.instagram\.com/hache\.natacion/",\n          "https://www\.facebook\.com/share/1C24ty435B/"\n        \]')
+              text, n = pattern_same.subn('', text)
+              if n != 1:
+                  raise SystemExit(f'{filename}: se esperaba retirar exactamente un bloque sameAs y se retiraron {n}')
+              path.write_text(text)
+
+          for filename in ['public/monteverde.php', 'public/palapas-protudec.php', 'public/metodologia.php']:
+              path = Path(filename)
+              text = path.read_text()
+              pattern_breadcrumb = re.compile(r',\n      \{\n        "@type": "BreadcrumbList",[\s\S]*?\n      \}\n    \]')
+              text, n = pattern_breadcrumb.subn('\n    ]', text)
+              if n != 1:
+                  raise SystemExit(f'{filename}: se esperaba retirar exactamente un BreadcrumbList y se retiraron {n}')
+              path.write_text(text)
+          PY
+      - name: Ejecutar regresiones
+        run: npm test
+      - name: Verificar diff
+        run: git diff --check
+      - name: Consolidar cambios y retirar automatización temporal
+        run: |
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git rm .github/workflows/seo-phase3-finalize.yml
+          git add public/home.php public/monteverde.php public/palapas-protudec.php public/metodologia.php
+          git commit -m "SEO: enlazar sedes y alinear schema con contenido visible"
+          git push origin HEAD:seo/fase-3-local-confianza-20260824
