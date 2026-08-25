@@ -55,9 +55,12 @@ assert.ok(paymentCore.includes('Este alumno ya pagó este curso intensivo'), 'De
 
 // El pago rápido del listado general mantiene su preflight añadido previamente.
 assert.ok(quickPay.includes('/api/intensivo-pago-estado.php?'), 'El pago rápido debe refrescar el estado del intensivo');
-const preflight = quickPay.indexOf('consultarEstadoIntensivo(current.id, current.courseId)');
+const preflight = quickPay.indexOf('consultarEstadoIntensivo(target.id, target.courseId)');
 const submit = quickPay.indexOf("fetch('/api/pagos-smart.php'", preflight);
 assert.ok(preflight >= 0 && submit > preflight, 'Debe volver a comprobar el estado antes de registrar un pago intensivo');
+assert.ok(quickPay.includes('const target = current'), 'El pago rápido debe congelar el objetivo antes de esperar');
+assert.ok(quickPay.includes('const pagado = await consultarEstadoIntensivo(target.id, target.courseId)'), 'La comprobación debe usar el objetivo congelado');
+assert.ok(quickPay.includes('if (current !== target) return;'), 'La operación debe abortar si el modal cambia durante la espera');
 
 // La regla temporal debe ser única, acotada por sede y usar explícitamente la fecha operativa de Cancún.
 assert.ok(statusRules.includes('function intensivo_hoy_operativo'));
@@ -96,6 +99,8 @@ assert.ok(bootstrap.includes("require_once __DIR__ . '/intensivos-estado.php'"))
 assert.ok(bootstrap.includes("$hoyIntensivos = intensivo_hoy_operativo()->format('Y-m-d')"));
 assert.ok(bootstrap.includes("$_SESSION['hache_intensivos_reconciliados']"));
 assert.ok(bootstrap.includes('intensivos_reconciliar_estados_sede'));
+assert.ok(paymentCore.includes("require_once __DIR__.'/../config/intensivos-estado.php'"));
+assert.ok(paymentCore.includes("if($tipo==='INTENSIVO')intensivos_reconciliar_estados_sede($pdo,$sedeId)"), 'El pago intensivo debe reconciliar su estado dentro de la transacción');
 
 // Forzar assets nuevos evita que el navegador siga ejecutando el JS anterior con Pagar siempre visible.
 assert.ok(backendMenu.includes("const ASSET_VERSION='20260825-2'"));

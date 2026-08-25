@@ -23,17 +23,17 @@ function borrar_por_alumno(PDO $pdo,string $tabla,string $alumnoId):int
 }
 function periodos_cerrados_alumno(PDO $pdo,string $alumnoId,string $sedeId):array
 {
-    $st=$pdo->prepare("SELECT p.tipo,DATE(p.fecha) fecha_pago,m.mes,m.anio,i.fecha inscripcion_fecha,ci.fecha_inicio intensivo_fecha FROM pagos p LEFT JOIN mensualidades m ON m.id=p.mensualidad_id LEFT JOIN inscripciones i ON i.id=p.inscripcion_id LEFT JOIN cursos_intensivos ci ON ci.id=p.intensivo_id WHERE p.alumno_id=:a AND p.estado='VALIDO' FOR UPDATE");$st->execute([':a'=>$alumnoId]);
+    $st=$pdo->prepare("SELECT p.tipo,DATE(p.fecha) fecha_pago,p.created_at,p.invalidated_at,m.mes,m.anio,i.fecha inscripcion_fecha,ci.fecha_inicio intensivo_fecha FROM pagos p LEFT JOIN mensualidades m ON m.id=p.mensualidad_id LEFT JOIN inscripciones i ON i.id=p.inscripcion_id LEFT JOIN cursos_intensivos ci ON ci.id=p.intensivo_id WHERE p.alumno_id=:a FOR UPDATE");$st->execute([':a'=>$alumnoId]);
     $periodos=[];foreach($st->fetchAll() as $p){
         if($p['tipo']==='MENSUALIDAD'&&!empty($p['mes'])&&!empty($p['anio']))$periodo=sprintf('%04d-%02d',(int)$p['anio'],(int)$p['mes']);
         elseif($p['tipo']==='INTENSIVO'&&!empty($p['intensivo_fecha']))$periodo=financiero_periodo_para_fecha($pdo,$sedeId,(string)$p['intensivo_fecha']);
         elseif($p['tipo']==='INSCRIPCION'&&!empty($p['inscripcion_fecha']))$periodo=financiero_periodo_para_fecha($pdo,$sedeId,(string)$p['inscripcion_fecha']);
         else $periodo=financiero_periodo_para_fecha($pdo,$sedeId,(string)$p['fecha_pago']);
-        $periodos[$periodo]=true;
+        $periodos[$periodo][]=$p;
     }
     if(!$periodos)return [];
-    $cerrados=[];$st=$pdo->prepare("SELECT 1 FROM cierres_mensuales WHERE sede_id=:s AND periodo=:p LIMIT 1 FOR UPDATE");
-    foreach(array_keys($periodos) as $periodo){$st->execute([':s'=>$sedeId,':p'=>$periodo.'-01']);if($st->fetchColumn())$cerrados[]=$periodo;}
+    $cerrados=[];$st=$pdo->prepare("SELECT cerrado_at FROM cierres_mensuales WHERE sede_id=:s AND periodo=:p LIMIT 1 FOR UPDATE");
+    foreach($periodos as $periodo=>$pagos){$st->execute([':s'=>$sedeId,':p'=>$periodo.'-01']);$cerradoAt=$st->fetchColumn();if($cerradoAt===false)continue;foreach($pagos as $p){if((string)$p['created_at']<=(string)$cerradoAt&&($p['invalidated_at']===null||(string)$p['invalidated_at']>(string)$cerradoAt)){$cerrados[]=$periodo;break;}}}
     sort($cerrados);return $cerrados;
 }
 function borrar_suscripciones_usuario(PDO $pdo,array $usuarios):int
@@ -70,13 +70,15 @@ try{
     if($accion==='BAJA'){$stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='BAJA',updated_at=NOW() WHERE id=:id AND sede_id=:s");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$pdo->commit();echo json_encode(['ok'=>true,'estado'=>'BAJA','mensaje'=>'Alumno dado de baja'],JSON_UNESCAPED_UNICODE);exit;}
     if($accion==='REACTIVAR'){$stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:id AND sede_id=:s");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$resultado=regla_recalcular_alumno($pdo,$alumnoId);$nuevo=(string)($resultado['estado']??'PENDIENTE');$pdo->commit();echo json_encode(['ok'=>true,'estado'=>$nuevo,'mensaje'=>$nuevo==='ACTIVO'?'Alumno reactivado con obligaciones vigentes':'Alumno reabierto como pendiente hasta cubrir sus obligaciones vigentes'],JSON_UNESCAPED_UNICODE);exit;}
 
-    $cerrados=periodos_cerrados_alumno($pdo,$alumnoId,$sedeId);if($cerrados){$pdo->rollBack();http_response_code(409);echo json_encode(['ok'=>false,'error'=>'No se puede eliminar definitivamente: el alumno tiene pagos válidos incluidos en un cierre mensual ya congelado. Usa Dar de baja o una corrección contable.','periodos_cerrados'=>$cerrados],JSON_UNESCAPED_UNICODE);exit;}
+    $cerrados=periodos_cerrados_alumno($pdo,$alumnoId,$sedeId);if($cerrados){$pdo->rollBack();http_response_code(409);echo json_encode(['ok'=>false,'error'=>'No se puede eliminar definitivamente: el alumno tiene pagos que formaron parte de un cierre mensual ya congelado. Usa Dar de baja o una corrección contable.','periodos_cerrados'=>$cerrados],JSON_UNESCAPED_UNICODE);exit;}
 
     $usuarios=[];if(tabla_tiene_columna($pdo,'usuarios','alumno_id')){$st=$pdo->prepare("SELECT id FROM usuarios WHERE alumno_id=:a FOR UPDATE");$st->execute([':a'=>$alumnoId]);$usuarios=array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN));}
+    $responsables=[];if(tabla_tiene_columna($pdo,'alumno_responsable','responsable_id')&&tabla_tiene_columna($pdo,'responsables','id')){$st=$pdo->prepare("SELECT responsable_id FROM alumno_responsable WHERE alumno_id=:a FOR UPDATE");$st->execute([':a'=>$alumnoId]);$responsables=array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN));}
     $detalle=[];
     foreach(['pagos','reposiciones_regulares','asistencias','ausencias','avisos_ausencia','notificaciones','mensajes','notification_events','registros_publicos'] as $tabla){$n=borrar_por_alumno($pdo,$tabla,$alumnoId);if($n)$detalle[$tabla]=$n;}
     if($usuarios&&tabla_tiene_columna($pdo,'historial','usuario_id')){$marks=implode(',',array_fill(0,count($usuarios),'?'));$st=$pdo->prepare("DELETE FROM historial WHERE alumno_id=? OR usuario_id IN ($marks)");$st->execute(array_merge([$alumnoId],$usuarios));$n=$st->rowCount();if($n)$detalle['historial']=$n;}else{$n=borrar_por_alumno($pdo,'historial',$alumnoId);if($n)$detalle['historial']=$n;}
     foreach(['alumno_reglas_negocio','curso_intensivo_alumnos','mensualidades','inscripciones','alumno_responsable'] as $tabla){$n=borrar_por_alumno($pdo,$tabla,$alumnoId);if($n)$detalle[$tabla]=$n;}
+    if($responsables){$marks=implode(',',array_fill(0,count($responsables),'?'));$st=$pdo->prepare("DELETE r FROM responsables r LEFT JOIN alumno_responsable ar ON ar.responsable_id=r.id WHERE r.id IN ($marks) AND ar.responsable_id IS NULL");$st->execute($responsables);if($st->rowCount())$detalle['responsables']=$st->rowCount();}
     if(tabla_tiene_columna($pdo,'cursos_intensivos','alumno_id')){$st=$pdo->prepare("UPDATE cursos_intensivos SET alumno_id=NULL WHERE alumno_id=:a");$st->execute([':a'=>$alumnoId]);if($st->rowCount())$detalle['cursos_intensivos_legacy_desvinculados']=$st->rowCount();}
     $n=borrar_suscripciones_usuario($pdo,$usuarios);if($n)$detalle['push_subscriptions']=$n;
     if($usuarios){$marks=implode(',',array_fill(0,count($usuarios),'?'));$st=$pdo->prepare("DELETE FROM usuarios WHERE id IN ($marks)");$st->execute($usuarios);if($st->rowCount())$detalle['usuarios']=$st->rowCount();}

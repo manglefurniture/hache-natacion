@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 $me=auth_require(['ADMIN']);
 require_once __DIR__.'/../config/reglas-acceso.php';
+require_once __DIR__.'/../config/intensivos-estado.php';
 $config=require __DIR__.'/../config/database.php';
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST'){http_response_code(405);header('Allow: POST');echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);exit;}
 
@@ -43,6 +44,7 @@ $stmt=$pdo->prepare("SELECT id FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");
 regla_promover_planes_programados_sede($pdo,$sedeId);
 $pdo->beginTransaction();
 $stmt=$pdo->prepare("SELECT a.id,a.sede_id,s.clave sede_clave,a.ciclo_pago,a.nombre,a.plan_actual_id,a.plan_programado_id,a.plan_programado_desde,a.horario_preferido_id,p.nombre plan_nombre,p.precio plan_precio,pp.nombre plan_programado_nombre,pp.precio plan_programado_precio FROM alumnos a JOIN sedes s ON s.id=a.sede_id LEFT JOIN planes p ON p.id=a.plan_actual_id AND p.sede_id=a.sede_id LEFT JOIN planes pp ON pp.id=a.plan_programado_id AND pp.sede_id=a.sede_id WHERE a.id=:id AND a.sede_id=:s LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$alumno=$stmt->fetch();if(!$alumno){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Alumno no encontrado en la sede seleccionada']);exit;}
+if($tipo==='INTENSIVO')intensivos_reconciliar_estados_sede($pdo,$sedeId);
 $ciclo=$alumno['ciclo_pago']!==null?strtoupper((string)$alumno['ciclo_pago']):null;
 if($sedeClave==='PALAPAS'&&$tipo==='MENSUALIDAD'&&!in_array($ciclo,['P1','P15'],true))throw new RuntimeException('El alumno regular de Palapas no tiene ciclo P1/P15 definido');
 if($tipo==='MENSUALIDAD'&&!$periodoExplicito){$actual=regla_periodo_regular_actual($sedeClave,$ciclo,$fechaPago);$periodoMes=(int)$actual['mes'];$periodoAnio=(int)$actual['anio'];}

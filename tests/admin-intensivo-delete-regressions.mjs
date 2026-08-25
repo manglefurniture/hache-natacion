@@ -21,9 +21,16 @@ assert.match(altaUi, /horario_intensivo_id/);
 assert.match(alta, /INSERT INTO curso_intensivo_alumnos/);
 assert.match(alta, /intensivo_inscripcion_abierta/);
 assert.match(intensivo, /La ventana de inscripción de este curso cerró/);
+assert.doesNotMatch(intensivo, /UPDATE alumnos SET plan_actual_id=NULL/);
+assert.match(intensivo, /UPDATE alumnos SET estado_administrativo='PENDIENTE'/);
 
 assert.match(gestion, /password_verify\(\$password,\$hash\)/);
 assert.match(gestion, /periodos_cerrados_alumno/);
+assert.match(gestion, /p\.created_at,p\.invalidated_at/);
+assert.match(gestion, /\$p\['invalidated_at'\]===null\|\|\(string\)\$p\['invalidated_at'\]>\(string\)\$cerradoAt/);
+assert.match(gestion, /SELECT responsable_id FROM alumno_responsable WHERE alumno_id=:a FOR UPDATE/);
+assert.match(gestion, /DELETE r FROM responsables r LEFT JOIN alumno_responsable ar/);
+assert.match(gestion, /ar\.responsable_id IS NULL/);
 assert.match(gestion, /foreach\(\['pagos','reposiciones_regulares','asistencias'/);
 assert.match(gestion, /\$n=borrar_por_alumno\(\$pdo,\$tabla,\$alumnoId\)/);
 assert.match(gestion, /DELETE FROM alumnos WHERE id=:id AND sede_id=:s/);
