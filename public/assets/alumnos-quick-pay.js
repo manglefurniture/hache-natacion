@@ -63,6 +63,7 @@
   }
 
   let current = null;
+  let inFlight = null;
 
   function open(btn) {
     ensureModal();
@@ -81,7 +82,7 @@
     document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad de ' + label + ' · importe sugerido según plan';
     document.getElementById('hqp-amount').value = Number(current.price || 0);
     document.getElementById('hqp-error').style.display = 'none';
-    document.getElementById('hqp-save').disabled = false;
+    document.getElementById('hqp-save').disabled = inFlight !== null;
     document.getElementById('hqp-more').href = '/pagos.php?alumno_id=' + encodeURIComponent(current.id) + '&tipo=' + encodeURIComponent(current.type) + (intensive && current.courseId ? '&curso_intensivo_id=' + encodeURIComponent(current.courseId) : '');
     document.getElementById('hache-quick-pay').style.display = 'flex';
   }
@@ -96,6 +97,8 @@
     if (!current) return;
 
     const target = current;
+    if (inFlight) return;
+    inFlight = target;
     const err = document.getElementById('hqp-error');
     const amount = document.getElementById('hqp-amount').value;
     const method = document.getElementById('hqp-method').value;
@@ -140,16 +143,21 @@
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo registrar el pago');
+      if (current !== target) return;
 
       close();
       const concepto = currentType === 'MENSUALIDAD' ? 'mensualidad · ' + (data.periodo_mensualidad?.etiqueta || label) : currentType === 'INSCRIPCION' ? 'inscripción' : 'curso intensivo';
       alert('Pago registrado: ' + money(amount) + ' · ' + concepto);
       location.reload();
     } catch (error) {
+      if (current !== target) return;
       err.textContent = error.message;
       err.style.display = 'block';
     } finally {
-      if (current === target) btn.disabled = false;
+      if (inFlight === target) {
+        inFlight = null;
+        if (current) btn.disabled = false;
+      }
     }
   }
 

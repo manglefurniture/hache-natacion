@@ -27,7 +27,7 @@ assert.match(intensivo, /UPDATE alumnos SET estado_administrativo='PENDIENTE'/);
 assert.match(gestion, /password_verify\(\$password,\$hash\)/);
 assert.match(gestion, /periodos_cerrados_alumno/);
 assert.match(gestion, /p\.created_at,p\.invalidated_at/);
-assert.match(gestion, /\$p\['invalidated_at'\]===null\|\|\(string\)\$p\['invalidated_at'\]>\(string\)\$cerradoAt/);
+assert.match(gestion, /\$p\['invalidated_at'\]===null\|\|\(string\)\$p\['invalidated_at'\]>=\(string\)\$cerradoAt/, 'Una invalidación en el mismo segundo del cierre debe conservar el pago por falta de orden fiable');
 assert.match(gestion, /SELECT responsable_id FROM alumno_responsable WHERE alumno_id=:a FOR UPDATE/);
 assert.match(gestion, /DELETE r FROM responsables r LEFT JOIN alumno_responsable ar/);
 assert.match(gestion, /ar\.responsable_id IS NULL/);
