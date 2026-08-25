@@ -88,6 +88,9 @@ assert.match(metodologia, /href="\/monteverde\.php"/);
 assert.match(metodologia, /href="\/palapas-protudec\.php"/);
 
 assert.match(bootstrap, /X-Robots-Tag: noindex, nofollow, noarchive/);
+for (const route of ['/monteverde.php', '/palapas-protudec.php', '/metodologia.php']) {
+  assert.ok(bootstrap.includes(`'${route}'`), `${route} debe estar en la allowlist pública de backend-bootstrap.php`);
+}
 assert.match(login, /<meta name="robots" content="noindex,nofollow,noarchive">/);
 assert.equal(
   robots,
