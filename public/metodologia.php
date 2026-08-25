@@ -47,14 +47,6 @@ declare(strict_types=1);
           "url": "https://hnatacion.com/",
           "telephone": "+52 990 230 8165"
         }
-      },
-      {
-        "@type": "BreadcrumbList",
-        "@id": "https://hnatacion.com/metodologia.php#breadcrumb",
-        "itemListElement": [
-          {"@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://hnatacion.com/"},
-          {"@type": "ListItem", "position": 2, "name": "Cómo trabajamos", "item": "https://hnatacion.com/metodologia.php"}
-        ]
       }
     ]
   }

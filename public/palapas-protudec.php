@@ -46,11 +46,7 @@ declare(strict_types=1);
           "addressLocality": "Cancún",
           "addressRegion": "Quintana Roo",
           "addressCountry": "MX"
-        },
-        "sameAs": [
-          "https://www.instagram.com/hache.natacion/",
-          "https://www.facebook.com/share/1C24ty435B/"
-        ]
+        }
       },
       {
         "@type": "WebPage",
@@ -59,14 +55,6 @@ declare(strict_types=1);
         "name": "Clases de natación en Palapas Protudec, Cancún | Hache Natación",
         "inLanguage": "es-MX",
         "about": {"@id": "https://hnatacion.com/palapas-protudec.php#location"}
-      },
-      {
-        "@type": "BreadcrumbList",
-        "@id": "https://hnatacion.com/palapas-protudec.php#breadcrumb",
-        "itemListElement": [
-          {"@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://hnatacion.com/"},
-          {"@type": "ListItem", "position": 2, "name": "Palapas Protudec", "item": "https://hnatacion.com/palapas-protudec.php"}
-        ]
       }
     ]
   }
