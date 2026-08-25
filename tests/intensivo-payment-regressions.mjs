@@ -42,7 +42,8 @@ assert.ok(detailFlow.slice(paidBranch, payLink).includes('}else{'), 'Pagar debe 
 assert.match(paymentContext, /pg\.alumno_id=cia\.alumno_id AND pg\.intensivo_id=ci\.id AND pg\.tipo='INTENSIVO' AND pg\.estado='VALIDO'/);
 assert.ok(paymentContext.includes("$cursoId=trim((string)($_GET['curso_id']??''))"));
 assert.ok(paymentContext.includes("$intensivo['pagado']=(int)($intensivo['pagado']??0)===1"));
-assert.ok(paymentContext.includes('ci.fecha_fin>=CURDATE()'), 'El contexto no debe depender de un estado persistido potencialmente viejo');
+assert.ok(paymentContext.includes("$hoyIntensivo=intensivo_hoy_operativo()->format('Y-m-d')"));
+assert.ok(paymentContext.includes('ci.fecha_fin>=:hoy'), 'El contexto no debe depender de un estado persistido ni del huso horario de MariaDB');
 assert.ok(paymentUi.includes("cursoParam=cursoId?'&curso_id='+encodeURIComponent(cursoId):''"));
 assert.ok(paymentUi.includes("tipo==='INTENSIVO'&&ctx.intensivo_activo?.pagado"));
 assert.ok(paymentUi.includes('Este curso intensivo ya está pagado.'));
@@ -58,7 +59,9 @@ const preflight = quickPay.indexOf('consultarEstadoIntensivo(current.id, current
 const submit = quickPay.indexOf("fetch('/api/pagos-smart.php'", preflight);
 assert.ok(preflight >= 0 && submit > preflight, 'Debe volver a comprobar el estado antes de registrar un pago intensivo');
 
-// La regla temporal debe ser única, acotada por sede y no depender de etiquetas guardadas a mano.
+// La regla temporal debe ser única, acotada por sede y usar explícitamente la fecha operativa de Cancún.
+assert.ok(statusRules.includes('function intensivo_hoy_operativo'));
+assert.ok(statusRules.includes("new DateTimeZone('America/Cancun')"));
 assert.ok(statusRules.includes('function intensivo_estado_por_fechas'));
 assert.ok(statusRules.includes('function intensivos_reconciliar_estados_sede'));
 assert.ok(statusRules.includes("if ($hoy < $fechaInicio)"));
@@ -67,16 +70,17 @@ assert.ok(statusRules.includes("return 'TERMINADO'"));
 assert.ok(statusRules.includes('WHERE sede_id = :s'));
 assert.ok(statusRules.includes('AND estado <> CASE'));
 
-// Ejecutar PHP real para verificar los cuatro límites de fecha.
+// Ejecutar PHP real para verificar los cuatro límites de fecha y el huso operativo.
 const helperPath = path.join(root, 'config/intensivos-estado.php');
 const phpProgram = `require ${JSON.stringify(helperPath)}; echo json_encode([
   intensivo_estado_por_fechas('2026-08-26','2026-09-13',new DateTimeImmutable('2026-08-25')),
   intensivo_estado_por_fechas('2026-08-25','2026-09-12',new DateTimeImmutable('2026-08-25')),
   intensivo_estado_por_fechas('2026-08-01','2026-08-25',new DateTimeImmutable('2026-08-25')),
-  intensivo_estado_por_fechas('2026-08-01','2026-08-24',new DateTimeImmutable('2026-08-25'))
+  intensivo_estado_por_fechas('2026-08-01','2026-08-24',new DateTimeImmutable('2026-08-25')),
+  intensivo_hoy_operativo()->getTimezone()->getName()
 ]);`;
 const boundaryStates = JSON.parse(execFileSync('php', ['-r', phpProgram], { encoding: 'utf8' }));
-assert.deepEqual(boundaryStates, ['PROGRAMADO','EN_CURSO','EN_CURSO','TERMINADO']);
+assert.deepEqual(boundaryStates, ['PROGRAMADO','EN_CURSO','EN_CURSO','TERMINADO','America/Cancun']);
 
 // Los listados derivan el estado al leer y las altas usan la misma regla.
 assert.ok(intensivesApi.includes('intensivo_estado_por_fechas((string)$row'));
@@ -89,6 +93,7 @@ assert.ok(detailApi.includes('intensivos_reconciliar_estados_sede($pdo,$sedeId)'
 // La reconciliación diaria es independiente de la antigua reconciliación de alumnos,
 // para que una actualización desplegada a mitad del día se aplique de inmediato.
 assert.ok(bootstrap.includes("require_once __DIR__ . '/intensivos-estado.php'"));
+assert.ok(bootstrap.includes("$hoyIntensivos = intensivo_hoy_operativo()->format('Y-m-d')"));
 assert.ok(bootstrap.includes("$_SESSION['hache_intensivos_reconciliados']"));
 assert.ok(bootstrap.includes('intensivos_reconciliar_estados_sede'));
 
