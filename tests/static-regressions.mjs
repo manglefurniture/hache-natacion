@@ -145,6 +145,12 @@ test('Sharky acepta una clave por entorno o archivo env sin exponerla', () => {
   excludes('public/api/sharky.php', "file_get_contents($keyFile)");
 });
 
+test('el formulario público muestra el aviso de privacidad antes de enviarse', () => {
+  includes('public/assets/telefono-internacional.js', "location.pathname!=='/registro.php'");
+  includes('public/assets/telefono-internacional.js', 'Política de privacidad');
+  includes('public/assets/telefono-internacional.js', 'form.appendChild(notice)');
+});
+
 test('mensajes quedan ligados a sede por migración y aplicación', () => {
   const migration = read('database/migrations/20260822_integrity_support.sql');
   assert.match(migration, /ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS sede_id/);

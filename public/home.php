@@ -380,7 +380,7 @@ declare(strict_types=1);
     <button class="hachi-close" id="hachiClose" type="button" aria-label="Cerrar Sharky">×</button>
   </header>
   <div class="hachi-chat" id="hachiChat" aria-live="polite"></div>
-  <footer class="hachi-foot"><button class="hachi-reset" id="hachiReset" type="button">Nueva conversación</button></footer>
+  <footer class="hachi-foot"><a href="/privacidad/" style="display:block;margin:0 0 8px;color:#527087;font-size:12px;text-align:center">Privacidad</a><button class="hachi-reset" id="hachiReset" type="button">Nueva conversación</button></footer>
 </section>
 
 <script>
@@ -400,6 +400,9 @@ button.addEventListener('click', event => {
 menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => setMenu(false)));
 document.addEventListener('click', () => {
   if (menuOpen) setMenu(false);
+});
+window.matchMedia('(min-width: 761px)').addEventListener('change', event => {
+  if (event.matches) setMenu(false);
 });
 window.addEventListener('scroll', () => {
   if (menuOpen) setMenu(false);

@@ -100,6 +100,7 @@ try{
         if($nextStart>$nextRange['cierre'])out(['ok'=>false,'error'=>'El cierre dejaría inválido el periodo siguiente.'],422);
 
         $pdo->beginTransaction();
+        if(closedPeriod($pdo,(string)$site['id'],$nextPeriod)){$pdo->rollBack();out(['ok'=>false,'error'=>'No se puede modificar este periodo porque cambiaría el inicio de un mes siguiente ya cerrado.'],409);}
         $stmt=$pdo->prepare('INSERT INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre,updated_by) VALUES(:s,:p,:i,:c,:u) ON DUPLICATE KEY UPDATE fecha_inicio=VALUES(fecha_inicio),fecha_cierre=VALUES(fecha_cierre),updated_by=VALUES(updated_by),updated_at=NOW()');
         $stmt->execute([':s'=>$site['id'],':p'=>$period.'-01',':i'=>$currentRange['inicio'],':c'=>$close,':u'=>$user['id']]);
         $stmt->execute([':s'=>$site['id'],':p'=>$nextPeriod.'-01',':i'=>$nextStart,':c'=>$nextRange['cierre'],':u'=>$user['id']]);

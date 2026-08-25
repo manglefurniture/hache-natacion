@@ -67,6 +67,8 @@ assert.match(home, /<meta name="description" content="Clases de natación en Can
 assert.match(home, /href="\/monteverde\.php"/);
 assert.match(home, /href="\/palapas-protudec\.php"/);
 assert.match(home, /href="\/metodologia\.php"/);
+assert.match(home, /window\.matchMedia\('\(min-width: 761px\)'\)/);
+assert.match(home, /<a href="\/privacidad\/" style="display:block;margin:0 0 8px;color:#527087;font-size:12px;text-align:center">Privacidad<\/a>/);
 
 assert.match(intensive, /<title>Curso intensivo de natación para adultos en Cancún \| Hache<\/title>/);
 assert.match(regular, /<title>Clases de natación para adultos en Cancún \| Plan regular<\/title>/);

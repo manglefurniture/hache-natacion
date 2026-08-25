@@ -18,10 +18,10 @@ CREATE TABLE IF NOT EXISTS periodos_financieros (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Regla operativa aprobada: agosto 2026 cierra el 30 y septiembre comienza el 31 de agosto.
-INSERT INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre)
+INSERT IGNORE INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre)
 SELECT id,'2026-08-01','2026-08-01','2026-08-30' FROM sedes WHERE activo=1
-ON DUPLICATE KEY UPDATE fecha_inicio=VALUES(fecha_inicio),fecha_cierre=VALUES(fecha_cierre);
+;
 
-INSERT INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre)
+INSERT IGNORE INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre)
 SELECT id,'2026-09-01','2026-08-31','2026-09-30' FROM sedes WHERE activo=1
-ON DUPLICATE KEY UPDATE fecha_inicio=VALUES(fecha_inicio),fecha_cierre=VALUES(fecha_cierre);
+;

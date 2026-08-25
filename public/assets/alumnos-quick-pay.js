@@ -66,14 +66,14 @@
 
   function open(btn) {
     ensureModal();
-    current = {
+    current = Object.freeze({
       id: btn.dataset.id,
       name: btn.dataset.name,
       price: btn.dataset.price,
       type: (btn.dataset.paymentType || 'MENSUALIDAD').toUpperCase(),
       courseId: btn.dataset.courseId || '',
       trigger: btn
-    };
+    });
 
     const intensive = current.type === 'INTENSIVO';
     const inscription = current.type === 'INSCRIPCION';
@@ -81,6 +81,7 @@
     document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad de ' + label + ' · importe sugerido según plan';
     document.getElementById('hqp-amount').value = Number(current.price || 0);
     document.getElementById('hqp-error').style.display = 'none';
+    document.getElementById('hqp-save').disabled = false;
     document.getElementById('hqp-more').href = '/pagos.php?alumno_id=' + encodeURIComponent(current.id) + '&tipo=' + encodeURIComponent(current.type) + (intensive && current.courseId ? '&curso_intensivo_id=' + encodeURIComponent(current.courseId) : '');
     document.getElementById('hache-quick-pay').style.display = 'flex';
   }
@@ -94,6 +95,7 @@
   async function save() {
     if (!current) return;
 
+    const target = current;
     const err = document.getElementById('hqp-error');
     const amount = document.getElementById('hqp-amount').value;
     const method = document.getElementById('hqp-method').value;
@@ -102,11 +104,12 @@
     err.style.display = 'none';
 
     try {
-      if (current.type === 'INTENSIVO' && current.courseId) {
+      if (target.type === 'INTENSIVO' && target.courseId) {
         try {
-          const pagado = await consultarEstadoIntensivo(current.id, current.courseId);
+          const pagado = await consultarEstadoIntensivo(target.id, target.courseId);
+          if (current !== target) return;
           if (pagado) {
-            const trigger = current.trigger;
+            const trigger = target.trigger;
             marcarIntensivoPagado(trigger);
             close();
             alert('Este curso intensivo ya aparece pagado. No se registrará otro cobro.');
@@ -120,16 +123,16 @@
       const local = new Date();
       const fecha = local.getFullYear() + '-' + String(local.getMonth() + 1).padStart(2, '0') + '-' + String(local.getDate()).padStart(2, '0') + ' ' + String(local.getHours()).padStart(2, '0') + ':' + String(local.getMinutes()).padStart(2, '0') + ':00';
       const body = {
-        alumno_id: current.id,
-        tipo: current.type,
+        alumno_id: target.id,
+        tipo: target.type,
         importe: amount,
         metodo: method,
         fecha,
         observacion: ''
       };
-      if (current.type === 'INTENSIVO' && current.courseId) body.curso_intensivo_id = current.courseId;
+      if (target.type === 'INTENSIVO' && target.courseId) body.curso_intensivo_id = target.courseId;
 
-      const currentType = current.type;
+      const currentType = target.type;
       const response = await fetch('/api/pagos-smart.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -146,7 +149,7 @@
       err.textContent = error.message;
       err.style.display = 'block';
     } finally {
-      btn.disabled = false;
+      if (current === target) btn.disabled = false;
     }
   }
 
