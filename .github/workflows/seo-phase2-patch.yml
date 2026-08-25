@@ -1,0 +1,36 @@
+name: SEO Phase 2 Patch
+
+on:
+  push:
+    branches:
+      - seo/fase-2-onpage-20260824
+
+permissions:
+  contents: write
+
+jobs:
+  apply-seo-home:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Aplicar cambios SEO controlados
+        run: node bin/apply-seo-home-phase2.mjs
+
+      - name: Ejecutar regresiones
+        run: npm test
+
+      - name: Consolidar cambios y retirar automatización temporal
+        run: |
+          rm -f bin/apply-seo-home-phase2.mjs .github/workflows/seo-phase2-patch.yml
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git add -A
+          git diff --cached --exit-code && exit 1 || true
+          git commit -m "SEO: reforzar relevancia on-page de la home"
+          git push
