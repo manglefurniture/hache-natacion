@@ -25,10 +25,27 @@ function financiero_periodo_siguiente(string $periodo): string
     return (new DateTimeImmutable($periodo.'-01'))->modify('+1 month')->format('Y-m');
 }
 
+function financiero_tabla_disponible(PDO $pdo): bool
+{
+    static $cache = [];
+    $key = spl_object_id($pdo);
+    if (array_key_exists($key, $cache)) return $cache[$key];
+    $stmt = $pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='periodos_financieros'");
+    return $cache[$key] = ((int)$stmt->fetchColumn() > 0);
+}
+
 function financiero_rango(PDO $pdo, string $sedeId, string $periodo): array
 {
     financiero_validar_periodo($periodo);
     $periodDate = $periodo.'-01';
+    if (!financiero_tabla_disponible($pdo)) {
+        return [
+            'periodo'=>$periodo,
+            'inicio'=>$periodDate,
+            'cierre'=>(new DateTimeImmutable($periodDate))->modify('last day of this month')->format('Y-m-d'),
+            'personalizado'=>false,
+        ];
+    }
     $stmt = $pdo->prepare('SELECT fecha_inicio,fecha_cierre FROM periodos_financieros WHERE sede_id=:sede AND periodo=:periodo LIMIT 1');
     $stmt->execute([':sede'=>$sedeId, ':periodo'=>$periodDate]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
