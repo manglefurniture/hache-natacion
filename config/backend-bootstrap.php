@@ -24,6 +24,7 @@ if ($requestHost === 'www.hnatacion.com') {
 
 $publicPages = [
     '/', '/home.php', '/registro.php', '/curso-intensivo.php', '/clases-regulares.php',
+    '/monteverde.php', '/palapas-protudec.php', '/metodologia.php',
     '/monteverde-regular.php', '/monteverde-intensivo.php', '/palapas-regular.php',
     '/palapas-intensivo.php', '/inscripcion-intensivo.php',
 ];
