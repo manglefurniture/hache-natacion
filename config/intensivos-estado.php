@@ -7,6 +7,44 @@ function intensivo_hoy_operativo(?DateTimeImmutable $referencia = null): DateTim
     return $referencia ?? new DateTimeImmutable('today', new DateTimeZone('America/Cancun'));
 }
 
+function intensivo_lunes_semana_actual(?DateTimeImmutable $referencia = null): DateTimeImmutable
+{
+    $hoy = intensivo_hoy_operativo($referencia);
+    $diasDesdeLunes = (int)$hoy->format('N') - 1;
+    return $diasDesdeLunes > 0 ? $hoy->modify('-'.$diasDesdeLunes.' days') : $hoy;
+}
+
+function intensivo_lunes_registro(int $cantidad = 10, ?DateTimeImmutable $referencia = null): array
+{
+    $cantidad = max(1, min(52, $cantidad));
+    $lunes = intensivo_lunes_semana_actual($referencia);
+    $fechas = [];
+    for ($i = 0; $i < $cantidad; $i++) {
+        $fechas[] = $lunes->modify('+'.($i * 7).' days')->format('Y-m-d');
+    }
+    return $fechas;
+}
+
+function intensivo_fecha_valida(string $fecha): DateTimeImmutable
+{
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $fecha, new DateTimeZone('America/Cancun'));
+    if (!$date || $date->format('Y-m-d') !== $fecha) {
+        throw new InvalidArgumentException('Fecha de intensivo inválida');
+    }
+    return $date;
+}
+
+function intensivo_cierre_inscripcion(string $fechaInicio): string
+{
+    return intensivo_fecha_valida($fechaInicio)->modify('+6 days')->format('Y-m-d');
+}
+
+function intensivo_inscripcion_abierta(string $fechaInicio, ?DateTimeImmutable $referencia = null): bool
+{
+    $hoy = intensivo_hoy_operativo($referencia)->format('Y-m-d');
+    return $hoy <= intensivo_cierre_inscripcion($fechaInicio);
+}
+
 function intensivo_estado_por_fechas(
     string $fechaInicio,
     string $fechaFin,
