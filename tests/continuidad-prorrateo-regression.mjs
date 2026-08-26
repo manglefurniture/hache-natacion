@@ -40,13 +40,38 @@ assert.match(
 
 assert.match(
   continuidad,
-  /\$periodosRetirables=\[\$periodoAlterno\][\s\S]{0,1500}continuidad_obligacion_de_relacion\([\s\S]{0,350}continuidad_obligacion_intacta\([\s\S]{0,450}DELETE m FROM mensualidades m[\s\S]{0,300}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
+  /\$periodosRetirables=\[\$periodoAlterno\][\s\S]{0,2400}continuidad_obligacion_de_relacion\([\s\S]{0,350}continuidad_obligacion_intacta\([\s\S]{0,450}DELETE m FROM mensualidades m[\s\S]{0,300}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
   'al cambiar de periodo solo puede retirar una obligación atribuible, pendiente y sin pagos'
 );
 
 assert.match(
   continuidad,
-  /\$cicloAnterior=.*ciclo_pago[\s\S]{0,800}\$periodoAnterior=regla_periodo_regular_actual[\s\S]{0,1600}ciclo anterior ya tiene historial financiero/,
+  /\$programadoDesdeAnterior=trim\(\(string\)\(\$rel\['plan_programado_desde'\]\?\?'\'\)\)/,
+  'el cambio de ciclo debe conservar el inicio programado anterior'
+);
+assert.match(
+  continuidad,
+  /\$programacionAnteriorPropia=\(int\)\$rel\['continua_regular'\]===1[\s\S]{0,350}\$planProgramadoAnterior===\$planContinuidadAnterior/,
+  'solo una programación perteneciente a esta continuidad puede usarse como referencia anterior'
+);
+assert.match(
+  continuidad,
+  /\$referenciaPeriodoAnterior=\$referenciaContinuidad/,
+  'debe existir una referencia segura de respaldo para el periodo anterior'
+);
+assert.match(
+  continuidad,
+  /\$referenciaPeriodoAnterior=new DateTimeImmutable\(\$programadoDesdeAnterior\)/,
+  'cuando existe programación previa propia debe usarse su fecha almacenada'
+);
+assert.match(
+  continuidad,
+  /\$periodoAnterior=regla_periodo_regular_actual\(\$sedeClave,\$cicloAnterior,\$referenciaPeriodoAnterior\)/,
+  'P1/P15 debe derivar el periodo anterior desde la referencia histórica elegida'
+);
+assert.match(
+  continuidad,
+  /ciclo anterior ya tiene historial financiero/,
   'si el ciclo anterior tiene historial, el cambio debe bloquearse sin borrar pagos'
 );
 

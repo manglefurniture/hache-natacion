@@ -19,10 +19,10 @@ function continuidad_obligacion_de_relacion(array $mensualidad,string $relacionI
 {
     $observacion=(string)($mensualidad['observacion']??'');
     if(str_contains($observacion,'[relacion:'.$relacionId.']')) return true;
+    if(preg_match('/\[relacion:[^\]]+\]/',$observacion)===1) return false;
 
-    // Compatibilidad con continuidades creadas antes de registrar la relación en
-    // la observación. Exige la misma traza funcional (plan y periodo), por lo
-    // que una obligación ajena no se toma ni se elimina.
+    // Compatibilidad exclusiva para obligaciones legacy sin etiqueta de relación.
+    // Si ya existe cualquier [relacion:*], otra continuidad no puede reclamarla.
     return $planId!==null && $planId!=='' && $periodoInicio!==null
         && str_starts_with($observacion,'Continuidad desde intensivo:')
         && (string)$mensualidad['plan_id']===$planId
@@ -110,15 +110,26 @@ try{
     $periodoAlterno=$inicioRegular==='PROXIMO'?$periodoActual:$periodoProximo;
     $referenciaContinuidad=new DateTimeImmutable($periodoContinuidad['inicio']);
     $cicloAnterior=$rel['ciclo_pago']!==null?strtoupper((string)$rel['ciclo_pago']):null;
+    $programadoDesdeAnterior=trim((string)($rel['plan_programado_desde']??''));
+    $planProgramadoAnterior=trim((string)($rel['plan_programado_id']??''));
+    $planContinuidadAnterior=trim((string)($rel['plan_continuidad_id']??''));
+    $programacionAnteriorPropia=(int)$rel['continua_regular']===1
+        && $programadoDesdeAnterior!==''
+        && $planProgramadoAnterior!==''
+        && $planProgramadoAnterior===$planContinuidadAnterior;
 
     $st=$pdo->prepare("UPDATE curso_intensivo_alumnos SET continua_regular=1,plan_continuidad_id=:p,importe_continuidad=:i,observacion_continuidad=:o WHERE id=:id");$st->execute([':p'=>$planId,':i'=>$importeFinal,':o'=>$observacion!==''?$observacion:null,':id'=>$relId]);
 
     // Al cambiar P1/P15, el periodo anterior puede solaparse al nuevo pero no
-    // comparte necesariamente mes/año. Se concilia por su rango real, nunca por
-    // una deuda genérica del alumno.
+    // comparte necesariamente mes/año. La programación previa propia conserva
+    // la fecha de inicio real del periodo que debe retirarse.
     $periodosRetirables=[$periodoAlterno];
     if($sedeClave==='PALAPAS'&&in_array($cicloAnterior,['P1','P15'],true)&&$cicloAnterior!==$ciclo){
-        $periodoAnterior=regla_periodo_regular_actual($sedeClave,$cicloAnterior,$referenciaContinuidad);
+        $referenciaPeriodoAnterior=$referenciaContinuidad;
+        if($programacionAnteriorPropia&&preg_match('/^\d{4}-\d{2}-\d{2}$/',$programadoDesdeAnterior)===1){
+            $referenciaPeriodoAnterior=new DateTimeImmutable($programadoDesdeAnterior);
+        }
+        $periodoAnterior=regla_periodo_regular_actual($sedeClave,$cicloAnterior,$referenciaPeriodoAnterior);
         $periodosRetirables[]=$periodoAnterior;
     }
     $periodosProcesados=[];
