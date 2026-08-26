@@ -6,6 +6,7 @@ const intensivoFlow = fs.readFileSync('public/assets/intensivo-flow.js', 'utf8')
 const quickPay = fs.readFileSync('public/assets/alumnos-quick-pay.js', 'utf8');
 const mensualidadPendiente = fs.readFileSync('api/mensualidad-pendiente.php', 'utf8');
 const pagosSmart = fs.readFileSync('api/pagos-smart.php', 'utf8');
+const alumnos = fs.readFileSync('public/alumnos.php', 'utf8');
 
 assert.match(
   continuidad,
@@ -27,26 +28,44 @@ assert.match(
 
 assert.match(
   continuidad,
+  /if\(\$inicioRegular==='PROXIMO'\)\{[\s\S]{0,500}plan_actual_id=NULL,plan_programado_id=:p,plan_programado_desde=:desde/,
+  'una continuidad del próximo periodo debe programar el plan sin activarlo en el periodo actual'
+);
+
+assert.match(
+  continuidad,
+  /else\{[\s\S]{0,500}plan_actual_id=:p,plan_programado_id=NULL,plan_programado_desde=NULL/,
+  'una continuidad del periodo actual debe activar el plan y limpiar cualquier programación futura'
+);
+
+assert.match(
+  continuidad,
   /DELETE m FROM mensualidades m[\s\S]{0,350}m\.mes=:m AND m\.anio=:y[\s\S]{0,250}m\.estado='PENDIENTE'[\s\S]{0,250}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
   'al cambiar de periodo solo puede retirarse la obligación alterna por clave mensual si nunca tuvo pago'
 );
 
 assert.match(
   continuidad,
-  /SELECT m\.id,m\.estado,m\.importe_cobrado,EXISTS\(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\) tiene_pagos FROM mensualidades m WHERE m\.alumno_id=:a AND m\.sede_id=:s AND m\.mes=:m AND m\.anio=:y LIMIT 1 FOR UPDATE/,
+  /SELECT id FROM mensualidades WHERE alumno_id=:a AND sede_id=:s AND mes=:m AND anio=:y LIMIT 1 FOR UPDATE[\s\S]{0,300}periodo alterno ya tiene historial financiero/,
+  'si queda una obligación alterna con historial, el cambio de periodo debe bloquearse'
+);
+
+assert.match(
+  continuidad,
+  /SELECT m\.id,m\.estado,m\.importe_cobrado,m\.periodo_inicio,m\.periodo_fin,m\.plan_id,EXISTS\(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\) tiene_pagos FROM mensualidades m WHERE m\.alumno_id=:a AND m\.sede_id=:s AND m\.mes=:m AND m\.anio=:y LIMIT 1 FOR UPDATE/,
   'la obligación objetivo debe bloquearse y localizarse por la misma clave mes/año usada para evitar duplicados'
 );
 
 assert.match(
   continuidad,
-  /mensualidadObjetivo\['estado'\]!=='PENDIENTE'[\s\S]{0,250}mensualidadObjetivo\['importe_cobrado'\]!==null[\s\S]{0,250}mensualidadObjetivo\['tiene_pagos'\]/,
-  'una obligación con historial financiero no debe reescribirse al cambiar P1/P15'
+  /\$mensualidadConHistorial=\$mensualidadObjetivo\['estado'\]!=='PENDIENTE'[\s\S]{0,300}\$coincidePeriodo=[\s\S]{0,300}\$coincidePlan=/,
+  'una mensualidad ya pagada puede conservarse solo si coincide exactamente con periodo y plan de la continuidad'
 );
 
 assert.match(
   continuidad,
-  /UPDATE mensualidades SET periodo_inicio=:pi,periodo_fin=:pf,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:importe,observacion=:obs,updated_at=NOW\(\) WHERE id=:id AND alumno_id=:a AND sede_id=:s AND estado='PENDIENTE'/,
-  'la obligación pendiente existente debe reconciliar fechas, plan, estándar e importe al cambiar ciclo'
+  /if\(!\$mensualidadConHistorial\)\{[\s\S]{0,800}UPDATE mensualidades SET periodo_inicio=:pi,periodo_fin=:pf,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:importe/,
+  'solo una obligación sin historial puede ser reescrita por Continuidad'
 );
 
 assert.ok(
@@ -144,4 +163,40 @@ assert.match(
   'la protección del backend ante importes distintos al plan debe seguir activa'
 );
 
-console.log('Continuidad, prorrateo, periodo explícito y cambio P1/P15: regresiones OK');
+assert.match(
+  alumnos,
+  /regla_reconciliar_sede_una_vez\(\$pdo,\(string\)\$sedeId,\$sedeClave\)/,
+  'Control de Alumnos debe promover planes programados y recalcular estados al cambiar de fecha'
+);
+
+assert.match(
+  alumnos,
+  /a\.plan_programado_id,a\.plan_programado_desde[\s\S]{0,300}plan_programado_nombre/,
+  'Control de Alumnos debe cargar el plan futuro y su fecha de activación'
+);
+
+assert.match(
+  alumnos,
+  /\$sinPlan=.*empty\(\$a\['plan_actual_id'\]\) && empty\(\$a\['plan_programado_id'\]\)/,
+  'un alumno con plan programado no debe caer en la categoría Sin plan'
+);
+
+assert.match(
+  alumnos,
+  /\$regulares=.*!empty\(\$a\['plan_actual_id'\]\) \|\| !empty\(\$a\['plan_programado_id'\]\)/,
+  'los alumnos con inicio futuro deben seguir visibles en Clases regulares'
+);
+
+assert.match(
+  alumnos,
+  /function inicio_regular_futuro[\s\S]{0,900}mensualidad_futura_estado'\]\?\?'\'\)==='PAGADA'/,
+  'un continuante legado con futuro pagado y obligación actual sin historial debe mostrarse como inicio futuro'
+);
+
+assert.match(
+  alumnos,
+  /\$estadoTexto='INICIA '\.fecha_corta\(\$inicioFuturo\)[\s\S]{0,300}\$mesFuturo\.' PAGADA'/,
+  'la tarjeta futura debe mostrar fecha de inicio y mensualidad futura pagada en vez de deuda actual'
+);
+
+console.log('Continuidad, prorrateo, inicio futuro, periodo explícito y cambio P1/P15: regresiones OK');
