@@ -40,14 +40,14 @@ assert.match(
 
 assert.match(
   continuidad,
-  /\$periodosRetirables=\[\$periodoAlterno\][\s\S]{0,1500}continuidad_obligacion_de_relacion\([\s\S]{0,350}continuidad_obligacion_intacta\([\s\S]{0,450}DELETE m FROM mensualidades m[\s\S]{0,300}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
+  /\$periodosRetirables=\[\$periodoAlterno\][\s\S]{0,2400}continuidad_obligacion_de_relacion\([\s\S]{0,350}continuidad_obligacion_intacta\([\s\S]{0,450}DELETE m FROM mensualidades m[\s\S]{0,300}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
   'al cambiar de periodo solo puede retirar una obligación atribuible, pendiente y sin pagos'
 );
 
 assert.match(
   continuidad,
-  /\$cicloAnterior=.*ciclo_pago[\s\S]{0,800}\$periodoAnterior=regla_periodo_regular_actual[\s\S]{0,1600}ciclo anterior ya tiene historial financiero/,
-  'si el ciclo anterior tiene historial, el cambio debe bloquearse sin borrar pagos'
+  /\$cicloAnterior=.*ciclo_pago[\s\S]{0,900}\$programadoDesdeAnterior=.*plan_programado_desde[\s\S]{0,900}\$referenciaPeriodoAnterior=\$referenciaContinuidad[\s\S]{0,700}new DateTimeImmutable\(\$programadoDesdeAnterior\)[\s\S]{0,450}\$periodoAnterior=regla_periodo_regular_actual[\s\S]{0,1800}ciclo anterior ya tiene historial financiero/,
+  'el cambio P1/P15 debe localizar el periodo anterior desde su inicio programado y bloquearlo si tiene historial'
 );
 
 assert.match(
