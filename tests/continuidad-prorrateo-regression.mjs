@@ -52,7 +52,7 @@ assert.match(
 
 assert.match(
   continuidad,
-  /SELECT m\.id,m\.estado,m\.importe_cobrado,m\.periodo_inicio,m\.periodo_fin,m\.plan_id,m\.observacion,EXISTS\(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\) tiene_pagos FROM mensualidades m WHERE m\.alumno_id=:a AND m\.sede_id=:s AND m\.mes=:m AND m\.anio=:y LIMIT 1 FOR UPDATE/,
+  /SELECT m\.id,m\.estado,m\.importe_cobrado,m\.periodo_inicio,m\.periodo_fin,m\.plan_id,m\.importe_a_cobrar,m\.observacion,EXISTS\(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\) tiene_pagos FROM mensualidades m WHERE m\.alumno_id=:a AND m\.sede_id=:s AND m\.mes=:m AND m\.anio=:y LIMIT 1 FOR UPDATE/,
   'la obligación objetivo debe bloquearse y localizarse por la misma clave mes/año usada para evitar duplicados'
 );
 

@@ -15,7 +15,9 @@ assert.match(continuidad,/if\(!\$continua\)\{[\s\S]+plan_programado_id=NULL,plan
 assert.match(continuidad,/programadoDesde>date\('Y-m-d'\)[\s\S]+continuidad_obligacion_de_relacion[\s\S]+continuidad_obligacion_intacta/,'la revocación futura debe ser idempotente y no tocar pagos ni historial');
 assert.match(continuidad,/\$cicloAnterior=.*ciclo_pago[\s\S]+\$periodoAnterior=regla_periodo_regular_actual\(\$sedeClave,\$cicloAnterior,\$referenciaContinuidad\)/,'P15 → P1 y P1 → P15 deben localizar el periodo del ciclo anterior por su rango real');
 assert.match(continuidad,/\$periodosRetirables=\[\$periodoAlterno\][\s\S]+\$periodosProcesados[\s\S]+DELETE m FROM mensualidades m/,'cada obligación atribuible se debe retirar una sola vez dentro de la transacción');
+assert.match(continuidad,/\$clavePeriodo=\$periodoRetirable\['inicio'\]\.'-'\.\$periodoRetirable\['fin'\]/,'P1 y P15 que comparten mes/año deben procesarse por sus rangos reales');
 assert.match(continuidad,/pertenece a otra operación y no puede modificarse desde Continuidad/,'una obligación ajena debe bloquear la mutación en vez de ser reescrita');
+assert.match(continuidad,/m\.importe_a_cobrar[\s\S]+\$mensualidadEditable=continuidad_obligacion_de_relacion[\s\S]+if\(!\$mensualidadEditable&&abs\(\(float\)\$importeFinal-\(float\)\$mensualidadObjetivo\['importe_a_cobrar'\]\)>0\.009\)/,'una obligación ajena no puede registrar un ajuste de importe que no se aplicaría');
 assert.match(continuidad,/\[relacion:\'\.\$relId\.\'\]/,'las nuevas obligaciones de continuidad deben conservar el identificador de relación');
 
 assert.match(alumnos,/LEFT JOIN mensualidades ma ON ma\.id=\([\s\S]+mensualidad_ciclo\.periodo_inicio=CASE[\s\S]+a\.ciclo_pago='P15'[\s\S]+ORDER BY mensualidad_ciclo\.id ASC[\s\S]+LIMIT 1/,'el listado debe elegir una sola mensualidad determinista del ciclo actual');

@@ -123,7 +123,10 @@ try{
     }
     $periodosProcesados=[];
     foreach($periodosRetirables as $periodoRetirable){
-        $clavePeriodo=$periodoRetirable['mes'].'-'.$periodoRetirable['anio'];
+        // P1 y P15 pueden compartir mes/año aunque representen rangos distintos.
+        // Conservamos ambos candidatos para poder reconocer la obligación legacy
+        // por su inicio real, sin eliminar nada que no pertenezca a la relación.
+        $clavePeriodo=$periodoRetirable['inicio'].'-'.$periodoRetirable['fin'];
         if(isset($periodosProcesados[$clavePeriodo])) continue;
         $periodosProcesados[$clavePeriodo]=true;
         $st=$pdo->prepare("SELECT m.id,m.estado,m.importe_cobrado,m.plan_id,m.periodo_inicio,m.periodo_fin,m.observacion,EXISTS(SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id) tiene_pagos FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y LIMIT 1 FOR UPDATE");
@@ -138,7 +141,7 @@ try{
         $st->execute([':id'=>$retirable['id'],':a'=>$alumnoId,':s'=>$sede['id']]);
     }
 
-    $st=$pdo->prepare("SELECT m.id,m.estado,m.importe_cobrado,m.periodo_inicio,m.periodo_fin,m.plan_id,m.observacion,EXISTS(SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id) tiene_pagos FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y LIMIT 1 FOR UPDATE");
+    $st=$pdo->prepare("SELECT m.id,m.estado,m.importe_cobrado,m.periodo_inicio,m.periodo_fin,m.plan_id,m.importe_a_cobrar,m.observacion,EXISTS(SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id) tiene_pagos FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y LIMIT 1 FOR UPDATE");
     $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':m'=>$periodoContinuidad['mes'],':y'=>$periodoContinuidad['anio']]);
     $mensualidadObjetivo=$st->fetch()?:null;
     $mensualidadConHistorial=false;
@@ -155,12 +158,13 @@ try{
             $coincidePlan=(string)$mensualidadObjetivo['plan_id']===$planId;
             $mensualidadEditable=continuidad_obligacion_de_relacion($mensualidadObjetivo,$relId,(string)($rel['plan_continuidad_id']??''),$mensualidadObjetivo['periodo_inicio']);
             if((!$coincidePeriodo||!$coincidePlan)&&!$mensualidadEditable){$pdo->rollBack();continuidad_out(['ok'=>false,'error'=>'La mensualidad de ese periodo pertenece a otra operación y no puede modificarse desde Continuidad'],409);}
+            if(!$mensualidadEditable&&abs((float)$importeFinal-(float)$mensualidadObjetivo['importe_a_cobrar'])>0.009){$pdo->rollBack();continuidad_out(['ok'=>false,'error'=>'La mensualidad de ese periodo pertenece a otra operación y no admite ajustar el importe desde Continuidad'],409);}
         }
     }
 
     if(!$mensualidadObjetivo){
         regla_crear_mensualidad_pendiente($pdo,$alumnoId,(string)$sede['id'],$sedeClave,$ciclo!==''?$ciclo:null,$planId,(float)$plan['precio'],(string)$admin['id'],$referenciaContinuidad);
-        $st=$pdo->prepare("SELECT m.id,m.estado,m.importe_cobrado,m.periodo_inicio,m.periodo_fin,m.plan_id,m.observacion,EXISTS(SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id) tiene_pagos FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y LIMIT 1 FOR UPDATE");
+        $st=$pdo->prepare("SELECT m.id,m.estado,m.importe_cobrado,m.periodo_inicio,m.periodo_fin,m.plan_id,m.importe_a_cobrar,m.observacion,EXISTS(SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id) tiene_pagos FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y LIMIT 1 FOR UPDATE");
         $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':m'=>$periodoContinuidad['mes'],':y'=>$periodoContinuidad['anio']]);
         $mensualidadObjetivo=$st->fetch()?:null;
         if(!$mensualidadObjetivo)throw new RuntimeException('No se pudo materializar la mensualidad de continuidad');
