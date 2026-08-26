@@ -22,15 +22,29 @@ try{
         $st->execute([':c'=>$cursoId,':a'=>$alumnoId,':s'=>$sede['id']]);$rel=$st->fetch();if(!$rel)continuidad_out(['ok'=>false,'error'=>'El alumno no pertenece a este intensivo de la sede activa'],404);
         $st=$pdo->prepare("SELECT id,nombre,sesiones_semana,precio FROM planes WHERE sede_id=:s AND activo=1 ORDER BY sesiones_semana,precio");$st->execute([':s'=>$sede['id']]);$planes=$st->fetchAll();
         $st=$pdo->prepare("SELECT id,hora_inicio,hora_fin FROM horarios WHERE sede_id=:s AND activo=1 AND regular=1 ORDER BY hora_inicio");$st->execute([':s'=>$sede['id']]);$horarios=$st->fetchAll();
-        continuidad_out(['ok'=>true,'sede'=>$sede,'requiere_ciclo_pago'=>$sedeClave==='PALAPAS','relacion'=>$rel,'planes'=>$planes,'horarios'=>$horarios]);
+
+        $cicloRel=$rel['ciclo_pago']!==null?strtoupper((string)$rel['ciclo_pago']):null;
+        $periodoActual=regla_periodo_regular_actual($sedeClave,$cicloRel);
+        $referenciaProxima=(new DateTimeImmutable($periodoActual['fin']))->modify('+1 day');
+        $periodoProximo=regla_periodo_regular_actual($sedeClave,$cicloRel,$referenciaProxima);
+        $st=$pdo->prepare("SELECT periodo_inicio,periodo_fin FROM mensualidades WHERE alumno_id=:a AND sede_id=:s AND ((periodo_inicio=:ai AND periodo_fin=:af) OR (periodo_inicio=:pi AND periodo_fin=:pf))");
+        $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':ai'=>$periodoActual['inicio'],':af'=>$periodoActual['fin'],':pi'=>$periodoProximo['inicio'],':pf'=>$periodoProximo['fin']]);
+        $tieneActual=false;$tieneProximo=false;
+        foreach($st->fetchAll() as $m){
+            if($m['periodo_inicio']===$periodoActual['inicio']&&$m['periodo_fin']===$periodoActual['fin'])$tieneActual=true;
+            if($m['periodo_inicio']===$periodoProximo['inicio']&&$m['periodo_fin']===$periodoProximo['fin'])$tieneProximo=true;
+        }
+        $inicioRegular=$tieneProximo&&!$tieneActual?'PROXIMO':'ACTUAL';
+        continuidad_out(['ok'=>true,'sede'=>$sede,'requiere_ciclo_pago'=>$sedeClave==='PALAPAS','relacion'=>$rel,'planes'=>$planes,'horarios'=>$horarios,'inicio_regular'=>$inicioRegular,'periodo_actual'=>$periodoActual,'periodo_proximo'=>$periodoProximo]);
     }
 
     if($method!=='POST')continuidad_out(['ok'=>false,'error'=>'Método no permitido'],405);
     $in=json_decode(file_get_contents('php://input'),true);if(!is_array($in))continuidad_out(['ok'=>false,'error'=>'JSON inválido'],400);
-    $cursoId=trim((string)($in['curso_id']??''));$alumnoId=trim((string)($in['alumno_id']??''));$continua=filter_var($in['continua_regular']??null,FILTER_VALIDATE_BOOLEAN,FILTER_NULL_ON_FAILURE);$planId=trim((string)($in['plan_id']??''));$horarioId=trim((string)($in['horario_id']??''));$importe=$in['importe_continuidad']??null;$observacion=trim((string)($in['observacion_continuidad']??''));$ciclo=strtoupper(trim((string)($in['ciclo_pago']??'')));
+    $cursoId=trim((string)($in['curso_id']??''));$alumnoId=trim((string)($in['alumno_id']??''));$continua=filter_var($in['continua_regular']??null,FILTER_VALIDATE_BOOLEAN,FILTER_NULL_ON_FAILURE);$planId=trim((string)($in['plan_id']??''));$horarioId=trim((string)($in['horario_id']??''));$importe=$in['importe_continuidad']??null;$observacion=trim((string)($in['observacion_continuidad']??''));$ciclo=strtoupper(trim((string)($in['ciclo_pago']??'')));$inicioRegular=strtoupper(trim((string)($in['inicio_regular']??'ACTUAL')));
     if($cursoId===''||$alumnoId===''||$continua===null)continuidad_out(['ok'=>false,'error'=>'Datos de continuidad incompletos'],422);
     if(mb_strlen($observacion)>2000)continuidad_out(['ok'=>false,'error'=>'La observación no puede exceder 2000 caracteres'],422);
     if($importe!==null&&$importe!==''&&(!is_numeric($importe)||(float)$importe<=0||(float)$importe>1000000))continuidad_out(['ok'=>false,'error'=>'El importe de continuidad debe ser mayor a cero'],422);
+    if($continua&&!in_array($inicioRegular,['ACTUAL','PROXIMO'],true))continuidad_out(['ok'=>false,'error'=>'Selecciona cuándo inicia la continuidad regular'],422);
     $pdo->beginTransaction();
     $st=$pdo->prepare("SELECT cia.id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id WHERE cia.curso_intensivo_id=:c AND cia.alumno_id=:a AND ci.sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':c'=>$cursoId,':a'=>$alumnoId,':s'=>$sede['id']]);$relId=$st->fetchColumn();if(!$relId){$pdo->rollBack();continuidad_out(['ok'=>false,'error'=>'El alumno no pertenece a este intensivo de la sede activa'],404);}
 
@@ -42,17 +56,28 @@ try{
     $st=$pdo->prepare("SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND regular=1 LIMIT 1 FOR UPDATE");$st->execute([':id'=>$horarioId,':s'=>$sede['id']]);if(!$st->fetch()){$pdo->rollBack();continuidad_out(['ok'=>false,'error'=>'El horario seleccionado no pertenece a la sede activa'],422);}
     $importeFinal=($importe!==null&&$importe!==''&&is_numeric($importe))?number_format((float)$importe,2,'.',''):number_format((float)$plan['precio'],2,'.','');
 
+    $periodoActual=regla_periodo_regular_actual($sedeClave,$ciclo!==''?$ciclo:null);
+    $referenciaProxima=(new DateTimeImmutable($periodoActual['fin']))->modify('+1 day');
+    $periodoProximo=regla_periodo_regular_actual($sedeClave,$ciclo!==''?$ciclo:null,$referenciaProxima);
+    $periodoContinuidad=$inicioRegular==='PROXIMO'?$periodoProximo:$periodoActual;
+    $periodoAlterno=$inicioRegular==='PROXIMO'?$periodoActual:$periodoProximo;
+    $referenciaContinuidad=new DateTimeImmutable($periodoContinuidad['inicio']);
+
     $st=$pdo->prepare("UPDATE curso_intensivo_alumnos SET continua_regular=1,plan_continuidad_id=:p,importe_continuidad=:i,observacion_continuidad=:o WHERE id=:id");$st->execute([':p'=>$planId,':i'=>$importeFinal,':o'=>$observacion!==''?$observacion:null,':id'=>$relId]);
     $st=$pdo->prepare("UPDATE alumnos SET plan_actual_id=:p,horario_preferido_id=:h,ciclo_pago=:c,estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:a AND sede_id=:s");$st->execute([':p'=>$planId,':h'=>$horarioId,':c'=>$ciclo!==''?$ciclo:null,':a'=>$alumnoId,':s'=>$sede['id']]);
-    regla_crear_mensualidad_pendiente($pdo,$alumnoId,(string)$sede['id'],$sedeClave,$ciclo!==''?$ciclo:null,$planId,(float)$plan['precio'],(string)$admin['id']);
 
-    $periodoContinuidad=regla_periodo_regular_actual($sedeClave,$ciclo!==''?$ciclo:null);
+    $st=$pdo->prepare("DELETE FROM mensualidades WHERE alumno_id=:a AND sede_id=:s AND periodo_inicio=:pi AND periodo_fin=:pf AND estado='PENDIENTE' AND importe_cobrado IS NULL AND observacion LIKE 'Continuidad desde intensivo:%'");
+    $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':pi'=>$periodoAlterno['inicio'],':pf'=>$periodoAlterno['fin']]);
+
+    regla_crear_mensualidad_pendiente($pdo,$alumnoId,(string)$sede['id'],$sedeClave,$ciclo!==''?$ciclo:null,$planId,(float)$plan['precio'],(string)$admin['id'],$referenciaContinuidad);
+
     $importeAjustado=abs((float)$importeFinal-(float)$plan['precio'])>0.009;
-    $observacionMensualidad=$observacion!==''?$observacion:($importeAjustado?'Continuidad desde intensivo: importe ajustado para el periodo':null);
-    $st=$pdo->prepare("UPDATE mensualidades SET importe_a_cobrar=:importe,observacion=COALESCE(:obs,observacion),updated_at=NOW() WHERE alumno_id=:a AND sede_id=:s AND periodo_inicio=:pi AND periodo_fin=:pf AND estado='PENDIENTE'");
+    $observacionMensualidad='Continuidad desde intensivo: '.($inicioRegular==='PROXIMO'?'próximo periodo':'periodo actual').($importeAjustado?' · importe ajustado':'');
+    if($observacion!=='')$observacionMensualidad.=' · '.$observacion;
+    $st=$pdo->prepare("UPDATE mensualidades SET importe_a_cobrar=:importe,observacion=:obs,updated_at=NOW() WHERE alumno_id=:a AND sede_id=:s AND periodo_inicio=:pi AND periodo_fin=:pf AND estado='PENDIENTE'");
     $st->execute([':importe'=>$importeFinal,':obs'=>$observacionMensualidad,':a'=>$alumnoId,':s'=>$sede['id'],':pi'=>$periodoContinuidad['inicio'],':pf'=>$periodoContinuidad['fin']]);
 
     $acceso=regla_recalcular_alumno_regular($pdo,$alumnoId);
     $pdo->commit();
-    continuidad_out(['ok'=>true,'mensaje'=>$sedeClave==='PALAPAS'?'Continuidad regular creada. Requiere inscripción y mensualidad para activar acceso.':'Continuidad regular creada. Inscripción exenta por venir de intensivo; requiere mensualidad para activar acceso.','reglas'=>['inscripcion'=>$sedeClave==='PALAPAS'?'OBLIGATORIA':'EXENTA_POR_INTENSIVO','mensualidad'=>'OBLIGATORIA','ciclo_pago'=>$ciclo!==''?$ciclo:null],'acceso_regular'=>$acceso]);
+    continuidad_out(['ok'=>true,'mensaje'=>$sedeClave==='PALAPAS'?'Continuidad regular creada. Requiere inscripción y mensualidad para activar acceso.':'Continuidad regular creada. Inscripción exenta por venir de intensivo; requiere mensualidad para activar acceso.','reglas'=>['inscripcion'=>$sedeClave==='PALAPAS'?'OBLIGATORIA':'EXENTA_POR_INTENSIVO','mensualidad'=>'OBLIGATORIA','ciclo_pago'=>$ciclo!==''?$ciclo:null],'inicio_regular'=>$inicioRegular,'periodo_continuidad'=>$periodoContinuidad,'acceso_regular'=>$acceso]);
 }catch(Throwable $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('[continuidad-intensivo] '.$e->getMessage());continuidad_out(['ok'=>false,'error'=>'No se pudo guardar la continuidad'],500);}
