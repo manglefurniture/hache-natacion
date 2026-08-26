@@ -14,7 +14,7 @@
   function ensureModal() {
     if (document.getElementById('hache-quick-pay')) return;
 
-    document.body.insertAdjacentHTML('beforeend', `<div id="hache-quick-pay" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px"><div style="width:min(420px,100%);background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 50px #0003"><div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><strong id="hqp-title" style="font-size:18px">Pago rápido</strong><div id="hqp-sub" style="font-size:12px;color:#64748b;margin-top:4px"></div></div><button id="hqp-close" type="button" style="border:0;background:#eef2f7;border-radius:8px;width:30px;height:30px;font-size:18px">×</button></div><div id="hqp-error" style="display:none;margin:12px 0;padding:9px;border-radius:8px;background:#fee2e2;color:#991b1b;font-size:12px"></div><label style="display:block;margin-top:14px;font-size:12px;font-weight:800">Importe</label><input id="hqp-amount" type="number" step="0.01" min="0" style="width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;margin-top:5px"><label style="display:block;margin-top:12px;font-size:12px;font-weight:800">Método de pago</label><select id="hqp-method" style="width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;margin-top:5px"><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="MERCADO_PAGO">Mercado Pago</option></select><div style="display:flex;gap:8px;margin-top:16px"><button id="hqp-save" type="button" style="flex:1;border:0;border-radius:10px;padding:11px;background:#172033;color:#fff;font-weight:800">Registrar pago</button><a id="hqp-more" href="#" style="flex:1;text-align:center;text-decoration:none;border:1px solid #cbd5e1;border-radius:10px;padding:11px;color:#334155;font-weight:800">Más detalles</a></div></div></div>`);
+    document.body.insertAdjacentHTML('beforeend', `<div id="hache-quick-pay" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px"><div style="width:min(420px,100%);background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 50px #0003"><div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><strong id="hqp-title" style="font-size:18px">Pago rápido</strong><div id="hqp-sub" style="font-size:12px;color:#64748b;margin-top:4px"></div></div><button id="hqp-close" type="button" style="border:0;background:#eef2f7;border-radius:8px;width:30px;height:30px;font-size:18px">×</button></div><div id="hqp-error" role="alert" aria-live="polite" style="display:none;margin:12px 0;padding:9px;border-radius:8px;background:#fee2e2;color:#991b1b;font-size:12px"></div><label style="display:block;margin-top:14px;font-size:12px;font-weight:800">Importe</label><input id="hqp-amount" type="number" step="0.01" min="0" style="width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;margin-top:5px"><label style="display:block;margin-top:12px;font-size:12px;font-weight:800">Método de pago</label><select id="hqp-method" style="width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;margin-top:5px"><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="MERCADO_PAGO">Mercado Pago</option></select><div style="display:flex;gap:8px;margin-top:16px"><button id="hqp-save" type="button" style="flex:1;border:0;border-radius:10px;padding:11px;background:#172033;color:#fff;font-weight:800">Registrar pago</button><a id="hqp-more" href="#" style="flex:1;text-align:center;text-decoration:none;border:1px solid #cbd5e1;border-radius:10px;padding:11px;color:#334155;font-weight:800">Más detalles</a></div></div></div>`);
 
     document.getElementById('hqp-close').onclick = close;
     document.getElementById('hache-quick-pay').onclick = (e) => {
@@ -79,7 +79,7 @@
     const intensive = current.type === 'INTENSIVO';
     const inscription = current.type === 'INSCRIPCION';
     document.getElementById('hqp-title').textContent = (intensive ? 'Pago de intensivo · ' : inscription ? 'Pago de inscripción · ' : 'Pago de mensualidad · ') + current.name;
-    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad de ' + label + ' · importe sugerido según plan';
+    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad de ' + label + ' · puedes ajustar el importe cuando corresponda';
     document.getElementById('hqp-amount').value = Number(current.price || 0);
     document.getElementById('hqp-error').style.display = 'none';
     document.getElementById('hqp-save').disabled = inFlight !== null;
@@ -101,12 +101,18 @@
     inFlight = target;
     const err = document.getElementById('hqp-error');
     const amount = document.getElementById('hqp-amount').value;
+    const amountNumber = Number(amount);
+    const suggestedNumber = Number(target.price || 0);
     const method = document.getElementById('hqp-method').value;
     const btn = document.getElementById('hqp-save');
     btn.disabled = true;
     err.style.display = 'none';
 
     try {
+      if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+        throw new Error('Captura un importe válido mayor a cero.');
+      }
+
       if (target.type === 'INTENSIVO' && target.courseId) {
         try {
           const pagado = await consultarEstadoIntensivo(target.id, target.courseId);
@@ -125,13 +131,14 @@
 
       const local = new Date();
       const fecha = local.getFullYear() + '-' + String(local.getMonth() + 1).padStart(2, '0') + '-' + String(local.getDate()).padStart(2, '0') + ' ' + String(local.getHours()).padStart(2, '0') + ':' + String(local.getMinutes()).padStart(2, '0') + ':00';
+      const amountAdjusted = target.type === 'MENSUALIDAD' && Number.isFinite(suggestedNumber) && Math.abs(amountNumber - suggestedNumber) > 0.009;
       const body = {
         alumno_id: target.id,
         tipo: target.type,
         importe: amount,
         metodo: method,
         fecha,
-        observacion: ''
+        observacion: amountAdjusted ? 'Importe ajustado manualmente desde Pago rápido' : ''
       };
       if (target.type === 'INTENSIVO' && target.courseId) body.curso_intensivo_id = target.courseId;
 
@@ -153,6 +160,7 @@
       if (current !== target) return;
       err.textContent = error.message;
       err.style.display = 'block';
+      err.scrollIntoView({ block: 'nearest' });
     } finally {
       if (inFlight === target) {
         inFlight = null;
