@@ -66,7 +66,7 @@ try{
     $st=$pdo->prepare("UPDATE curso_intensivo_alumnos SET continua_regular=1,plan_continuidad_id=:p,importe_continuidad=:i,observacion_continuidad=:o WHERE id=:id");$st->execute([':p'=>$planId,':i'=>$importeFinal,':o'=>$observacion!==''?$observacion:null,':id'=>$relId]);
     $st=$pdo->prepare("UPDATE alumnos SET plan_actual_id=:p,horario_preferido_id=:h,ciclo_pago=:c,estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:a AND sede_id=:s");$st->execute([':p'=>$planId,':h'=>$horarioId,':c'=>$ciclo!==''?$ciclo:null,':a'=>$alumnoId,':s'=>$sede['id']]);
 
-    $st=$pdo->prepare("DELETE FROM mensualidades WHERE alumno_id=:a AND sede_id=:s AND periodo_inicio=:pi AND periodo_fin=:pf AND estado='PENDIENTE' AND importe_cobrado IS NULL AND observacion LIKE 'Continuidad desde intensivo:%'");
+    $st=$pdo->prepare("DELETE m FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.periodo_inicio=:pi AND m.periodo_fin=:pf AND m.estado='PENDIENTE' AND m.importe_cobrado IS NULL AND NOT EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id)");
     $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':pi'=>$periodoAlterno['inicio'],':pf'=>$periodoAlterno['fin']]);
 
     regla_crear_mensualidad_pendiente($pdo,$alumnoId,(string)$sede['id'],$sedeClave,$ciclo!==''?$ciclo:null,$planId,(float)$plan['precio'],(string)$admin['id'],$referenciaContinuidad);
