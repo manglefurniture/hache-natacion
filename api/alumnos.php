@@ -8,8 +8,26 @@ require_once __DIR__.'/../config/telefono.php';
 require_once __DIR__.'/../config/passwords.php';
 require_once __DIR__.'/../config/intensivos-estado.php';
 $config = require __DIR__ . '/../config/database.php';
+require_once __DIR__.'/../config/notificaciones-email.php';
 
 function out(array $d,int $c=200):never{http_response_code($c);echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);exit;}
+function out_alta_con_alerta(array $d,array $alumno,string $tipoIngreso):never
+{
+    http_response_code(201);
+    echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+
+    // En PHP-FPM la respuesta ya quedó enviada al navegador antes de abrir SMTP.
+    // Si SMTP falla, solo se registra el fallo: el alta ya confirmada no cambia.
+    if(function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    try{
+        hache_notificar_nueva_inscripcion($alumno,$tipoIngreso,[
+            'curso_inicio'=>$tipoIngreso==='INTENSIVO'?(string)($alumno['fecha_inicio']??''):'',
+        ]);
+    }catch(Throwable $e){
+        error_log('[notificaciones-email] Falló el disparador diferido: '.$e->getMessage());
+    }
+    exit;
+}
 function slug_usuario(string $nombre):string{$ascii=iconv('UTF-8','ASCII//TRANSLIT//IGNORE',$nombre) ?: $nombre;$ascii=strtolower($ascii);$ascii=preg_replace('/[^a-z0-9 ]+/',' ',$ascii)??'';$parts=array_values(array_filter(preg_split('/\s+/',trim($ascii))?:[]));if(!$parts)return 'alumno';$base=$parts[0];if(count($parts)>1)$base.='.'.end($parts);return substr($base,0,40);}
 function usuario_unico(PDO $pdo,string $nombre):string{$base=slug_usuario($nombre);$candidate=$base;$n=2;$st=$pdo->prepare("SELECT 1 FROM usuarios WHERE usuario=:u LIMIT 1");while(true){$st->execute([':u'=>$candidate]);if(!$st->fetchColumn())return $candidate;$candidate=$base.$n;$n++;}}
 function sede(PDO $pdo,string $clave):array{$st=$pdo->prepare("SELECT id,clave,nombre FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$s=$st->fetch();if(!$s)out(['ok'=>false,'error'=>'Sede inválida'],422);return $s;}
@@ -109,6 +127,6 @@ try {
     $stmt=$pdo->prepare("INSERT INTO usuarios(id,usuario,password_hash,rol,activo,debe_cambiar_password,alumno_id) VALUES(:id,:u,:p,'ALUMNO',1,1,:a)");$stmt->execute([':id'=>$uid,':u'=>$usuario,':p'=>$passwordHash,':a'=>$id]);
     $pdo->commit();
 
-    $stmt=$pdo->prepare("SELECT a.*,s.clave sede_clave,s.nombre sede_nombre,p.nombre plan_nombre,p.precio plan_precio FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id LEFT JOIN planes p ON p.id=a.plan_actual_id WHERE a.id=:id LIMIT 1");$stmt->execute([':id'=>$id]);
-    out(['ok'=>true,'mensaje'=>$tipoIngreso==='REGULAR'?'Alumno creado. Queda pendiente de inscripción y primera mensualidad antes de poder tomar clase.':'Alumno creado y agregado al curso intensivo. Queda pendiente de pago.','tipo_ingreso'=>$tipoIngreso,'obligaciones'=>$tipoIngreso==='REGULAR'?['inscripcion'=>'PENDIENTE','mensualidad'=>'PENDIENTE']:['intensivo'=>'PENDIENTE'],'curso_intensivo_id'=>$tipoIngreso==='INTENSIVO'?$cursoId:null,'alumno'=>$stmt->fetch(),'acceso_portal'=>['usuario'=>$usuario,'password_temporal'=>$temporal,'debe_cambiar_password'=>true]],201);
+    $stmt=$pdo->prepare("SELECT a.*,s.clave sede_clave,s.nombre sede_nombre,p.nombre plan_nombre,p.precio plan_precio FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id LEFT JOIN planes p ON p.id=a.plan_actual_id WHERE a.id=:id LIMIT 1");$stmt->execute([':id'=>$id]);$alumnoCreado=$stmt->fetch();
+    out_alta_con_alerta(['ok'=>true,'mensaje'=>$tipoIngreso==='REGULAR'?'Alumno creado. Queda pendiente de inscripción y primera mensualidad antes de poder tomar clase.':'Alumno creado y agregado al curso intensivo. Queda pendiente de pago.','tipo_ingreso'=>$tipoIngreso,'obligaciones'=>$tipoIngreso==='REGULAR'?['inscripcion'=>'PENDIENTE','mensualidad'=>'PENDIENTE']:['intensivo'=>'PENDIENTE'],'curso_intensivo_id'=>$tipoIngreso==='INTENSIVO'?$cursoId:null,'alumno'=>$alumnoCreado,'acceso_portal'=>['usuario'=>$usuario,'password_temporal'=>$temporal,'debe_cambiar_password'=>true]],$alumnoCreado?:[],$tipoIngreso);
 } catch(Throwable $e){if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();error_log('[alumnos] '.$e->getMessage());out(['ok'=>false,'error'=>'No se pudo procesar el alumno'],500);}

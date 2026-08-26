@@ -40,19 +40,19 @@ assert.match(
 
 assert.match(
   continuidad,
-  /DELETE m FROM mensualidades m[\s\S]{0,350}m\.mes=:m AND m\.anio=:y[\s\S]{0,250}m\.estado='PENDIENTE'[\s\S]{0,250}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
-  'al cambiar de periodo solo puede retirarse la obligación alterna por clave mensual si nunca tuvo pago'
+  /\$periodosRetirables=\[\$periodoAlterno\][\s\S]{0,1500}continuidad_obligacion_de_relacion\([\s\S]{0,350}continuidad_obligacion_intacta\([\s\S]{0,450}DELETE m FROM mensualidades m[\s\S]{0,300}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
+  'al cambiar de periodo solo puede retirar una obligación atribuible, pendiente y sin pagos'
 );
 
 assert.match(
   continuidad,
-  /SELECT id FROM mensualidades WHERE alumno_id=:a AND sede_id=:s AND mes=:m AND anio=:y LIMIT 1 FOR UPDATE[\s\S]{0,300}periodo alterno ya tiene historial financiero/,
-  'si queda una obligación alterna con historial, el cambio de periodo debe bloquearse'
+  /\$cicloAnterior=.*ciclo_pago[\s\S]{0,800}\$periodoAnterior=regla_periodo_regular_actual[\s\S]{0,1600}ciclo anterior ya tiene historial financiero/,
+  'si el ciclo anterior tiene historial, el cambio debe bloquearse sin borrar pagos'
 );
 
 assert.match(
   continuidad,
-  /SELECT m\.id,m\.estado,m\.importe_cobrado,m\.periodo_inicio,m\.periodo_fin,m\.plan_id,EXISTS\(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\) tiene_pagos FROM mensualidades m WHERE m\.alumno_id=:a AND m\.sede_id=:s AND m\.mes=:m AND m\.anio=:y LIMIT 1 FOR UPDATE/,
+  /SELECT m\.id,m\.estado,m\.importe_cobrado,m\.periodo_inicio,m\.periodo_fin,m\.plan_id,m\.observacion,EXISTS\(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\) tiene_pagos FROM mensualidades m WHERE m\.alumno_id=:a AND m\.sede_id=:s AND m\.mes=:m AND m\.anio=:y LIMIT 1 FOR UPDATE/,
   'la obligación objetivo debe bloquearse y localizarse por la misma clave mes/año usada para evitar duplicados'
 );
 
@@ -64,8 +64,8 @@ assert.match(
 
 assert.match(
   continuidad,
-  /if\(!\$mensualidadConHistorial\)\{[\s\S]{0,800}UPDATE mensualidades SET periodo_inicio=:pi,periodo_fin=:pf,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:importe/,
-  'solo una obligación sin historial puede ser reescrita por Continuidad'
+  /if\(!\$mensualidadConHistorial&&\$mensualidadEditable\)\{[\s\S]{0,800}UPDATE mensualidades SET periodo_inicio=:pi,periodo_fin=:pf,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:importe/,
+  'solo una obligación sin historial y atribuible a Continuidad puede ser reescrita'
 );
 
 assert.ok(
@@ -159,8 +159,8 @@ assert.match(
 
 assert.match(
   pagosSmart,
-  /if\(\(float\)\$importeDecimal!==\(float\)\$estandar&&\$observacion===''\)throw new RuntimeException/,
-  'la protección del backend ante importes distintos al plan debe seguir activa'
+  /\$importeReferencia=\$importeEsperado!==null\?number_format\(\(float\)\$importeEsperado,2,'\.',''\):\$estandar;if\(\(float\)\$importeDecimal!==\(float\)\$importeReferencia&&\$observacion===''\)throw new RuntimeException/,
+  'la protección del backend debe comparar contra la obligación histórica y seguir exigiendo observación ante un importe distinto'
 );
 
 assert.match(

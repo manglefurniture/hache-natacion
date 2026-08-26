@@ -16,6 +16,40 @@ declare(strict_types=1);
  * HACHE_SMTP_FROM (igual a HACHE_SMTP_USER)
  * HACHE_SMTP_FROM_NAME (Hache Natación)
  */
+function hache_construir_alerta_nueva_inscripcion(array $alumno,string $tipoIngreso,array $detalle=[]):array
+{
+    $nombre = trim((string)($alumno['nombre'] ?? 'Alumno'));
+    $sede = trim((string)($alumno['sede_nombre'] ?? $alumno['sede_clave'] ?? ''));
+    $whatsapp = trim((string)($alumno['whatsapp'] ?? ''));
+    $correo = trim((string)($alumno['correo'] ?? ''));
+    $fechaInicio = trim((string)($alumno['fecha_inicio'] ?? ''));
+    $plan = trim((string)($alumno['plan_nombre'] ?? ''));
+    $esIntensivo=strtoupper($tipoIngreso)==='INTENSIVO';
+    $tipo = $esIntensivo ? 'Curso intensivo' : 'Clases regulares';
+    $horario = trim((string)($detalle['horario'] ?? ''));
+    $cursoInicio = $esIntensivo ? trim((string)($detalle['curso_inicio'] ?? '')) : '';
+
+    $subject = 'Nueva inscripción · ' . $tipo . ($sede !== '' ? ' · ' . $sede : '');
+    $lines = [
+        'Nueva inscripción en Hache Natación',
+        '',
+        'Alumno: ' . $nombre,
+        'Modalidad: ' . $tipo,
+        'Sede: ' . ($sede !== '' ? $sede : '—'),
+        'WhatsApp: ' . ($whatsapp !== '' ? $whatsapp : '—'),
+        'Correo: ' . ($correo !== '' ? $correo : '—'),
+        'Fecha de inicio: ' . ($fechaInicio !== '' ? $fechaInicio : '—'),
+    ];
+    if ($plan !== '') $lines[] = 'Plan: ' . $plan;
+    if ($horario !== '') $lines[] = 'Horario: ' . $horario;
+    if ($cursoInicio !== '') $lines[] = 'Inicio del intensivo: ' . $cursoInicio;
+    $lines[] = '';
+    $lines[] = 'Estado administrativo: ' . (string)($alumno['estado_administrativo'] ?? 'PENDIENTE');
+    $body = implode("\r\n", $lines);
+
+    return ['subject'=>$subject,'body'=>$body];
+}
+
 function hache_notificar_nueva_inscripcion(array $alumno, string $tipoIngreso, array $detalle = []): bool
 {
     $to = trim((string)(getenv('HACHE_ALERT_EMAIL_TO') ?: ''));
@@ -36,36 +70,9 @@ function hache_notificar_nueva_inscripcion(array $alumno, string $tipoIngreso, a
         return false;
     }
 
-    $nombre = trim((string)($alumno['nombre'] ?? 'Alumno'));
-    $sede = trim((string)($alumno['sede_nombre'] ?? $alumno['sede_clave'] ?? ''));
-    $whatsapp = trim((string)($alumno['whatsapp'] ?? ''));
-    $correo = trim((string)($alumno['correo'] ?? ''));
-    $fechaInicio = trim((string)($alumno['fecha_inicio'] ?? ''));
-    $plan = trim((string)($alumno['plan_nombre'] ?? ''));
-    $tipo = strtoupper($tipoIngreso) === 'INTENSIVO' ? 'Curso intensivo' : 'Clases regulares';
-    $horario = trim((string)($detalle['horario'] ?? ''));
-    $cursoInicio = trim((string)($detalle['curso_inicio'] ?? ''));
-
-    $subject = 'Nueva inscripción · ' . $tipo . ($sede !== '' ? ' · ' . $sede : '');
-    $lines = [
-        'Nueva inscripción en Hache Natación',
-        '',
-        'Alumno: ' . $nombre,
-        'Modalidad: ' . $tipo,
-        'Sede: ' . ($sede !== '' ? $sede : '—'),
-        'WhatsApp: ' . ($whatsapp !== '' ? $whatsapp : '—'),
-        'Correo: ' . ($correo !== '' ? $correo : '—'),
-        'Fecha de inicio: ' . ($fechaInicio !== '' ? $fechaInicio : '—'),
-    ];
-    if ($plan !== '') $lines[] = 'Plan: ' . $plan;
-    if ($horario !== '') $lines[] = 'Horario: ' . $horario;
-    if ($cursoInicio !== '') $lines[] = 'Inicio del intensivo: ' . $cursoInicio;
-    $lines[] = '';
-    $lines[] = 'Estado administrativo: ' . (string)($alumno['estado_administrativo'] ?? 'PENDIENTE');
-    $body = implode("\r\n", $lines);
-
+    $alerta=hache_construir_alerta_nueva_inscripcion($alumno,$tipoIngreso,$detalle);
     try {
-        return hache_smtp_send($host, $port, $user, $pass, $from, $fromName, $to, $subject, $body);
+        return hache_smtp_send($host, $port, $user, $pass, $from, $fromName, $to, $alerta['subject'], $alerta['body']);
     } catch (Throwable $e) {
         error_log('[notificaciones-email] No se pudo enviar alerta: ' . $e->getMessage());
         return false;
