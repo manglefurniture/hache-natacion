@@ -11,6 +11,12 @@
     return Number(v || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
   }
 
+  function fechaCorta(v) {
+    if (!v) return '';
+    const d = new Date(v + 'T12:00:00');
+    return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('es-MX');
+  }
+
   function ensureModal() {
     if (document.getElementById('hache-quick-pay')) return;
 
@@ -21,6 +27,18 @@
       if (e.target.id === 'hache-quick-pay') close();
     };
     document.getElementById('hqp-save').onclick = save;
+  }
+
+  async function consultarMensualidadPendiente(alumnoId) {
+    const params = new URLSearchParams({ alumno_id: alumnoId });
+    const response = await fetch('/api/mensualidad-pendiente.php?' + params.toString(), {
+      headers: { Accept: 'application/json' }
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'No se pudo cargar la mensualidad pendiente');
+    }
+    return data.mensualidad || null;
   }
 
   async function consultarEstadoIntensivo(alumnoId, cursoId) {
@@ -65,21 +83,35 @@
   let current = null;
   let inFlight = null;
 
-  function open(btn) {
+  function open(btn, mensualidadPendiente = null) {
     ensureModal();
+    const type = (btn.dataset.paymentType || 'MENSUALIDAD').toUpperCase();
+    const usarObligacion = type === 'MENSUALIDAD' && mensualidadPendiente;
+    const price = usarObligacion ? mensualidadPendiente.importe_a_cobrar : btn.dataset.price;
+    const standardPrice = usarObligacion ? mensualidadPendiente.importe_estandar : btn.dataset.price;
+    const periodMes = usarObligacion ? Number(mensualidadPendiente.mes) : null;
+    const periodAnio = usarObligacion ? Number(mensualidadPendiente.anio) : null;
+    const periodLabel = usarObligacion
+      ? fechaCorta(mensualidadPendiente.periodo_inicio) + ' al ' + fechaCorta(mensualidadPendiente.periodo_fin)
+      : label;
+
     current = Object.freeze({
       id: btn.dataset.id,
       name: btn.dataset.name,
-      price: btn.dataset.price,
-      type: (btn.dataset.paymentType || 'MENSUALIDAD').toUpperCase(),
+      price,
+      standardPrice,
+      type,
       courseId: btn.dataset.courseId || '',
+      periodMes,
+      periodAnio,
+      periodLabel,
       trigger: btn
     });
 
     const intensive = current.type === 'INTENSIVO';
     const inscription = current.type === 'INSCRIPCION';
     document.getElementById('hqp-title').textContent = (intensive ? 'Pago de intensivo · ' : inscription ? 'Pago de inscripción · ' : 'Pago de mensualidad · ') + current.name;
-    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad de ' + label + ' · puedes ajustar el importe cuando corresponda';
+    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad · ' + current.periodLabel + ' · importe pendiente ' + money(current.price);
     document.getElementById('hqp-amount').value = Number(current.price || 0);
     document.getElementById('hqp-error').style.display = 'none';
     document.getElementById('hqp-save').disabled = inFlight !== null;
@@ -102,7 +134,7 @@
     const err = document.getElementById('hqp-error');
     const amount = document.getElementById('hqp-amount').value;
     const amountNumber = Number(amount);
-    const suggestedNumber = Number(target.price || 0);
+    const standardNumber = Number(target.standardPrice || 0);
     const method = document.getElementById('hqp-method').value;
     const btn = document.getElementById('hqp-save');
     btn.disabled = true;
@@ -131,7 +163,7 @@
 
       const local = new Date();
       const fecha = local.getFullYear() + '-' + String(local.getMonth() + 1).padStart(2, '0') + '-' + String(local.getDate()).padStart(2, '0') + ' ' + String(local.getHours()).padStart(2, '0') + ':' + String(local.getMinutes()).padStart(2, '0') + ':00';
-      const amountAdjusted = target.type === 'MENSUALIDAD' && Number.isFinite(suggestedNumber) && Math.abs(amountNumber - suggestedNumber) > 0.009;
+      const amountAdjusted = target.type === 'MENSUALIDAD' && Number.isFinite(standardNumber) && Math.abs(amountNumber - standardNumber) > 0.009;
       const body = {
         alumno_id: target.id,
         tipo: target.type,
@@ -140,6 +172,10 @@
         fecha,
         observacion: amountAdjusted ? 'Importe ajustado manualmente desde Pago rápido' : ''
       };
+      if (target.type === 'MENSUALIDAD' && target.periodMes && target.periodAnio) {
+        body.periodo_mes = target.periodMes;
+        body.periodo_anio = target.periodAnio;
+      }
       if (target.type === 'INTENSIVO' && target.courseId) body.curso_intensivo_id = target.courseId;
 
       const currentType = target.type;
@@ -153,7 +189,7 @@
       if (current !== target) return;
 
       close();
-      const concepto = currentType === 'MENSUALIDAD' ? 'mensualidad · ' + (data.periodo_mensualidad?.etiqueta || label) : currentType === 'INSCRIPCION' ? 'inscripción' : 'curso intensivo';
+      const concepto = currentType === 'MENSUALIDAD' ? 'mensualidad · ' + (data.periodo_mensualidad?.etiqueta || target.periodLabel || label) : currentType === 'INSCRIPCION' ? 'inscripción' : 'curso intensivo';
       alert('Pago registrado: ' + money(amount) + ' · ' + concepto);
       location.reload();
     } catch (error) {
@@ -173,7 +209,18 @@
     const trigger = e.target.closest('[data-quick-pay]');
     if (!trigger) return;
     if (await detenerSiIntensivoYaPagado(trigger, false)) return;
-    open(trigger);
+
+    let mensualidadPendiente = null;
+    if ((trigger.dataset.paymentType || '').toUpperCase() === 'MENSUALIDAD') {
+      try {
+        mensualidadPendiente = await consultarMensualidadPendiente(trigger.dataset.id || '');
+      } catch (error) {
+        alert(error.message || 'No se pudo cargar la mensualidad pendiente');
+        return;
+      }
+    }
+
+    open(trigger, mensualidadPendiente);
   });
 
   document.querySelectorAll('[data-quick-pay][data-payment-type="INTENSIVO"]').forEach((trigger) => {
