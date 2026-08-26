@@ -92,7 +92,6 @@ try{
     if($observacion!=='')$observacionMensualidad.=' · '.$observacion;
     $st=$pdo->prepare("UPDATE mensualidades SET periodo_inicio=:pi,periodo_fin=:pf,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:importe,observacion=:obs,updated_at=NOW() WHERE id=:id AND alumno_id=:a AND sede_id=:s AND estado='PENDIENTE'");
     $st->execute([':pi'=>$periodoContinuidad['inicio'],':pf'=>$periodoContinuidad['fin'],':plan'=>$planId,':estandar'=>$importeEstandar,':importe'=>$importeFinal,':obs'=>$observacionMensualidad,':id'=>$mensualidadObjetivo['id'],':a'=>$alumnoId,':s'=>$sede['id']]);
-    if($st->rowCount()!==1)throw new RuntimeException('No se pudo reconciliar la mensualidad de continuidad');
 
     $acceso=regla_recalcular_alumno_regular($pdo,$alumnoId);
     $pdo->commit();
