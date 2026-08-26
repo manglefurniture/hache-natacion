@@ -130,6 +130,31 @@ function auth_logout(): void
     session_destroy();
 }
 
+function auth_request_json(): array
+{
+    static $decoded=null;
+    if(is_array($decoded)) return $decoded;
+    $raw=file_get_contents('php://input');
+    $value=json_decode((string)$raw,true);
+    $decoded=is_array($value)?$value:[];
+    return $decoded;
+}
+
+function auth_verificador_override(array $roles): bool
+{
+    $u=auth_user();
+    if(($u['rol']??'')!=='VERIFICADOR' || in_array('VERIFICADOR',$roles,true)) return false;
+    if(!in_array('ADMIN',$roles,true)) return false;
+    $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
+    $script=basename((string)($_SERVER['SCRIPT_NAME']??$_SERVER['SCRIPT_FILENAME']??''));
+    if(in_array($method,['GET','HEAD'],true) && in_array($script,['conciliacion-proa.php','conciliacion-proa-pdf.php','comisiones-proa.php'],true)) return true;
+    if($method!=='POST') return false;
+    $accion=strtoupper(trim((string)(auth_request_json()['accion']??'')));
+    if(in_array($script,['asistencia.php','sesiones.php'],true) && $accion==='ASISTENCIA') return true;
+    if($script==='ausencias-programadas.php' && in_array($accion,['CREAR','CANCELAR'],true)) return true;
+    return false;
+}
+
 function auth_require(array $roles = [], bool $allowForcedPassword = false): array
 {
     $u = auth_revalidate_user();
@@ -145,7 +170,7 @@ function auth_require(array $roles = [], bool $allowForcedPassword = false): arr
         echo json_encode(['ok'=>false,'error'=>'Debes cambiar tu contraseña antes de continuar','password_change_required'=>true], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    if ($roles && !in_array($u['rol'], $roles, true)) {
+    if ($roles && !in_array($u['rol'], $roles, true) && !auth_verificador_override($roles)) {
         http_response_code(403);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['ok'=>false,'error'=>'No tienes permiso para realizar esta acción'], JSON_UNESCAPED_UNICODE);
@@ -206,7 +231,9 @@ function page_require(array $roles = [], bool $allowForcedPassword = false): arr
         header('Location: /cambiar-password.php');
         exit;
     }
-    if ($roles && !in_array($u['rol'], $roles, true)) {
+    $path=parse_url((string)($_SERVER['REQUEST_URI']??''),PHP_URL_PATH)?:'';
+    $supervisorReadOnly=($u['rol']??'')==='VERIFICADOR' && in_array($path,['/conciliacion-proa.php','/comisiones-proa.php'],true);
+    if ($roles && !in_array($u['rol'], $roles, true) && !$supervisorReadOnly) {
         header('Location: '.($u['rol']==='ALUMNO' ? '/mi-cuenta.php' : '/dashboard.php'));
         exit;
     }
