@@ -46,8 +46,33 @@ assert.match(
 
 assert.match(
   continuidad,
-  /\$cicloAnterior=.*ciclo_pago[\s\S]{0,900}\$programadoDesdeAnterior=.*plan_programado_desde[\s\S]{0,900}\$referenciaPeriodoAnterior=\$referenciaContinuidad[\s\S]{0,700}new DateTimeImmutable\(\$programadoDesdeAnterior\)[\s\S]{0,450}\$periodoAnterior=regla_periodo_regular_actual[\s\S]{0,1800}ciclo anterior ya tiene historial financiero/,
-  'el cambio P1/P15 debe localizar el periodo anterior desde su inicio programado y bloquearlo si tiene historial'
+  /\$programadoDesdeAnterior=trim\(\(string\)\(\$rel\['plan_programado_desde'\]\?\?'\'\)\)/,
+  'el cambio de ciclo debe conservar el inicio programado anterior'
+);
+assert.match(
+  continuidad,
+  /\$programacionAnteriorPropia=\(int\)\$rel\['continua_regular'\]===1[\s\S]{0,350}\$planProgramadoAnterior===\$planContinuidadAnterior/,
+  'solo una programación perteneciente a esta continuidad puede usarse como referencia anterior'
+);
+assert.match(
+  continuidad,
+  /\$referenciaPeriodoAnterior=\$referenciaContinuidad/,
+  'debe existir una referencia segura de respaldo para el periodo anterior'
+);
+assert.match(
+  continuidad,
+  /\$referenciaPeriodoAnterior=new DateTimeImmutable\(\$programadoDesdeAnterior\)/,
+  'cuando existe programación previa propia debe usarse su fecha almacenada'
+);
+assert.match(
+  continuidad,
+  /\$periodoAnterior=regla_periodo_regular_actual\(\$sedeClave,\$cicloAnterior,\$referenciaPeriodoAnterior\)/,
+  'P1/P15 debe derivar el periodo anterior desde la referencia histórica elegida'
+);
+assert.match(
+  continuidad,
+  /ciclo anterior ya tiene historial financiero/,
+  'si el ciclo anterior tiene historial, el cambio debe bloquearse sin borrar pagos'
 );
 
 assert.match(
