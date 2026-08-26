@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const continuidad = fs.readFileSync('api/continuidad-intensivo.php', 'utf8');
 const intensivoFlow = fs.readFileSync('public/assets/intensivo-flow.js', 'utf8');
 const quickPay = fs.readFileSync('public/assets/alumnos-quick-pay.js', 'utf8');
+const mensualidadPendiente = fs.readFileSync('api/mensualidad-pendiente.php', 'utf8');
 const pagosSmart = fs.readFileSync('api/pagos-smart.php', 'utf8');
 
 assert.match(
@@ -21,35 +22,36 @@ assert.match(
 assert.match(
   continuidad,
   /\$periodoContinuidad=\$inicioRegular==='PROXIMO'\?\$periodoProximo:\$periodoActual/,
-  'la obligación debe crearse en el periodo elegido'
+  'la obligación debe apuntar al periodo elegido'
 );
 
 assert.match(
   continuidad,
-  /regla_crear_mensualidad_pendiente\([\s\S]{0,350}\$referenciaContinuidad\)/,
-  'la mensualidad pendiente debe crearse usando la referencia del periodo de continuidad'
+  /DELETE m FROM mensualidades m[\s\S]{0,350}m\.mes=:m AND m\.anio=:y[\s\S]{0,250}m\.estado='PENDIENTE'[\s\S]{0,250}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
+  'al cambiar de periodo solo puede retirarse la obligación alterna por clave mensual si nunca tuvo pago'
 );
 
 assert.match(
   continuidad,
-  /UPDATE mensualidades SET importe_a_cobrar=:importe,observacion=:obs,updated_at=NOW\(\) WHERE alumno_id=:a AND sede_id=:s AND periodo_inicio=:pi AND periodo_fin=:pf AND estado='PENDIENTE'/,
-  'el ajuste debe limitarse a la mensualidad pendiente del periodo y de la sede'
+  /SELECT m\.id,m\.estado,m\.importe_cobrado,EXISTS\(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\) tiene_pagos FROM mensualidades m WHERE m\.alumno_id=:a AND m\.sede_id=:s AND m\.mes=:m AND m\.anio=:y LIMIT 1 FOR UPDATE/,
+  'la obligación objetivo debe bloquearse y localizarse por la misma clave mes/año usada para evitar duplicados'
+);
+
+assert.match(
+  continuidad,
+  /mensualidadObjetivo\['estado'\]!=='PENDIENTE'[\s\S]{0,250}mensualidadObjetivo\['importe_cobrado'\]!==null[\s\S]{0,250}mensualidadObjetivo\['tiene_pagos'\]/,
+  'una obligación con historial financiero no debe reescribirse al cambiar P1/P15'
+);
+
+assert.match(
+  continuidad,
+  /UPDATE mensualidades SET periodo_inicio=:pi,periodo_fin=:pf,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:importe,observacion=:obs,updated_at=NOW\(\) WHERE id=:id AND alumno_id=:a AND sede_id=:s AND estado='PENDIENTE'/,
+  'la obligación pendiente existente debe reconciliar fechas, plan, estándar e importe al cambiar ciclo'
 );
 
 assert.ok(
-  !/UPDATE mensualidades SET[^\n]*importe_estandar=:importe/.test(continuidad),
-  'el prorrateo no debe reemplazar el importe estándar del plan'
-);
-
-assert.ok(
-  !/UPDATE mensualidades SET[^\n]*importe_cobrado=:importe/.test(continuidad),
-  'marcar continuidad no debe registrar un cobro todavía'
-);
-
-assert.match(
-  continuidad,
-  /DELETE m FROM mensualidades m[\s\S]{0,400}m\.estado='PENDIENTE'[\s\S]{0,250}m\.importe_cobrado IS NULL[\s\S]{0,300}NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=m\.id\)/,
-  'al cambiar de periodo solo puede retirarse una obligación alterna pendiente que nunca tuvo pago'
+  !/importe_cobrado=:importe/.test(continuidad),
+  'marcar continuidad no debe registrar un cobro'
 );
 
 assert.match(
@@ -77,15 +79,51 @@ assert.match(
 );
 
 assert.match(
+  mensualidadPendiente,
+  /SELECT id,mes,anio,periodo_inicio,periodo_fin,importe_estandar,importe_a_cobrar,estado/,
+  'el contexto de pago rápido debe devolver el importe estándar y el importe real pendiente'
+);
+
+assert.match(
+  mensualidadPendiente,
+  /\(CURDATE\(\) BETWEEN periodo_inicio AND periodo_fin\) DESC[\s\S]{0,180}\(periodo_inicio>CURDATE\(\)\) DESC/,
+  'la obligación vigente debe tener prioridad y, si no existe, la próxima obligación debe preceder a deudas antiguas'
+);
+
+assert.match(
   quickPay,
-  /const amountAdjusted = target\.type === 'MENSUALIDAD'[\s\S]{0,250}Math\.abs\(amountNumber - suggestedNumber\) > 0\.009/,
-  'Pago rápido debe detectar importes manuales distintos al sugerido'
+  /fetch\('\/api\/mensualidad-pendiente\.php\?' \+ params\.toString\(\)/,
+  'Pago rápido debe consultar la obligación mensual real antes de abrir el cobro'
+);
+
+assert.match(
+  quickPay,
+  /const price = usarObligacion \? mensualidadPendiente\.importe_a_cobrar : btn\.dataset\.price/,
+  'el importe sugerido debe venir de importe_a_cobrar cuando existe obligación pendiente'
+);
+
+assert.match(
+  quickPay,
+  /const standardPrice = usarObligacion \? mensualidadPendiente\.importe_estandar : btn\.dataset\.price/,
+  'la comparación financiera debe conservar el precio estándar del plan'
+);
+
+assert.match(
+  quickPay,
+  /const amountAdjusted = target\.type === 'MENSUALIDAD'[\s\S]{0,250}Math\.abs\(amountNumber - standardNumber\) > 0\.009/,
+  'un prorrateo debe justificarse contra el estándar aunque sea el importe sugerido'
+);
+
+assert.match(
+  quickPay,
+  /body\.periodo_mes = target\.periodMes;[\s\S]{0,120}body\.periodo_anio = target\.periodAnio;/,
+  'Pago rápido debe enviar el periodo explícito de la obligación seleccionada'
 );
 
 assert.match(
   quickPay,
   /observacion: amountAdjusted \? 'Importe ajustado manualmente desde Pago rápido' : ''/,
-  'Pago rápido debe justificar el importe manual para la validación financiera'
+  'Pago rápido debe justificar importes distintos al estándar para la validación financiera'
 );
 
 assert.match(
@@ -106,4 +144,4 @@ assert.match(
   'la protección del backend ante importes distintos al plan debe seguir activa'
 );
 
-console.log('Continuidad, prorrateo e inicio por periodo: regresiones OK');
+console.log('Continuidad, prorrateo, periodo explícito y cambio P1/P15: regresiones OK');
