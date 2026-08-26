@@ -95,4 +95,28 @@ if (str_starts_with($uri, '/api/')) {
     }
 }
 
+// Alerta de nueva inscripción: observa únicamente respuestas exitosas de POST /api/alumnos.php.
+// El envío sucede después de que el endpoint ya confirmó la transacción; una falla SMTP nunca cambia la respuesta ni el alta.
+if ($uri === '/api/alumnos.php' && strtoupper($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    require_once __DIR__ . '/notificaciones-email.php';
+    ob_start(static function (string $body): string {
+        try {
+            $status = http_response_code();
+            if ($status < 200 || $status >= 300 || $body === '') return $body;
+            $payload = json_decode($body, true);
+            if (!is_array($payload) || ($payload['ok'] ?? false) !== true || !is_array($payload['alumno'] ?? null)) return $body;
+            hache_notificar_nueva_inscripcion(
+                $payload['alumno'],
+                (string)($payload['tipo_ingreso'] ?? 'REGULAR'),
+                [
+                    'curso_inicio' => (string)($payload['alumno']['fecha_inicio'] ?? ''),
+                ]
+            );
+        } catch (Throwable $e) {
+            error_log('[notificaciones-email] Falló el disparador: ' . $e->getMessage());
+        }
+        return $body;
+    });
+}
+
 return $config;
