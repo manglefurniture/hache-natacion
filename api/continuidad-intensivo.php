@@ -55,6 +55,7 @@ try{
     $st=$pdo->prepare("SELECT id,precio FROM planes WHERE id=:id AND sede_id=:s AND activo=1 LIMIT 1 FOR UPDATE");$st->execute([':id'=>$planId,':s'=>$sede['id']]);$plan=$st->fetch();if(!$plan){$pdo->rollBack();continuidad_out(['ok'=>false,'error'=>'El plan seleccionado no pertenece a la sede activa'],422);}
     $st=$pdo->prepare("SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND regular=1 LIMIT 1 FOR UPDATE");$st->execute([':id'=>$horarioId,':s'=>$sede['id']]);if(!$st->fetch()){$pdo->rollBack();continuidad_out(['ok'=>false,'error'=>'El horario seleccionado no pertenece a la sede activa'],422);}
     $importeFinal=($importe!==null&&$importe!==''&&is_numeric($importe))?number_format((float)$importe,2,'.',''):number_format((float)$plan['precio'],2,'.','');
+    $importeEstandar=number_format((float)$plan['precio'],2,'.','');
 
     $periodoActual=regla_periodo_regular_actual($sedeClave,$ciclo!==''?$ciclo:null);
     $referenciaProxima=(new DateTimeImmutable($periodoActual['fin']))->modify('+1 day');
@@ -66,16 +67,32 @@ try{
     $st=$pdo->prepare("UPDATE curso_intensivo_alumnos SET continua_regular=1,plan_continuidad_id=:p,importe_continuidad=:i,observacion_continuidad=:o WHERE id=:id");$st->execute([':p'=>$planId,':i'=>$importeFinal,':o'=>$observacion!==''?$observacion:null,':id'=>$relId]);
     $st=$pdo->prepare("UPDATE alumnos SET plan_actual_id=:p,horario_preferido_id=:h,ciclo_pago=:c,estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:a AND sede_id=:s");$st->execute([':p'=>$planId,':h'=>$horarioId,':c'=>$ciclo!==''?$ciclo:null,':a'=>$alumnoId,':s'=>$sede['id']]);
 
-    $st=$pdo->prepare("DELETE m FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.periodo_inicio=:pi AND m.periodo_fin=:pf AND m.estado='PENDIENTE' AND m.importe_cobrado IS NULL AND NOT EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id)");
-    $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':pi'=>$periodoAlterno['inicio'],':pf'=>$periodoAlterno['fin']]);
+    $st=$pdo->prepare("DELETE m FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y AND m.estado='PENDIENTE' AND m.importe_cobrado IS NULL AND NOT EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id)");
+    $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':m'=>$periodoAlterno['mes'],':y'=>$periodoAlterno['anio']]);
 
-    regla_crear_mensualidad_pendiente($pdo,$alumnoId,(string)$sede['id'],$sedeClave,$ciclo!==''?$ciclo:null,$planId,(float)$plan['precio'],(string)$admin['id'],$referenciaContinuidad);
+    $st=$pdo->prepare("SELECT m.id,m.estado,m.importe_cobrado,EXISTS(SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id) tiene_pagos FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y LIMIT 1 FOR UPDATE");
+    $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':m'=>$periodoContinuidad['mes'],':y'=>$periodoContinuidad['anio']]);
+    $mensualidadObjetivo=$st->fetch()?:null;
+
+    if($mensualidadObjetivo&&($mensualidadObjetivo['estado']!=='PENDIENTE'||$mensualidadObjetivo['importe_cobrado']!==null||(int)$mensualidadObjetivo['tiene_pagos']===1)){
+        $pdo->rollBack();
+        continuidad_out(['ok'=>false,'error'=>'La mensualidad de ese periodo ya tiene historial financiero y no puede modificarse desde Continuidad'],409);
+    }
+
+    if(!$mensualidadObjetivo){
+        regla_crear_mensualidad_pendiente($pdo,$alumnoId,(string)$sede['id'],$sedeClave,$ciclo!==''?$ciclo:null,$planId,(float)$plan['precio'],(string)$admin['id'],$referenciaContinuidad);
+        $st=$pdo->prepare("SELECT m.id,m.estado,m.importe_cobrado,EXISTS(SELECT 1 FROM pagos p WHERE p.mensualidad_id=m.id) tiene_pagos FROM mensualidades m WHERE m.alumno_id=:a AND m.sede_id=:s AND m.mes=:m AND m.anio=:y LIMIT 1 FOR UPDATE");
+        $st->execute([':a'=>$alumnoId,':s'=>$sede['id'],':m'=>$periodoContinuidad['mes'],':y'=>$periodoContinuidad['anio']]);
+        $mensualidadObjetivo=$st->fetch()?:null;
+        if(!$mensualidadObjetivo)throw new RuntimeException('No se pudo materializar la mensualidad de continuidad');
+    }
 
     $importeAjustado=abs((float)$importeFinal-(float)$plan['precio'])>0.009;
     $observacionMensualidad='Continuidad desde intensivo: '.($inicioRegular==='PROXIMO'?'próximo periodo':'periodo actual').($importeAjustado?' · importe ajustado':'');
     if($observacion!=='')$observacionMensualidad.=' · '.$observacion;
-    $st=$pdo->prepare("UPDATE mensualidades SET importe_a_cobrar=:importe,observacion=:obs,updated_at=NOW() WHERE alumno_id=:a AND sede_id=:s AND periodo_inicio=:pi AND periodo_fin=:pf AND estado='PENDIENTE'");
-    $st->execute([':importe'=>$importeFinal,':obs'=>$observacionMensualidad,':a'=>$alumnoId,':s'=>$sede['id'],':pi'=>$periodoContinuidad['inicio'],':pf'=>$periodoContinuidad['fin']]);
+    $st=$pdo->prepare("UPDATE mensualidades SET periodo_inicio=:pi,periodo_fin=:pf,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:importe,observacion=:obs,updated_at=NOW() WHERE id=:id AND alumno_id=:a AND sede_id=:s AND estado='PENDIENTE'");
+    $st->execute([':pi'=>$periodoContinuidad['inicio'],':pf'=>$periodoContinuidad['fin'],':plan'=>$planId,':estandar'=>$importeEstandar,':importe'=>$importeFinal,':obs'=>$observacionMensualidad,':id'=>$mensualidadObjetivo['id'],':a'=>$alumnoId,':s'=>$sede['id']]);
+    if($st->rowCount()!==1)throw new RuntimeException('No se pudo reconciliar la mensualidad de continuidad');
 
     $acceso=regla_recalcular_alumno_regular($pdo,$alumnoId);
     $pdo->commit();
