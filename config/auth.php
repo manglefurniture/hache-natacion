@@ -147,7 +147,8 @@ function auth_verificador_override(array $roles): bool
     if(!in_array('ADMIN',$roles,true)) return false;
     $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
     $script=basename((string)($_SERVER['SCRIPT_NAME']??$_SERVER['SCRIPT_FILENAME']??''));
-    if(in_array($method,['GET','HEAD'],true) && in_array($script,['conciliacion-proa.php','conciliacion-proa-pdf.php','comisiones-proa.php'],true)) return true;
+    $proaRead=in_array($script,['conciliacion-proa.php','conciliacion-proa-pdf.php','comisiones-proa.php'],true);
+    if(in_array($method,['GET','HEAD'],true) && $proaRead) return auth_active_sede_clave()==='MONTEVERDE';
     if($method!=='POST') return false;
     $accion=strtoupper(trim((string)(auth_request_json()['accion']??'')));
     if(in_array($script,['asistencia.php','sesiones.php'],true) && $accion==='ASISTENCIA') return true;
@@ -232,7 +233,8 @@ function page_require(array $roles = [], bool $allowForcedPassword = false): arr
         exit;
     }
     $path=parse_url((string)($_SERVER['REQUEST_URI']??''),PHP_URL_PATH)?:'';
-    $supervisorReadOnly=($u['rol']??'')==='VERIFICADOR' && in_array($path,['/conciliacion-proa.php','/comisiones-proa.php'],true);
+    $supervisorProa=in_array($path,['/conciliacion-proa.php','/comisiones-proa.php'],true);
+    $supervisorReadOnly=($u['rol']??'')==='VERIFICADOR' && $supervisorProa && auth_active_sede_clave()==='MONTEVERDE';
     if ($roles && !in_array($u['rol'], $roles, true) && !$supervisorReadOnly) {
         header('Location: '.($u['rol']==='ALUMNO' ? '/mi-cuenta.php' : '/dashboard.php'));
         exit;
