@@ -33,7 +33,21 @@ FROM alumnos a
 LEFT JOIN horarios h ON h.id=a.horario_preferido_id AND h.sede_id=a.sede_id
 LEFT JOIN planes p ON p.id=a.plan_actual_id AND p.sede_id=a.sede_id
 LEFT JOIN planes pp ON pp.id=a.plan_programado_id AND pp.sede_id=a.sede_id
-LEFT JOIN mensualidades ma ON ma.alumno_id=a.id AND ma.sede_id=a.sede_id AND CURDATE() BETWEEN ma.periodo_inicio AND ma.periodo_fin
+LEFT JOIN mensualidades ma ON ma.id=(
+    SELECT mensualidad_ciclo.id
+    FROM mensualidades mensualidad_ciclo
+    WHERE mensualidad_ciclo.alumno_id=a.id
+      AND mensualidad_ciclo.sede_id=a.sede_id
+      AND mensualidad_ciclo.periodo_inicio=CASE
+        WHEN a.ciclo_pago='P15' THEN DATE_FORMAT(
+            CASE WHEN DAY(CURDATE())>=15 THEN CURDATE() ELSE DATE_SUB(CURDATE(),INTERVAL 1 MONTH) END,
+            '%Y-%m-15'
+        )
+        ELSE DATE_FORMAT(CURDATE(),'%Y-%m-01')
+      END
+    ORDER BY mensualidad_ciclo.id ASC
+    LIMIT 1
+)
 WHERE a.sede_id=:sede ORDER BY a.nombre";
 $stmt=$pdo->prepare($sql);$stmt->execute([':sede'=>$sedeId]);$alumnos=$stmt->fetchAll();
 $intensivos=array_values(array_filter($alumnos,fn($a)=>(int)$a['intensivo_activo']===1));

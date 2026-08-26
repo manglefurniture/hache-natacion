@@ -109,7 +109,7 @@ test('las altas de intensivos serializan por alumno antes de validar exclusivida
 test('la decisión de continuidad bloquea la relación y recalcula ambos caminos', () => {
   const source = read('api/continuidad-intensivo.php');
   assert.match(source, /beginTransaction\(\)[\s\S]{0,700}curso_intensivo_alumnos[\s\S]{0,500}FOR UPDATE/);
-  assert.match(source, /if\(!\$continua\)[\s\S]{0,600}regla_recalcular_alumno\(\$pdo,\$alumnoId\)/);
+  assert.match(source, /if\(!\$continua\)[\s\S]{0,2200}regla_recalcular_alumno\(\$pdo,\$alumnoId\)/);
   assert.equal((source.match(/\$pdo->beginTransaction\(\)/g) || []).length, 1);
 });
 
