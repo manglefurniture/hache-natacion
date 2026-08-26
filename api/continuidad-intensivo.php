@@ -45,6 +45,13 @@ try{
     $st=$pdo->prepare("UPDATE curso_intensivo_alumnos SET continua_regular=1,plan_continuidad_id=:p,importe_continuidad=:i,observacion_continuidad=:o WHERE id=:id");$st->execute([':p'=>$planId,':i'=>$importeFinal,':o'=>$observacion!==''?$observacion:null,':id'=>$relId]);
     $st=$pdo->prepare("UPDATE alumnos SET plan_actual_id=:p,horario_preferido_id=:h,ciclo_pago=:c,estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:a AND sede_id=:s");$st->execute([':p'=>$planId,':h'=>$horarioId,':c'=>$ciclo!==''?$ciclo:null,':a'=>$alumnoId,':s'=>$sede['id']]);
     regla_crear_mensualidad_pendiente($pdo,$alumnoId,(string)$sede['id'],$sedeClave,$ciclo!==''?$ciclo:null,$planId,(float)$plan['precio'],(string)$admin['id']);
+
+    $periodoContinuidad=regla_periodo_regular_actual($sedeClave,$ciclo!==''?$ciclo:null);
+    $importeAjustado=abs((float)$importeFinal-(float)$plan['precio'])>0.009;
+    $observacionMensualidad=$observacion!==''?$observacion:($importeAjustado?'Continuidad desde intensivo: importe ajustado para el periodo':null);
+    $st=$pdo->prepare("UPDATE mensualidades SET importe_a_cobrar=:importe,observacion=COALESCE(:obs,observacion),updated_at=NOW() WHERE alumno_id=:a AND sede_id=:s AND periodo_inicio=:pi AND periodo_fin=:pf AND estado='PENDIENTE'");
+    $st->execute([':importe'=>$importeFinal,':obs'=>$observacionMensualidad,':a'=>$alumnoId,':s'=>$sede['id'],':pi'=>$periodoContinuidad['inicio'],':pf'=>$periodoContinuidad['fin']]);
+
     $acceso=regla_recalcular_alumno_regular($pdo,$alumnoId);
     $pdo->commit();
     continuidad_out(['ok'=>true,'mensaje'=>$sedeClave==='PALAPAS'?'Continuidad regular creada. Requiere inscripción y mensualidad para activar acceso.':'Continuidad regular creada. Inscripción exenta por venir de intensivo; requiere mensualidad para activar acceso.','reglas'=>['inscripcion'=>$sedeClave==='PALAPAS'?'OBLIGATORIA':'EXENTA_POR_INTENSIVO','mensualidad'=>'OBLIGATORIA','ciclo_pago'=>$ciclo!==''?$ciclo:null],'acceso_regular'=>$acceso]);
