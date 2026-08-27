@@ -20,8 +20,8 @@ expect(
   'El registro regular debe conservar su pantalla de éxito anterior sin instrucciones bancarias.'
 );
 expect(
-  registro.includes('SELECT id,precio FROM cursos_intensivos') && registro.includes("$intensivoPrecio=(float)$curso['precio']"),
-  'El importe mostrado debe salir del precio real del curso intensivo existente.'
+  registro.includes('SELECT id FROM cursos_intensivos WHERE sede_id=:s AND fecha_inicio=:f LIMIT 1') && registro.includes('SELECT precio FROM cursos_intensivos WHERE id=:c LIMIT 1 FOR UPDATE') && registro.includes('$intensivoPrecio=(float)$st->fetchColumn()'),
+  'El importe mostrado debe salir del precio real del curso intensivo existente sin romper la serialización previa.'
 );
 expect(
   registro.includes("':precio'=>$intensivoPrecio") && registro.includes('Total a pagar: $<?=e(number_format((float)$intensivoPrecio'),
