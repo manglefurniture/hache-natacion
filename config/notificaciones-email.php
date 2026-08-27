@@ -3,18 +3,15 @@
 declare(strict_types=1);
 
 /**
- * Envía alertas de inscripción por SMTP sin dependencias externas.
+ * Envía alertas de inscripción mediante la API HTTPS de Resend.
  *
  * Variables requeridas en producción:
  * HACHE_ALERT_EMAIL_TO
- * HACHE_SMTP_HOST
- * HACHE_SMTP_USER
- * HACHE_SMTP_PASS
+ * HACHE_RESEND_API_KEY
+ * HACHE_EMAIL_FROM
  *
- * Opcionales:
- * HACHE_SMTP_PORT (587)
- * HACHE_SMTP_FROM (igual a HACHE_SMTP_USER)
- * HACHE_SMTP_FROM_NAME (Hache Natación)
+ * Opcional:
+ * HACHE_EMAIL_FROM_NAME (Hache Natación)
  */
 function hache_construir_alerta_nueva_inscripcion(array $alumno,string $tipoIngreso,array $detalle=[]):array
 {
@@ -53,15 +50,12 @@ function hache_construir_alerta_nueva_inscripcion(array $alumno,string $tipoIngr
 function hache_notificar_nueva_inscripcion(array $alumno, string $tipoIngreso, array $detalle = []): bool
 {
     $to = trim((string)(getenv('HACHE_ALERT_EMAIL_TO') ?: ''));
-    $host = trim((string)(getenv('HACHE_SMTP_HOST') ?: ''));
-    $user = trim((string)(getenv('HACHE_SMTP_USER') ?: ''));
-    $pass = (string)(getenv('HACHE_SMTP_PASS') ?: '');
-    $port = (int)(getenv('HACHE_SMTP_PORT') ?: 587);
-    $from = trim((string)(getenv('HACHE_SMTP_FROM') ?: $user));
-    $fromName = trim((string)(getenv('HACHE_SMTP_FROM_NAME') ?: 'Hache Natación'));
+    $apiKey = trim((string)(getenv('HACHE_RESEND_API_KEY') ?: ''));
+    $from = trim((string)(getenv('HACHE_EMAIL_FROM') ?: ''));
+    $fromName = trim((string)(getenv('HACHE_EMAIL_FROM_NAME') ?: 'Hache Natación'));
 
-    if ($to === '' || $host === '' || $user === '' || $pass === '' || $from === '') {
-        error_log('[notificaciones-email] Configuración SMTP incompleta; alerta omitida.');
+    if ($to === '' || $apiKey === '' || $from === '') {
+        error_log('[notificaciones-email] Configuración Resend incompleta; alerta omitida.');
         return false;
     }
 
@@ -72,63 +66,64 @@ function hache_notificar_nueva_inscripcion(array $alumno, string $tipoIngreso, a
 
     $alerta=hache_construir_alerta_nueva_inscripcion($alumno,$tipoIngreso,$detalle);
     try {
-        return hache_smtp_send($host, $port, $user, $pass, $from, $fromName, $to, $alerta['subject'], $alerta['body']);
+        return hache_resend_send($apiKey, $from, $fromName, $to, $alerta['subject'], $alerta['body']);
     } catch (Throwable $e) {
         error_log('[notificaciones-email] No se pudo enviar alerta: ' . $e->getMessage());
         return false;
     }
 }
 
-function hache_smtp_send(string $host, int $port, string $user, string $pass, string $from, string $fromName, string $to, string $subject, string $body): bool
+function hache_resend_send(string $apiKey, string $from, string $fromName, string $to, string $subject, string $body): bool
 {
-    $socket = @stream_socket_client('tcp://' . $host . ':' . $port, $errno, $errstr, 8);
-    if (!$socket) throw new RuntimeException('No se pudo conectar al SMTP: ' . $errstr);
-    stream_set_timeout($socket, 8);
+    if (!function_exists('curl_init')) {
+        throw new RuntimeException('La extensión cURL es necesaria para enviar correos.');
+    }
 
-    $read = static function () use ($socket): string {
-        $response = '';
-        while (($line = fgets($socket, 515)) !== false) {
-            $response .= $line;
-            if (strlen($line) < 4 || $line[3] === ' ') break;
-        }
-        return $response;
-    };
-    $cmd = static function (string $command, array $expected) use ($socket, $read): string {
-        fwrite($socket, $command . "\r\n");
-        $response = $read();
-        $code = (int)substr($response, 0, 3);
-        if (!in_array($code, $expected, true)) throw new RuntimeException('SMTP rechazó comando con código ' . $code);
-        return $response;
-    };
+    $payload = json_encode([
+        'from' => $fromName . ' <' . $from . '>',
+        'to' => [$to],
+        'subject' => $subject,
+        'text' => $body,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 
-    $hello = php_uname('n') ?: 'hnatacion.com';
-    $greeting = $read();
-    if ((int)substr($greeting, 0, 3) !== 220) throw new RuntimeException('SMTP no respondió con saludo válido');
-    $cmd('EHLO ' . $hello, [250]);
-    $cmd('STARTTLS', [220]);
-    if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) throw new RuntimeException('No se pudo iniciar TLS');
-    $cmd('EHLO ' . $hello, [250]);
-    $cmd('AUTH LOGIN', [334]);
-    $cmd(base64_encode($user), [334]);
-    $cmd(base64_encode($pass), [235]);
-    $cmd('MAIL FROM:<' . $from . '>', [250]);
-    $cmd('RCPT TO:<' . $to . '>', [250, 251]);
-    $cmd('DATA', [354]);
+    $ch = curl_init('https://api.resend.com/emails');
+    if ($ch === false) {
+        throw new RuntimeException('No se pudo iniciar la conexión con Resend.');
+    }
 
-    $safeSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
-    $safeFromName = '=?UTF-8?B?' . base64_encode($fromName) . '?=';
-    $headers = [
-        'From: ' . $safeFromName . ' <' . $from . '>',
-        'To: <' . $to . '>',
-        'Subject: ' . $safeSubject,
-        'Date: ' . date(DATE_RFC2822),
-        'MIME-Version: 1.0',
-        'Content-Type: text/plain; charset=UTF-8',
-        'Content-Transfer-Encoding: 8bit',
-    ];
-    $payload = implode("\r\n", $headers) . "\r\n\r\n" . preg_replace('/(?m)^\./', '..', $body) . "\r\n.";
-    $cmd($payload, [250]);
-    $cmd('QUIT', [221]);
-    fclose($socket);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ],
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException('Resend no respondió: ' . $curlError);
+    }
+
+    $decoded = json_decode((string)$response, true);
+    if ($httpCode < 200 || $httpCode >= 300) {
+        $message = is_array($decoded)
+            ? (string)($decoded['message'] ?? $decoded['name'] ?? 'Error desconocido')
+            : 'Respuesta HTTP ' . $httpCode;
+        throw new RuntimeException('Resend: ' . $message);
+    }
+
+    if (!is_array($decoded) || trim((string)($decoded['id'] ?? '')) === '') {
+        throw new RuntimeException('Resend no devolvió un identificador de correo.');
+    }
+
     return true;
 }
