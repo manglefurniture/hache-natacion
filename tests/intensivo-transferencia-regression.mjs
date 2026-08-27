@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const registro = fs.readFileSync(new URL('../public/registro.php', import.meta.url), 'utf8');
 const transferencia = fs.readFileSync(new URL('../config/transferencia-publica.php', import.meta.url), 'utf8');
+const telefono = fs.readFileSync(new URL('../public/assets/telefono-internacional.js', import.meta.url), 'utf8');
 
 function expect(condition, message) {
   if (!condition) throw new Error(message);
@@ -34,6 +35,19 @@ expect(
 expect(
   registro.includes('Tu registro está realizado, pero el pago permanece pendiente hasta que sea confirmado.'),
   'La advertencia de pago pendiente debe permanecer visible.'
+);
+expect(
+  registro.includes('<meta name="robots" content="noindex,nofollow">'),
+  'El flujo transaccional de registro debe mantenerse fuera del índice.'
+);
+expect(
+  telefono.includes('function registroAccesibilidad()') &&
+    telefono.includes("['nombre','registro-nombre']") &&
+    telefono.includes("['whatsapp','whatsapp']") &&
+    telefono.includes("['horario_id','registro-horario']") &&
+    telefono.includes("['fecha_inicio','registro-fecha-inicio']") &&
+    telefono.includes('label.htmlFor=control.id'),
+  'Los campos del registro deben quedar asociados programáticamente con sus etiquetas visibles.'
 );
 expect(
   /'clabe'\s*=>\s*'\d{18}'/.test(transferencia),
