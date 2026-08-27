@@ -3,7 +3,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/periodos-financieros.php';
-auth_require(['ADMIN','VERIFICADOR']);
+$me=auth_require(['ADMIN']);
 $config=require __DIR__.'/../config/database.php';
 function jsonOut(array $data,int $status=200):never{http_response_code($status);echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);exit;}
 function site(PDO $pdo,string $clave):array{$st=$pdo->prepare("SELECT id,clave,nombre,socio,porcentaje_mensualidad_socio,porcentaje_intensivo_socio,porcentaje_inscripcion_socio,minimo_mensual_socio FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$s=$st->fetch();if(!$s)jsonOut(['ok'=>false,'error'=>'Sede inválida'],422);return $s;}
@@ -49,9 +49,8 @@ function exactMovementDate(string $value):string{
     throw new InvalidArgumentException('Fecha inválida');
 }
 try{
-    $method=$_SERVER['REQUEST_METHOD']??'GET';
-    $config=require __DIR__.'/../config/database.php';
     $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+    $method=$_SERVER['REQUEST_METHOD']??'GET';
     $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));
     $s=site($pdo,$clave);
     if($method==='GET'){
@@ -79,7 +78,6 @@ try{
         $situation=abs($balance)<.005?'CUADRADO':($balance>0?'HACHE_DEBE_PROA':'PROA_DEBE_HACHE');
         jsonOut(['ok'=>true,'periodo'=>$period,'sede'=>'MONTEVERDE','rango_financiero'=>$rango,'base'=>$base,'comisiones_automaticas'=>$automatic['rows'],'resumen'=>['efectivo_a_proa'=>$cash,'transferencias_a_proa'=>$transfers,'entregado_a_proa'=>$delivered,'pagos_directos_proa'=>$direct,'comisiones_recibidas'=>$commissions,'saldo'=>$balance,'situacion'=>$situation],'movimientos'=>$rows]);
     }
-    $me=auth_require(['ADMIN']);
     if($method!=='POST')jsonOut(['ok'=>false,'error'=>'Método no permitido'],405);
     $input=json_decode(file_get_contents('php://input'),true);
     if(!is_array($input))jsonOut(['ok'=>false,'error'=>'Solicitud JSON inválida'],400);
