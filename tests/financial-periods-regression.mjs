@@ -6,6 +6,8 @@ const migration=fs.readFileSync(new URL('../database/migrations/20260825_financi
 const close=fs.readFileSync(new URL('../api/cierres-mensuales.php',import.meta.url),'utf8');
 const reports=fs.readFileSync(new URL('../api/reportes.php',import.meta.url),'utf8');
 const proa=fs.readFileSync(new URL('../api/comisiones-proa.php',import.meta.url),'utf8');
+const reconciliation=fs.readFileSync(new URL('../api/conciliacion-proa.php',import.meta.url),'utf8');
+const reconciliationPdf=fs.readFileSync(new URL('../api/conciliacion-proa-pdf.php',import.meta.url),'utf8');
 const exportCsv=fs.readFileSync(new URL('../api/reportes-exportar.php',import.meta.url),'utf8');
 
 assert.match(migration,/2026-08-30/);
@@ -15,6 +17,15 @@ assert.match(close,/accion.*PERIODO/s);
 assert.match(reports,/financiero_totales/);
 assert.match(proa,/financiero_totales/);
 assert.doesNotMatch(proa,/DATE\(p\.fecha\).*INTENSIVO/s);
+assert.match(reconciliation,/periodos-financieros\.php/);
+assert.match(reconciliation,/financiero_totales\(\$pdo,\$site,\$period\)/);
+assert.match(reconciliation,/\$rango=\$base\['rango'\]/);
+assert.match(reconciliation,/\$start=\$rango\['inicio'\].*\$end=.*\$rango\['cierre'\]/s);
+assert.doesNotMatch(reconciliation,/function\s+monthRange\s*\(/);
+assert.match(reconciliationPdf,/periodos-financieros\.php/);
+assert.match(reconciliationPdf,/financiero_totales\(\$pdo,\$site,\$periodo\)/);
+assert.match(reconciliationPdf,/\$desde=\$rango\['inicio'\].*\$hasta=.*\$rango\['cierre'\]/s);
+assert.doesNotMatch(reconciliationPdf,/function\s+rangeMonth\s*\(/);
 assert.match(exportCsv,/financiero_periodo_para_fecha/);
 assert.match(exportCsv,/\$periodoDesde=financiero_periodo_para_fecha\(\$pdo,\(string\)\$s\['id'\],\$desde\)/);
 assert.match(exportCsv,/\$periodoHasta=financiero_periodo_para_fecha\(\$pdo,\(string\)\$s\['id'\],\$hasta\)/);
