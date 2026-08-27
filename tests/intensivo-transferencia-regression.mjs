@@ -1,0 +1,47 @@
+import fs from 'node:fs';
+
+const registro = fs.readFileSync(new URL('../public/registro.php', import.meta.url), 'utf8');
+const transferencia = fs.readFileSync(new URL('../config/transferencia-publica.php', import.meta.url), 'utf8');
+
+function expect(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+expect(
+  registro.includes("$transferencia=$tipo==='INTENSIVO'?require __DIR__.'/../config/transferencia-publica.php':[]"),
+  'Los datos de transferencia deben cargarse únicamente para registros intensivos.'
+);
+expect(
+  registro.includes("<?php if($ok&&$tipo==='INTENSIVO'):?>"),
+  'La pantalla de transferencia debe mostrarse únicamente tras un registro intensivo exitoso.'
+);
+expect(
+  registro.includes("<?php elseif($ok):?><section class=\"ok\">") && registro.includes('Hache Natación revisará tu inscripción y confirmará los siguientes pasos.'),
+  'El registro regular debe conservar su pantalla de éxito anterior sin instrucciones bancarias.'
+);
+expect(
+  registro.includes('SELECT id FROM cursos_intensivos WHERE sede_id=:s AND fecha_inicio=:f LIMIT 1') && registro.includes('SELECT precio FROM cursos_intensivos WHERE id=:c LIMIT 1 FOR UPDATE') && registro.includes('$intensivoPrecio=(float)$st->fetchColumn()'),
+  'El importe mostrado debe salir del precio real del curso intensivo existente sin romper la serialización previa.'
+);
+expect(
+  registro.includes("':precio'=>$intensivoPrecio") && registro.includes('Total a pagar: $<?=e(number_format((float)$intensivoPrecio'),
+  'Los cursos nuevos y la pantalla final deben compartir la misma variable de precio.'
+);
+expect(
+  registro.includes('id="copiar-clabe"') && registro.includes('navigator.clipboard.writeText(value)') && registro.includes("document.execCommand('copy')"),
+  'La pantalla intensiva debe permitir copiar la CLABE con fallback.'
+);
+expect(
+  registro.includes('Tu registro está realizado, pero el pago permanece pendiente hasta que sea confirmado.'),
+  'La advertencia de pago pendiente debe permanecer visible.'
+);
+expect(
+  /'clabe'\s*=>\s*'\d{18}'/.test(transferencia),
+  'La CLABE pública debe tener exactamente 18 dígitos.'
+);
+expect(
+  transferencia.includes("'institucion' => 'Mercado Pago W'") && transferencia.includes("'beneficiario' => 'Heidy Garcia Liranza'"),
+  'Los datos públicos de transferencia deben mantener la institución y beneficiario configurados.'
+);
+
+console.log('INTENSIVO_TRANSFERENCIA_REGRESSION_OK');

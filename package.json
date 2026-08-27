@@ -2,6 +2,6 @@
   "name": "hache-natacion-quality",
   "private": true,
   "scripts": {
-    "test": "node tests/static-regressions.mjs && node tests/financial-periods-regression.mjs && node tests/continuidad-prorrateo-regression.mjs && node tests/codex-review-pr29-31-regressions.mjs && node tests/intensivo-payment-regressions.mjs && node tests/admin-intensivo-delete-regressions.mjs && node tests/finance-iframe-regression.mjs && node tests/verificador-permissions-regression.mjs && node tests/seo-regressions.mjs && node tests/check-js-syntax.mjs"
+    "test": "node tests/static-regressions.mjs && node tests/financial-periods-regression.mjs && node tests/continuidad-prorrateo-regression.mjs && node tests/codex-review-pr29-31-regressions.mjs && node tests/intensivo-payment-regressions.mjs && node tests/intensivo-transferencia-regression.mjs && node tests/admin-intensivo-delete-regressions.mjs && node tests/finance-iframe-regression.mjs && node tests/verificador-permissions-regression.mjs && node tests/seo-regressions.mjs && node tests/check-js-syntax.mjs"
   }
 }
