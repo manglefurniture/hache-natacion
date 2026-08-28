@@ -18,17 +18,17 @@ declare(strict_types=1);
   <meta property="og:title" content="Del miedo al agua a un logro de vida | María del Carmen">
   <meta property="og:description" content="Una historia real sobre aprender a nadar, ganar confianza y descubrir que sí era posible.">
   <meta property="og:url" content="https://hnatacion.com/historias/maria-del-carmen.php">
-  <meta property="og:image" content="https://hnatacion.com/assets/IMG_20260828_094447.jpg">
+  <meta property="og:image" content="https://hnatacion.com/assets/file_00000000ddc881fba7297eac7c62765c.png">
   <meta property="og:image:alt" content="María del Carmen sonríe frente a la alberca después de su clase de natación">
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Del miedo al agua a un logro de vida | Hache Natación">
   <meta name="twitter:description" content="La historia de María del Carmen: miedo, constancia y la alegría de aprender a nadar.">
-  <meta name="twitter:image" content="https://hnatacion.com/assets/IMG_20260828_094447.jpg">
+  <meta name="twitter:image" content="https://hnatacion.com/assets/file_00000000ddc881fba7297eac7c62765c.png">
 
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
-  <link rel="preload" as="image" href="/assets/IMG_20260828_094447.jpg" fetchpriority="high">
-  <link rel="stylesheet" href="/assets/historia-maria-del-carmen.css?v=20260828-1">
+  <link rel="preload" as="image" href="/assets/file_00000000ddc881fba7297eac7c62765c.png" fetchpriority="high">
+  <link rel="stylesheet" href="/assets/historia-maria-del-carmen.css?v=20260828-2">
 
   <script type="application/ld+json">
   {
@@ -41,7 +41,7 @@ declare(strict_types=1);
     "inLanguage": "es-MX",
     "mainEntityOfPage": "https://hnatacion.com/historias/maria-del-carmen.php",
     "image": [
-      "https://hnatacion.com/assets/IMG_20260828_094447.jpg",
+      "https://hnatacion.com/assets/file_00000000ddc881fba7297eac7c62765c.png",
       "https://hnatacion.com/assets/IMG_20260828_093247.jpg",
       "https://hnatacion.com/assets/IMG_20260828_093221.jpg"
     ],
@@ -77,17 +77,21 @@ declare(strict_types=1);
 
   <main>
     <section class="story-hero" aria-labelledby="story-title">
-      <img class="hero-image" src="/assets/IMG_20260828_094447.jpg" alt="María del Carmen sonríe frente a la alberca y levanta el pulgar" fetchpriority="high" decoding="async">
-      <div class="hero-overlay"></div>
-      <div class="hero-content">
-        <p class="kicker">HISTORIAS HACHE · CANCÚN</p>
-        <h1 id="story-title">Del miedo al agua<br><span>a un logro de vida.</span></h1>
-        <p class="hero-lead">María del Carmen llegó a la alberca con miedo. Hoy entra al agua con confianza y con una certeza nueva: sí podía aprender.</p>
+      <div class="hero-media">
+        <img class="hero-image" src="/assets/file_00000000ddc881fba7297eac7c62765c.png" alt="María del Carmen sonríe frente a la alberca y levanta el pulgar" fetchpriority="high" decoding="async">
+        <div class="hero-media-shade" aria-hidden="true"></div>
       </div>
-      <figure class="hero-quote">
-        <blockquote>“Nunca pensé que iba a aprender a nadar. Hoy es un logro en mi vida.”</blockquote>
-        <figcaption>María del Carmen</figcaption>
-      </figure>
+      <div class="hero-copy-panel">
+        <div class="hero-copy-inner">
+          <p class="kicker">HISTORIAS HACHE · CANCÚN</p>
+          <h1 id="story-title">Del miedo al agua <span>a un logro de vida.</span></h1>
+          <p class="hero-lead">María del Carmen llegó a la alberca con miedo. Hoy entra al agua con confianza y con una certeza nueva: sí podía aprender.</p>
+          <figure class="hero-quote">
+            <blockquote>“Nunca pensé que iba a aprender a nadar. Hoy es un logro en mi vida.”</blockquote>
+            <figcaption>María del Carmen</figcaption>
+          </figure>
+        </div>
+      </div>
     </section>
 
     <article class="story-body">
