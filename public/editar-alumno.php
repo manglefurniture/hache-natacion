@@ -34,9 +34,11 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         if($plan){$st=$pdo->prepare("SELECT activo FROM planes WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$plan,':s'=>$actual['sede_id']]);$activo=$st->fetchColumn();if($activo===false||(!(bool)$activo&&(string)$actual['plan_actual_id']!==$plan)){$pdo->rollBack();exit('El plan seleccionado no pertenece a la sede del alumno o ya no está disponible.');}}
         $sql="UPDATE alumnos SET nombre=?,fecha_nacimiento=?,whatsapp=?,correo=?,fecha_inicio=?,horario_preferido_id=?,plan_actual_id=?,estado_administrativo=?,observaciones=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND sede_id=?";
         $pdo->prepare($sql)->execute([$nombre,$fechaNacimiento!==''?$fechaNacimiento:null,$whatsapp,$correo!==''?$correo:null,$fechaInicio,$horario,$plan,$estado==='BAJA'?'BAJA':'PENDIENTE',$obs!==''?$obs:null,$id,$sedeId]);
-        intensivo_transferir_por_fecha_edicion($pdo,$id,$sedeId,$fechaInicio,(string)$admin['id']);
         regla_marcar_inscripcion_historica($pdo,$id,$historica,$historica?'Inscripción cubierta antes de la implementación del sistema':null);
-        if($estado!=='BAJA')regla_recalcular_alumno($pdo,$id);
+        if($estado!=='BAJA'){
+            intensivo_transferir_por_fecha_edicion($pdo,$id,$sedeId,$fechaInicio,(string)$admin['id']);
+            regla_recalcular_alumno($pdo,$id);
+        }
         $pdo->commit();
     }catch(IntensivoTransferenciaException $e){if($pdo->inTransaction())$pdo->rollBack();exit(htmlspecialchars($e->getMessage(),ENT_QUOTES,'UTF-8'));}
     catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
