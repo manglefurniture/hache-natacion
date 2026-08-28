@@ -10,6 +10,16 @@ function check(bool $condition,string $message): void
     if(!$condition) throw new RuntimeException($message);
 }
 
+function expectTransferException(callable $fn,string $needle,string $message): void
+{
+    try{$fn();}
+    catch(IntensivoTransferenciaException $e){
+        check(str_contains($e->getMessage(),$needle),$message.' Mensaje recibido: '.$e->getMessage());
+        return;
+    }
+    throw new RuntimeException($message.' No se lanzó IntensivoTransferenciaException.');
+}
+
 $tz=new DateTimeZone('America/Cancun');
 $viernes=new DateTimeImmutable('2026-08-28 12:00:00',$tz);
 $opciones=intensivo_lunes_registro(4,$viernes);
@@ -25,6 +35,29 @@ check(
     'En lunes el curso que inicia ese mismo día debe seguir siendo la primera opción.'
 );
 
+// P1 Codex: un alumno regular no debe heredar la regla de "solo lunes".
+check(
+    intensivo_validar_fecha_transferencia([], '2026-08-27')===null,
+    'Un alumno sin relación activa de intensivo debe poder conservar una fecha regular que no sea lunes.'
+);
+
+$relacionActiva=[['curso_intensivo_id'=>'curso-1']];
+expectTransferException(
+    fn()=>intensivo_validar_fecha_transferencia($relacionActiva,''),
+    'obligatoria',
+    'P2 Codex: no debe permitirse borrar la fecha mientras exista una relación activa de intensivo.'
+);
+expectTransferException(
+    fn()=>intensivo_validar_fecha_transferencia($relacionActiva,'2026-08-27'),
+    'lunes',
+    'La restricción de lunes sí debe aplicarse cuando existe una relación activa de intensivo.'
+);
+$fechaValida=intensivo_validar_fecha_transferencia($relacionActiva,'2026-08-31');
+check(
+    $fechaValida instanceof DateTimeImmutable && $fechaValida->format('Y-m-d')==='2026-08-31',
+    'Una relación activa de intensivo debe aceptar un lunes válido.'
+);
+
 $helper=file_get_contents(__DIR__.'/../config/intensivo-transferencias.php');
 $editar=file_get_contents(__DIR__.'/../public/editar-alumno.php');
 check(is_string($helper)&&is_string($editar),'No se pudieron leer los archivos de transferencia.');
@@ -38,6 +71,18 @@ foreach([
 ] as $needle){
     check(str_contains($helper,$needle),'Falta una protección crítica en la transferencia de intensivos: '.$needle);
 }
+
+// P1 Codex: la sincronización de fecha no puede pisar el horario regular de
+// continuidad. El helper ya no debe escribir horario_preferido_id en ningún
+// camino; el horario del intensivo vive en curso_intensivo_alumnos.horario_id.
+check(
+    !str_contains($helper,'UPDATE alumnos SET fecha_inicio=:f,horario_preferido_id=:h'),
+    'La transferencia no debe reemplazar horario_preferido_id con el horario del intensivo.'
+);
+check(
+    str_contains($helper,'UPDATE alumnos SET fecha_inicio=:f,updated_at=NOW()'),
+    'La sincronización debe limitarse a la fecha del alumno y preservar su horario regular/preferido.'
+);
 
 check(
     str_contains($editar,"require_once __DIR__.'/../config/intensivo-transferencias.php'") &&
