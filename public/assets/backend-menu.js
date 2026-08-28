@@ -3,7 +3,7 @@ const ASSET_VERSION='20260828-historias1';
 const fix=document.createElement('link');fix.rel='stylesheet';fix.href=`/assets/responsive-fixes.css?v=${ASSET_VERSION}`;document.head.appendChild(fix);
 const path=location.pathname;let data={};
 try{const r=await fetch('/api/sesion.php',{credentials:'same-origin'}),d=await r.json();if(d.autenticado&&d.usuario){data=d.usuario;sessionStorage.setItem('hache_usuario',JSON.stringify(data));}}catch(e){try{data=JSON.parse(sessionStorage.getItem('hache_usuario')||'{}')}catch(_){}}
-const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const role=data.rol||'',user=esc(data.nombre||data.usuario||''),safeRole=esc(role),sede=data.sede_activa||data.sede_clave||'';
 if(!role){location.href='/';return}
 if(data.debe_cambiar_password&&path!=='/cambiar-password.php'){location.href='/cambiar-password.php';return}
