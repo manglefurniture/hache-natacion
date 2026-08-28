@@ -134,6 +134,17 @@ declare(strict_types=1);
   </section>
 
   <section class="wrap">
+    <div class="eyebrow">GUÍAS PARA ENTENDER EL PROCESO</div>
+    <h2 class="section-title">Respuestas antes de entrar al agua.</h2>
+    <div class="faq-grid">
+      <article class="faq"><h3>¿Estás empezando desde cero?</h3><p>Lee cómo plantear el aprendizaje adulto, qué trabajar primero y cómo reconocer avances que puedas repetir.</p><p><a href="/guias/aprender-a-nadar-de-adulto/"><strong>Cómo aprender a nadar de adulto →</strong></a></p></article>
+      <article class="faq"><h3>¿No sabes qué programa elegir?</h3><p>Compara el objetivo y la frecuencia del curso intensivo y las clases regulares según tu punto de partida.</p><p><a href="/guias/curso-intensivo-o-clases-regulares/"><strong>Comparar programas →</strong></a></p></article>
+      <article class="faq"><h3>¿La respiración o el miedo te frenan?</h3><p>Las guías explican estos problemas por separado para que puedas identificar qué necesitas practicar.</p><p><a href="/guias/"><strong>Explorar todas las guías →</strong></a></p></article>
+      <article class="faq"><h3>¿No sabes cómo describir tu nivel?</h3><p>Usa habilidades concretas —no etiquetas vagas— para reconocer tu punto de partida antes de elegir clases.</p><p><a href="/guias/como-saber-mi-nivel-de-natacion/"><strong>Identificar mi nivel →</strong></a></p></article>
+    </div>
+  </section>
+
+  <section class="wrap">
     <div class="eyebrow">SEDES REALES EN CANCÚN</div>
     <h2 class="section-title">Conoce dónde entrenamos.</h2>
     <div class="venue-grid">
@@ -178,6 +189,7 @@ declare(strict_types=1);
   <div><strong>H NATACIÓN</strong><br><small>Cancún · Quintana Roo</small></div>
   <nav aria-label="Más información">
     <a href="/">Inicio</a>
+    <a href="/guias/">Guías</a>
     <a href="/monteverde.php">PROA Monteverde</a>
     <a href="/palapas-protudec.php">Palapas Protudec</a>
     <a href="/curso-intensivo.php">Curso intensivo</a>
