@@ -32,10 +32,15 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $dup=$pdo->prepare("SELECT nombre FROM alumnos WHERE whatsapp=:w AND id<>:id LIMIT 1");$dup->execute([':w'=>$whatsapp,':id'=>$id]);if($x=$dup->fetch()){$pdo->rollBack();exit('Ese WhatsApp ya pertenece a '.htmlspecialchars($x['nombre'],ENT_QUOTES,'UTF-8').'.');}
         if($horario){$st=$pdo->prepare("SELECT activo FROM horarios WHERE id=:id AND sede_id=:s AND regular=1 LIMIT 1 FOR UPDATE");$st->execute([':id'=>$horario,':s'=>$actual['sede_id']]);$activo=$st->fetchColumn();if($activo===false||(!(bool)$activo&&(string)$actual['horario_preferido_id']!==$horario)){$pdo->rollBack();exit('El horario seleccionado no pertenece a la sede del alumno o ya no está disponible.');}}
         if($plan){$st=$pdo->prepare("SELECT activo FROM planes WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$plan,':s'=>$actual['sede_id']]);$activo=$st->fetchColumn();if($activo===false||(!(bool)$activo&&(string)$actual['plan_actual_id']!==$plan)){$pdo->rollBack();exit('El plan seleccionado no pertenece a la sede del alumno o ya no está disponible.');}}
-        if($estado==='BAJA'&&$fechaInicio===null){
-            $st=$pdo->prepare("SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=CURDATE() LIMIT 1 FOR UPDATE");
+        if($estado==='BAJA'){
+            $st=$pdo->prepare("SELECT ci.fecha_inicio FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=CURDATE() ORDER BY ci.fecha_inicio ASC LIMIT 1 FOR UPDATE");
             $st->execute([':a'=>$id,':s'=>$sedeId]);
-            if($st->fetchColumn())throw new IntensivoTransferenciaException('La fecha de inicio es obligatoria mientras el alumno siga ligado a un intensivo activo, incluso al marcarlo como baja.');
+            $fechaIntensivoBaja=$st->fetchColumn();
+            if($fechaIntensivoBaja!==false){
+                $fechaIntensivoBaja=(string)$fechaIntensivoBaja;
+                if($fechaInicio===null)throw new IntensivoTransferenciaException('La fecha de inicio es obligatoria mientras el alumno siga ligado a un intensivo activo, incluso al marcarlo como baja.');
+                if($fechaInicio!==$fechaIntensivoBaja)throw new IntensivoTransferenciaException('Al marcar BAJA conserva la fecha del curso intensivo actual. Si necesitas cambiarlo de curso, haz esa corrección antes de darlo de baja.');
+            }
         }
         $sql="UPDATE alumnos SET nombre=?,fecha_nacimiento=?,whatsapp=?,correo=?,fecha_inicio=?,horario_preferido_id=?,plan_actual_id=?,estado_administrativo=?,observaciones=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND sede_id=?";
         $pdo->prepare($sql)->execute([$nombre,$fechaNacimiento!==''?$fechaNacimiento:null,$whatsapp,$correo!==''?$correo:null,$fechaInicio,$horario,$plan,$estado==='BAJA'?'BAJA':'PENDIENTE',$obs!==''?$obs:null,$id,$sedeId]);
