@@ -9,7 +9,7 @@ declare(strict_types=1);
   <meta name="theme-color" content="#062a45">
   <title>María del Carmen: del miedo al agua a aprender a nadar | Hache Natación</title>
   <meta name="description" content="María del Carmen cuenta cómo pasó del miedo al agua a aprender a nadar en Cancún. Una historia real de constancia, confianza y bienestar.">
-  <meta name="robots" content="noindex,follow,max-image-preview:large,max-snippet:-1">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
   <link rel="canonical" href="https://hnatacion.com/historias/maria-del-carmen.php">
 
   <meta property="og:locale" content="es_MX">
@@ -29,6 +29,7 @@ declare(strict_types=1);
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="preload" as="image" href="/assets/file_00000000ddc881fba7297eac7c62765c.png" fetchpriority="high">
   <link rel="stylesheet" href="/assets/historia-maria-del-carmen.css?v=20260828-2">
+  <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260828-1">
 
   <script type="application/ld+json">
   {
@@ -72,7 +73,7 @@ declare(strict_types=1);
       <span class="brand-mark">H</span>
       <span class="brand-name">H NATACIÓN</span>
     </a>
-    <a class="back-link" href="/">Volver al sitio <span aria-hidden="true">↗</span></a>
+    <a class="back-link" href="/historias/">Todas las historias <span aria-hidden="true">↗</span></a>
   </header>
 
   <main>
@@ -159,6 +160,44 @@ declare(strict_types=1);
       </section>
     </article>
 
+    <section class="story-community" data-story-community data-story="maria-del-carmen" aria-labelledby="community-title">
+      <div class="story-community-inner">
+        <header class="community-heading">
+          <p class="kicker blue">LA HISTORIA SIGUE EN COMUNIDAD</p>
+          <h2 id="community-title">¿Qué te hizo sentir esta historia?</h2>
+          <p>Reacciona o deja unas palabras para María del Carmen y para quienes todavía están pensando en entrar al agua. Los comentarios son públicos después de ser revisados por Hache Natación.</p>
+        </header>
+        <section class="reaction-panel" aria-label="Reacciones a la historia">
+          <h3>Reacciona a esta historia</h3>
+          <div class="reaction-grid">
+            <button class="reaction-button" type="button" data-reaction="CORAZON" aria-pressed="false"><span class="reaction-emoji" aria-hidden="true">❤️</span><span>Me encantó</span><span data-count>0</span></button>
+            <button class="reaction-button" type="button" data-reaction="APLAUSOS" aria-pressed="false"><span class="reaction-emoji" aria-hidden="true">👏</span><span>Aplausos</span><span data-count>0</span></button>
+            <button class="reaction-button" type="button" data-reaction="INSPIRA" aria-pressed="false"><span class="reaction-emoji" aria-hidden="true">✨</span><span>Inspira</span><span data-count>0</span></button>
+            <button class="reaction-button" type="button" data-reaction="FUERZA" aria-pressed="false"><span class="reaction-emoji" aria-hidden="true">💪</span><span>Fuerza</span><span data-count>0</span></button>
+            <button class="reaction-button" type="button" data-reaction="SONRISA" aria-pressed="false"><span class="reaction-emoji" aria-hidden="true">😊</span><span>Sonrisa</span><span data-count>0</span></button>
+          </div>
+        </section>
+        <div class="comments-layout">
+          <section class="comment-form-panel">
+            <h3>Deja un comentario</h3>
+            <p class="comment-help">Solo pedimos tu nombre. No publiques teléfonos, correos ni otros datos personales. Tu comentario quedará pendiente hasta que un moderador lo apruebe.</p>
+            <form class="comment-form" data-comment-form>
+              <label>Tu nombre<input type="text" name="nombre" maxlength="80" autocomplete="name" required></label>
+              <label>Comentario<textarea name="comentario" maxlength="700" required></textarea></label>
+              <label class="comment-honeypot" aria-hidden="true">Sitio web<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+              <button type="submit">Enviar para moderación</button>
+            </form>
+            <p class="community-status" data-community-status hidden></p>
+          </section>
+          <section class="comments-panel" aria-labelledby="comments-title">
+            <h3 id="comments-title">Comentarios publicados</h3>
+            <p class="comment-help">Mostramos únicamente el primer nombre de quien comenta.</p>
+            <div class="comments-list" data-comments-list aria-live="polite"><p class="comments-empty">Cargando comentarios…</p></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
     <section class="story-cta" aria-label="Información sobre clases de natación">
       <div>
         <p class="kicker">TU HISTORIA PUEDE EMPEZAR AQUÍ</p>
@@ -180,5 +219,6 @@ declare(strict_types=1);
     <p>Cancún · Quintana Roo</p>
     <a href="/privacidad/">Política de privacidad</a>
   </footer>
+  <script src="/assets/historias-interacciones.js?v=20260828-1" defer></script>
 </body>
 </html>
