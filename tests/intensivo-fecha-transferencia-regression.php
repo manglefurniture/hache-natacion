@@ -90,10 +90,16 @@ check(
     'Editar alumno debe sincronizar la fecha con la pertenencia real al intensivo.'
 );
 check(
-    str_contains($editar,"if(\$estado==='BAJA'&&\$fechaInicio===null)") &&
-    str_contains($editar,'ci.fecha_fin>=CURDATE() LIMIT 1 FOR UPDATE') &&
+    str_contains($editar,"if(\$estado==='BAJA')") &&
+    str_contains($editar,'SELECT ci.fecha_inicio FROM curso_intensivo_alumnos') &&
+    str_contains($editar,'$fechaInicio===null') &&
     str_contains($editar,'incluso al marcarlo como baja'),
     'P2 Codex: marcar BAJA no debe permitir borrar fecha_inicio si aún existe una relación activa de intensivo.'
+);
+check(
+    str_contains($editar,'$fechaInicio!==$fechaIntensivoBaja') &&
+    str_contains($editar,'Al marcar BAJA conserva la fecha del curso intensivo actual'),
+    'P2 Codex: marcar BAJA tampoco debe permitir cambiar fecha_inicio sin mover primero la relación real del intensivo.'
 );
 check(
     str_contains($editar,'Por seguridad no se moverá si ya tiene pago, asistencia, ausencias, reposiciones o continuidad registradas.'),
