@@ -30,7 +30,7 @@ assert.match(publicApi,/mismo_origen\(\)/,'Las mutaciones públicas deben valida
 assert.match(publicApi,/origen_bloqueado/);
 assert.match(publicApi,/INTERVAL 30 MINUTE/,'Debe existir rate limit de comentarios');
 assert.match(publicApi,/INTERVAL 10 MINUTE/,'Debe existir rate limit de reacciones');
-assert.match(publicApi,/estado,'PENDIENTE'/,'Los comentarios nuevos deben quedar pendientes');
+assert.match(publicApi,/VALUES\(:historia,:autor,:comentario,'PENDIENTE'/,'Los comentarios nuevos deben quedar pendientes');
 assert.match(publicApi,/estado='APROBADO'/,'Solo comentarios aprobados deben salir en la lectura pública');
 assert.match(publicApi,/demasiados enlaces/,'Debe existir filtro básico de enlaces');
 assert.match(publicApi,/lenguaje_revisar/,'Debe existir señal básica para revisión de lenguaje');
