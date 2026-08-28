@@ -17,10 +17,27 @@ function intensivo_lunes_semana_actual(?DateTimeImmutable $referencia = null): D
 function intensivo_lunes_registro(int $cantidad = 10, ?DateTimeImmutable $referencia = null): array
 {
     $cantidad = max(1, min(52, $cantidad));
-    $lunes = intensivo_lunes_semana_actual($referencia);
-    $fechas = [];
-    for ($i = 0; $i < $cantidad; $i++) {
-        $fechas[] = $lunes->modify('+'.($i * 7).' days')->format('Y-m-d');
+    $hoy = intensivo_hoy_operativo($referencia);
+    $lunesActual = intensivo_lunes_semana_actual($hoy);
+
+    // El lunes de la semana actual sigue disponible durante su ventana de
+    // inscripción tardía, pero a partir del martes la opción predeterminada
+    // debe ser el próximo lunes. Así evitamos altas accidentales en un curso
+    // que ya comenzó sin perder la posibilidad de inscribir tarde a propósito.
+    if ((int)$hoy->format('N') === 1) {
+        $fechas = [];
+        for ($i = 0; $i < $cantidad; $i++) {
+            $fechas[] = $lunesActual->modify('+'.($i * 7).' days')->format('Y-m-d');
+        }
+        return $fechas;
+    }
+
+    $fechas = [$lunesActual->modify('+7 days')->format('Y-m-d')];
+    if ($cantidad > 1 && intensivo_inscripcion_abierta($lunesActual->format('Y-m-d'), $hoy)) {
+        $fechas[] = $lunesActual->format('Y-m-d');
+    }
+    for ($i = 2; count($fechas) < $cantidad; $i++) {
+        $fechas[] = $lunesActual->modify('+'.($i * 7).' days')->format('Y-m-d');
     }
     return $fechas;
 }
