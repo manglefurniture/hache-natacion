@@ -32,6 +32,11 @@ Hache Natación ofrece clases presenciales de natación para adultos y adolescen
 - [Cómo aprender a flotar](https://hnatacion.com/guias/aprender-a-flotar/): posición corporal, respiración y recuperación del apoyo.
 - [Cómo saber tu nivel de natación](https://hnatacion.com/guias/como-saber-mi-nivel-de-natacion/): habilidades concretas para elegir mejor un programa.
 
+## Historias de Hache
+
+- [Historias Hache](https://hnatacion.com/historias/): historias reales de alumnos y sus procesos dentro del agua.
+- [María del Carmen: del miedo al agua a un logro de vida](https://hnatacion.com/historias/maria-del-carmen.php): una historia real sobre miedo al agua, constancia, confianza y aprendizaje.
+
 ## Audiencia
 
 Adultos y adolescentes desde 12 años.
