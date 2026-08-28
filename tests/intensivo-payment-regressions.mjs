@@ -109,7 +109,7 @@ assert.ok(paymentCore.includes("require_once __DIR__.'/../config/intensivos-esta
 assert.ok(paymentCore.includes("if($tipo==='INTENSIVO')intensivos_reconciliar_estados_sede($pdo,$sedeId)"), 'El pago intensivo debe reconciliar su estado dentro de la transacción');
 
 // Forzar assets nuevos evita que el navegador siga ejecutando el JS anterior con Pagar siempre visible.
-assert.ok(backendMenu.includes("const ASSET_VERSION='20260825-2'"));
-assert.ok(bootstrap.includes('/assets/backend-menu.js?v=20260825-2'));
+assert.ok(backendMenu.includes("const ASSET_VERSION='20260828-historias1'"));
+assert.ok(bootstrap.includes('/assets/backend-menu.js?v=20260828-historias1'));
 
 console.log('✓ regresiones de integridad de intensivos verificadas');
