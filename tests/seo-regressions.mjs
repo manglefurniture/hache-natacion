@@ -28,6 +28,18 @@ const indexablePages = [
   ['public/metodologia.php', 'https://hnatacion.com/metodologia.php', metodologia],
 ];
 
+const guideUrls = [
+  'https://hnatacion.com/guias/',
+  'https://hnatacion.com/guias/aprender-a-nadar-de-adulto/',
+  'https://hnatacion.com/guias/cuanto-tiempo-tarda-aprender-a-nadar/',
+  'https://hnatacion.com/guias/perder-miedo-al-agua/',
+  'https://hnatacion.com/guias/curso-intensivo-o-clases-regulares/',
+  'https://hnatacion.com/guias/primera-clase-de-natacion/',
+  'https://hnatacion.com/guias/respiracion-al-nadar-principiantes/',
+  'https://hnatacion.com/guias/aprender-a-flotar/',
+  'https://hnatacion.com/guias/como-saber-mi-nivel-de-natacion/',
+];
+
 const titles = new Set();
 const canonicals = new Set();
 for (const [file, url, html] of indexablePages) {
@@ -104,7 +116,7 @@ for (const route of ['/dashboard.php', '/alumnos.php', '/pagos.php', '/mi-cuenta
 }
 assert.ok(robots.includes('Disallow: /api/'), 'La API debe continuar excluida del rastreo');
 
-const expectedUrls = indexablePages.map(([, url]) => url);
+const expectedUrls = [...indexablePages.map(([, url]) => url), ...guideUrls];
 const sitemapUrls = [...sitemap.matchAll(/<loc>(https:\/\/hnatacion\.com\/[^<]*)<\/loc>/g)]
   .map((match) => match[1])
   .filter((url) => !url.includes('/assets/'));
@@ -129,5 +141,6 @@ assert.match(llms, /\[Clases regulares de natación para adultos en Cancún\]\(h
 assert.match(llms, /\[PROA Monteverde\]\(https:\/\/hnatacion\.com\/monteverde\.php\)/);
 assert.match(llms, /\[Palapas Protudec\]\(https:\/\/hnatacion\.com\/palapas-protudec\.php\)/);
 assert.match(llms, /\[Metodología de Hache Natación\]\(https:\/\/hnatacion\.com\/metodologia\.php\)/);
+assert.match(llms, /\[Guías de Hache Natación\]\(https:\/\/hnatacion\.com\/guias\/\)/);
 
 console.log('✓ regresiones SEO verificadas');
