@@ -13,6 +13,8 @@ const regular = read('public/clases-regulares.php');
 const monteverde = read('public/monteverde.php');
 const palapas = read('public/palapas-protudec.php');
 const metodologia = read('public/metodologia.php');
+const historias = read('public/historias/index.php');
+const mariaStory = read('public/historias/maria-del-carmen.php');
 const robots = read('public/robots.txt');
 const sitemap = read('public/sitemap.xml');
 const llms = read('public/llms.txt');
@@ -38,6 +40,11 @@ const guideUrls = [
   'https://hnatacion.com/guias/respiracion-al-nadar-principiantes/',
   'https://hnatacion.com/guias/aprender-a-flotar/',
   'https://hnatacion.com/guias/como-saber-mi-nivel-de-natacion/',
+];
+
+const storyUrls = [
+  'https://hnatacion.com/historias/',
+  'https://hnatacion.com/historias/maria-del-carmen.php',
 ];
 
 const titles = new Set();
@@ -79,6 +86,8 @@ assert.match(home, /<meta name="description" content="Clases de natación en Can
 assert.match(home, /href="\/monteverde\.php"/);
 assert.match(home, /href="\/palapas-protudec\.php"/);
 assert.match(home, /href="\/metodologia\.php"/);
+assert.ok((home.match(/href="\/historias\/"/g) || []).length >= 3, 'Home debe enlazar Historias desde navegación y contenido');
+assert.match(home, /href="\/historias\/maria-del-carmen\.php"/);
 assert.match(home, /window\.matchMedia\('\(min-width: 761px\)'\)/);
 assert.match(home, /<a href="\/privacidad\/" style="display:block;margin:0 0 8px;color:#527087;font-size:12px;text-align:center">Privacidad<\/a>/);
 
@@ -101,10 +110,21 @@ assert.match(metodologia, /<h1>Aprender a nadar también es ganar confianza\.<\/
 assert.match(metodologia, /href="\/monteverde\.php"/);
 assert.match(metodologia, /href="\/palapas-protudec\.php"/);
 
+assert.match(historias, /<title>Historias Hache \| Personas reales que aprendieron a nadar<\/title>/);
+assert.match(historias, /<meta name="robots" content="index,follow[^\"]*">/);
+assert.match(historias, /<link rel="canonical" href="https:\/\/hnatacion\.com\/historias\/">/);
+assert.match(historias, /href="\/historias\/maria-del-carmen\.php"/);
+assert.match(historias, /"@type":"CollectionPage"/);
+assert.match(mariaStory, /<meta name="robots" content="index,follow[^\"]*">/);
+assert.match(mariaStory, /<link rel="canonical" href="https:\/\/hnatacion\.com\/historias\/maria-del-carmen\.php">/);
+assert.match(mariaStory, /data-story-community data-story="maria-del-carmen"/);
+assert.match(mariaStory, /\/assets\/historias-interacciones\.js/);
+
 assert.match(bootstrap, /X-Robots-Tag: noindex, nofollow, noarchive/);
 for (const route of ['/monteverde.php', '/palapas-protudec.php', '/metodologia.php']) {
   assert.ok(bootstrap.includes(`'${route}'`), `${route} debe estar en la allowlist pública de backend-bootstrap.php`);
 }
+assert.match(bootstrap, /str_starts_with\(\$currentPath, '\/historias\/'\)/, 'Historias debe conservar acceso público');
 assert.match(login, /<meta name="robots" content="noindex,nofollow,noarchive">/);
 assert.equal(
   robots,
@@ -116,7 +136,7 @@ for (const route of ['/dashboard.php', '/alumnos.php', '/pagos.php', '/mi-cuenta
 }
 assert.ok(robots.includes('Disallow: /api/'), 'La API debe continuar excluida del rastreo');
 
-const expectedUrls = [...indexablePages.map(([, url]) => url), ...guideUrls];
+const expectedUrls = [...indexablePages.map(([, url]) => url), ...guideUrls, ...storyUrls];
 const sitemapUrls = [...sitemap.matchAll(/<loc>(https:\/\/hnatacion\.com\/[^<]*)<\/loc>/g)]
   .map((match) => match[1])
   .filter((url) => !url.includes('/assets/'));
@@ -129,7 +149,7 @@ for (const url of expectedUrls) {
   }
 }
 
-for (const forbidden of ['/dashboard.php', '/alumnos.php', '/pagos.php', '/api/']) {
+for (const forbidden of ['/dashboard.php', '/alumnos.php', '/pagos.php', '/api/', '/historias-moderacion.php', '/historias/interacciones.php']) {
   assert.ok(!sitemap.includes(forbidden), `${forbidden} no debe aparecer en sitemap.xml`);
   assert.ok(!llms.includes(forbidden), `${forbidden} no debe aparecer en llms.txt`);
 }
@@ -142,5 +162,7 @@ assert.match(llms, /\[PROA Monteverde\]\(https:\/\/hnatacion\.com\/monteverde\.p
 assert.match(llms, /\[Palapas Protudec\]\(https:\/\/hnatacion\.com\/palapas-protudec\.php\)/);
 assert.match(llms, /\[Metodología de Hache Natación\]\(https:\/\/hnatacion\.com\/metodologia\.php\)/);
 assert.match(llms, /\[Guías de Hache Natación\]\(https:\/\/hnatacion\.com\/guias\/\)/);
+assert.match(llms, /\[Historias Hache\]\(https:\/\/hnatacion\.com\/historias\/\)/);
+assert.match(llms, /\[María del Carmen: del miedo al agua a un logro de vida\]\(https:\/\/hnatacion\.com\/historias\/maria-del-carmen\.php\)/);
 
 console.log('✓ regresiones SEO verificadas');
