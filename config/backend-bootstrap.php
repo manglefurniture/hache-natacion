@@ -28,8 +28,9 @@ $publicPages = [
     '/monteverde-regular.php', '/monteverde-intensivo.php', '/palapas-regular.php',
     '/palapas-intensivo.php', '/inscripcion-intensivo.php',
 ];
+$isPublicStory = str_starts_with($currentPath, '/historias/');
 
-if ($baseName === 'index.php' || str_starts_with($scriptName, '/api/') || in_array($currentPath, $publicPages, true)) return;
+if ($baseName === 'index.php' || str_starts_with($scriptName, '/api/') || $isPublicStory || in_array($currentPath, $publicPages, true)) return;
 
 if (!headers_sent()) header('X-Robots-Tag: noindex, nofollow, noarchive');
 
