@@ -90,6 +90,12 @@ check(
     'Editar alumno debe sincronizar la fecha con la pertenencia real al intensivo.'
 );
 check(
+    str_contains($editar,"if(\$estado==='BAJA'&&\$fechaInicio===null)") &&
+    str_contains($editar,'ci.fecha_fin>=CURDATE() LIMIT 1 FOR UPDATE') &&
+    str_contains($editar,'incluso al marcarlo como baja'),
+    'P2 Codex: marcar BAJA no debe permitir borrar fecha_inicio si aún existe una relación activa de intensivo.'
+);
+check(
     str_contains($editar,'Por seguridad no se moverá si ya tiene pago, asistencia, ausencias, reposiciones o continuidad registradas.'),
     'La interfaz administrativa debe explicar cuándo una transferencia está protegida/bloqueada.'
 );
