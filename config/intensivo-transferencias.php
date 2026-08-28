@@ -7,6 +7,30 @@ require_once __DIR__.'/intensivos-estado.php';
 final class IntensivoTransferenciaException extends RuntimeException {}
 
 /**
+ * Valida la fecha solamente cuando existe una pertenencia a intensivo que
+ * realmente debe sincronizarse. Los alumnos regulares pueden tener cualquier
+ * fecha de inicio válida y no deben heredar las restricciones de los lunes.
+ */
+function intensivo_validar_fecha_transferencia(array $relaciones, ?string $fechaInicio): ?DateTimeImmutable
+{
+    if(!$relaciones) return null;
+
+    $fechaInicio=trim((string)$fechaInicio);
+    if($fechaInicio===''){
+        throw new IntensivoTransferenciaException('La fecha de inicio es obligatoria mientras el alumno pertenezca a un curso intensivo activo.');
+    }
+
+    try{$fecha=intensivo_fecha_valida($fechaInicio);}catch(InvalidArgumentException $e){
+        throw new IntensivoTransferenciaException('La nueva fecha del intensivo no es válida.',0,$e);
+    }
+    if((int)$fecha->format('N')!==1){
+        throw new IntensivoTransferenciaException('Los cursos intensivos solo pueden iniciar en lunes.');
+    }
+
+    return $fecha;
+}
+
+/**
  * Sincroniza la pertenencia a un curso intensivo cuando un administrador
  * cambia la fecha de inicio del alumno desde su ficha.
  *
@@ -20,16 +44,6 @@ function intensivo_transferir_por_fecha_edicion(
     ?string $fechaInicio,
     string $actorId
 ): array {
-    $fechaInicio=trim((string)$fechaInicio);
-    if($fechaInicio==='') return ['aplica'=>false,'transferido'=>false];
-
-    try{$fecha=intensivo_fecha_valida($fechaInicio);}catch(InvalidArgumentException $e){
-        throw new IntensivoTransferenciaException('La nueva fecha del intensivo no es válida.',0,$e);
-    }
-    if((int)$fecha->format('N')!==1){
-        throw new IntensivoTransferenciaException('Los cursos intensivos solo pueden iniciar en lunes.');
-    }
-
     intensivos_reconciliar_estados_sede($pdo,$sedeId);
 
     $st=$pdo->prepare("SELECT cia.id AS relacion_id,cia.curso_intensivo_id,cia.horario_id,cia.reposiciones_justificadas,cia.reposiciones_cancelacion,cia.continua_regular,cia.plan_continuidad_id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,ci.created_by
@@ -39,12 +53,18 @@ function intensivo_transferir_por_fecha_edicion(
         ORDER BY ci.fecha_inicio ASC
         FOR UPDATE");
     $st->execute([':a'=>$alumnoId,':s'=>$sedeId]);$relaciones=$st->fetchAll();
+
+    $fecha=intensivo_validar_fecha_transferencia($relaciones,$fechaInicio);
     if(!$relaciones) return ['aplica'=>false,'transferido'=>false];
+    $fechaInicio=trim((string)$fechaInicio);
 
     foreach($relaciones as $rel){
         if((string)$rel['fecha_inicio']===$fechaInicio){
-            $pdo->prepare("UPDATE alumnos SET fecha_inicio=:f,horario_preferido_id=:h,updated_at=NOW() WHERE id=:a AND sede_id=:s")
-                ->execute([':f'=>$fechaInicio,':h'=>$rel['horario_id'],':a'=>$alumnoId,':s'=>$sedeId]);
+            // La relación ya apunta al curso correcto. Solo repara/sincroniza la
+            // fecha: horario_preferido_id puede ser el horario regular elegido
+            // para una continuidad y no debe reemplazarse por el del intensivo.
+            $pdo->prepare("UPDATE alumnos SET fecha_inicio=:f,updated_at=NOW() WHERE id=:a AND sede_id=:s")
+                ->execute([':f'=>$fechaInicio,':a'=>$alumnoId,':s'=>$sedeId]);
             return ['aplica'=>true,'transferido'=>false,'curso_intensivo_id'=>$rel['curso_intensivo_id']];
         }
     }
@@ -107,8 +127,11 @@ function intensivo_transferir_por_fecha_edicion(
     $st->execute([':nuevo'=>$destino['id'],':nota'=>'Transferido administrativamente desde el intensivo del '.date('d/m/Y',strtotime((string)$actual['fecha_inicio'])).' al '.date('d/m/Y',strtotime($fechaInicio)).'.',':id'=>$actual['relacion_id'],':a'=>$alumnoId]);
     if($st->rowCount()!==1) throw new IntensivoTransferenciaException('No se pudo actualizar la pertenencia del alumno al nuevo intensivo.');
 
-    $pdo->prepare("UPDATE alumnos SET fecha_inicio=:f,horario_preferido_id=:h,updated_at=NOW() WHERE id=:a AND sede_id=:s")
-        ->execute([':f'=>$fechaInicio,':h'=>$actual['horario_id'],':a'=>$alumnoId,':s'=>$sedeId]);
+    // La transferencia conserva el horario del participante en la relación
+    // cia. El horario_preferido_id del alumno pertenece a la capa regular y
+    // puede contener una continuidad ya elegida, por lo que no se sobrescribe.
+    $pdo->prepare("UPDATE alumnos SET fecha_inicio=:f,updated_at=NOW() WHERE id=:a AND sede_id=:s")
+        ->execute([':f'=>$fechaInicio,':a'=>$alumnoId,':s'=>$sedeId]);
 
     return [
         'aplica'=>true,
