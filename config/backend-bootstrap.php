@@ -90,7 +90,7 @@ ob_start(static function (string $html): string {
     if (stripos($html, '<html') === false || stripos($html, '<body') === false) return $html;
     $css = '<link rel="stylesheet" href="/assets/backend-menu.css">';
     $diag = '<script src="/assets/diagnostico.js?v=20260817-1"></script>';
-    $js = '<script src="/assets/backend-menu.js?v=20260825-2" defer></script>';
+    $js = '<script src="/assets/backend-menu.js?v=20260828-historias1" defer></script>';
     $oblig = '<script src="/assets/obligaciones-alumnos.js?v=20260821-1" defer></script>';
     $phone = '<script src="/assets/telefono-internacional.js?v=20260821-1" defer></script>';
     foreach ([['/assets/backend-menu.css',$css,'</head>'],['/assets/diagnostico.js',$diag,'</head>'],['/assets/backend-menu.js',$js,'</body>'],['/assets/obligaciones-alumnos.js',$oblig,'</body>'],['/assets/telefono-internacional.js',$phone,'</body>']] as [$needle,$tag,$close]) {
