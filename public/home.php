@@ -32,6 +32,7 @@ declare(strict_types=1);
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="preload" as="image" href="/assets/seo/clases-natacion-adultos-cancun.webp" type="image/webp" fetchpriority="high">
   <link rel="stylesheet" href="/assets/home-v1.css?v=20260822-seo1">
+  <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260828-1">
   <link rel="stylesheet" href="/assets/hachi.css?v=20260818-wa2">
 
   <script type="application/ld+json">
@@ -193,6 +194,7 @@ declare(strict_types=1);
       <a href="#programas">Programas</a>
       <a href="#sedes">Sedes</a>
       <a href="/metodologia.php">Cómo trabajamos</a>
+      <a href="/historias/">Historias</a>
       <a href="#preguntas">Preguntas</a>
       <a class="access" href="/index.php">Iniciar sesión</a>
     </div>
@@ -204,6 +206,7 @@ declare(strict_types=1);
     <a href="#programas">Programas</a>
     <a href="#sedes">Sedes</a>
     <a href="/metodologia.php">Cómo trabajamos</a>
+    <a href="/historias/">Historias</a>
     <a href="#preguntas">Preguntas</a>
     <a href="/index.php">Iniciar sesión</a>
   </div>
@@ -297,6 +300,26 @@ declare(strict_types=1);
     </div>
   </section>
 
+  <section class="stories-section" id="historias">
+    <div class="stories-inner">
+      <div class="section-heading align-left stories-heading">
+        <p class="eyebrow dark">HISTORIAS HACHE</p>
+        <h2>Personas reales. Procesos reales.</h2>
+        <p>Conoce a quienes decidieron entrar al agua, avanzar a su ritmo y convertir cada pequeño logro en confianza.</p>
+      </div>
+      <a class="story-feature-card" href="/historias/maria-del-carmen.php" aria-label="Leer la historia de María del Carmen">
+        <div class="story-feature-media" role="img" aria-label="María del Carmen sonríe frente a la alberca"></div>
+        <div class="story-feature-copy">
+          <small>MARÍA DEL CARMEN · HISTORIA 01</small>
+          <h3>Del miedo al agua a un logro de vida.</h3>
+          <p>Durante años, el agua significó miedo. Hoy entra a la alberca con confianza y con una certeza nueva: sí podía aprender.</p>
+          <strong>Leer su historia →</strong>
+        </div>
+      </a>
+      <a class="stories-all" href="/historias/">Ver todas las historias →</a>
+    </div>
+  </section>
+
   <section class="faq-section" id="preguntas">
     <div class="section-heading align-left">
       <p class="eyebrow dark">PREGUNTAS FRECUENTES</p>
@@ -353,6 +376,7 @@ declare(strict_types=1);
     <a href="/monteverde.php">PROA Monteverde</a>
     <a href="/palapas-protudec.php">Palapas Protudec</a>
     <a href="/metodologia.php">Cómo trabajamos</a>
+    <a href="/historias/">Historias Hache</a>
     <a href="#preguntas">Preguntas frecuentes</a>
   </nav>
   <div class="footer-contact">
