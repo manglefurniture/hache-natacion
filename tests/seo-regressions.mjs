@@ -126,11 +126,32 @@ for (const route of ['/monteverde.php', '/palapas-protudec.php', '/metodologia.p
 }
 assert.match(bootstrap, /str_starts_with\(\$currentPath, '\/historias\/'\)/, 'Historias debe conservar acceso público');
 assert.match(login, /<meta name="robots" content="noindex,nofollow,noarchive">/);
+
+const expectedRobots = `# OpenAI search crawler: public pages remain discoverable in ChatGPT search.
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+
+# OpenAI training crawler: kept as a separate, explicit policy.
+# This preserves the site's current crawl behavior while allowing future changes
+# without affecting search inclusion.
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://hnatacion.com/sitemap.xml
+`;
 assert.equal(
   robots,
-  'User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://hnatacion.com/sitemap.xml\n',
-  'robots.txt debe permitir rastrear páginas HTML protegidas para que Google pueda leer su noindex'
+  expectedRobots,
+  'robots.txt debe separar búsqueda y entrenamiento sin cambiar la política de rastreo pública'
 );
+assert.match(robots, /User-agent: OAI-SearchBot\nAllow: \/\nDisallow: \/api\//, 'OAI-SearchBot debe poder rastrear la superficie pública');
+assert.match(robots, /User-agent: GPTBot\nAllow: \/\nDisallow: \/api\//, 'GPTBot debe conservar una política separada y explícita');
 for (const route of ['/dashboard.php', '/alumnos.php', '/pagos.php', '/mi-cuenta.php']) {
   assert.ok(!robots.includes(`Disallow: ${route}`), `${route} debe poder rastrearse para recibir X-Robots-Tag noindex`);
 }
@@ -148,6 +169,15 @@ for (const url of expectedUrls) {
     assert.match(llms, new RegExp(`\\(${escapeRegExp(url)}\\)`), `Falta ${url} en llms.txt`);
   }
 }
+
+const sitemapUrlBlocks = [...sitemap.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((match) => match[1]);
+const historiasSitemapBlock = sitemapUrlBlocks.find((block) => block.includes('<loc>https://hnatacion.com/historias/</loc>'));
+assert.ok(historiasSitemapBlock, 'El sitemap debe contener el bloque del hub de Historias');
+assert.match(
+  historiasSitemapBlock,
+  /<image:loc>https:\/\/hnatacion\.com\/assets\/file_00000000ddc881fba7297eac7c62765c\.png<\/image:loc>/,
+  'El hub de Historias debe declarar su imagen principal en su propio bloque <url>'
+);
 
 for (const forbidden of ['/dashboard.php', '/alumnos.php', '/pagos.php', '/api/', '/historias-moderacion.php', '/historias/interacciones.php']) {
   assert.ok(!sitemap.includes(forbidden), `${forbidden} no debe aparecer en sitemap.xml`);
