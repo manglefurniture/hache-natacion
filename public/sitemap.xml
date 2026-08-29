@@ -77,7 +77,13 @@
   <url><loc>https://hnatacion.com/guias/respiracion-al-nadar-principiantes/</loc><lastmod>2026-08-27</lastmod></url>
   <url><loc>https://hnatacion.com/guias/aprender-a-flotar/</loc><lastmod>2026-08-27</lastmod></url>
   <url><loc>https://hnatacion.com/guias/como-saber-mi-nivel-de-natacion/</loc><lastmod>2026-08-27</lastmod></url>
-  <url><loc>https://hnatacion.com/historias/</loc><lastmod>2026-08-28</lastmod></url>
+  <url>
+    <loc>https://hnatacion.com/historias/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <image:image>
+      <image:loc>https://hnatacion.com/assets/file_00000000ddc881fba7297eac7c62765c.png</image:loc>
+    </image:image>
+  </url>
   <url>
     <loc>https://hnatacion.com/historias/maria-del-carmen.php</loc>
     <lastmod>2026-08-28</lastmod>
