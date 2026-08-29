@@ -169,10 +169,14 @@ for (const url of expectedUrls) {
     assert.match(llms, new RegExp(`\\(${escapeRegExp(url)}\\)`), `Falta ${url} en llms.txt`);
   }
 }
+
+const sitemapUrlBlocks = [...sitemap.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((match) => match[1]);
+const historiasSitemapBlock = sitemapUrlBlocks.find((block) => block.includes('<loc>https://hnatacion.com/historias/</loc>'));
+assert.ok(historiasSitemapBlock, 'El sitemap debe contener el bloque del hub de Historias');
 assert.match(
-  sitemap,
-  /<loc>https:\/\/hnatacion\.com\/historias\/<\/loc>[\s\S]*?<image:loc>https:\/\/hnatacion\.com\/assets\/file_00000000ddc881fba7297eac7c62765c\.png<\/image:loc>/,
-  'El hub de Historias debe declarar su imagen principal en sitemap'
+  historiasSitemapBlock,
+  /<image:loc>https:\/\/hnatacion\.com\/assets\/file_00000000ddc881fba7297eac7c62765c\.png<\/image:loc>/,
+  'El hub de Historias debe declarar su imagen principal en su propio bloque <url>'
 );
 
 for (const forbidden of ['/dashboard.php', '/alumnos.php', '/pagos.php', '/api/', '/historias-moderacion.php', '/historias/interacciones.php']) {
