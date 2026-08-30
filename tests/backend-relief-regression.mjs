@@ -6,6 +6,9 @@ const relief=fs.readFileSync(new URL('../public/assets/backend-relief.css',impor
 const pagos=fs.readFileSync(new URL('../public/pagos.php',import.meta.url),'utf8');
 const alumnos=fs.readFileSync(new URL('../public/alumnos.php',import.meta.url),'utf8');
 const dashboard=fs.readFileSync(new URL('../public/dashboard.php',import.meta.url),'utf8');
+const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.meta.url),'utf8');
+const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url),'utf8');
+const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
 
 // La capa se carga únicamente desde el bootstrap del backend y después del CSS base.
 assert.match(bootstrap,/backend-menu\.css/);
@@ -18,18 +21,26 @@ assert.match(pagos,/class="btn btn-secondary"/);
 assert.match(alumnos,/class="tab activa"/);
 assert.match(alumnos,/class="mini-edit"/);
 assert.match(alumnos,/class="quick-pay/);
+assert.match(cierres,/id="cerrar" class="close"/);
+assert.match(finanzas,/class="tab active"/);
+assert.match(resumen,/class="tab active"/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
 assert.match(relief,/--hache-control-shadow:/);
-assert.match(relief,/button:not\(\.close\)/);
+assert.match(relief,/button:not\(\.hache-flow-close\)/);
+assert.doesNotMatch(relief,/button:not\(\.close\)/);
+assert.match(relief,/\.modal \.close\{/);
 assert.match(relief,/\.btn,/);
 assert.match(relief,/\.tab,/);
+assert.match(relief,/\.tab\.active/);
 assert.match(relief,/\.mini-edit,/);
 assert.match(relief,/\.quick-pay/);
 assert.match(relief,/:focus-visible/);
 assert.match(relief,/@media\(hover:hover\)/);
 assert.match(relief,/:active\{/);
 assert.match(relief,/--hache-control-shadow-active:/);
+assert.match(relief,/:where\(\.btn-primary,\.tab\.activa,\.tab\.active,/);
+assert.match(relief,/:where\(\.btn-primary,\.tab\.activa,\.tab\.active,[^)]*\):active/);
 
 // Móvil/táctil y accesibilidad de movimiento.
 assert.match(relief,/@media\(max-width:750px\)/);
