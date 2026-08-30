@@ -126,7 +126,7 @@ assert.match(relief,/#btnGuardar/);
 assert.match(relief,/\.botones > button\[type="submit"\]/);
 assert.match(relief,/#ver/);
 assert.match(relief,/#logout\.logout/);
-assert.match(relief,/a\.btn\[href\^="\/api\/exportar-"\]/);
+assert.match(relief,/a\.btn\[href\$="exportar-alumnos-horarios\.php"\]/);
 assert.match(relief,/#liq\.btn/);
 assert.match(relief,/#pag\.btn/);
 assert.match(relief,/\.proa-save/);
@@ -137,11 +137,11 @@ assert.match(relief,/#toolbar\.toolbar button/);
 assert.match(relief,/#form\.form button:not\(\.danger\)/);
 assert.match(relief,/\.form > button#guardar/);
 assert.match(relief,/\.clase-actions \.cerrar/);
-assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#form > button\.btn,[\s\S]*#crear\.btn,[\s\S]*\.msg \.btn,[\s\S]*#activar\.btn,[\s\S]*#btnGuardar,[\s\S]*\.botones > button\[type="submit"\],[\s\S]*#ver,[\s\S]*#logout\.logout,[\s\S]*a\.btn\[href\^="\/api\/exportar-"\],[\s\S]*#liq\.btn,[\s\S]*#pag\.btn,[\s\S]*\.proa-save,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#form > button\.btn,[\s\S]*#crear\.btn,[\s\S]*\.msg \.btn,[\s\S]*#activar\.btn,[\s\S]*#btnGuardar,[\s\S]*\.botones > button\[type="submit"\],[\s\S]*#ver,[\s\S]*#logout\.logout,[\s\S]*a\.btn\[href\$="exportar-alumnos-horarios\.php"\],[\s\S]*#liq\.btn,[\s\S]*#pag\.btn,[\s\S]*\.proa-save,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
 assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
-assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#form > button\.btn,[\s\S]*#crear\.btn,[\s\S]*\.msg \.btn,[\s\S]*#activar\.btn,[\s\S]*#btnGuardar,[\s\S]*\.botones > button\[type="submit"\],[\s\S]*#ver,[\s\S]*#logout\.logout,[\s\S]*a\.btn\[href\^="\/api\/exportar-"\],[\s\S]*#liq\.btn,[\s\S]*#pag\.btn,[\s\S]*\.proa-save[\s\S]*\):active\{/);
+assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#form > button\.btn,[\s\S]*#crear\.btn,[\s\S]*\.msg \.btn,[\s\S]*#activar\.btn,[\s\S]*#btnGuardar,[\s\S]*\.botones > button\[type="submit"\],[\s\S]*#ver,[\s\S]*#logout\.logout,[\s\S]*a\.btn\[href\$="exportar-alumnos-horarios\.php"\],[\s\S]*#liq\.btn,[\s\S]*#pag\.btn,[\s\S]*\.proa-save[\s\S]*\):active\{/);
 
-for(const selector of ['#form > button.btn','#crear.btn','.msg .btn','#activar.btn','#btnGuardar','.botones > button[type="submit"]','#ver','#logout.logout','a.btn[href^="/api/exportar-"]','#liq.btn','#pag.btn','.proa-save']){
+for(const selector of ['#form > button.btn','#crear.btn','.msg .btn','#activar.btn','#btnGuardar','.botones > button[type="submit"]','#ver','#logout.logout','a.btn[href$="exportar-alumnos-horarios.php"]','#liq.btn','#pag.btn','.proa-save']){
   const occurrences=relief.split(selector).length-1;
   assert.ok(occurrences>=4,`${selector} debe conservar bisel primario en normal, hover, disabled-hover y active`);
 }
