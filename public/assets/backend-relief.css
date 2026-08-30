@@ -148,18 +148,60 @@
 }
 
 /*
- * Los botones de cierre de modal son controles transparentes, no piezas en relieve.
- * La exclusión se limita al contexto modal para no afectar acciones reales que usan
- * la clase genérica .close, como "Cerrar mes".
+ * Los botones de cierre de modal y los auxiliares transparentes de búsqueda
+ * no son piezas en relieve. Se restablecen después de las reglas globales para
+ * preservar su geometría propia y evitar saltos al pulsarlos.
  */
-.modal .close{
+.modal .close,
+.hache-search-clear,
+.hache-search-option,
+.hache-person-clear,
+.hache-person-option{
+  border:0!important;
+  box-shadow:none!important;
+  filter:none!important;
+}
+.modal .close,
+.hache-person-clear,
+.hache-person-option,
+.hache-search-option{
+  transform:none!important;
+}
+.hache-search-clear{
+  transform:translateY(-50%)!important;
+}
+@media(hover:hover){
+  .modal .close:hover,
+  .hache-person-clear:hover,
+  .hache-person-option:hover,
+  .hache-search-option:hover{
+    border:0!important;
+    box-shadow:none!important;
+    transform:none!important;
+    filter:none!important;
+  }
+  .hache-search-clear:hover{
+    border:0!important;
+    box-shadow:none!important;
+    transform:translateY(-50%)!important;
+    filter:none!important;
+  }
+}
+.modal .close:active,
+.hache-person-clear:active,
+.hache-person-option:active,
+.hache-search-option:active{
   border:0!important;
   box-shadow:none!important;
   transform:none!important;
   filter:none!important;
 }
-@media(hover:hover){.modal .close:hover{box-shadow:none!important;transform:none!important;filter:none!important}}
-.modal .close:active{box-shadow:none!important;transform:none!important;filter:none!important}
+.hache-search-clear:active{
+  border:0!important;
+  box-shadow:none!important;
+  transform:translateY(-50%)!important;
+  filter:none!important;
+}
 
 @media(max-width:750px){
   /* Menos profundidad en pantallas pequeñas para evitar ruido visual. */
@@ -188,6 +230,7 @@
     .mini-edit,
     .quick-pay
   ):hover{transform:none;filter:none}
+  .hache-search-clear:hover{transform:translateY(-50%)!important}
 }
 
 @media(prefers-reduced-motion:reduce){
