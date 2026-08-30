@@ -42,6 +42,7 @@
   .btn-primary,
   .tab.activa,
   .tab.active,
+  .tab.is-active,
   .hache-mini-action:not(.hache-mini-action-secondary),
   .hache-flow-btn-primary,
   button.primary,
@@ -86,7 +87,7 @@
     .hache-flow-btn,
     .mini-edit,
     .quick-pay
-  ):hover{
+  ):not(:disabled):hover{
     transform:translateY(-1px);
     box-shadow:var(--hache-control-shadow-hover)!important;
     filter:brightness(1.015);
@@ -97,13 +98,14 @@
     .btn-primary,
     .tab.activa,
     .tab.active,
+    .tab.is-active,
     .hache-mini-action:not(.hache-mini-action-secondary),
     .hache-flow-btn-primary,
     button.primary,
     .btn.primary,
     button.save,
     #cerrar.close
-  ):hover{
+  ):not(:disabled):hover{
     border-top-color:rgba(255,255,255,.38)!important;
     border-right-color:rgba(15,23,42,.38)!important;
     border-bottom-color:rgba(3,12,21,.68)!important;
@@ -133,6 +135,7 @@
   .btn-primary,
   .tab.activa,
   .tab.active,
+  .tab.is-active,
   .hache-mini-action:not(.hache-mini-action-secondary),
   .hache-flow-btn-primary,
   button.primary,
