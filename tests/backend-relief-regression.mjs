@@ -53,7 +53,7 @@ assert.match(sesiones,/\.cerrar\{background:#172033/);
 assert.match(sesiones,/class="cerrar"/);
 assert.match(intensivoFlow,/hache-mini-action hache-mini-action-secondary/);
 assert.match(proaFinanceUx,/\.proa-edit-btn\{[^}]*top:50%;transform:translateY\(-50%\)/);
-assert.match(proaFinanceUx,/@media\(max-width:900px\)\{[^}]*\.proa-edit-btn,[^}]*transform:none/);
+assert.match(proaFinanceUx,/@media\(max-width:900px\)\{[\s\S]*?\.proa-edit-btn,\.proa-row-actions\{[^}]*transform:none/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
 assert.match(relief,/--hache-control-shadow:/);
