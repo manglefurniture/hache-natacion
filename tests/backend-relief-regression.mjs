@@ -9,6 +9,7 @@ const dashboard=fs.readFileSync(new URL('../public/dashboard.php',import.meta.ur
 const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.meta.url),'utf8');
 const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url),'utf8');
 const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
+const auditoria=fs.readFileSync(new URL('../public/auditoria.php',import.meta.url),'utf8');
 const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
 const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
 const historiasModeracion=fs.readFileSync(new URL('../public/historias-moderacion.php',import.meta.url),'utf8');
@@ -21,6 +22,8 @@ const filtrosAlumnos=fs.readFileSync(new URL('../public/assets/filtros-alumnos.j
 const filtrosPagos=fs.readFileSync(new URL('../public/assets/filtros-pagos.js',import.meta.url),'utf8');
 const personSearch=fs.readFileSync(new URL('../public/assets/person-search.js',import.meta.url),'utf8');
 const proaFinanceUx=fs.readFileSync(new URL('../public/assets/proa-finance-ux.js',import.meta.url),'utf8');
+const compactUi=fs.readFileSync(new URL('../public/assets/compact-ui.js',import.meta.url),'utf8');
+const alumnosQuickPay=fs.readFileSync(new URL('../public/assets/alumnos-quick-pay.js',import.meta.url),'utf8');
 
 // La capa se carga únicamente desde el bootstrap del backend y después del CSS base.
 assert.match(bootstrap,/backend-menu\.css/);
@@ -38,6 +41,8 @@ assert.match(cierres,/class="save"/);
 assert.match(finanzas,/class="tab active"/);
 assert.match(finanzas,/class="primary"/);
 assert.match(resumen,/class="tab active"/);
+assert.match(resumen,/\.load\{[^}]*background:#172033;color:#fff/);
+assert.match(auditoria,/\.filters button\{background:#172033;color:#fff/);
 assert.match(configuracion,/class="btn primary"/);
 assert.match(usuarios,/class="primary"/);
 assert.match(historiasModeracion,/\.tab\.is-active\{/);
@@ -57,6 +62,9 @@ assert.match(filtrosPagos,/\.hache-filter-toggle\{background:#172033;color:#fff\
 assert.match(proaFinanceUx,/\.quick-entry \.entry-toggle\{[^}]*background:#123b5d;color:#fff/);
 assert.match(proaFinanceUx,/\.proa-edit-btn\{[^}]*top:50%;transform:translateY\(-50%\);border:0/);
 assert.match(proaFinanceUx,/@media\(max-width:900px\)\{[\s\S]*?\.proa-edit-btn,\.proa-row-actions\{[^}]*transform:none/);
+assert.match(compactUi,/\.hache-compact-panel>\.hache-compact-toggle\{[^}]*border:0;background:#fff/);
+assert.match(compactUi,/\.hache-compact-panel\.hache-compact-open>\.hache-compact-toggle\{border-bottom:1px solid #edf1f5/);
+assert.match(alumnosQuickPay,/id="hqp-save"[^>]*background:#172033;color:#fff/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
 assert.match(relief,/--hache-control-shadow:/);
@@ -80,6 +88,9 @@ assert.match(relief,/--hache-control-shadow-active:/);
 assert.match(relief,/\.hache-mini-action:not\(\.hache-mini-action-secondary\)/);
 assert.match(relief,/\.hache-filter-toggle/);
 assert.match(relief,/\.quick-entry \.entry-toggle/);
+assert.match(relief,/button\.load/);
+assert.match(relief,/\.filters > button#b/);
+assert.match(relief,/#hqp-save/);
 assert.match(relief,/button\.primary/);
 assert.match(relief,/button\.save/);
 assert.match(relief,/#cerrar\.close/);
@@ -87,9 +98,9 @@ assert.match(relief,/#toolbar\.toolbar button/);
 assert.match(relief,/#form\.form button:not\(\.danger\)/);
 assert.match(relief,/\.form > button#guardar/);
 assert.match(relief,/\.clase-actions \.cerrar/);
-assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
 assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
-assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle[\s\S]*\):active\{/);
+assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save[\s\S]*\):active\{/);
 
 // En desktop, los bloqueados no se elevan ni heredan el hover de backend-menu.css.
 assert.match(relief,/\):not\(:disabled\):hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)!important/);
@@ -119,6 +130,12 @@ assert.match(relief,/\.proa-edit-btn\{[^}]*border:0!important;[^}]*transform:tra
 assert.match(relief,/\.proa-edit-btn:not\(:disabled\):hover\{[^}]*border:0!important;[^}]*transform:translateY\(-50%\)!important/);
 assert.match(relief,/\.proa-edit-btn:active\{[^}]*border:0!important;[^}]*transform:translateY\(-50%\)!important/);
 assert.match(relief,/@media\(max-width:900px\)\{[\s\S]*\.proa-edit-btn,[\s\S]*transform:none!important;/);
+
+// Los encabezados compactos móviles no heredan el relieve global.
+assert.match(relief,/\.hache-compact-toggle\{[^}]*border:0!important;[^}]*box-shadow:none!important;[^}]*transform:none!important/);
+assert.match(relief,/\.hache-compact-toggle:not\(:disabled\):hover\{[^}]*border:0!important;[^}]*box-shadow:none!important;[^}]*transform:none!important/);
+assert.match(relief,/\.hache-compact-toggle:active\{[^}]*border:0!important;[^}]*box-shadow:none!important;[^}]*transform:none!important/);
+assert.match(relief,/\.hache-compact-panel\.hache-compact-open>\.hache-compact-toggle\{[^}]*border-bottom:1px solid #edf1f5!important/);
 
 // Móvil/táctil y accesibilidad de movimiento.
 assert.match(relief,/@media\(max-width:750px\)/);
