@@ -13,7 +13,7 @@
  * el tratamiento físico del borde y la interacción de controles accionables.
  */
 :where(
-  button:not(.close):not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
+  button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
   .btn,
   .tab,
   .hache-mini-action,
@@ -32,7 +32,7 @@
 }
 
 /* Controles oscuros / primarios: el bisel necesita un contraste propio. */
-:where(.btn-primary,.tab.activa,.hache-mini-action,.hache-flow-btn-primary){
+:where(.btn-primary,.tab.activa,.tab.active,.hache-mini-action,.hache-flow-btn-primary){
   border-top-color:rgba(255,255,255,.34)!important;
   border-right-color:rgba(15,23,42,.36)!important;
   border-bottom-color:rgba(3,12,21,.62)!important;
@@ -49,7 +49,7 @@
 }
 
 :where(
-  button:not(.close):not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
+  button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
   .btn,
   .tab,
   .hache-mini-action,
@@ -63,7 +63,7 @@
 
 @media(hover:hover){
   :where(
-    button:not(.close):not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
+    button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
     .btn,
     .tab,
     .hache-mini-action,
@@ -78,7 +78,7 @@
 }
 
 :where(
-  button:not(.close):not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
+  button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
   .btn,
   .tab,
   .hache-mini-action,
@@ -94,11 +94,25 @@
 }
 
 /* La acción primaria también debe hundirse aunque su regla de color sea más específica. */
-:where(.btn-primary,.tab.activa,.hache-mini-action,.hache-flow-btn-primary):active{
+:where(.btn-primary,.tab.activa,.tab.active,.hache-mini-action,.hache-flow-btn-primary):active{
   border-top-color:rgba(3,12,21,.48)!important;
   border-bottom-color:rgba(255,255,255,.18)!important;
   box-shadow:inset 0 2px 5px rgba(3,12,21,.34),0 1px 2px rgba(15,23,42,.08)!important;
 }
+
+/*
+ * Los botones de cierre de modal son controles transparentes, no piezas en relieve.
+ * La exclusión se limita al contexto modal para no afectar acciones reales que usan
+ * la clase genérica .close, como "Cerrar mes".
+ */
+.modal .close{
+  border:0!important;
+  box-shadow:none!important;
+  transform:none!important;
+  filter:none!important;
+}
+@media(hover:hover){.modal .close:hover{box-shadow:none!important;transform:none!important;filter:none!important}}
+.modal .close:active{box-shadow:none!important;transform:none!important;filter:none!important}
 
 @media(max-width:750px){
   /* Menos profundidad en pantallas pequeñas para evitar ruido visual. */
@@ -117,7 +131,7 @@
 
 @media(hover:none){
   :where(
-    button:not(.close):not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
+    button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
     .btn,
     .tab,
     .hache-mini-action,
@@ -129,7 +143,7 @@
 
 @media(prefers-reduced-motion:reduce){
   :where(
-    button:not(.close):not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
+    button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
     .btn,
     .tab,
     .hache-mini-action,
