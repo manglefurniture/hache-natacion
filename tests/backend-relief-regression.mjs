@@ -9,6 +9,9 @@ const dashboard=fs.readFileSync(new URL('../public/dashboard.php',import.meta.ur
 const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.meta.url),'utf8');
 const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url),'utf8');
 const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
+const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
+const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
+const intensivoFlow=fs.readFileSync(new URL('../public/assets/intensivo-flow.js',import.meta.url),'utf8');
 
 // La capa se carga únicamente desde el bootstrap del backend y después del CSS base.
 assert.match(bootstrap,/backend-menu\.css/);
@@ -22,11 +25,18 @@ assert.match(alumnos,/class="tab activa"/);
 assert.match(alumnos,/class="mini-edit"/);
 assert.match(alumnos,/class="quick-pay/);
 assert.match(cierres,/id="cerrar" class="close"/);
+assert.match(cierres,/class="save"/);
 assert.match(finanzas,/class="tab active"/);
+assert.match(finanzas,/class="primary"/);
 assert.match(resumen,/class="tab active"/);
+assert.match(configuracion,/class="btn primary"/);
+assert.match(usuarios,/class="primary"/);
+assert.match(intensivoFlow,/hache-mini-action hache-mini-action-secondary/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
 assert.match(relief,/--hache-control-shadow:/);
+assert.match(relief,/--hache-primary-shadow:/);
+assert.match(relief,/--hache-primary-shadow-hover:/);
 assert.match(relief,/button:not\(\.hache-flow-close\)/);
 assert.doesNotMatch(relief,/button:not\(\.close\)/);
 assert.match(relief,/\.modal \.close\{/);
@@ -39,8 +49,16 @@ assert.match(relief,/:focus-visible/);
 assert.match(relief,/@media\(hover:hover\)/);
 assert.match(relief,/:active\{/);
 assert.match(relief,/--hache-control-shadow-active:/);
-assert.match(relief,/:where\(\.btn-primary,\.tab\.activa,\.tab\.active,/);
-assert.match(relief,/:where\(\.btn-primary,\.tab\.activa,\.tab\.active,[^)]*\):active/);
+
+// Primarios oscuros: variantes compartidas, locales, hover y active coherentes.
+assert.match(relief,/\.hache-mini-action:not\(\.hache-mini-action-secondary\)/);
+assert.match(relief,/button\.primary/);
+assert.match(relief,/button\.save/);
+assert.match(relief,/#cerrar\.close/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*button\.primary,[\s\S]*button\.save,[\s\S]*#cerrar\.close[\s\S]*\)\{/);
+assert.match(relief,/@media\(hover:hover\)\{[\s\S]*--hache-primary-shadow-hover|@media\(hover:hover\)\{[\s\S]*var\(--hache-primary-shadow-hover\)/);
+assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
+assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\):active\{/);
 
 // Móvil/táctil y accesibilidad de movimiento.
 assert.match(relief,/@media\(max-width:750px\)/);
