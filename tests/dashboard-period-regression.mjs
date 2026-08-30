@@ -2,15 +2,17 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const api=fs.readFileSync(new URL('../api/dashboard.php',import.meta.url),'utf8');
+const clock=fs.readFileSync(new URL('../config/dashboard-tiempo.php',import.meta.url),'utf8');
+const boundary=fs.readFileSync(new URL('./dashboard-fecha-operativa.php',import.meta.url),'utf8');
 const page=fs.readFileSync(new URL('../public/dashboard.php',import.meta.url),'utf8');
 const backendCss=fs.readFileSync(new URL('../public/assets/backend-menu.css',import.meta.url),'utf8');
 
 assert.match(api,/periodos-financieros\.php/);
-assert.match(api,/DateTimeZone\('America\/Cancun'\)/);
-assert.match(api,/new DateTimeImmutable\('now',new DateTimeZone\('America\/Cancun'\)\)/);
+assert.match(api,/dashboard-tiempo\.php/);
+assert.match(api,/dashboard_contexto_temporal\(\$sid/);
 assert.doesNotMatch(api,/\bdate\('Y-m-d'\)/);
 assert.doesNotMatch(api,/CURDATE\(\)/);
-assert.match(api,/financiero_periodo_para_fecha\(\$pdo,\$sid,\$hoy\)/);
+assert.match(api,/financiero_periodo_para_fecha\(\$pdo,\$sedeId,\$fecha\)/);
 assert.match(api,/financiero_totales\(\$pdo,\$s,\$periodoVigente\)/);
 assert.match(api,/m\.estado='PAGADA'.*:hoy_m BETWEEN m\.periodo_inicio AND m\.periodo_fin/s);
 assert.match(api,/UNION\s+SELECT cia\.alumno_id/s);
@@ -21,6 +23,18 @@ assert.match(api,/aa\.estado='ACTIVO' AND :hoy BETWEEN aa\.fecha_desde AND aa\.f
 assert.match(api,/m\.estado='PAGADA' AND :hoy BETWEEN m\.periodo_inicio AND m\.periodo_fin/);
 assert.doesNotMatch(api,/m\.mes=:mes.*m\.anio=:anio/s);
 assert.match(api,/'facturacion'=>\['cantidad'/);
+
+assert.match(clock,/DateTimeZone\('America\/Cancun'\)/);
+assert.match(clock,/\?DateTimeImmutable \$instante/);
+assert.match(clock,/\$instante->setTimezone\(\$zona\)/);
+assert.match(clock,/'fecha' => \$fecha/);
+assert.match(clock,/'periodo_vigente' => \(string\)\$resolverPeriodo\(\$sedeId, \$fecha\)/);
+
+assert.match(boundary,/2026-08-30T00:30:00\+00:00/);
+assert.match(boundary,/2026-08-31T04:59:59\+00:00/);
+assert.match(boundary,/2026-08-31T05:00:00\+00:00/);
+assert.match(boundary,/00:30 UTC fecha Cancún/);
+assert.match(boundary,/después medianoche periodo/);
 
 assert.match(page,/Facturación del mes/);
 assert.match(page,/d\.facturacion\?\.total/);
