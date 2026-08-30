@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const api=fs.readFileSync(new URL('../api/dashboard.php',import.meta.url),'utf8');
+const alerts=fs.readFileSync(new URL('../api/alertas.php',import.meta.url),'utf8');
 const clock=fs.readFileSync(new URL('../config/dashboard-tiempo.php',import.meta.url),'utf8');
 const boundary=fs.readFileSync(new URL('./dashboard-fecha-operativa.php',import.meta.url),'utf8');
 const page=fs.readFileSync(new URL('../public/dashboard.php',import.meta.url),'utf8');
@@ -24,7 +25,16 @@ assert.match(api,/m\.estado='PAGADA' AND :hoy BETWEEN m\.periodo_inicio AND m\.p
 assert.doesNotMatch(api,/m\.mes=:mes.*m\.anio=:anio/s);
 assert.match(api,/'facturacion'=>\['cantidad'/);
 
+assert.match(alerts,/dashboard-tiempo\.php/);
+assert.match(alerts,/\$hoy=hache_instante_operativo\(\)/);
+assert.match(alerts,/\$hoyFecha=\$hoy->format\('Y-m-d'\)/);
+assert.match(alerts,/m\.estado='PAGADA' AND :hoy BETWEEN m\.periodo_inicio AND m\.periodo_fin/);
+assert.match(alerts,/'?:hoy'?/);
+assert.doesNotMatch(alerts,/CURDATE\(\)/);
+assert.doesNotMatch(alerts,/new DateTimeImmutable\('today'\)/);
+
 assert.match(clock,/DateTimeZone\('America\/Cancun'\)/);
+assert.match(clock,/function hache_instante_operativo/);
 assert.match(clock,/\?DateTimeImmutable \$instante/);
 assert.match(clock,/\$instante->setTimezone\(\$zona\)/);
 assert.match(clock,/'fecha' => \$fecha/);
