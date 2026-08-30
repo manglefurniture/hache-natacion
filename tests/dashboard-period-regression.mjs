@@ -51,6 +51,10 @@ assert.match(page,/d\.facturacion\?\.total/);
 assert.doesNotMatch(page,/Ingresos del mes/);
 assert.doesNotMatch(page,/d\.caja\?\.total/);
 assert.match(page,/mensualidad vigente o intensivo en curso/);
+assert.match(page,/--depth:inset 0 1px 0/);
+assert.match(page,/\.hero-card\.dark\{[^}]*border-top-color:[^;]+;border-bottom-color:/s);
+assert.match(page,/\.quick a\{[^}]*border-top-color:#fff;[^}]*border-bottom-color:#b8c5d3;/s);
+assert.match(page,/\.quick a:active\{[^}]*box-shadow:inset 0 1px 2px/s);
 
 assert.match(backendCss,/--hache-shadow-hover/);
 assert.match(backendCss,/translateY\(-2px\)/);
