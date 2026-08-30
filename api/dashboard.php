@@ -2,17 +2,32 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
+require_once __DIR__.'/../config/periodos-financieros.php';
 auth_require(['ADMIN','VERIFICADOR']);
 $config=require __DIR__.'/../config/database.php';
 $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
 function out(array $d,int $c=200):never{http_response_code($c);echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
 try{
- $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));$st=$pdo->prepare("SELECT id,nombre FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$s=$st->fetch();if(!$s)out(['ok'=>false,'error'=>'Sede inválida'],422);$sid=$s['id'];
- $mes=(int)date('n');$anio=(int)date('Y');$hoy=date('Y-m-d');$inicio=sprintf('%04d-%02d-01',$anio,$mes);$fin=(new DateTimeImmutable($inicio))->modify('+1 month')->format('Y-m-d');
- $st=$pdo->prepare("SELECT COUNT(*) FROM alumnos WHERE sede_id=:s AND estado_administrativo<>'BAJA'");$st->execute([':s'=>$sid]);$alumnos=(int)$st->fetchColumn();
+ $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));$st=$pdo->prepare("SELECT id,nombre FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$s=$st->fetch();if(!$s)out(['ok'=>false,'error'=>'Sede inválida'],422);$sid=(string)$s['id'];
+ $hoy=date('Y-m-d');
+ $periodoVigente=financiero_periodo_para_fecha($pdo,$sid,$hoy);[$anioPeriodo,$mesPeriodo]=array_map('intval',explode('-',$periodoVigente));
+ $facturacion=financiero_totales($pdo,$s,$periodoVigente);$rangoPeriodo=$facturacion['rango']??financiero_rango($pdo,$sid,$periodoVigente);
+ $sqlActivos="SELECT COUNT(*) FROM (
+   SELECT m.alumno_id
+   FROM mensualidades m
+   INNER JOIN alumnos a ON a.id=m.alumno_id AND a.sede_id=m.sede_id
+   WHERE m.sede_id=:sm AND m.estado='PAGADA' AND m.mes=:mes AND m.anio=:anio AND a.estado_administrativo<>'BAJA'
+   UNION
+   SELECT cia.alumno_id
+   FROM curso_intensivo_alumnos cia
+   INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
+   INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id
+   WHERE ci.sede_id=:si AND CURDATE() BETWEEN ci.fecha_inicio AND ci.fecha_fin AND a.estado_administrativo<>'BAJA'
+     AND EXISTS(SELECT 1 FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=ci.id AND p.tipo='INTENSIVO' AND p.estado='VALIDO')
+ ) activos";
+ $st=$pdo->prepare($sqlActivos);$st->execute([':sm'=>$sid,':mes'=>$mesPeriodo,':anio'=>$anioPeriodo,':si'=>$sid]);$alumnos=(int)$st->fetchColumn();
  $st=$pdo->prepare("SELECT COUNT(*) FROM alumnos WHERE sede_id=:s AND estado_administrativo='PENDIENTE'");$st->execute([':s'=>$sid]);$pend=(int)$st->fetchColumn();
  $st=$pdo->prepare("SELECT COUNT(*) c,COALESCE(SUM(importe_cobrado),0) total FROM mensualidades WHERE sede_id=:s AND CURDATE() BETWEEN periodo_inicio AND periodo_fin AND estado='PAGADA'");$st->execute([':s'=>$sid]);$mens=$st->fetch();
- $st=$pdo->prepare("SELECT COUNT(*) c,COALESCE(SUM(p.importe),0) total FROM pagos p JOIN alumnos a ON a.id=p.alumno_id WHERE a.sede_id=:s AND p.estado='VALIDO' AND p.fecha>=:i AND p.fecha<:f");$st->execute([':s'=>$sid,':i'=>$inicio,':f'=>$fin]);$caja=$st->fetch();
  $st=$pdo->prepare("SELECT COUNT(*) FROM cursos_intensivos WHERE sede_id=:s AND estado IN ('PROGRAMADO','EN_CURSO')");$st->execute([':s'=>$sid]);$intensivos=(int)$st->fetchColumn();
  $st=$pdo->prepare("SELECT COUNT(*) FROM avisos_ausencia aa JOIN alumnos a ON a.id=aa.alumno_id WHERE a.sede_id=:s AND aa.estado='ACTIVO' AND CURDATE() BETWEEN aa.fecha_desde AND aa.fecha_hasta");$st->execute([':s'=>$sid]);$avisos=(int)$st->fetchColumn();
  $st=$pdo->prepare("SELECT COUNT(*) FROM reposiciones_regulares rr JOIN alumnos a ON a.id=rr.alumno_id WHERE a.sede_id=:s AND rr.estado='DISPONIBLE'");$st->execute([':s'=>$sid]);$repos=(int)$st->fetchColumn();
@@ -20,5 +35,5 @@ try{
  $st=$pdo->prepare($sqlSinPago);$st->execute([':sede'=>$sid]);$sinPago=(int)$st->fetchColumn();
  $alertas=($sinPago>0?1:0)+($avisos>0?1:0)+($repos>0?1:0);
  $st=$pdo->prepare("SELECT h.hora_inicio,h.hora_fin,COUNT(DISTINCT a.id) alumnos FROM horarios h LEFT JOIN alumnos a ON a.horario_preferido_id=h.id AND a.sede_id=:sa AND a.estado_administrativo='ACTIVO' WHERE h.sede_id=:sh AND h.activo=1 GROUP BY h.id,h.hora_inicio,h.hora_fin HAVING alumnos>0 ORDER BY h.hora_inicio");$st->execute([':sa'=>$sid,':sh'=>$sid]);$horarios=$st->fetchAll();
- out(['ok'=>true,'sede'=>['clave'=>$clave,'nombre'=>$s['nombre']],'fecha'=>$hoy,'alumnos_activos'=>$alumnos,'pendientes'=>$pend,'mensualidades'=>['cantidad'=>(int)$mens['c'],'total'=>(float)$mens['total']],'caja'=>['cantidad'=>(int)$caja['c'],'total'=>(float)$caja['total']],'intensivos'=>$intensivos,'avisos_hoy'=>$avisos,'reposiciones'=>$repos,'sin_pago_mes'=>$sinPago,'alertas'=>$alertas,'horarios'=>$horarios]);
+ out(['ok'=>true,'sede'=>['clave'=>$clave,'nombre'=>$s['nombre']],'fecha'=>$hoy,'periodo_vigente'=>$periodoVigente,'rango_periodo'=>['inicio'=>$rangoPeriodo['inicio'],'cierre'=>$rangoPeriodo['cierre']],'facturacion'=>['cantidad'=>(int)($facturacion['pagos_count']??0),'total'=>(float)($facturacion['total']??0)],'alumnos_activos'=>$alumnos,'pendientes'=>$pend,'mensualidades'=>['cantidad'=>(int)$mens['c'],'total'=>(float)$mens['total']],'intensivos'=>$intensivos,'avisos_hoy'=>$avisos,'reposiciones'=>$repos,'sin_pago_mes'=>$sinPago,'alertas'=>$alertas,'horarios'=>$horarios]);
 }catch(Throwable $e){error_log('[dashboard] '.$e->getMessage());out(['ok'=>false,'error'=>'No se pudo cargar el dashboard'],500);}
