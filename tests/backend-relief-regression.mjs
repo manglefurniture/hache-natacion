@@ -10,6 +10,11 @@ const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.m
 const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url),'utf8');
 const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
 const auditoria=fs.readFileSync(new URL('../public/auditoria.php',import.meta.url),'utf8');
+const cambiarPassword=fs.readFileSync(new URL('../public/cambiar-password.php',import.meta.url),'utf8');
+const mensajes=fs.readFileSync(new URL('../public/mensajes.php',import.meta.url),'utf8');
+const notificaciones=fs.readFileSync(new URL('../public/notificaciones.php',import.meta.url),'utf8');
+const agregarAlumno=fs.readFileSync(new URL('../public/agregar-alumno.php',import.meta.url),'utf8');
+const editarAlumno=fs.readFileSync(new URL('../public/editar-alumno.php',import.meta.url),'utf8');
 const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
 const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
 const historiasModeracion=fs.readFileSync(new URL('../public/historias-moderacion.php',import.meta.url),'utf8');
@@ -43,6 +48,18 @@ assert.match(finanzas,/class="primary"/);
 assert.match(resumen,/class="tab active"/);
 assert.match(resumen,/\.load\{[^}]*background:#172033;color:#fff/);
 assert.match(auditoria,/\.filters button\{background:#172033;color:#fff/);
+assert.match(cambiarPassword,/\.btn\{[^}]*background:#123b5d;color:#fff/);
+assert.match(cambiarPassword,/<button class="btn">Guardar contraseña<\/button>/);
+assert.match(mensajes,/\.btn\{[^}]*background:#123b5d;color:#fff/);
+assert.match(mensajes,/id="crear" class="btn"/);
+assert.match(mensajes,/<button class=\"btn\" data-id=/);
+assert.match(notificaciones,/\.btn\{[^}]*background:#172033;color:#fff/);
+assert.match(notificaciones,/id="activar" class="btn"/);
+assert.match(notificaciones,/id="desactivar" class="btn off"/);
+assert.match(agregarAlumno,/button\{[^}]*background:#2563eb;color:#fff/);
+assert.match(agregarAlumno,/id="btnGuardar"/);
+assert.match(editarAlumno,/button\{background:#2563eb;color:#fff\}/);
+assert.match(editarAlumno,/<div class="botones"><button type="submit">Guardar cambios<\/button>/);
 assert.match(configuracion,/class="btn primary"/);
 assert.match(usuarios,/class="primary"/);
 assert.match(historiasModeracion,/\.tab\.is-active\{/);
@@ -91,6 +108,12 @@ assert.match(relief,/\.quick-entry \.entry-toggle/);
 assert.match(relief,/button\.load/);
 assert.match(relief,/\.filters > button#b/);
 assert.match(relief,/#hqp-save/);
+assert.match(relief,/#form > button\.btn/);
+assert.match(relief,/#crear\.btn/);
+assert.match(relief,/\.msg \.btn/);
+assert.match(relief,/#activar\.btn/);
+assert.match(relief,/#btnGuardar/);
+assert.match(relief,/\.botones > button\[type="submit"\]/);
 assert.match(relief,/button\.primary/);
 assert.match(relief,/button\.save/);
 assert.match(relief,/#cerrar\.close/);
@@ -98,9 +121,14 @@ assert.match(relief,/#toolbar\.toolbar button/);
 assert.match(relief,/#form\.form button:not\(\.danger\)/);
 assert.match(relief,/\.form > button#guardar/);
 assert.match(relief,/\.clase-actions \.cerrar/);
-assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#form > button\.btn,[\s\S]*#crear\.btn,[\s\S]*\.msg \.btn,[\s\S]*#activar\.btn,[\s\S]*#btnGuardar,[\s\S]*\.botones > button\[type="submit"\],[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
 assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
-assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save[\s\S]*\):active\{/);
+assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*button\.load,[\s\S]*\.filters > button#b,[\s\S]*#hqp-save,[\s\S]*#form > button\.btn,[\s\S]*#crear\.btn,[\s\S]*\.msg \.btn,[\s\S]*#activar\.btn,[\s\S]*#btnGuardar,[\s\S]*\.botones > button\[type="submit"\][\s\S]*\):active\{/);
+
+for(const selector of ['#form > button.btn','#crear.btn','.msg .btn','#activar.btn','#btnGuardar','.botones > button[type="submit"]']){
+  const occurrences=relief.split(selector).length-1;
+  assert.ok(occurrences>=4,`${selector} debe conservar bisel primario en normal, hover, disabled-hover y active`);
+}
 
 // En desktop, los bloqueados no se elevan ni heredan el hover de backend-menu.css.
 assert.match(relief,/\):not\(:disabled\):hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)!important/);
