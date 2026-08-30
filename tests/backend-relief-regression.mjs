@@ -19,6 +19,7 @@ const sesiones=fs.readFileSync(new URL('../public/sesiones.php',import.meta.url)
 const intensivoFlow=fs.readFileSync(new URL('../public/assets/intensivo-flow.js',import.meta.url),'utf8');
 const filtrosAlumnos=fs.readFileSync(new URL('../public/assets/filtros-alumnos.js',import.meta.url),'utf8');
 const personSearch=fs.readFileSync(new URL('../public/assets/person-search.js',import.meta.url),'utf8');
+const proaFinanceUx=fs.readFileSync(new URL('../public/assets/proa-finance-ux.js',import.meta.url),'utf8');
 
 // La capa se carga únicamente desde el bootstrap del backend y después del CSS base.
 assert.match(bootstrap,/backend-menu\.css/);
@@ -51,6 +52,8 @@ assert.match(conciliacion,/\.student-results button\{[^}]*border:0;[^}]*border-b
 assert.match(sesiones,/\.cerrar\{background:#172033/);
 assert.match(sesiones,/class="cerrar"/);
 assert.match(intensivoFlow,/hache-mini-action hache-mini-action-secondary/);
+assert.match(proaFinanceUx,/\.proa-edit-btn\{[^}]*top:50%;transform:translateY\(-50%\)/);
+assert.match(proaFinanceUx,/@media\(max-width:900px\)\{[^}]*\.proa-edit-btn,[^}]*transform:none/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
 assert.match(relief,/--hache-control-shadow:/);
@@ -102,7 +105,15 @@ assert.match(relief,/\.hache-search-clear:active\{[\s\S]*transform:translateY\(-
 assert.match(relief,/\.hache-person-clear:active/);
 assert.match(relief,/\.hache-person-option:active/);
 assert.match(relief,/\.student-results button\{[^}]*border:0!important;[^}]*border-bottom:1px solid #eef2f7!important;[^}]*box-shadow:none!important;[^}]*transform:none!important;/);
+assert.match(relief,/\.student-results button:not\(:disabled\):hover\{[^}]*box-shadow:none!important;[^}]*transform:none!important;/);
+assert.match(relief,/\.student-results button:active\{[^}]*box-shadow:none!important;[^}]*transform:none!important;/);
 assert.match(relief,/\.student-results button:last-child\{border-bottom:0!important\}/);
+
+// Los auxiliares posicionados mantienen su transform en desktop y su anclaje móvil.
+assert.match(relief,/\.proa-edit-btn\{[^}]*transform:translateY\(-50%\)!important/);
+assert.match(relief,/\.proa-edit-btn:not\(:disabled\):hover\{[^}]*transform:translateY\(-50%\)!important/);
+assert.match(relief,/\.proa-edit-btn:active\{[^}]*transform:translateY\(-50%\)!important/);
+assert.match(relief,/@media\(max-width:900px\)\{[\s\S]*\.proa-edit-btn,[\s\S]*transform:none!important;/);
 
 // Móvil/táctil y accesibilidad de movimiento.
 assert.match(relief,/@media\(max-width:750px\)/);
