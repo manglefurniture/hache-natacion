@@ -66,9 +66,9 @@ assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
 assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\):active\{/);
 
 // En desktop solo los controles habilitados reaccionan al hover.
-assert.match(relief,/@media\(hover:hover\)\{[\s\S]*\):not\(:disabled\):hover\{/);
-assert.match(relief,/:where\([\s\S]*\.tab\.is-active[\s\S]*\):not\(:disabled\):hover\{/);
-assert.doesNotMatch(relief,/@media\(hover:hover\)\{[\s\S]*\)\:hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)/);
+const desktopHover=relief.match(/@media\(hover:hover\)\{([\s\S]*?)\n\}/)?.[1]||'';
+assert.match(desktopHover,/\):not\(:disabled\):hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)!important/);
+assert.match(desktopHover,/\.tab\.is-active,[\s\S]*\):not\(:disabled\):hover\{[\s\S]*var\(--hache-primary-shadow-hover\)!important/);
 
 // Los controles contextuales transparentes de búsqueda conservan su geometría.
 assert.match(filtrosAlumnos,/\.hache-search-clear\{[^}]*transform:translateY\(-50%\)/);
