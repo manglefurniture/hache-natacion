@@ -43,6 +43,7 @@
   #cerrar.close,
   #toolbar.toolbar button,
   #form.form button:not(.danger),
+  .form > button#guardar,
   .clase-actions .cerrar
 ){
   border-top-color:rgba(255,255,255,.34)!important;
@@ -100,6 +101,7 @@
     #cerrar.close,
     #toolbar.toolbar button,
     #form.form button:not(.danger),
+    .form > button#guardar,
     .clase-actions .cerrar
   ):not(:disabled):hover{
     border-top-color:rgba(255,255,255,.38)!important;
@@ -132,6 +134,7 @@
     #cerrar.close,
     #toolbar.toolbar button,
     #form.form button:not(.danger),
+    .form > button#guardar,
     .clase-actions .cerrar
   ):disabled:hover{
     border-top-color:rgba(255,255,255,.34)!important;
@@ -171,6 +174,7 @@
   #cerrar.close,
   #toolbar.toolbar button,
   #form.form button:not(.danger),
+  .form > button#guardar,
   .clase-actions .cerrar
 ):active{
   border-top-color:rgba(3,12,21,.48)!important;
@@ -197,6 +201,17 @@
   transform:none!important;
 }
 .hache-search-clear{transform:translateY(-50%)!important}
+
+/* Sugerencias planas del autocompletado de Conciliación PROA. */
+.student-results button{
+  border:0!important;
+  border-bottom:1px solid #eef2f7!important;
+  box-shadow:none!important;
+  transform:none!important;
+  filter:none!important;
+}
+.student-results button:last-child{border-bottom:0!important}
+
 @media(hover:hover){
   .modal .close:hover,
   .hache-person-clear:hover,
