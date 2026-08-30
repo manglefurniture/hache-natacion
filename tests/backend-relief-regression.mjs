@@ -14,6 +14,7 @@ const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url)
 const historiasModeracion=fs.readFileSync(new URL('../public/historias-moderacion.php',import.meta.url),'utf8');
 const reportes=fs.readFileSync(new URL('../public/reportes.php',import.meta.url),'utf8');
 const comisiones=fs.readFileSync(new URL('../public/comisiones-proa.php',import.meta.url),'utf8');
+const conciliacion=fs.readFileSync(new URL('../public/conciliacion-proa.php',import.meta.url),'utf8');
 const sesiones=fs.readFileSync(new URL('../public/sesiones.php',import.meta.url),'utf8');
 const intensivoFlow=fs.readFileSync(new URL('../public/assets/intensivo-flow.js',import.meta.url),'utf8');
 const filtrosAlumnos=fs.readFileSync(new URL('../public/assets/filtros-alumnos.js',import.meta.url),'utf8');
@@ -44,6 +45,9 @@ assert.match(reportes,/id="toolbar" class="toolbar"/);
 assert.match(comisiones,/\.form button\{background:var\(--ink\)/);
 assert.match(comisiones,/id="form" class="form"/);
 assert.match(comisiones,/btn\.disabled=!d\.habilitado/);
+assert.match(conciliacion,/\.form button\{border:0;background:var\(--ink\)/);
+assert.match(conciliacion,/<button id="guardar">Registrar<\/button>/);
+assert.match(conciliacion,/\.student-results button\{[^}]*border:0;[^}]*border-bottom:1px solid #eef2f7/);
 assert.match(sesiones,/\.cerrar\{background:#172033/);
 assert.match(sesiones,/class="cerrar"/);
 assert.match(intensivoFlow,/hache-mini-action hache-mini-action-secondary/);
@@ -73,8 +77,9 @@ assert.match(relief,/button\.save/);
 assert.match(relief,/#cerrar\.close/);
 assert.match(relief,/#toolbar\.toolbar button/);
 assert.match(relief,/#form\.form button:not\(\.danger\)/);
+assert.match(relief,/\.form > button#guardar/);
 assert.match(relief,/\.clase-actions \.cerrar/);
-assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
 assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
 assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\):active\{/);
 
@@ -96,6 +101,8 @@ assert.match(relief,/\.hache-search-clear\{transform:translateY\(-50%\)!importan
 assert.match(relief,/\.hache-search-clear:active\{[\s\S]*transform:translateY\(-50%\)!important;/);
 assert.match(relief,/\.hache-person-clear:active/);
 assert.match(relief,/\.hache-person-option:active/);
+assert.match(relief,/\.student-results button\{[^}]*border:0!important;[^}]*border-bottom:1px solid #eef2f7!important;[^}]*box-shadow:none!important;[^}]*transform:none!important;/);
+assert.match(relief,/\.student-results button:last-child\{border-bottom:0!important\}/);
 
 // Móvil/táctil y accesibilidad de movimiento.
 assert.match(relief,/@media\(max-width:750px\)/);
