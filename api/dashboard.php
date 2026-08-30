@@ -10,13 +10,13 @@ function out(array $d,int $c=200):never{http_response_code($c);echo json_encode(
 try{
  $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));$st=$pdo->prepare("SELECT id,nombre FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$s=$st->fetch();if(!$s)out(['ok'=>false,'error'=>'Sede inválida'],422);$sid=(string)$s['id'];
  $hoy=date('Y-m-d');
- $periodoVigente=financiero_periodo_para_fecha($pdo,$sid,$hoy);[$anioPeriodo,$mesPeriodo]=array_map('intval',explode('-',$periodoVigente));
+ $periodoVigente=financiero_periodo_para_fecha($pdo,$sid,$hoy);
  $facturacion=financiero_totales($pdo,$s,$periodoVigente);$rangoPeriodo=$facturacion['rango']??financiero_rango($pdo,$sid,$periodoVigente);
  $sqlActivos="SELECT COUNT(*) FROM (
    SELECT m.alumno_id
    FROM mensualidades m
    INNER JOIN alumnos a ON a.id=m.alumno_id AND a.sede_id=m.sede_id
-   WHERE m.sede_id=:sm AND m.estado='PAGADA' AND m.mes=:mes AND m.anio=:anio AND a.estado_administrativo<>'BAJA'
+   WHERE m.sede_id=:sm AND m.estado='PAGADA' AND CURDATE() BETWEEN m.periodo_inicio AND m.periodo_fin AND a.estado_administrativo<>'BAJA'
    UNION
    SELECT cia.alumno_id
    FROM curso_intensivo_alumnos cia
@@ -25,7 +25,7 @@ try{
    WHERE ci.sede_id=:si AND CURDATE() BETWEEN ci.fecha_inicio AND ci.fecha_fin AND a.estado_administrativo<>'BAJA'
      AND EXISTS(SELECT 1 FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=ci.id AND p.tipo='INTENSIVO' AND p.estado='VALIDO')
  ) activos";
- $st=$pdo->prepare($sqlActivos);$st->execute([':sm'=>$sid,':mes'=>$mesPeriodo,':anio'=>$anioPeriodo,':si'=>$sid]);$alumnos=(int)$st->fetchColumn();
+ $st=$pdo->prepare($sqlActivos);$st->execute([':sm'=>$sid,':si'=>$sid]);$alumnos=(int)$st->fetchColumn();
  $st=$pdo->prepare("SELECT COUNT(*) FROM alumnos WHERE sede_id=:s AND estado_administrativo='PENDIENTE'");$st->execute([':s'=>$sid]);$pend=(int)$st->fetchColumn();
  $st=$pdo->prepare("SELECT COUNT(*) c,COALESCE(SUM(importe_cobrado),0) total FROM mensualidades WHERE sede_id=:s AND CURDATE() BETWEEN periodo_inicio AND periodo_fin AND estado='PAGADA'");$st->execute([':s'=>$sid]);$mens=$st->fetch();
  $st=$pdo->prepare("SELECT COUNT(*) FROM cursos_intensivos WHERE sede_id=:s AND estado IN ('PROGRAMADO','EN_CURSO')");$st->execute([':s'=>$sid]);$intensivos=(int)$st->fetchColumn();
