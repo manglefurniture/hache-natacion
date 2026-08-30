@@ -9,11 +9,7 @@
   --hache-primary-shadow-hover:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -2px 0 rgba(3,12,21,.28),0 3px 6px rgba(15,23,42,.10),0 11px 24px rgba(15,23,42,.14);
 }
 
-/*
- * Relieve global del backend.
- * Conserva colores, tamaños y layout propios de cada pantalla; solo unifica
- * el tratamiento físico del borde y la interacción de controles accionables.
- */
+/* Relieve global del backend. */
 :where(
   button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
   .btn,
@@ -33,11 +29,7 @@
   transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease,filter .15s ease!important;
 }
 
-/*
- * Controles oscuros / primarios. Incluye las convenciones compartidas y las
- * clases locales ya existentes en Finanzas, Configuración, Usuarios y Cierres.
- * Las miniacciones secundarias quedan expresamente fuera de este bisel oscuro.
- */
+/* Primarios oscuros compartidos y convenciones locales ya existentes. */
 :where(
   .btn-primary,
   .tab.activa,
@@ -48,7 +40,10 @@
   button.primary,
   .btn.primary,
   button.save,
-  #cerrar.close
+  #cerrar.close,
+  #toolbar.toolbar button,
+  #form.form button:not(.danger),
+  .clase-actions .cerrar
 ){
   border-top-color:rgba(255,255,255,.34)!important;
   border-right-color:rgba(15,23,42,.36)!important;
@@ -57,7 +52,6 @@
   box-shadow:var(--hache-primary-shadow)!important;
 }
 
-/* Superficies de interacción que aparecen como cajas/modal. */
 :where(.modal-box,.form-card){
   border:1px solid rgba(226,232,240,.96)!important;
   border-top-color:#fff!important;
@@ -93,7 +87,6 @@
     filter:brightness(1.015);
   }
 
-  /* El hover de un primario conserva su bisel oscuro y no cae al relieve claro. */
   :where(
     .btn-primary,
     .tab.activa,
@@ -104,13 +97,48 @@
     button.primary,
     .btn.primary,
     button.save,
-    #cerrar.close
+    #cerrar.close,
+    #toolbar.toolbar button,
+    #form.form button:not(.danger),
+    .clase-actions .cerrar
   ):not(:disabled):hover{
     border-top-color:rgba(255,255,255,.38)!important;
     border-right-color:rgba(15,23,42,.38)!important;
     border-bottom-color:rgba(3,12,21,.68)!important;
     border-left-color:rgba(15,23,42,.38)!important;
     box-shadow:var(--hache-primary-shadow-hover)!important;
+  }
+
+  /* Neutraliza hover heredado de backend-menu.css en controles bloqueados. */
+  :where(
+    button:not(.hache-flow-close):not(.hache-menu-group-toggle):not(.hache-menu-logout):not(#hache-menu-toggle),
+    .btn,
+    .tab,
+    .hache-mini-action,
+    .hache-flow-btn,
+    .mini-edit,
+    .quick-pay
+  ):disabled:hover{
+    transform:none!important;
+    filter:none!important;
+    box-shadow:var(--hache-control-shadow)!important;
+  }
+
+  :where(
+    .btn-primary,
+    button.primary,
+    .btn.primary,
+    button.save,
+    #cerrar.close,
+    #toolbar.toolbar button,
+    #form.form button:not(.danger),
+    .clase-actions .cerrar
+  ):disabled:hover{
+    border-top-color:rgba(255,255,255,.34)!important;
+    border-right-color:rgba(15,23,42,.36)!important;
+    border-bottom-color:rgba(3,12,21,.62)!important;
+    border-left-color:rgba(15,23,42,.36)!important;
+    box-shadow:var(--hache-primary-shadow)!important;
   }
 }
 
@@ -130,7 +158,6 @@
   filter:none!important;
 }
 
-/* La acción primaria también debe hundirse aunque su regla de color sea más específica. */
 :where(
   .btn-primary,
   .tab.activa,
@@ -141,7 +168,10 @@
   button.primary,
   .btn.primary,
   button.save,
-  #cerrar.close
+  #cerrar.close,
+  #toolbar.toolbar button,
+  #form.form button:not(.danger),
+  .clase-actions .cerrar
 ):active{
   border-top-color:rgba(3,12,21,.48)!important;
   border-right-color:rgba(15,23,42,.42)!important;
@@ -150,11 +180,7 @@
   box-shadow:inset 0 2px 5px rgba(3,12,21,.34),0 1px 2px rgba(15,23,42,.08)!important;
 }
 
-/*
- * Los botones de cierre de modal y los auxiliares transparentes de búsqueda
- * no son piezas en relieve. Se restablecen después de las reglas globales para
- * preservar su geometría propia y evitar saltos al pulsarlos.
- */
+/* Controles transparentes contextuales. */
 .modal .close,
 .hache-search-clear,
 .hache-search-option,
@@ -170,9 +196,7 @@
 .hache-search-option{
   transform:none!important;
 }
-.hache-search-clear{
-  transform:translateY(-50%)!important;
-}
+.hache-search-clear{transform:translateY(-50%)!important}
 @media(hover:hover){
   .modal .close:hover,
   .hache-person-clear:hover,
@@ -207,18 +231,14 @@
 }
 
 @media(max-width:750px){
-  /* Menos profundidad en pantallas pequeñas para evitar ruido visual. */
   :root{
     --hache-control-shadow:inset 0 1px 0 rgba(255,255,255,.78),inset 0 -2px 0 rgba(15,23,42,.09),0 2px 4px rgba(15,23,42,.05),0 5px 12px rgba(15,23,42,.06);
     --hache-control-shadow-hover:var(--hache-control-shadow);
     --hache-primary-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(3,12,21,.22),0 2px 4px rgba(15,23,42,.07),0 6px 14px rgba(15,23,42,.09);
     --hache-primary-shadow-hover:var(--hache-primary-shadow);
   }
-
-  /* Objetivos táctiles cómodos sin inflar microacciones. */
   :where(.btn,.tab,.hache-flow-btn){min-height:42px}
   :where(.mini-edit,.hache-mini-action,.quick-pay){min-height:32px}
-
   .form-actions{flex-wrap:wrap}
   .form-actions :where(.btn,.hache-flow-btn){flex:1 1 140px}
 }
