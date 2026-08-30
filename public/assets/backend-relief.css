@@ -5,6 +5,8 @@
   --hache-control-shadow:inset 0 1px 0 rgba(255,255,255,.78),inset 0 -2px 0 rgba(15,23,42,.10),0 2px 4px rgba(15,23,42,.055),0 7px 16px rgba(15,23,42,.07);
   --hache-control-shadow-hover:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -2px 0 rgba(15,23,42,.13),0 3px 6px rgba(15,23,42,.07),0 10px 22px rgba(15,23,42,.09);
   --hache-control-shadow-active:inset 0 2px 4px rgba(15,23,42,.15),inset 0 -1px 0 rgba(255,255,255,.28),0 1px 2px rgba(15,23,42,.06);
+  --hache-primary-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(3,12,21,.24),0 2px 4px rgba(15,23,42,.08),0 8px 18px rgba(15,23,42,.11);
+  --hache-primary-shadow-hover:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -2px 0 rgba(3,12,21,.28),0 3px 6px rgba(15,23,42,.10),0 11px 24px rgba(15,23,42,.14);
 }
 
 /*
@@ -31,13 +33,27 @@
   transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease,filter .15s ease!important;
 }
 
-/* Controles oscuros / primarios: el bisel necesita un contraste propio. */
-:where(.btn-primary,.tab.activa,.tab.active,.hache-mini-action,.hache-flow-btn-primary){
+/*
+ * Controles oscuros / primarios. Incluye las convenciones compartidas y las
+ * clases locales ya existentes en Finanzas, Configuración, Usuarios y Cierres.
+ * Las miniacciones secundarias quedan expresamente fuera de este bisel oscuro.
+ */
+:where(
+  .btn-primary,
+  .tab.activa,
+  .tab.active,
+  .hache-mini-action:not(.hache-mini-action-secondary),
+  .hache-flow-btn-primary,
+  button.primary,
+  .btn.primary,
+  button.save,
+  #cerrar.close
+){
   border-top-color:rgba(255,255,255,.34)!important;
   border-right-color:rgba(15,23,42,.36)!important;
   border-bottom-color:rgba(3,12,21,.62)!important;
   border-left-color:rgba(15,23,42,.36)!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(3,12,21,.24),0 2px 4px rgba(15,23,42,.08),0 8px 18px rgba(15,23,42,.11)!important;
+  box-shadow:var(--hache-primary-shadow)!important;
 }
 
 /* Superficies de interacción que aparecen como cajas/modal. */
@@ -75,6 +91,25 @@
     box-shadow:var(--hache-control-shadow-hover)!important;
     filter:brightness(1.015);
   }
+
+  /* El hover de un primario conserva su bisel oscuro y no cae al relieve claro. */
+  :where(
+    .btn-primary,
+    .tab.activa,
+    .tab.active,
+    .hache-mini-action:not(.hache-mini-action-secondary),
+    .hache-flow-btn-primary,
+    button.primary,
+    .btn.primary,
+    button.save,
+    #cerrar.close
+  ):hover{
+    border-top-color:rgba(255,255,255,.38)!important;
+    border-right-color:rgba(15,23,42,.38)!important;
+    border-bottom-color:rgba(3,12,21,.68)!important;
+    border-left-color:rgba(15,23,42,.38)!important;
+    box-shadow:var(--hache-primary-shadow-hover)!important;
+  }
 }
 
 :where(
@@ -94,9 +129,21 @@
 }
 
 /* La acción primaria también debe hundirse aunque su regla de color sea más específica. */
-:where(.btn-primary,.tab.activa,.tab.active,.hache-mini-action,.hache-flow-btn-primary):active{
+:where(
+  .btn-primary,
+  .tab.activa,
+  .tab.active,
+  .hache-mini-action:not(.hache-mini-action-secondary),
+  .hache-flow-btn-primary,
+  button.primary,
+  .btn.primary,
+  button.save,
+  #cerrar.close
+):active{
   border-top-color:rgba(3,12,21,.48)!important;
+  border-right-color:rgba(15,23,42,.42)!important;
   border-bottom-color:rgba(255,255,255,.18)!important;
+  border-left-color:rgba(15,23,42,.42)!important;
   box-shadow:inset 0 2px 5px rgba(3,12,21,.34),0 1px 2px rgba(15,23,42,.08)!important;
 }
 
@@ -119,6 +166,8 @@
   :root{
     --hache-control-shadow:inset 0 1px 0 rgba(255,255,255,.78),inset 0 -2px 0 rgba(15,23,42,.09),0 2px 4px rgba(15,23,42,.05),0 5px 12px rgba(15,23,42,.06);
     --hache-control-shadow-hover:var(--hache-control-shadow);
+    --hache-primary-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(3,12,21,.22),0 2px 4px rgba(15,23,42,.07),0 6px 14px rgba(15,23,42,.09);
+    --hache-primary-shadow-hover:var(--hache-primary-shadow);
   }
 
   /* Objetivos táctiles cómodos sin inflar microacciones. */
