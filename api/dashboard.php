@@ -3,14 +3,14 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/periodos-financieros.php';
+require_once __DIR__.'/../config/dashboard-tiempo.php';
 auth_require(['ADMIN','VERIFICADOR']);
 $config=require __DIR__.'/../config/database.php';
 $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
 function out(array $d,int $c=200):never{http_response_code($c);echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
 try{
  $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));$st=$pdo->prepare("SELECT id,nombre FROM sedes WHERE clave=:c AND activo=1 LIMIT 1");$st->execute([':c'=>$clave]);$s=$st->fetch();if(!$s)out(['ok'=>false,'error'=>'Sede inválida'],422);$sid=(string)$s['id'];
- $hoy=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('Y-m-d');
- $periodoVigente=financiero_periodo_para_fecha($pdo,$sid,$hoy);
+ $tiempo=dashboard_contexto_temporal($sid,static fn(string $sedeId,string $fecha):string=>financiero_periodo_para_fecha($pdo,$sedeId,$fecha));$hoy=$tiempo['fecha'];$periodoVigente=$tiempo['periodo_vigente'];
  $facturacion=financiero_totales($pdo,$s,$periodoVigente);$rangoPeriodo=$facturacion['rango']??financiero_rango($pdo,$sid,$periodoVigente);
  $sqlActivos="SELECT COUNT(*) FROM (
    SELECT m.alumno_id
