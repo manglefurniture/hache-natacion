@@ -143,6 +143,21 @@
     border-left-color:rgba(15,23,42,.36)!important;
     box-shadow:var(--hache-primary-shadow)!important;
   }
+
+  /* Auxiliares planos/posicionados conservan su geometría propia. */
+  .student-results button:not(:disabled):hover{
+    border:0!important;
+    border-bottom:1px solid #eef2f7!important;
+    box-shadow:none!important;
+    transform:none!important;
+    filter:none!important;
+  }
+  .student-results button:last-child:not(:disabled):hover{border-bottom:0!important}
+  .proa-edit-btn:not(:disabled):hover{
+    box-shadow:none!important;
+    transform:translateY(-50%)!important;
+    filter:none!important;
+  }
 }
 
 :where(
@@ -211,6 +226,26 @@
   filter:none!important;
 }
 .student-results button:last-child{border-bottom:0!important}
+.student-results button:active{
+  border:0!important;
+  border-bottom:1px solid #eef2f7!important;
+  box-shadow:none!important;
+  transform:none!important;
+  filter:none!important;
+}
+.student-results button:last-child:active{border-bottom:0!important}
+
+/* El editor de comisión está centrado por transform en desktop. */
+.proa-edit-btn{
+  box-shadow:none!important;
+  transform:translateY(-50%)!important;
+  filter:none!important;
+}
+.proa-edit-btn:active{
+  box-shadow:none!important;
+  transform:translateY(-50%)!important;
+  filter:none!important;
+}
 
 @media(hover:hover){
   .modal .close:hover,
@@ -245,6 +280,15 @@
   filter:none!important;
 }
 
+@media(max-width:900px){
+  /* proa-finance-ux cambia el editor a anclaje inferior en móvil. */
+  .proa-edit-btn,
+  .proa-edit-btn:hover,
+  .proa-edit-btn:active{
+    transform:none!important;
+  }
+}
+
 @media(max-width:750px){
   :root{
     --hache-control-shadow:inset 0 1px 0 rgba(255,255,255,.78),inset 0 -2px 0 rgba(15,23,42,.09),0 2px 4px rgba(15,23,42,.05),0 5px 12px rgba(15,23,42,.06);
@@ -269,6 +313,10 @@
     .quick-pay
   ):hover{transform:none;filter:none}
   .hache-search-clear:hover{transform:translateY(-50%)!important}
+  .proa-edit-btn:hover{transform:translateY(-50%)!important;box-shadow:none!important;filter:none!important}
+}
+@media(max-width:900px) and (hover:none){
+  .proa-edit-btn:hover{transform:none!important}
 }
 
 @media(prefers-reduced-motion:reduce){
