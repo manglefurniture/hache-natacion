@@ -39,6 +39,9 @@
   .hache-flow-btn-primary,
   .hache-filter-toggle,
   .quick-entry .entry-toggle,
+  button.load,
+  .filters > button#b,
+  #hqp-save,
   button.primary,
   .btn.primary,
   button.save,
@@ -99,6 +102,9 @@
     .hache-flow-btn-primary,
     .hache-filter-toggle,
     .quick-entry .entry-toggle,
+    button.load,
+    .filters > button#b,
+    #hqp-save,
     button.primary,
     .btn.primary,
     button.save,
@@ -134,6 +140,9 @@
     .btn-primary,
     .hache-filter-toggle,
     .quick-entry .entry-toggle,
+    button.load,
+    .filters > button#b,
+    #hqp-save,
     button.primary,
     .btn.primary,
     button.save,
@@ -192,6 +201,9 @@
   .hache-flow-btn-primary,
   .hache-filter-toggle,
   .quick-entry .entry-toggle,
+  button.load,
+  .filters > button#b,
+  #hqp-save,
   button.primary,
   .btn.primary,
   button.save,
@@ -258,6 +270,14 @@
   filter:none!important;
 }
 
+/* Los encabezados compactos móviles son parte del panel, no botones elevados. */
+.hache-compact-toggle{
+  border:0!important;
+  box-shadow:none!important;
+  transform:none!important;
+  filter:none!important;
+}
+
 @media(hover:hover){
   .modal .close:hover,
   .hache-person-clear:hover,
@@ -272,6 +292,12 @@
     border:0!important;
     box-shadow:none!important;
     transform:translateY(-50%)!important;
+    filter:none!important;
+  }
+  .hache-compact-toggle:not(:disabled):hover{
+    border:0!important;
+    box-shadow:none!important;
+    transform:none!important;
     filter:none!important;
   }
 }
@@ -290,6 +316,12 @@
   transform:translateY(-50%)!important;
   filter:none!important;
 }
+.hache-compact-toggle:active{
+  border:0!important;
+  box-shadow:none!important;
+  transform:none!important;
+  filter:none!important;
+}
 
 @media(max-width:900px){
   /* proa-finance-ux cambia el editor a anclaje inferior en móvil. */
@@ -297,6 +329,11 @@
   .proa-edit-btn:hover,
   .proa-edit-btn:active{
     transform:none!important;
+  }
+  /* Conserva el separador previsto cuando un panel compacto está abierto. */
+  .hache-compact-panel.hache-compact-open>.hache-compact-toggle{
+    border:0!important;
+    border-bottom:1px solid #edf1f5!important;
   }
 }
 
@@ -325,9 +362,11 @@
   ):hover{transform:none;filter:none}
   .hache-search-clear:hover{transform:translateY(-50%)!important}
   .proa-edit-btn:hover{border:0!important;transform:translateY(-50%)!important;box-shadow:none!important;filter:none!important}
+  .hache-compact-toggle:hover{border:0!important;box-shadow:none!important;transform:none!important;filter:none!important}
 }
 @media(max-width:900px) and (hover:none){
   .proa-edit-btn:hover{transform:none!important}
+  .hache-compact-panel.hache-compact-open>.hache-compact-toggle:hover{border-bottom:1px solid #edf1f5!important}
 }
 
 @media(prefers-reduced-motion:reduce){
