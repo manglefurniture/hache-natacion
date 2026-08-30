@@ -18,6 +18,7 @@ const conciliacion=fs.readFileSync(new URL('../public/conciliacion-proa.php',imp
 const sesiones=fs.readFileSync(new URL('../public/sesiones.php',import.meta.url),'utf8');
 const intensivoFlow=fs.readFileSync(new URL('../public/assets/intensivo-flow.js',import.meta.url),'utf8');
 const filtrosAlumnos=fs.readFileSync(new URL('../public/assets/filtros-alumnos.js',import.meta.url),'utf8');
+const filtrosPagos=fs.readFileSync(new URL('../public/assets/filtros-pagos.js',import.meta.url),'utf8');
 const personSearch=fs.readFileSync(new URL('../public/assets/person-search.js',import.meta.url),'utf8');
 const proaFinanceUx=fs.readFileSync(new URL('../public/assets/proa-finance-ux.js',import.meta.url),'utf8');
 
@@ -52,7 +53,9 @@ assert.match(conciliacion,/\.student-results button\{[^}]*border:0;[^}]*border-b
 assert.match(sesiones,/\.cerrar\{background:#172033/);
 assert.match(sesiones,/class="cerrar"/);
 assert.match(intensivoFlow,/hache-mini-action hache-mini-action-secondary/);
-assert.match(proaFinanceUx,/\.proa-edit-btn\{[^}]*top:50%;transform:translateY\(-50%\)/);
+assert.match(filtrosPagos,/\.hache-filter-toggle\{background:#172033;color:#fff\}/);
+assert.match(proaFinanceUx,/\.quick-entry \.entry-toggle\{[^}]*background:#123b5d;color:#fff/);
+assert.match(proaFinanceUx,/\.proa-edit-btn\{[^}]*top:50%;transform:translateY\(-50%\);border:0/);
 assert.match(proaFinanceUx,/@media\(max-width:900px\)\{[\s\S]*?\.proa-edit-btn,\.proa-row-actions\{[^}]*transform:none/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
@@ -73,8 +76,10 @@ assert.match(relief,/@media\(hover:hover\)/);
 assert.match(relief,/:active\{/);
 assert.match(relief,/--hache-control-shadow-active:/);
 
-// Primarios oscuros: variantes compartidas y convenciones locales reales.
+// Primarios oscuros: variantes compartidas, locales y dinámicas reales.
 assert.match(relief,/\.hache-mini-action:not\(\.hache-mini-action-secondary\)/);
+assert.match(relief,/\.hache-filter-toggle/);
+assert.match(relief,/\.quick-entry \.entry-toggle/);
 assert.match(relief,/button\.primary/);
 assert.match(relief,/button\.save/);
 assert.match(relief,/#cerrar\.close/);
@@ -82,9 +87,9 @@ assert.match(relief,/#toolbar\.toolbar button/);
 assert.match(relief,/#form\.form button:not\(\.danger\)/);
 assert.match(relief,/\.form > button#guardar/);
 assert.match(relief,/\.clase-actions \.cerrar/);
-assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.form > button#guardar,[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
 assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
-assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\):active\{/);
+assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\.hache-filter-toggle,[\s\S]*\.quick-entry \.entry-toggle[\s\S]*\):active\{/);
 
 // En desktop, los bloqueados no se elevan ni heredan el hover de backend-menu.css.
 assert.match(relief,/\):not\(:disabled\):hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)!important/);
@@ -109,10 +114,10 @@ assert.match(relief,/\.student-results button:not\(:disabled\):hover\{[^}]*box-s
 assert.match(relief,/\.student-results button:active\{[^}]*box-shadow:none!important;[^}]*transform:none!important;/);
 assert.match(relief,/\.student-results button:last-child\{border-bottom:0!important\}/);
 
-// Los auxiliares posicionados mantienen su transform en desktop y su anclaje móvil.
-assert.match(relief,/\.proa-edit-btn\{[^}]*transform:translateY\(-50%\)!important/);
-assert.match(relief,/\.proa-edit-btn:not\(:disabled\):hover\{[^}]*transform:translateY\(-50%\)!important/);
-assert.match(relief,/\.proa-edit-btn:active\{[^}]*transform:translateY\(-50%\)!important/);
+// Los auxiliares posicionados mantienen geometría y borde plano.
+assert.match(relief,/\.proa-edit-btn\{[^}]*border:0!important;[^}]*transform:translateY\(-50%\)!important/);
+assert.match(relief,/\.proa-edit-btn:not\(:disabled\):hover\{[^}]*border:0!important;[^}]*transform:translateY\(-50%\)!important/);
+assert.match(relief,/\.proa-edit-btn:active\{[^}]*border:0!important;[^}]*transform:translateY\(-50%\)!important/);
 assert.match(relief,/@media\(max-width:900px\)\{[\s\S]*\.proa-edit-btn,[\s\S]*transform:none!important;/);
 
 // Móvil/táctil y accesibilidad de movimiento.
