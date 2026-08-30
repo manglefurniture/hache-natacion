@@ -8,7 +8,8 @@ const backendCss=fs.readFileSync(new URL('../public/assets/backend-menu.css',imp
 assert.match(api,/periodos-financieros\.php/);
 assert.match(api,/financiero_periodo_para_fecha\(\$pdo,\$sid,\$hoy\)/);
 assert.match(api,/financiero_totales\(\$pdo,\$s,\$periodoVigente\)/);
-assert.match(api,/m\.estado='PAGADA'.*m\.mes=:mes.*m\.anio=:anio/s);
+assert.match(api,/m\.estado='PAGADA'.*CURDATE\(\) BETWEEN m\.periodo_inicio AND m\.periodo_fin/s);
+assert.doesNotMatch(api,/m\.mes=:mes.*m\.anio=:anio/s);
 assert.match(api,/UNION\s+SELECT cia\.alumno_id/s);
 assert.match(api,/CURDATE\(\) BETWEEN ci\.fecha_inicio AND ci\.fecha_fin/);
 assert.match(api,/p\.tipo='INTENSIVO' AND p\.estado='VALIDO'/);
