@@ -37,6 +37,8 @@
   .tab.is-active,
   .hache-mini-action:not(.hache-mini-action-secondary),
   .hache-flow-btn-primary,
+  .hache-filter-toggle,
+  .quick-entry .entry-toggle,
   button.primary,
   .btn.primary,
   button.save,
@@ -95,6 +97,8 @@
     .tab.is-active,
     .hache-mini-action:not(.hache-mini-action-secondary),
     .hache-flow-btn-primary,
+    .hache-filter-toggle,
+    .quick-entry .entry-toggle,
     button.primary,
     .btn.primary,
     button.save,
@@ -128,6 +132,8 @@
 
   :where(
     .btn-primary,
+    .hache-filter-toggle,
+    .quick-entry .entry-toggle,
     button.primary,
     .btn.primary,
     button.save,
@@ -154,6 +160,7 @@
   }
   .student-results button:last-child:not(:disabled):hover{border-bottom:0!important}
   .proa-edit-btn:not(:disabled):hover{
+    border:0!important;
     box-shadow:none!important;
     transform:translateY(-50%)!important;
     filter:none!important;
@@ -183,6 +190,8 @@
   .tab.is-active,
   .hache-mini-action:not(.hache-mini-action-secondary),
   .hache-flow-btn-primary,
+  .hache-filter-toggle,
+  .quick-entry .entry-toggle,
   button.primary,
   .btn.primary,
   button.save,
@@ -235,13 +244,15 @@
 }
 .student-results button:last-child:active{border-bottom:0!important}
 
-/* El editor de comisión está centrado por transform en desktop. */
+/* El editor de comisión está centrado y es deliberadamente plano. */
 .proa-edit-btn{
+  border:0!important;
   box-shadow:none!important;
   transform:translateY(-50%)!important;
   filter:none!important;
 }
 .proa-edit-btn:active{
+  border:0!important;
   box-shadow:none!important;
   transform:translateY(-50%)!important;
   filter:none!important;
@@ -313,7 +324,7 @@
     .quick-pay
   ):hover{transform:none;filter:none}
   .hache-search-clear:hover{transform:translateY(-50%)!important}
-  .proa-edit-btn:hover{transform:translateY(-50%)!important;box-shadow:none!important;filter:none!important}
+  .proa-edit-btn:hover{border:0!important;transform:translateY(-50%)!important;box-shadow:none!important;filter:none!important}
 }
 @media(max-width:900px) and (hover:none){
   .proa-edit-btn:hover{transform:none!important}
