@@ -11,6 +11,7 @@ const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url)
 const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
 const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
 const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
+const historiasModeracion=fs.readFileSync(new URL('../public/historias-moderacion.php',import.meta.url),'utf8');
 const intensivoFlow=fs.readFileSync(new URL('../public/assets/intensivo-flow.js',import.meta.url),'utf8');
 const filtrosAlumnos=fs.readFileSync(new URL('../public/assets/filtros-alumnos.js',import.meta.url),'utf8');
 const personSearch=fs.readFileSync(new URL('../public/assets/person-search.js',import.meta.url),'utf8');
@@ -33,6 +34,8 @@ assert.match(finanzas,/class="primary"/);
 assert.match(resumen,/class="tab active"/);
 assert.match(configuracion,/class="btn primary"/);
 assert.match(usuarios,/class="primary"/);
+assert.match(historiasModeracion,/\.tab\.is-active\{/);
+assert.match(historiasModeracion,/button\.disabled=true/);
 assert.match(intensivoFlow,/hache-mini-action hache-mini-action-secondary/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
@@ -45,6 +48,7 @@ assert.match(relief,/\.modal \.close/);
 assert.match(relief,/\.btn,/);
 assert.match(relief,/\.tab,/);
 assert.match(relief,/\.tab\.active/);
+assert.match(relief,/\.tab\.is-active/);
 assert.match(relief,/\.mini-edit,/);
 assert.match(relief,/\.quick-pay/);
 assert.match(relief,/:focus-visible/);
@@ -57,9 +61,14 @@ assert.match(relief,/\.hache-mini-action:not\(\.hache-mini-action-secondary\)/);
 assert.match(relief,/button\.primary/);
 assert.match(relief,/button\.save/);
 assert.match(relief,/#cerrar\.close/);
-assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*button\.primary,[\s\S]*button\.save,[\s\S]*#cerrar\.close[\s\S]*\)\{/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*button\.primary,[\s\S]*button\.save,[\s\S]*#cerrar\.close[\s\S]*\)\{/);
 assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
 assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\):active\{/);
+
+// En desktop solo los controles habilitados reaccionan al hover.
+assert.match(relief,/@media\(hover:hover\)\{[\s\S]*\):not\(:disabled\):hover\{/);
+assert.match(relief,/:where\([\s\S]*\.tab\.is-active[\s\S]*\):not\(:disabled\):hover\{/);
+assert.doesNotMatch(relief,/@media\(hover:hover\)\{[\s\S]*\)\:hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)/);
 
 // Los controles contextuales transparentes de búsqueda conservan su geometría.
 assert.match(filtrosAlumnos,/\.hache-search-clear\{[^}]*transform:translateY\(-50%\)/);
