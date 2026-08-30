@@ -12,6 +12,9 @@ const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.
 const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
 const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
 const historiasModeracion=fs.readFileSync(new URL('../public/historias-moderacion.php',import.meta.url),'utf8');
+const reportes=fs.readFileSync(new URL('../public/reportes.php',import.meta.url),'utf8');
+const comisiones=fs.readFileSync(new URL('../public/comisiones-proa.php',import.meta.url),'utf8');
+const sesiones=fs.readFileSync(new URL('../public/sesiones.php',import.meta.url),'utf8');
 const intensivoFlow=fs.readFileSync(new URL('../public/assets/intensivo-flow.js',import.meta.url),'utf8');
 const filtrosAlumnos=fs.readFileSync(new URL('../public/assets/filtros-alumnos.js',import.meta.url),'utf8');
 const personSearch=fs.readFileSync(new URL('../public/assets/person-search.js',import.meta.url),'utf8');
@@ -36,6 +39,13 @@ assert.match(configuracion,/class="btn primary"/);
 assert.match(usuarios,/class="primary"/);
 assert.match(historiasModeracion,/\.tab\.is-active\{/);
 assert.match(historiasModeracion,/button\.disabled=true/);
+assert.match(reportes,/\.toolbar button\{background:var\(--ink\)/);
+assert.match(reportes,/id="toolbar" class="toolbar"/);
+assert.match(comisiones,/\.form button\{background:var\(--ink\)/);
+assert.match(comisiones,/id="form" class="form"/);
+assert.match(comisiones,/btn\.disabled=!d\.habilitado/);
+assert.match(sesiones,/\.cerrar\{background:#172033/);
+assert.match(sesiones,/class="cerrar"/);
 assert.match(intensivoFlow,/hache-mini-action hache-mini-action-secondary/);
 
 // Relieve: normal, hover de escritorio, pulsado y foco accesible.
@@ -56,19 +66,22 @@ assert.match(relief,/@media\(hover:hover\)/);
 assert.match(relief,/:active\{/);
 assert.match(relief,/--hache-control-shadow-active:/);
 
-// Primarios oscuros: variantes compartidas, locales, hover y active coherentes.
+// Primarios oscuros: variantes compartidas y convenciones locales reales.
 assert.match(relief,/\.hache-mini-action:not\(\.hache-mini-action-secondary\)/);
 assert.match(relief,/button\.primary/);
 assert.match(relief,/button\.save/);
 assert.match(relief,/#cerrar\.close/);
-assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*button\.primary,[\s\S]*button\.save,[\s\S]*#cerrar\.close[\s\S]*\)\{/);
+assert.match(relief,/#toolbar\.toolbar button/);
+assert.match(relief,/#form\.form button:not\(\.danger\)/);
+assert.match(relief,/\.clase-actions \.cerrar/);
+assert.match(relief,/:where\([\s\S]*\.tab\.active,[\s\S]*\.tab\.is-active,[\s\S]*#toolbar\.toolbar button,[\s\S]*#form\.form button:not\(\.danger\),[\s\S]*\.clase-actions \.cerrar[\s\S]*\)\{/);
 assert.match(relief,/var\(--hache-primary-shadow-hover\)!important/);
 assert.match(relief,/:where\([\s\S]*\.hache-mini-action:not\(\.hache-mini-action-secondary\)[\s\S]*\):active\{/);
 
-// En desktop solo los controles habilitados reaccionan al hover.
-const desktopHover=relief.match(/@media\(hover:hover\)\{([\s\S]*?)\n\}/)?.[1]||'';
-assert.match(desktopHover,/\):not\(:disabled\):hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)!important/);
-assert.match(desktopHover,/\.tab\.is-active,[\s\S]*\):not\(:disabled\):hover\{[\s\S]*var\(--hache-primary-shadow-hover\)!important/);
+// En desktop, los bloqueados no se elevan ni heredan el hover de backend-menu.css.
+assert.match(relief,/\):not\(:disabled\):hover\{[\s\S]*box-shadow:var\(--hache-control-shadow-hover\)!important/);
+assert.match(relief,/\):disabled:hover\{[\s\S]*transform:none!important;[\s\S]*box-shadow:var\(--hache-control-shadow\)!important/);
+assert.match(relief,/\.btn-primary,[\s\S]*\):disabled:hover\{[\s\S]*box-shadow:var\(--hache-primary-shadow\)!important/);
 
 // Los controles contextuales transparentes de búsqueda conservan su geometría.
 assert.match(filtrosAlumnos,/\.hache-search-clear\{[^}]*transform:translateY\(-50%\)/);
@@ -79,7 +92,7 @@ assert.match(relief,/\.hache-search-clear,/);
 assert.match(relief,/\.hache-search-option,/);
 assert.match(relief,/\.hache-person-clear,/);
 assert.match(relief,/\.hache-person-option/);
-assert.match(relief,/\.hache-search-clear\{\s*transform:translateY\(-50%\)!important;/);
+assert.match(relief,/\.hache-search-clear\{transform:translateY\(-50%\)!important\}/);
 assert.match(relief,/\.hache-search-clear:active\{[\s\S]*transform:translateY\(-50%\)!important;/);
 assert.match(relief,/\.hache-person-clear:active/);
 assert.match(relief,/\.hache-person-option:active/);
