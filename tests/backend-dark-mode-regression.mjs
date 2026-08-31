@@ -133,4 +133,73 @@ assert.match(css,/#lista>\.msg/);
 assert.doesNotMatch(css,/:where\(\.msg(?:[,)]|\s)/,'no debe tematizarse .msg globalmente');
 assert.doesNotMatch(css,/,:?\.msg(?:[,)]|\s)/,'no debe aparecer .msg desnudo en listas de selectores');
 
+
+// P1/P2: cabeceras, avisos e indicadores del portal sin alterar light ni variantes.
+const cuenta=fs.readFileSync(new URL('../public/mi-cuenta.php',import.meta.url),'utf8');
+const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
+const notificaciones=fs.readFileSync(new URL('../public/notificaciones.php',import.meta.url),'utf8');
+const ausencias=fs.readFileSync(new URL('../public/ausencias.php',import.meta.url),'utf8');
+for(const page of ['intensivos','intensivo-detalle','pagos']){
+  const source=fs.readFileSync(new URL('../public/'+page+'.php',import.meta.url),'utf8');
+  assert.match(source,/\.header\s*\{[^}]*background:\s*#fff(?:fff)?;/);
+  assert.match(source,/<body>\s*<header class="header">/);
+}
+assert.match(cuenta,/\.notice\{background:#eef6fb/);
+assert.match(cuenta,/\.notice p\{[^}]*color:#334155/);
+assert.match(cuenta,/<div id="mensajes">/);
+assert.match(cuenta,/<div class="notice"><h3>/);
+assert.match(cuenta,/<main class="wrap"><section class="hero">.*?<\/section><div class="grid"><section class="card">/);
+assert.match(cuenta,/\.small\{[^}]*color:#64748b/);
+for(const source of [cuenta,usuarios]){
+  assert.match(source,/\.badge\{[^}]*background:#e2e8f0/);
+  assert.match(source,/<span class="badge">/);
+}
+assert.match(usuarios,/lista.innerHTML=d\.usuarios\.map\(u=>\x60<div class="usuario">/);
+assert.match(notificaciones,/\.status\{[^}]*background:#f8fafc/);
+assert.match(notificaciones,/<div id="status" class="status">/);
+assert.match(ausencias,/\.status\{[^}]*background:#e8eef2/);
+assert.match(ausencias,/<div id="avisos" class="card">/);
+assert.match(ausencias,/<span class="status">CANCELADO<\/span>/);
+
+// Inspeccionar declaraciones del bloque concreto, no solo presencia del selector.
+function darkBlock(selector){
+  const compact=css.replace(/\s+/g,' ').replace(/\/\*.*?\*\//g,'');
+  const escaped=selector.replace(/[.*+?^$()|[\]{}\\]/g,'\\$&');
+  const match=compact.match(new RegExp('html\\[data-theme="dark"\\] :where\\(\\s*'+escaped+'\\s*\\)\\{([^}]+)\\}'));
+  assert.ok(match,'falta bloque dark acotado: '+selector);
+  return match[1];
+}
+const surfaceBlock=darkBlock('body>header.header,#mensajes>.notice');
+assert.match(surfaceBlock,/color:var\(--hache-ink\)!important/);
+assert.match(surfaceBlock,/background:var\(--hache-card\)!important/);
+assert.match(surfaceBlock,/border-color:var\(--hache-line\)!important/);
+assert.match(darkBlock('body>header.header span'),/color:var\(--hache-muted\)!important/);
+assert.match(darkBlock('#mensajes>.notice p'),/color:var\(--hache-ink\)!important/);
+const neutralBlock=darkBlock('#avisos .badge[class="badge"],#intensivos .badge[class="badge"], #lista>.usuario .badge[class="badge"], .card>#status.status[class="status"],#avisos.card .status[class="status"]');
+assert.match(neutralBlock,/color:#d9e5f1!important/);
+assert.match(neutralBlock,/background:#1a2a3e!important/);
+assert.match(neutralBlock,/border-color:#3a4d65!important/);
+assert.match(darkBlock('main.wrap>.hero+.grid .card .small'),/color:var\(--hache-muted\)!important/);
+assert.doesNotMatch(css,/(?:html\[data-theme="dark"\]\s+|:where\(\s*|,\s*)\.(?:badge|status|small|notice)(?=\s*[,){])/,
+  'no añadir selectores globales para componentes locales');
+
+// El contraste de los textos pequeños debe ser al menos 4.5:1.
+function luminance(hex){
+  const rgb=hex.slice(1).match(/../g).map(v=>parseInt(v,16)/255)
+    .map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4);
+  return rgb[0]*0.2126+rgb[1]*0.7152+rgb[2]*0.0722;
+}
+function contrast(fg,bg){
+  const values=[luminance(fg),luminance(bg)].sort((a,b)=>b-a);
+  return (values[0]+0.05)/(values[1]+0.05);
+}
+const tokenColor=name=>css.match(new RegExp(name+':(#[0-9a-f]{6})'))[1];
+for(const fg of [tokenColor('--hache-ink'),tokenColor('--hache-muted')]){
+  for(const bg of [tokenColor('--hache-card'),'#142235','#0f1928']){
+    assert.ok(contrast(fg,bg)>=4.5,fg+' sobre '+bg+' debe ser legible');
+  }
+}
+assert.ok(contrast(neutralBlock.match(/color:(#[0-9a-f]{6})/)[1],
+  neutralBlock.match(/background:(#[0-9a-f]{6})/)[1])>=4.5);
+
 console.log('BACKEND_DARK_MODE_REGRESSION_OK');

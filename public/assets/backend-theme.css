@@ -114,6 +114,31 @@ html[data-theme="dark"] .a.OK{border-left-color:#53c878!important}
   html[data-theme="dark"] .a.OK:hover{border-left-color:#53c878!important}
 }
 
+
+/* Cabeceras administrativas y avisos del portal: conservar el light local. */
+html[data-theme="dark"] :where(body>header.header,#mensajes>.notice){
+  color:var(--hache-ink)!important;
+  background:var(--hache-card)!important;
+  border-color:var(--hache-line)!important;
+}
+html[data-theme="dark"] :where(body>header.header span){color:var(--hache-muted)!important}
+html[data-theme="dark"] :where(#mensajes>.notice p){color:var(--hache-ink)!important}
+
+/* Solo indicadores neutrales de Mi cuenta, Usuarios, Notificaciones y Ausencias.
+   La clase exacta deja intactas todas las variantes semánticas y locales. */
+html[data-theme="dark"] :where(
+  #avisos .badge[class="badge"],#intensivos .badge[class="badge"],
+  #lista>.usuario .badge[class="badge"],
+  .card>#status.status[class="status"],#avisos.card .status[class="status"]
+){
+  color:#d9e5f1!important;
+  background:#1a2a3e!important;
+  border-color:#3a4d65!important;
+}
+
+/* La grilla que sigue al hero pertenece al portal del alumno. */
+html[data-theme="dark"] :where(main.wrap>.hero+.grid .card .small){color:var(--hache-muted)!important}
+
 /* Dashboard y tarjetas de acción */
 html[data-theme="dark"] .quick a:not(.primary),
 html[data-theme="dark"] .slot{
