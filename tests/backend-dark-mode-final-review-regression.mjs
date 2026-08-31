@@ -11,10 +11,11 @@ const themePos=bootstrap.indexOf("['/assets/backend-theme.css'");
 const fixesPos=bootstrap.indexOf("['/assets/backend-theme-review-fixes.css'");
 assert.ok(themePos>=0&&fixesPos>themePos,'los fixes finales deben cargar después del theme principal');
 
-// P1 Codex: estado neutral de clases, sin tocar variantes como .estado.cancel.
+// P1 Codex: el template neutral renderiza `estado `; el selector debe coincidir y excluir .cancel.
 assert.match(sesiones,/\.estado\{[^}]*background:#e2e8f0/);
 assert.match(sesiones,/class="estado \$\{cancel\?'cancel':''\}"/);
-assert.match(fixes,/\.clase \.estado\[class="estado"\]/);
+assert.match(fixes,/\.clase \.estado:not\(\.cancel\)/);
+assert.doesNotMatch(fixes,/\.estado\[class="estado"\]/);
 assert.doesNotMatch(fixes,/\.estado\.cancel\s*\{/);
 
 // P2 Codex: spans secundarios del resumen, limitados a sus paneles únicos.
