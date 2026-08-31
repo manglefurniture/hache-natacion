@@ -42,5 +42,54 @@ html[data-theme="dark"] .card.diag .footnote{color:var(--hache-muted)!important}
 /* Intensivos: enlace de alta dentro del modal de agregar alumno. */
 html[data-theme="dark"] #modalAlumno .modal-box .link-nuevo{color:#8dcdf2!important}
 
+/* Mobile: responsive-fixes.css usa !important y mayor especificidad que el theme base.
+   Esta variante dark recupera superficie, texto y divisores de las tarjetas de tabla. */
+html[data-theme="dark"].hache-touch-ui table.hache-responsive-table tbody tr{
+  color:var(--hache-ink)!important;
+  background:#111d2d!important;
+  background-image:linear-gradient(155deg,#142235,#0f1928)!important;
+  border-color:#2a3b51!important;
+  box-shadow:var(--hache-shadow)!important;
+}
+html[data-theme="dark"].hache-touch-ui table.hache-responsive-table tbody td{
+  color:var(--hache-ink)!important;
+}
+html[data-theme="dark"].hache-touch-ui table.hache-responsive-table tbody td::before{
+  color:var(--hache-muted)!important;
+}
+html[data-theme="dark"].hache-touch-ui table.hache-responsive-table tbody td:first-child{
+  border-bottom-color:#29384c!important;
+}
+
+/* Buscador de personas: person-search.js inyecta superficies light después de cargar CSS. */
+html[data-theme="dark"] .hache-person-box,
+html[data-theme="dark"] .hache-person-suggest{
+  color:var(--hache-ink)!important;
+  background:#0b1625!important;
+  border-color:#354861!important;
+  box-shadow:0 10px 28px rgba(0,0,0,.28)!important;
+}
+html[data-theme="dark"] .hache-person-input{
+  color:#edf4fc!important;
+  background:transparent!important;
+}
+html[data-theme="dark"] .hache-person-input::placeholder,
+html[data-theme="dark"] :where(.hache-person-icon,.hache-person-clear,.hache-person-empty){
+  color:var(--hache-muted)!important;
+}
+html[data-theme="dark"] .hache-person-option{
+  color:var(--hache-ink)!important;
+  background:#0f1b2b!important;
+}
+html[data-theme="dark"] .hache-person-option:hover,
+html[data-theme="dark"] .hache-person-option.active{
+  background:#17263a!important;
+}
+html[data-theme="dark"] .hache-person-chip{
+  color:#d9e5f1!important;
+  background:#1a2a3e!important;
+  border-color:#3a4d65!important;
+}
+
 /* Portal del alumno: selector de apariencia inline solo tras confirmar rol ALUMNO. */
 :where(main.wrap,main.box)>.hache-theme-switcher-inline{max-width:360px;margin:0 0 14px}
