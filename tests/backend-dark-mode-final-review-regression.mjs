@@ -15,6 +15,7 @@ const pagoDetalle=fs.readFileSync(new URL('../public/pago-detalle.php',import.me
 const agregar=fs.readFileSync(new URL('../public/agregar-alumno.php',import.meta.url),'utf8');
 const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
 const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.meta.url),'utf8');
+const estadoSistema=fs.readFileSync(new URL('../public/estado-sistema.php',import.meta.url),'utf8');
 
 assert.match(bootstrap,/backend-theme-review-fixes\.css\?v=20260831-1/);
 const themePos=bootstrap.indexOf("['/assets/backend-theme.css'");
@@ -57,10 +58,15 @@ assert.match(themeJs,/document\.querySelector\('main\.wrap,main\.box'\)/);
 assert.match(themeJs,/if\(role==='ALUMNO'\)/);
 assert.match(themeJs,/mountSwitcher\(\{allowInline:true\}\)/);
 assert.match(themeJs,/setInterval\(\(\)=>\{/);
-assert.match(themeJs,/if\(attempts>=50\)\{\s*clearInterval\(roleWait\);\s*\/\* El observer sigue esperando el footer/);
-assert.doesNotMatch(themeJs,/if\(attempts>=50\)[\s\S]{0,120}observer\.disconnect\(\)/);
+assert.doesNotMatch(themeJs,/attempts>=50/);
+assert.doesNotMatch(themeJs,/let attempts=/);
+assert.match(themeJs,/window\.addEventListener\('pagehide',\(\)=>clearInterval\(roleWait\),\{once:true\}\)/);
 assert.match(themeJs,/hache-theme-switcher-inline/);
 assert.match(fixes,/:where\(main\.wrap,main\.box\)>\.hache-theme-switcher-inline/);
+
+// P2 Codex: nota técnica del estado del sistema usa foreground secundario dark.
+assert.match(estadoSistema,/\.footnote\{font-size:11px;color:#64748b/);
+assert.match(fixes,/\.card\.diag \.footnote\{color:var\(--hache-muted\)!important\}/);
 
 // P2 Codex: navegación de regreso del detalle de pago.
 assert.match(pagoDetalle,/class="back"/);
