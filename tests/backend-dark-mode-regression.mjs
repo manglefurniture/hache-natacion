@@ -9,6 +9,8 @@ const editar=fs.readFileSync(new URL('../public/editar-alumno.php',import.meta.u
 const sesiones=fs.readFileSync(new URL('../public/sesiones.php',import.meta.url),'utf8');
 const historias=fs.readFileSync(new URL('../public/historias-moderacion.php',import.meta.url),'utf8');
 const alertas=fs.readFileSync(new URL('../public/alertas.php',import.meta.url),'utf8');
+const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url),'utf8');
+const auditoria=fs.readFileSync(new URL('../public/auditoria.php',import.meta.url),'utf8');
 
 // El theme se carga solo desde el bootstrap protegido del backend.
 assert.match(bootstrap,/backend-theme\.js\?v=20260831-1/);
@@ -61,13 +63,19 @@ assert.match(sesiones,/\.descanso\{background:#fff/);
 assert.match(historias,/\.comment\{[^}]*color:#34495b/);
 assert.match(alertas,/\.a\{[^}]*background:#fff/);
 assert.match(alertas,/\.det\{[^}]*color:#64748b/);
+assert.match(finanzas,/\.builder\{background:#fff/);
+assert.match(finanzas,/\.builder p\{[^}]*color:#64748b/);
+assert.match(finanzas,/\.field label\{[^}]*color:#64748b/);
+assert.match(finanzas,/\.secondary\{background:#e8eef3;color:#172033/);
+assert.match(finanzas,/\.note\{[^}]*background:#f8fafc[^}]*color:#64748b/);
+assert.match(auditoria,/\.route\{[^}]*color:#475569/);
 
-for(const selector of ['.tarjeta','.dato','.clase','.descanso','.modal-card','.check','.a']){
+for(const selector of ['.tarjeta','.dato','.clase','.descanso','.modal-card','.check','.a','.builder']){
   assert.ok(css.includes(selector),`${selector} debe tener cobertura en dark mode`);
 }
 assert.match(css,/\.clase\.cancelada\{/);
 assert.match(css,/:where\(\.comment,\.observaciones,\.modal-card p,\.modal-card li\)\{color:#c7d4e3!important\}/);
-assert.match(css,/:where\(\.tarjeta small,\.card small,\.panel small,\.modal-card small,\.form-card small\)\{color:var\(--hache-muted\)!important\}/);
+assert.match(css,/:where\(\.tarjeta small,\.card small,\.panel small,\.modal-card small,\.form-card small,\.builder small\)\{color:var\(--hache-muted\)!important\}/);
 assert.match(css,/html\[data-theme="dark"\] a:not\(\[class\]\)\{color:#8dcdf2\}/);
 assert.doesNotMatch(css,/a:not\(\.btn\):not\(\.tab\)/);
 assert.match(css,/\.boton-cancelar/);
@@ -75,6 +83,9 @@ assert.match(css,/\.a\.ALTA\{border-left-color:#ef6a6a!important\}/);
 assert.match(css,/\.a\.MEDIA\{border-left-color:#f2b84b!important\}/);
 assert.match(css,/\.a\.BAJA\{border-left-color:#65a5ff!important\}/);
 assert.match(css,/\.a\.OK\{border-left-color:#53c878!important\}/);
+assert.match(css,/\.route,\.builder p,\.field label,\.note/);
+assert.match(css,/html\[data-theme="dark"\] \.note\{/);
+assert.match(css,/\.secondary/);
 assert.match(css,/\.estado\.historica/);
 assert.match(css,/:where\(\.state,\.tag\)/);
 assert.match(css,/\.action-button\.approve/);
