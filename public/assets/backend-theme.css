@@ -1,0 +1,269 @@
+/* Hache Natación — Theme layer del backend.
+   Aplica únicamente cuando config/backend-bootstrap.php está activo. */
+
+html[data-theme="light"]{color-scheme:light}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --hache-bg:#08111f;
+  --hache-card:#111d2d;
+  --hache-line:#29384c;
+  --hache-ink:#e7edf6;
+  --hache-muted:#9aaabd;
+  --hache-accent:#78bfe8;
+  --hache-action-bg:#245f86;
+  --hache-action-border:#367da8;
+  --hache-shadow:inset 0 1px 0 rgba(255,255,255,.075),inset 0 -1px 0 rgba(0,0,0,.28),0 3px 8px rgba(0,0,0,.24),0 16px 38px rgba(0,0,0,.22);
+  --hache-shadow-hover:inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.34),0 5px 12px rgba(0,0,0,.26),0 20px 46px rgba(0,0,0,.28);
+
+  /* aliases usados por las pantallas históricas */
+  --ink:#e7edf6;
+  --muted:#9aaabd;
+  --line:#29384c;
+  --paper:#111d2d;
+  --bg:#08111f;
+  --brand:#2578a8;
+  --surface:#111d2d;
+  --surface-2:#152337;
+  --border:#29384c;
+  --text:#e7edf6;
+  --text-muted:#9aaabd;
+  --depth:inset 0 1px 0 rgba(255,255,255,.075),inset 0 -1px 0 rgba(0,0,0,.28),0 3px 8px rgba(0,0,0,.24),0 16px 38px rgba(0,0,0,.22);
+  --depth-hover:inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.34),0 5px 12px rgba(0,0,0,.26),0 20px 46px rgba(0,0,0,.28);
+
+  /* relief compatible con fondo oscuro */
+  --hache-control-border:rgba(112,135,164,.52);
+  --hache-control-border-bottom:rgba(0,0,0,.58);
+  --hache-control-highlight:rgba(255,255,255,.15);
+  --hache-control-shadow:inset 0 1px 0 rgba(255,255,255,.10),inset 0 -2px 0 rgba(0,0,0,.26),0 2px 5px rgba(0,0,0,.22),0 8px 20px rgba(0,0,0,.18);
+  --hache-control-shadow-hover:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -2px 0 rgba(0,0,0,.30),0 3px 7px rgba(0,0,0,.25),0 11px 26px rgba(0,0,0,.22);
+  --hache-control-shadow-active:inset 0 2px 5px rgba(0,0,0,.42),inset 0 -1px 0 rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.20);
+}
+
+html[data-theme="dark"] body{
+  color:var(--hache-ink)!important;
+  background:radial-gradient(circle at 8% 0%,rgba(45,128,177,.13),transparent 30%),radial-gradient(circle at 96% 10%,rgba(39,100,145,.10),transparent 27%),var(--hache-bg)!important;
+}
+
+html[data-theme="dark"] :where(h1,h2,h3,h4,strong,label,.label,.value,.big,.plan){color:inherit}
+html[data-theme="dark"] :where(.subtitulo,.contador,.sub,.meta,.secundario,.precio,.muted,.hint,.help,.hache-flow-sub,.hache-flow-help,.section-head span,.resumen,.bloque-sub,.tipo,.info,.descanso span,.etiqueta,.check small,.det,.route,.builder p,.field label,.note,.k,.s,.split-note,.mini span,.asis-item span,.links a span,.toolbar-note,.status-meta,.fold-hint,.formula,.range-edit label){color:var(--hache-muted)!important}
+html[data-theme="dark"] :where(.tarjeta small,.card small,.panel small,.modal-card small,.form-card small,.builder small){color:var(--hache-muted)!important}
+html[data-theme="dark"] :where(.eyebrow){color:#8eabc2!important}
+html[data-theme="dark"] a:not([class]){color:#8dcdf2}
+html[data-theme="dark"] :where(.nombre a,.hero-link){color:var(--hache-ink)!important}
+html[data-theme="dark"] :where(.comment,.observaciones,.modal-card p,.modal-card li){color:#c7d4e3!important}
+
+/* Superficies dimensionales */
+html[data-theme="dark"] :where(
+  .card,.hero-card:not(.dark),.panel,.tabla-contenedor,.table-container,.course-card,
+  .hache-flow-box,.modal-box,.modal-content,.modal-card,.form-card,.content-card,.summary-card,
+  .metric-card,.section-card,.box,.empty,.hache-compact-panel,.tarjeta,.dato,.clase,.descanso,.check,.a,.builder,
+  .toolbar,.fold,.proa-box,.asis-item,.mini,.split,main>.status,.card .range
+){
+  color:var(--hache-ink)!important;
+  background-color:var(--hache-card)!important;
+  background-image:linear-gradient(155deg,#142235,#0f1928)!important;
+  border-color:#2a3b51!important;
+  border-top-color:rgba(255,255,255,.10)!important;
+  border-bottom-color:rgba(0,0,0,.48)!important;
+  box-shadow:var(--hache-shadow)!important;
+}
+html[data-theme="dark"] :where(.hero-card,.card,.panel)::after{background:linear-gradient(180deg,rgba(255,255,255,.055),transparent)!important}
+html[data-theme="dark"] :where(.card .item,.links a,#lista>.msg){
+  color:var(--hache-ink)!important;
+  background:#0f1b2b!important;
+  border-color:#2a3b51!important;
+}
+html[data-theme="dark"] :where(.history-row.head,.row.head,.formula>div,.history-controls .field,.panel>.form,.fold.primary-fold>summary,.fold-icon,.row.auto){
+  color:var(--hache-ink)!important;
+  background:#101d2d!important;
+  border-color:#29384c!important;
+}
+html[data-theme="dark"] :where(.progress,.bar){background:#24344a!important}
+html[data-theme="dark"] :where(.progress>span,.fill){background:linear-gradient(90deg,#367da8,#65a9d3)!important}
+html[data-theme="dark"] .clase.cancelada{
+  color:var(--hache-ink)!important;
+  background:#24171d!important;
+  background-image:linear-gradient(155deg,#2b1a22,#1e1419)!important;
+  border-color:#56303e!important;
+}
+html[data-theme="dark"] .hint-intensivo{
+  color:#f2c574!important;
+  background:#382812!important;
+  border-color:#6c4d25!important;
+}
+html[data-theme="dark"] .note{
+  color:var(--hache-muted)!important;
+  background:#0b1625!important;
+  border:1px solid #29384c!important;
+}
+html[data-theme="dark"] .note .warn{color:#f2c574!important}
+html[data-theme="dark"] .a.ALTA{border-left-color:#ef6a6a!important}
+html[data-theme="dark"] .a.MEDIA{border-left-color:#f2b84b!important}
+html[data-theme="dark"] .a.BAJA{border-left-color:#65a5ff!important}
+html[data-theme="dark"] .a.OK{border-left-color:#53c878!important}
+@media(hover:hover){
+  html[data-theme="dark"] :where(.card,.hero-card:not(.dark),.panel,.course-card,.hache-flow-box,.tarjeta,.clase,.descanso,.a,.builder,.proa-box,.asis-item,.mini,.split):hover{
+    border-color:#38506b!important;
+    border-top-color:rgba(255,255,255,.14)!important;
+    border-bottom-color:rgba(0,0,0,.55)!important;
+    box-shadow:var(--hache-shadow-hover)!important;
+  }
+  html[data-theme="dark"] .a.ALTA:hover{border-left-color:#ef6a6a!important}
+  html[data-theme="dark"] .a.MEDIA:hover{border-left-color:#f2b84b!important}
+  html[data-theme="dark"] .a.BAJA:hover{border-left-color:#65a5ff!important}
+  html[data-theme="dark"] .a.OK:hover{border-left-color:#53c878!important}
+}
+
+
+/* Cabeceras administrativas y avisos del portal: conservar el light local. */
+html[data-theme="dark"] :where(body>header.header,#mensajes>.notice){
+  color:var(--hache-ink)!important;
+  background:var(--hache-card)!important;
+  border-color:var(--hache-line)!important;
+}
+html[data-theme="dark"] :where(body>header.header span){color:var(--hache-muted)!important}
+html[data-theme="dark"] :where(#mensajes>.notice p){color:var(--hache-ink)!important}
+
+/* Solo indicadores neutrales de Mi cuenta, Usuarios, Notificaciones y Ausencias.
+   La clase exacta deja intactas todas las variantes semánticas y locales. */
+html[data-theme="dark"] :where(
+  #avisos .badge[class="badge"],#intensivos .badge[class="badge"],
+  #lista>.usuario .badge[class="badge"],
+  .card>#status.status[class="status"],#avisos.card .status[class="status"]
+){
+  color:#d9e5f1!important;
+  background:#1a2a3e!important;
+  border-color:#3a4d65!important;
+}
+
+/* La grilla que sigue al hero pertenece al portal del alumno. */
+html[data-theme="dark"] :where(main.wrap>.hero+.grid .card .small){color:var(--hache-muted)!important}
+
+/* Dashboard y tarjetas de acción */
+html[data-theme="dark"] .quick a:not(.primary),
+html[data-theme="dark"] .slot{
+  color:var(--hache-ink)!important;
+  background:linear-gradient(145deg,#142235,#0e1927)!important;
+  border-color:#2a3b51!important;
+  border-top-color:rgba(255,255,255,.10)!important;
+  border-bottom-color:rgba(0,0,0,.52)!important;
+  box-shadow:var(--hache-control-shadow)!important;
+}
+html[data-theme="dark"] .attention{
+  background:linear-gradient(145deg,#302315,#241a10)!important;
+  border-color:#72522b!important;
+  border-top-color:#8a6736!important;
+  border-bottom-color:#171008!important;
+}
+html[data-theme="dark"] .attention .big{color:#f3bd68!important}
+
+/* Acciones históricas: --ink sigue siendo texto, nunca fondo en dark */
+html[data-theme="dark"] :where(.toolbar button,.form>button,.load,.tab.active,.tab.is-active){
+  color:#fff!important;
+  background:var(--hache-action-bg)!important;
+  border-color:var(--hache-action-border)!important;
+}
+html[data-theme="dark"] :where(.toolbar button,.form>button,.load,.tab.active,.tab.is-active):hover{background:#2d719e!important}
+
+/* Tablas */
+html[data-theme="dark"] table{color:var(--hache-ink)!important}
+html[data-theme="dark"] th{
+  color:#aebed0!important;
+  background:#142235!important;
+  border-color:#2a3b51!important;
+}
+html[data-theme="dark"] td{border-color:#233247!important}
+html[data-theme="dark"] tr{border-color:#233247}
+html[data-theme="dark"] table.hache-responsive-table tr{
+  color:var(--hache-ink)!important;
+  background:linear-gradient(155deg,#142235,#0f1928)!important;
+  border-color:#2a3b51!important;
+  box-shadow:var(--hache-shadow)!important;
+}
+html[data-theme="dark"] table.hache-responsive-table td:first-child{border-bottom-color:#29384c!important}
+
+/* Formularios */
+html[data-theme="dark"] :where(input,select,textarea,.hache-flow-control){
+  color:#edf4fc!important;
+  background:#0b1625!important;
+  border-color:#354861!important;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.30),0 1px 0 rgba(255,255,255,.035)!important;
+}
+html[data-theme="dark"] :where(input,select,textarea,.hache-flow-control)::placeholder{color:#71849a!important}
+html[data-theme="dark"] :where(input,select,textarea,.hache-flow-control):focus{
+  border-color:#4b8db7!important;
+  box-shadow:0 0 0 3px rgba(79,157,205,.16),inset 0 1px 3px rgba(0,0,0,.28)!important;
+}
+html[data-theme="dark"] option{color:#edf4fc;background:#0b1625}
+html[data-theme="dark"] :where(.btn-secondary,.hache-mini-action-secondary,.hache-flow-btn-secondary,.mini-edit,.boton-cancelar,.secondary,.toolbar a:not(.pdf),.tab:not(.activa):not(.active):not(.is-active)){
+  color:#d9e5f1!important;
+  background:#1a2a3e!important;
+  border-color:#3a4d65!important;
+}
+
+/* Estados semánticos: conservan significado sin usar fondos claros */
+html[data-theme="dark"] :where(.estado.activo,.derecho.acceso,.pagado-intensivo,.badge.success,.status.success,.vino,.ok){background:#143525!important;color:#91e3ae!important;border-color:#28583c!important}
+html[data-theme="dark"] :where(.estado.baja,.derecho.sin-acceso,.badge.danger,.status.danger,.error,.no-vino,.bloqueado,.alerta){background:#3b1820!important;color:#ffb3bf!important;border-color:#6f2b39!important}
+html[data-theme="dark"] :where(.estado.pendiente,.derecho.pendiente,.pendiente-intensivo,.sin-plan-tag,.badge.warning,.status.warning,.justificada){background:#382812!important;color:#f2c574!important;border-color:#6c4d25!important}
+html[data-theme="dark"] :where(.estado.intensivo,.estado.programado,.intensivo,.programado,.badge.info,.status.info,.estado.historica){background:#152b46!important;color:#9fcbff!important;border-color:#2d5076!important}
+html[data-theme="dark"] :where(.state,.tag){background:#1a2a3e!important;color:#d9e5f1!important;border-color:#3a4d65!important}
+html[data-theme="dark"] :where(.motivo,.error-delete){color:#ff9caf!important}
+html[data-theme="dark"] :where(.btn-danger,.bloque-cancel,.cancelar,.boton-eliminar){background:#311820!important;color:#ffb3bf!important;border-color:#6f2b39!important}
+html[data-theme="dark"] main>.status.no,
+html[data-theme="dark"] main>.status.warn{background:#382812!important;background-image:none!important;color:#f2c574!important;border-color:#6c4d25!important}
+html[data-theme="dark"] main>.status.bad{background:#3b1820!important;background-image:none!important;color:#ffb3bf!important;border-color:#6c2b39!important}
+
+/* Moderación de Historias */
+html[data-theme="dark"] .action-button{background:#17263a!important;color:#dce7f2!important;border-color:#3a4d65!important}
+html[data-theme="dark"] .action-button.approve{background:#143525!important;color:#91e3ae!important;border-color:#28583c!important}
+html[data-theme="dark"] :where(.action-button.reject,.action-button.hide){background:#382812!important;color:#f2c574!important;border-color:#6c4d25!important}
+html[data-theme="dark"] :where(.action-button.delete,.action-button.block){background:#3b1820!important;color:#ffb3bf!important;border-color:#6f2b39!important}
+html[data-theme="dark"] .flag{background:#382812!important;color:#f2c574!important}
+html[data-theme="dark"] .flag.blocked{background:#3b1820!important;color:#ffb3bf!important}
+
+/* Menú lateral */
+html[data-theme="dark"] #hache-menu-panel{
+  color:var(--hache-ink);
+  background:linear-gradient(180deg,#111d2d,#0b1523)!important;
+  box-shadow:12px 0 34px rgba(0,0,0,.40),24px 0 60px rgba(0,0,0,.22)!important;
+}
+html[data-theme="dark"] .hache-menu-nav{background:transparent}
+html[data-theme="dark"] .hache-menu-group.is-open{border-color:#29384c!important;background:#121f31!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 3px 12px rgba(0,0,0,.18)!important}
+html[data-theme="dark"] .hache-menu-group-toggle{color:#d9e5f1!important}
+html[data-theme="dark"] .hache-menu-group-toggle:hover{background:#18283b!important}
+html[data-theme="dark"] .hache-menu-chevron{color:#8fa2b8!important}
+html[data-theme="dark"] .hache-menu-link{color:#b7c5d5!important}
+html[data-theme="dark"] .hache-menu-link:hover{background:#18283b!important}
+html[data-theme="dark"] .hache-menu-link.is-active{color:#a7daf6!important;background:linear-gradient(145deg,#17334a,#152a3c)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 2px 8px rgba(0,0,0,.18)!important}
+html[data-theme="dark"] .hache-menu-footer{background:#0d1827!important;border-top-color:#26364a!important}
+html[data-theme="dark"] .hache-menu-logout{color:#ff9caf!important;background:#21151c!important}
+
+/* Selector Claro / Oscuro / Sistema */
+.hache-theme-switcher{margin-bottom:10px;padding:10px;border:1px solid var(--hache-line);border-radius:12px;background:rgba(248,250,252,.75)}
+.hache-theme-label{margin:0 0 7px 2px;color:var(--hache-muted);font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.hache-theme-options{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.hache-theme-options button{min-width:0;border:1px solid #d8e1ea;border-radius:8px;padding:7px 5px;background:#fff;color:#526277;font:700 10px/1.2 'Manrope',Arial,sans-serif;cursor:pointer;box-shadow:none!important;transform:none!important}
+.hache-theme-options button.is-active,.hache-theme-options button[aria-pressed="true"]{background:#123b5d;color:#fff;border-color:#123b5d}
+html[data-theme="dark"] .hache-theme-switcher{background:#101d2d;border-color:#2b3c51}
+html[data-theme="dark"] .hache-theme-options button{background:#142235;color:#aebed0;border-color:#33465d}
+html[data-theme="dark"] .hache-theme-options button.is-active,
+html[data-theme="dark"] .hache-theme-options button[aria-pressed="true"]{background:#245f86;color:#fff;border-color:#367da8}
+
+/* Modales y overlays */
+html[data-theme="dark"] :where(.modal,.hache-flow-modal){--hache-modal-overlay:rgba(0,0,0,.68)}
+html[data-theme="dark"] :where(.modal .close,.hache-flow-close){color:#aebed0!important}
+html[data-theme="dark"] :where(hr,.divider,.separator){border-color:#29384c!important}
+
+/* Helpers dinámicos */
+html[data-theme="dark"] :where(.hache-search-results,.hache-person-results,.student-results,.quick-entry,.hache-compact-panel){background:#111d2d!important;color:var(--hache-ink)!important;border-color:#2a3b51!important}
+html[data-theme="dark"] :where(.hache-search-option,.hache-person-option,.student-results button){color:#dce7f2!important;background:#111d2d!important;border-bottom-color:#29384c!important}
+html[data-theme="dark"] :where(.hache-search-option,.hache-person-option,.student-results button):hover{background:#18283b!important}
+html[data-theme="dark"] .hache-compact-panel.hache-compact-open>.hache-compact-toggle{border-bottom-color:#29384c!important}
+
+@media(max-width:750px){
+  html[data-theme="dark"] table.hache-responsive-table tr{background:linear-gradient(155deg,#142235,#0d1725)!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .hache-theme-options button{transition:none!important}
+}

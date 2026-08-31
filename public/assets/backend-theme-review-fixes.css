@@ -1,0 +1,46 @@
+/* PR #54 — fixes acotados de revisión final para dark mode. */
+
+/* Sesiones: estado neutral de clase; excluye explícitamente la variante cancelada. */
+html[data-theme="dark"] .clase .estado:not(.cancel){
+  color:#d9e5f1!important;
+  background:#1a2a3e!important;
+  border-color:#3a4d65!important;
+}
+
+/* Resumen financiero: importes secundarios generados dentro de sus tres paneles. */
+html[data-theme="dark"] :where(#actual,#siguiente,#historial) .row>span{
+  color:var(--hache-muted)!important;
+}
+
+/* Feedback de formularios: variantes legibles, acotadas a los módulos revisados. */
+html[data-theme="dark"] #movementFold #msg.msg.good,
+html[data-theme="dark"] section.panel>#msg.msg.good,
+html[data-theme="dark"] .card>#msg.msg:not(.err),
+html[data-theme="dark"] .card>#perfilMsg.msg{
+  color:#91e3ae!important;
+}
+html[data-theme="dark"] #movementFold #msg.msg.bad,
+html[data-theme="dark"] section.panel>#msg.msg.bad,
+html[data-theme="dark"] .card>#msg.msg.err,
+html[data-theme="dark"] main.wrap>#msg.msg,
+html[data-theme="dark"] .range>#rm.msg.err{
+  color:#ffb3bf!important;
+}
+html[data-theme="dark"] .range>#rm.msg.ok{
+  color:#91e3ae!important;
+}
+
+/* Navegación única del detalle de pago. */
+html[data-theme="dark"] main.wrap>.back{color:#8dcdf2!important}
+
+/* Alta de alumnos: ayudas contextuales dentro del formulario. */
+html[data-theme="dark"] #formAlumno .ayuda{color:var(--hache-muted)!important}
+
+/* Estado del sistema: nota técnica dentro del bloque diagnóstico. */
+html[data-theme="dark"] .card.diag .footnote{color:var(--hache-muted)!important}
+
+/* Intensivos: enlace de alta dentro del modal de agregar alumno. */
+html[data-theme="dark"] #modalAlumno .modal-box .link-nuevo{color:#8dcdf2!important}
+
+/* Portal del alumno: selector de apariencia inline solo tras confirmar rol ALUMNO. */
+:where(main.wrap,main.box)>.hache-theme-switcher-inline{max-width:360px;margin:0 0 14px}

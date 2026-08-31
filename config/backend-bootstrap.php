@@ -88,13 +88,16 @@ if ($u['rol'] === 'ADMIN') {
 
 ob_start(static function (string $html): string {
     if (stripos($html, '<html') === false || stripos($html, '<body') === false) return $html;
+    $themeJs = '<script src="/assets/backend-theme.js?v=20260831-1"></script>';
     $css = '<link rel="stylesheet" href="/assets/backend-menu.css">';
     $relief = '<link rel="stylesheet" href="/assets/backend-relief.css?v=20260830-1">';
+    $themeCss = '<link rel="stylesheet" href="/assets/backend-theme.css?v=20260831-1">';
+    $themeReviewFixes = '<link rel="stylesheet" href="/assets/backend-theme-review-fixes.css?v=20260831-1">';
     $diag = '<script src="/assets/diagnostico.js?v=20260817-1"></script>';
     $js = '<script src="/assets/backend-menu.js?v=20260828-historias1" defer></script>';
     $oblig = '<script src="/assets/obligaciones-alumnos.js?v=20260821-1" defer></script>';
     $phone = '<script src="/assets/telefono-internacional.js?v=20260821-1" defer></script>';
-    foreach ([['/assets/backend-menu.css',$css,'</head>'],['/assets/backend-relief.css',$relief,'</head>'],['/assets/diagnostico.js',$diag,'</head>'],['/assets/backend-menu.js',$js,'</body>'],['/assets/obligaciones-alumnos.js',$oblig,'</body>'],['/assets/telefono-internacional.js',$phone,'</body>']] as [$needle,$tag,$close]) {
+    foreach ([['/assets/backend-theme.js',$themeJs,'</head>'],['/assets/backend-menu.css',$css,'</head>'],['/assets/backend-relief.css',$relief,'</head>'],['/assets/backend-theme.css',$themeCss,'</head>'],['/assets/backend-theme-review-fixes.css',$themeReviewFixes,'</head>'],['/assets/diagnostico.js',$diag,'</head>'],['/assets/backend-menu.js',$js,'</body>'],['/assets/obligaciones-alumnos.js',$oblig,'</body>'],['/assets/telefono-internacional.js',$phone,'</body>']] as [$needle,$tag,$close]) {
         if (stripos($html,$needle)!==false) continue;
         if (stripos($html,$close)!==false) $html=preg_replace('/'.preg_quote($close,'/').'/i',$tag."\n".$close,$html,1)??$html; else $html.=$tag;
     }
