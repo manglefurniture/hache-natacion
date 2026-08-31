@@ -7,6 +7,9 @@ const ficha=fs.readFileSync(new URL('../public/ficha-alumno.php',import.meta.url
 const editar=fs.readFileSync(new URL('../public/editar-alumno.php',import.meta.url),'utf8');
 const cuenta=fs.readFileSync(new URL('../public/mi-cuenta.php',import.meta.url),'utf8');
 const reportes=fs.readFileSync(new URL('../public/reportes.php',import.meta.url),'utf8');
+const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
+const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url),'utf8');
+const pagoDetalle=fs.readFileSync(new URL('../public/pago-detalle.php',import.meta.url),'utf8');
 const fichaRelations=fs.readFileSync(new URL('../public/assets/ficha-relations.js',import.meta.url),'utf8');
 const quickPay=fs.readFileSync(new URL('../public/assets/alumnos-quick-pay.js',import.meta.url),'utf8');
 const quickEdit=fs.readFileSync(new URL('../public/assets/alumnos-quick-edit.js',import.meta.url),'utf8');
@@ -28,6 +31,14 @@ assert.match(fichaRelations,/class="hache-relation-action hache-relation-action-
 assert.match(fichaRelations,/class="hache-relation-action"/);
 assert.match(quickPay,/id="hqp-more"/);
 assert.match(quickEdit,/id="hmm-save"[^>]*background:#172033;color:#fff/);
+
+// Últimos enlaces locales: se normalizan con la clase compartida ya cubierta por el relieve.
+assert.match(configuracion,/class="hache-relation-action" href="\/horarios\.php"/);
+assert.match(configuracion,/class="hache-relation-action" href="\/usuarios\.php"/);
+assert.match(finanzas,/id="movimientos" class="secondary hache-relation-action"/);
+assert.match(pagoDetalle,/class="hache-relation-action" href="\/ficha-alumno\.php/);
+assert.match(pagoDetalle,/class="hache-relation-action" href="\/intensivo-detalle\.php/);
+assert.match(pagoDetalle,/class="hache-relation-action" href="\/pagos\.php/);
 
 // Todos los enlaces de acción reciben relieve, foco, hover/active y reducción de movimiento.
 for(const selector of ['.report-btn','.boton-editar','.boton-cancelar','a.action']){
