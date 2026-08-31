@@ -11,3 +11,25 @@ html[data-theme="dark"] .clase .estado:not(.cancel){
 html[data-theme="dark"] :where(#actual,#siguiente,#historial) .row>span{
   color:var(--hache-muted)!important;
 }
+
+/* Feedback de formularios: variantes legibles, acotadas a los módulos revisados. */
+html[data-theme="dark"] #movementFold #msg.msg.good,
+html[data-theme="dark"] section.panel>#msg.msg.good,
+html[data-theme="dark"] .card>#msg.msg:not(.err),
+html[data-theme="dark"] .card>#perfilMsg.msg{
+  color:#91e3ae!important;
+}
+html[data-theme="dark"] #movementFold #msg.msg.bad,
+html[data-theme="dark"] section.panel>#msg.msg.bad,
+html[data-theme="dark"] .card>#msg.msg.err{
+  color:#ffb3bf!important;
+}
+
+/* Navegación única del detalle de pago. */
+html[data-theme="dark"] main.wrap>.back{color:#8dcdf2!important}
+
+/* Alta de alumnos: ayudas contextuales dentro del formulario. */
+html[data-theme="dark"] #formAlumno .ayuda{color:var(--hache-muted)!important}
+
+/* Portal del alumno: selector de apariencia montado inline cuando no existe menú lateral. */
+main.wrap>.hache-theme-switcher-inline{max-width:360px;margin:0 0 14px}
