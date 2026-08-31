@@ -12,6 +12,8 @@ const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url)
 const miCuenta=fs.readFileSync(new URL('../public/mi-cuenta.php',import.meta.url),'utf8');
 const pagoDetalle=fs.readFileSync(new URL('../public/pago-detalle.php',import.meta.url),'utf8');
 const agregar=fs.readFileSync(new URL('../public/agregar-alumno.php',import.meta.url),'utf8');
+const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
+const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.meta.url),'utf8');
 
 assert.match(bootstrap,/backend-theme-review-fixes\.css\?v=20260831-1/);
 const themePos=bootstrap.indexOf("['/assets/backend-theme.css'");
@@ -35,14 +37,24 @@ assert.match(conciliacion,/\.msg\.bad\{color:var\(--bad\)\}/);
 assert.match(comisiones,/\.msg\.bad\{color:var\(--danger\)\}/);
 assert.match(usuarios,/\.err\{color:#991b1b\}/);
 assert.match(miCuenta,/\.msg\{margin-top:8px;font-size:12px;color:#166534/);
+assert.match(configuracion,/\.msg\{min-height:22px;margin-bottom:8px;color:#b42318/);
+assert.match(cierres,/\.err\{color:#b42318\}/);
 assert.match(fixes,/#movementFold #msg\.msg\.bad/);
 assert.match(fixes,/section\.panel>#msg\.msg\.bad/);
 assert.match(fixes,/\.card>#msg\.msg\.err/);
 assert.match(fixes,/\.card>#perfilMsg\.msg/);
+assert.match(fixes,/main\.wrap>#msg\.msg/);
+assert.match(fixes,/\.range>#rm\.msg\.err/);
+assert.match(fixes,/\.range>#rm\.msg\.ok/);
 
-// P2 Codex: el selector de tema debe tener fallback inline para ALUMNO.
+// P2 Codex: no usar fallback inline hasta confirmar rol ALUMNO.
 assert.match(miCuenta,/page_require\(\['ALUMNO'\]\)/);
-assert.match(themeJs,/const inlineHost=footer\?null:document\.querySelector\('main\.wrap'\)/);
+assert.match(themeJs,/function currentRole\(\)/);
+assert.match(themeJs,/mountSwitcher\(\{allowInline=false\}=\{\}\)/);
+assert.match(themeJs,/if\(role==='ALUMNO'\)/);
+assert.match(themeJs,/mountSwitcher\(\{allowInline:true\}\)/);
+assert.match(themeJs,/setInterval\(\(\)=>\{/);
+assert.doesNotMatch(themeJs,/const inlineHost=footer\?null:document\.querySelector\('main\.wrap'\)/);
 assert.match(themeJs,/hache-theme-switcher-inline/);
 assert.match(fixes,/main\.wrap>\.hache-theme-switcher-inline/);
 
