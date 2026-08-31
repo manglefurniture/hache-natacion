@@ -12,7 +12,8 @@ const fixesPos=bootstrap.indexOf("['/assets/backend-theme-review-fixes.css'");
 assert.ok(themePos>=0&&fixesPos>themePos,'los fixes finales deben cargar después del theme principal');
 
 // P1 Codex: estado neutral de clases, sin tocar variantes como .estado.cancel.
-assert.match(sesiones,/class="estado"/);
+assert.match(sesiones,/\.estado\{[^}]*background:#e2e8f0/);
+assert.match(sesiones,/class="estado \$\{cancel\?'cancel':''\}"/);
 assert.match(fixes,/\.clase \.estado\[class="estado"\]/);
 assert.doesNotMatch(fixes,/\.estado\.cancel\s*\{/);
 
