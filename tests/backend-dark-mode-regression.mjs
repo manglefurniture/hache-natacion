@@ -11,6 +11,11 @@ const historias=fs.readFileSync(new URL('../public/historias-moderacion.php',imp
 const alertas=fs.readFileSync(new URL('../public/alertas.php',import.meta.url),'utf8');
 const finanzas=fs.readFileSync(new URL('../public/finanzas.php',import.meta.url),'utf8');
 const auditoria=fs.readFileSync(new URL('../public/auditoria.php',import.meta.url),'utf8');
+const reportes=fs.readFileSync(new URL('../public/reportes.php',import.meta.url),'utf8');
+const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
+const pago=fs.readFileSync(new URL('../public/pago-detalle.php',import.meta.url),'utf8');
+const conciliacion=fs.readFileSync(new URL('../public/conciliacion-proa.php',import.meta.url),'utf8');
+const comisiones=fs.readFileSync(new URL('../public/comisiones-proa.php',import.meta.url),'utf8');
 
 // El theme se carga solo desde el bootstrap protegido del backend.
 assert.match(bootstrap,/backend-theme\.js\?v=20260831-1/);
@@ -38,7 +43,7 @@ assert.match(js,/MutationObserver/);
 // Dark mode transversal: tokens, shell, superficies, tablas, forms y menú.
 assert.match(css,/html\[data-theme="dark"\]\{/);
 assert.match(css,/color-scheme:dark/);
-for(const token of ['--hache-bg:','--hache-card:','--hache-line:','--hache-ink:','--hache-muted:','--ink:','--paper:','--bg:','--depth:']){
+for(const token of ['--hache-bg:','--hache-card:','--hache-line:','--hache-ink:','--hache-muted:','--hache-action-bg:','--ink:','--paper:','--bg:','--depth:']){
   assert.ok(css.includes(token),`${token} debe quedar tematizado`);
 }
 assert.match(css,/html\[data-theme="dark"\] body/);
@@ -90,5 +95,28 @@ assert.match(css,/\.estado\.historica/);
 assert.match(css,/:where\(\.state,\.tag\)/);
 assert.match(css,/\.action-button\.approve/);
 assert.match(css,/\.action-button\.delete/);
+
+// P1: --ink es texto histórico; las acciones necesitan fondo dark independiente.
+assert.match(reportes,/\.toolbar button\{background:var\(--ink\);color:#fff/);
+assert.match(conciliacion,/\.form button\{border:0;background:var\(--ink\);color:#fff/);
+assert.match(comisiones,/\.form button\{background:var\(--ink\);color:#fff/);
+assert.match(historias,/\.tab\.is-active\{background:var\(--ink\);color:#fff/);
+assert.match(css,/--hache-action-bg:#245f86/);
+assert.match(css,/:where\(\.toolbar button,\.form>button,\.load,\.tab\.active,\.tab\.is-active\)\{/);
+assert.match(css,/background:var\(--hache-action-bg\)!important/);
+
+// P1: superficies financieras anidadas no pueden conservar fondos claros en dark.
+assert.match(reportes,/\.proa-box\{[^}]*background:#fbfcfe/);
+assert.match(reportes,/\.asis-item\{[^}]*background:#f8fafc/);
+assert.match(resumen,/\.mini\{background:#fff/);
+assert.match(resumen,/\.split\{background:#fff/);
+assert.match(pago,/\.item\{[^}]*background:#f8fafc/);
+for(const selector of ['.proa-box','.asis-item','.mini','.split']){
+  assert.ok(css.includes(selector),`${selector} debe tener superficie dark explícita`);
+}
+assert.match(css,/:where\(\.card \.item,\.links a\)\{/);
+assert.match(css,/:where\(\.history-row\.head,\.row\.head,\.formula>div,\.history-controls \.field,\.panel>\.form,\.fold\.primary-fold>summary,\.fold-icon,\.row\.auto\)\{/);
+assert.match(css,/:where\(\.progress,\.bar\)\{background:#24344a!important\}/);
+assert.match(css,/:where\(\.progress>span,\.fill\)\{background:linear-gradient\(90deg,#367da8,#65a9d3\)!important\}/);
 
 console.log('BACKEND_DARK_MODE_REGRESSION_OK');
