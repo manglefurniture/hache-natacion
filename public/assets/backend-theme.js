@@ -74,9 +74,7 @@
     const observer=new MutationObserver(()=>{if(mountSwitcher()) observer.disconnect()});
     observer.observe(document.body,{childList:true,subtree:true});
 
-    let attempts=0;
     const roleWait=setInterval(()=>{
-      attempts+=1;
       const role=currentRole();
       if(mountSwitcher()){
         clearInterval(roleWait);
@@ -87,13 +85,9 @@
         clearInterval(roleWait);
         observer.disconnect();
         mountSwitcher({allowInline:true});
-        return;
       }
-      if(attempts>=50){
-        clearInterval(roleWait);
-        /* El observer sigue esperando el footer si la sesión tarda en resolver. */
-      }
-    },100);
+    },250);
+    window.addEventListener('pagehide',()=>clearInterval(roleWait),{once:true});
   };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',startMount,{once:true});
   else startMount();
