@@ -43,7 +43,7 @@
 
   function mountSwitcher({allowInline=false}={}){
     const footer=document.querySelector('.hache-menu-footer');
-    const inlineHost=!footer&&allowInline?document.querySelector('main.wrap'):null;
+    const inlineHost=!footer&&allowInline?document.querySelector('main.wrap,main.box'):null;
     const host=footer||inlineHost;
     if(!host||document.getElementById('hache-theme-switcher')) return !!host;
 
@@ -91,7 +91,7 @@
       }
       if(attempts>=50){
         clearInterval(roleWait);
-        observer.disconnect();
+        /* El observer sigue esperando el footer si la sesión tarda en resolver. */
       }
     },100);
   };
