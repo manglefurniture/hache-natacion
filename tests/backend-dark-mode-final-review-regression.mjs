@@ -10,6 +10,7 @@ const conciliacion=fs.readFileSync(new URL('../public/conciliacion-proa.php',imp
 const comisiones=fs.readFileSync(new URL('../public/comisiones-proa.php',import.meta.url),'utf8');
 const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
 const miCuenta=fs.readFileSync(new URL('../public/mi-cuenta.php',import.meta.url),'utf8');
+const cambiarPassword=fs.readFileSync(new URL('../public/cambiar-password.php',import.meta.url),'utf8');
 const pagoDetalle=fs.readFileSync(new URL('../public/pago-detalle.php',import.meta.url),'utf8');
 const agregar=fs.readFileSync(new URL('../public/agregar-alumno.php',import.meta.url),'utf8');
 const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
@@ -47,16 +48,19 @@ assert.match(fixes,/main\.wrap>#msg\.msg/);
 assert.match(fixes,/\.range>#rm\.msg\.err/);
 assert.match(fixes,/\.range>#rm\.msg\.ok/);
 
-// P2 Codex: no usar fallback inline hasta confirmar rol ALUMNO.
+// P2 Codex: fallback inline solo tras confirmar ALUMNO y cubriendo ambas pantallas del portal.
 assert.match(miCuenta,/page_require\(\['ALUMNO'\]\)/);
+assert.match(cambiarPassword,/main class="box"/);
 assert.match(themeJs,/function currentRole\(\)/);
 assert.match(themeJs,/mountSwitcher\(\{allowInline=false\}=\{\}\)/);
+assert.match(themeJs,/document\.querySelector\('main\.wrap,main\.box'\)/);
 assert.match(themeJs,/if\(role==='ALUMNO'\)/);
 assert.match(themeJs,/mountSwitcher\(\{allowInline:true\}\)/);
 assert.match(themeJs,/setInterval\(\(\)=>\{/);
-assert.doesNotMatch(themeJs,/const inlineHost=footer\?null:document\.querySelector\('main\.wrap'\)/);
+assert.match(themeJs,/if\(attempts>=50\)\{\s*clearInterval\(roleWait\);\s*\/\* El observer sigue esperando el footer/);
+assert.doesNotMatch(themeJs,/if\(attempts>=50\)[\s\S]{0,120}observer\.disconnect\(\)/);
 assert.match(themeJs,/hache-theme-switcher-inline/);
-assert.match(fixes,/main\.wrap>\.hache-theme-switcher-inline/);
+assert.match(fixes,/:where\(main\.wrap,main\.box\)>\.hache-theme-switcher-inline/);
 
 // P2 Codex: navegación de regreso del detalle de pago.
 assert.match(pagoDetalle,/class="back"/);
