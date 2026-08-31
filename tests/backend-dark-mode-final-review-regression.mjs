@@ -3,8 +3,15 @@ import assert from 'node:assert/strict';
 
 const bootstrap=fs.readFileSync(new URL('../config/backend-bootstrap.php',import.meta.url),'utf8');
 const fixes=fs.readFileSync(new URL('../public/assets/backend-theme-review-fixes.css',import.meta.url),'utf8');
+const themeJs=fs.readFileSync(new URL('../public/assets/backend-theme.js',import.meta.url),'utf8');
 const sesiones=fs.readFileSync(new URL('../public/sesiones.php',import.meta.url),'utf8');
 const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
+const conciliacion=fs.readFileSync(new URL('../public/conciliacion-proa.php',import.meta.url),'utf8');
+const comisiones=fs.readFileSync(new URL('../public/comisiones-proa.php',import.meta.url),'utf8');
+const usuarios=fs.readFileSync(new URL('../public/usuarios.php',import.meta.url),'utf8');
+const miCuenta=fs.readFileSync(new URL('../public/mi-cuenta.php',import.meta.url),'utf8');
+const pagoDetalle=fs.readFileSync(new URL('../public/pago-detalle.php',import.meta.url),'utf8');
+const agregar=fs.readFileSync(new URL('../public/agregar-alumno.php',import.meta.url),'utf8');
 
 assert.match(bootstrap,/backend-theme-review-fixes\.css\?v=20260831-1/);
 const themePos=bootstrap.indexOf("['/assets/backend-theme.css'");
@@ -22,5 +29,29 @@ assert.doesNotMatch(fixes,/\.estado\.cancel\s*\{/);
 assert.match(resumen,/\.row span\{font-size:13px;color:#64748b\}/);
 assert.match(fixes,/:where\(#actual,#siguiente,#historial\) \.row>span/);
 assert.doesNotMatch(fixes,/html\[data-theme="dark"\] \.row>span\s*\{/);
+
+// P1 Codex: feedback de formularios legible en dark y limitado a sus contenedores.
+assert.match(conciliacion,/\.msg\.bad\{color:var\(--bad\)\}/);
+assert.match(comisiones,/\.msg\.bad\{color:var\(--danger\)\}/);
+assert.match(usuarios,/\.err\{color:#991b1b\}/);
+assert.match(miCuenta,/\.msg\{margin-top:8px;font-size:12px;color:#166534/);
+assert.match(fixes,/#movementFold #msg\.msg\.bad/);
+assert.match(fixes,/section\.panel>#msg\.msg\.bad/);
+assert.match(fixes,/\.card>#msg\.msg\.err/);
+assert.match(fixes,/\.card>#perfilMsg\.msg/);
+
+// P2 Codex: el selector de tema debe tener fallback inline para ALUMNO.
+assert.match(miCuenta,/page_require\(\['ALUMNO'\]\)/);
+assert.match(themeJs,/const inlineHost=footer\?null:document\.querySelector\('main\.wrap'\)/);
+assert.match(themeJs,/hache-theme-switcher-inline/);
+assert.match(fixes,/main\.wrap>\.hache-theme-switcher-inline/);
+
+// P2 Codex: navegación de regreso del detalle de pago.
+assert.match(pagoDetalle,/class="back"/);
+assert.match(fixes,/main\.wrap>\.back\{color:#8dcdf2!important\}/);
+
+// P2 Codex: ayudas del alta de alumnos.
+assert.match(agregar,/\.ayuda\{margin-top:2px;color:#667085/);
+assert.match(fixes,/#formAlumno \.ayuda\{color:var\(--hache-muted\)!important\}/);
 
 console.log('BACKEND_DARK_MODE_FINAL_REVIEW_OK');
