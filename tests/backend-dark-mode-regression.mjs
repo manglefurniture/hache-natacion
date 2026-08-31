@@ -130,6 +130,7 @@ assert.match(css,/\.card \.range/);
 assert.match(mensajes,/\.panel,\.msg\{background:#fff/);
 assert.match(mensajes,/<article class="msg /);
 assert.match(css,/#lista>\.msg/);
-assert.doesNotMatch(css,/:where\([^)]*\.msg[,)]/,'no debe tematizarse .msg globalmente');
+assert.doesNotMatch(css,/:where\(\.msg(?:[,)]|\s)/,'no debe tematizarse .msg globalmente');
+assert.doesNotMatch(css,/,:?\.msg(?:[,)]|\s)/,'no debe aparecer .msg desnudo en listas de selectores');
 
 console.log('BACKEND_DARK_MODE_REGRESSION_OK');
