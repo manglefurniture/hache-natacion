@@ -1,7 +1,7 @@
 /* PR #54 — fixes acotados de revisión final para dark mode. */
 
-/* Sesiones: solo el estado neutral exacto; no toca .estado.cancel ni variantes semánticas. */
-html[data-theme="dark"] .clase .estado[class="estado"]{
+/* Sesiones: estado neutral de clase; excluye explícitamente la variante cancelada. */
+html[data-theme="dark"] .clase .estado:not(.cancel){
   color:#d9e5f1!important;
   background:#1a2a3e!important;
   border-color:#3a4d65!important;
