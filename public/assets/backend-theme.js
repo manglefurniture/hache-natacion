@@ -39,13 +39,19 @@
 
   function mountSwitcher(){
     const footer=document.querySelector('.hache-menu-footer');
-    if(!footer||document.getElementById('hache-theme-switcher')) return !!footer;
+    const inlineHost=footer?null:document.querySelector('main.wrap');
+    const host=footer||inlineHost;
+    if(!host||document.getElementById('hache-theme-switcher')) return !!host;
 
     const block=document.createElement('div');
     block.id='hache-theme-switcher';
     block.className='hache-theme-switcher';
     block.innerHTML='<div class="hache-theme-label">Apariencia</div><div class="hache-theme-options" role="group" aria-label="Apariencia del backend"><button type="button" data-hache-theme-value="light" aria-pressed="false">Claro</button><button type="button" data-hache-theme-value="dark" aria-pressed="false">Oscuro</button><button type="button" data-hache-theme-value="system" aria-pressed="false">Sistema</button></div>';
-    footer.insertBefore(block,footer.firstChild);
+    if(footer) footer.insertBefore(block,footer.firstChild);
+    else{
+      block.classList.add('hache-theme-switcher-inline');
+      host.insertBefore(block,host.firstChild);
+    }
     block.querySelectorAll('[data-hache-theme-value]').forEach(button=>button.addEventListener('click',()=>apply(button.dataset.hacheThemeValue)));
     updateButtons();
     return true;
