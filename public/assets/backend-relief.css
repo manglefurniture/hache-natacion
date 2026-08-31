@@ -462,3 +462,72 @@
     a.action
   ){transition:none!important}
 }
+
+/* Acciones enlace adicionales y guardado rápido detectados en revisión. */
+:where(#csv,#pdf.pdf,#hqp-more,.hache-relation-action){
+  border-style:solid!important;
+  border-width:1px!important;
+  border-color:var(--hache-control-border)!important;
+  border-top-color:var(--hache-control-highlight)!important;
+  border-bottom-color:var(--hache-control-border-bottom)!important;
+  box-shadow:var(--hache-control-shadow)!important;
+  transform:translateZ(0);
+  transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease,filter .15s ease!important;
+}
+:where(#csv,#pdf.pdf,#hqp-more,.hache-relation-action):focus-visible{
+  outline:3px solid rgba(18,59,93,.17)!important;
+  outline-offset:2px!important;
+}
+:where(#pdf.pdf,.hache-relation-action-primary,#hmm-save){
+  border-top-color:rgba(255,255,255,.34)!important;
+  border-right-color:rgba(15,23,42,.36)!important;
+  border-bottom-color:rgba(3,12,21,.62)!important;
+  border-left-color:rgba(15,23,42,.36)!important;
+  box-shadow:var(--hache-primary-shadow)!important;
+}
+@media(hover:hover){
+  :where(#csv,#pdf.pdf,#hqp-more,.hache-relation-action):hover{
+    transform:translateY(-1px);
+    box-shadow:var(--hache-control-shadow-hover)!important;
+    filter:brightness(1.015);
+  }
+  :where(#pdf.pdf,.hache-relation-action-primary,#hmm-save):not(:disabled):hover{
+    border-top-color:rgba(255,255,255,.38)!important;
+    border-right-color:rgba(15,23,42,.38)!important;
+    border-bottom-color:rgba(3,12,21,.68)!important;
+    border-left-color:rgba(15,23,42,.38)!important;
+    box-shadow:var(--hache-primary-shadow-hover)!important;
+  }
+  #hmm-save:disabled:hover{
+    transform:none!important;
+    filter:none!important;
+    border-top-color:rgba(255,255,255,.34)!important;
+    border-right-color:rgba(15,23,42,.36)!important;
+    border-bottom-color:rgba(3,12,21,.62)!important;
+    border-left-color:rgba(15,23,42,.36)!important;
+    box-shadow:var(--hache-primary-shadow)!important;
+  }
+}
+:where(#csv,#pdf.pdf,#hqp-more,.hache-relation-action):active{
+  transform:translateY(1px)!important;
+  border-top-color:rgba(71,85,105,.32)!important;
+  border-bottom-color:rgba(255,255,255,.54)!important;
+  box-shadow:var(--hache-control-shadow-active)!important;
+  filter:none!important;
+}
+:where(#pdf.pdf,.hache-relation-action-primary,#hmm-save):active{
+  border-top-color:rgba(3,12,21,.48)!important;
+  border-right-color:rgba(15,23,42,.42)!important;
+  border-bottom-color:rgba(255,255,255,.18)!important;
+  border-left-color:rgba(15,23,42,.42)!important;
+  box-shadow:inset 0 2px 5px rgba(3,12,21,.34),0 1px 2px rgba(15,23,42,.08)!important;
+}
+@media(max-width:750px){
+  :where(#csv,#pdf.pdf,#hqp-more,.hache-relation-action){min-height:42px}
+}
+@media(hover:none){
+  :where(#csv,#pdf.pdf,#hqp-more,.hache-relation-action):hover{transform:none;filter:none}
+}
+@media(prefers-reduced-motion:reduce){
+  :where(#csv,#pdf.pdf,#hqp-more,.hache-relation-action){transition:none!important}
+}
