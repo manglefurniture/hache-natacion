@@ -16,6 +16,7 @@ const agregar=fs.readFileSync(new URL('../public/agregar-alumno.php',import.meta
 const configuracion=fs.readFileSync(new URL('../public/configuracion.php',import.meta.url),'utf8');
 const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.meta.url),'utf8');
 const estadoSistema=fs.readFileSync(new URL('../public/estado-sistema.php',import.meta.url),'utf8');
+const intensivoDetalle=fs.readFileSync(new URL('../public/intensivo-detalle.php',import.meta.url),'utf8');
 
 assert.match(bootstrap,/backend-theme-review-fixes\.css\?v=20260831-1/);
 const themePos=bootstrap.indexOf("['/assets/backend-theme.css'");
@@ -67,6 +68,11 @@ assert.match(fixes,/:where\(main\.wrap,main\.box\)>\.hache-theme-switcher-inline
 // P2 Codex: nota técnica del estado del sistema usa foreground secundario dark.
 assert.match(estadoSistema,/\.footnote\{font-size:11px;color:#64748b/);
 assert.match(fixes,/\.card\.diag \.footnote\{color:var\(--hache-muted\)!important\}/);
+
+// P2 Codex: enlace para altas desde intensivos legible dentro del modal dark.
+assert.match(intensivoDetalle,/\.link-nuevo\s*\{[\s\S]*?color:\s*#1976a8/);
+assert.match(intensivoDetalle,/id="modalAlumno"[\s\S]*?class="link-nuevo"/);
+assert.match(fixes,/#modalAlumno \.modal-box \.link-nuevo\{color:#8dcdf2!important\}/);
 
 // P2 Codex: navegación de regreso del detalle de pago.
 assert.match(pagoDetalle,/class="back"/);
