@@ -36,5 +36,8 @@ html[data-theme="dark"] main.wrap>.back{color:#8dcdf2!important}
 /* Alta de alumnos: ayudas contextuales dentro del formulario. */
 html[data-theme="dark"] #formAlumno .ayuda{color:var(--hache-muted)!important}
 
+/* Estado del sistema: nota técnica dentro del bloque diagnóstico. */
+html[data-theme="dark"] .card.diag .footnote{color:var(--hache-muted)!important}
+
 /* Portal del alumno: selector de apariencia inline solo tras confirmar rol ALUMNO. */
 :where(main.wrap,main.box)>.hache-theme-switcher-inline{max-width:360px;margin:0 0 14px}
