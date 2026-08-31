@@ -16,6 +16,8 @@ const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.
 const pago=fs.readFileSync(new URL('../public/pago-detalle.php',import.meta.url),'utf8');
 const conciliacion=fs.readFileSync(new URL('../public/conciliacion-proa.php',import.meta.url),'utf8');
 const comisiones=fs.readFileSync(new URL('../public/comisiones-proa.php',import.meta.url),'utf8');
+const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.meta.url),'utf8');
+const mensajes=fs.readFileSync(new URL('../public/mensajes.php',import.meta.url),'utf8');
 
 // El theme se carga solo desde el bootstrap protegido del backend.
 assert.match(bootstrap,/backend-theme\.js\?v=20260831-1/);
@@ -114,9 +116,20 @@ assert.match(pago,/\.item\{[^}]*background:#f8fafc/);
 for(const selector of ['.proa-box','.asis-item','.mini','.split']){
   assert.ok(css.includes(selector),`${selector} debe tener superficie dark explícita`);
 }
-assert.match(css,/:where\(\.card \.item,\.links a\)\{/);
+assert.match(css,/:where\(\.card \.item,\.links a,#lista>\.msg\)\{/);
 assert.match(css,/:where\(\.history-row\.head,\.row\.head,\.formula>div,\.history-controls \.field,\.panel>\.form,\.fold\.primary-fold>summary,\.fold-icon,\.row\.auto\)\{/);
 assert.match(css,/:where\(\.progress,\.bar\)\{background:#24344a!important\}/);
 assert.match(css,/:where\(\.progress>span,\.fill\)\{background:linear-gradient\(90deg,#367da8,#65a9d3\)!important\}/);
+
+// P1: enlaces neutrales y superficies locales restantes deben oscurecerse sin selectores globales peligrosos.
+assert.match(reportes,/\.toolbar a\{background:#eef3f7;color:var\(--ink\)/);
+assert.match(reportes,/<a id="csv">Exportar CSV<\/a>/);
+assert.match(css,/\.toolbar a:not\(\.pdf\)/);
+assert.match(cierres,/\.range\{[^}]*background:#f8fafc/);
+assert.match(css,/\.card \.range/);
+assert.match(mensajes,/\.panel,\.msg\{background:#fff/);
+assert.match(mensajes,/<article class="msg /);
+assert.match(css,/#lista>\.msg/);
+assert.doesNotMatch(css,/:where\([^)]*\.msg[,)]/,'no debe tematizarse .msg globalmente');
 
 console.log('BACKEND_DARK_MODE_REGRESSION_OK');
