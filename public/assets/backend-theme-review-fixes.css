@@ -21,8 +21,13 @@ html[data-theme="dark"] .card>#perfilMsg.msg{
 }
 html[data-theme="dark"] #movementFold #msg.msg.bad,
 html[data-theme="dark"] section.panel>#msg.msg.bad,
-html[data-theme="dark"] .card>#msg.msg.err{
+html[data-theme="dark"] .card>#msg.msg.err,
+html[data-theme="dark"] main.wrap>#msg.msg,
+html[data-theme="dark"] .range>#rm.msg.err{
   color:#ffb3bf!important;
+}
+html[data-theme="dark"] .range>#rm.msg.ok{
+  color:#91e3ae!important;
 }
 
 /* Navegación única del detalle de pago. */
@@ -31,5 +36,5 @@ html[data-theme="dark"] main.wrap>.back{color:#8dcdf2!important}
 /* Alta de alumnos: ayudas contextuales dentro del formulario. */
 html[data-theme="dark"] #formAlumno .ayuda{color:var(--hache-muted)!important}
 
-/* Portal del alumno: selector de apariencia montado inline cuando no existe menú lateral. */
+/* Portal del alumno: selector de apariencia inline solo tras confirmar rol ALUMNO. */
 main.wrap>.hache-theme-switcher-inline{max-width:360px;margin:0 0 14px}
