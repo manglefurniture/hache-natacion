@@ -20,7 +20,8 @@ assert.match(adminStudents, /hache_notificar_nueva_inscripcion\(\$alumno,\$tipoI
 assert.match(intensiveStudents, /config\/notificaciones-email\.php/, 'el endpoint de intensivos debe cargar el notificador por correo');
 assert.match(intensiveStudents, /SELECT a\.\*,s\.clave AS sede_clave,s\.nombre AS sede_nombre/, 'la alerta de intensivo debe conservar datos del alumno y sede');
 assert.match(intensiveStudents, /SELECT id,hora_inicio,hora_fin FROM horarios/, 'la alerta de intensivo debe incluir el horario validado');
-assert.match(intensiveStudents, /\$pdo->commit\(\);[\s\S]*http_response_code\(201\)[\s\S]*fastcgi_finish_request[\s\S]*hache_notificar_nueva_inscripcion\(\$alumnoNotificacion,'INTENSIVO'/, 'el alta a intensivo debe confirmar, responder 201 y solo después esperar a Resend');
+assert.match(intensiveStudents, /\$resultadoRecalculo=regla_recalcular_alumno\(\$pdo,\$alumnoId\);[\s\S]*\$alumnoNotificacion\['estado_administrativo'\]=\(string\)\(\$resultadoRecalculo\['estado'\]/, 'la alerta de intensivo debe usar el estado administrativo posterior al recálculo');
+assert.match(intensiveStudents, /\$pdo->commit\(\);[\s\S]*http_response_code\(201\)[\s\S]*session_write_close\(\)[\s\S]*fastcgi_finish_request[\s\S]*hache_notificar_nueva_inscripcion\(\$alumnoNotificacion,'INTENSIVO'/, 'el alta a intensivo debe confirmar, responder 201, liberar sesión y solo después esperar a Resend');
 assert.match(intensiveStudents, /'curso_inicio'=>\(string\)\$curso\['fecha_inicio'\]/, 'la alerta de intensivo debe incluir la fecha de inicio');
 assert.match(intensiveStudents, /catch\(Throwable \$e\).*Falló alerta de alta a intensivo/s, 'un fallo de correo de intensivo no debe revertir el alta');
 
