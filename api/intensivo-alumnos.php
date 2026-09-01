@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/reglas-acceso.php';
 require_once __DIR__ . '/../config/intensivos-estado.php';
+require_once __DIR__ . '/../config/notificaciones-email.php';
 $config = require __DIR__ . '/../config/database.php';
 
 try {
@@ -44,16 +45,27 @@ try {
         $cursoId=trim((string)($input['curso_intensivo_id']??''));$alumnoId=trim((string)($input['alumno_id']??''));$horarioId=trim((string)($input['horario_id']??''));$observaciones=trim((string)($input['observaciones']??''));$createdBy=(string)$me['id'];
         if($cursoId===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El curso es obligatorio']);exit;}if($alumnoId===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Selecciona un alumno']);exit;}if($horarioId===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Selecciona un horario']);exit;}if(mb_strlen($observaciones)>1000){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Las observaciones no pueden exceder 1000 caracteres']);exit;}
         intensivos_reconciliar_estados_sede($pdo,$sedeId);$pdo->beginTransaction();
-        $stmt=$pdo->prepare("SELECT id FROM alumnos WHERE id=:id AND sede_id=:s AND estado_administrativo<>'BAJA' LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);if(!$stmt->fetch()){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El alumno no pertenece a la sede del curso o está dado de baja']);exit;}
+        $stmt=$pdo->prepare("SELECT a.*,s.clave AS sede_clave,s.nombre AS sede_nombre FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id WHERE a.id=:id AND a.sede_id=:s AND a.estado_administrativo<>'BAJA' LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$alumnoNotificacion=$stmt->fetch();if(!$alumnoNotificacion){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El alumno no pertenece a la sede del curso o está dado de baja']);exit;}
         $stmt=$pdo->prepare("SELECT id,estado,fecha_inicio,fecha_fin FROM cursos_intensivos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$cursoId,':s'=>$sedeId]);$curso=$stmt->fetch();
         if(!$curso){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El curso intensivo no existe en la sede activa']);exit;}
         if(!intensivo_inscripcion_abierta((string)$curso['fecha_inicio'])){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'La ventana de inscripción de este curso cerró el '.date('d/m/Y',strtotime(intensivo_cierre_inscripcion((string)$curso['fecha_inicio'])))],JSON_UNESCAPED_UNICODE);exit;}
-        $stmt=$pdo->prepare("SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND intensivo=1 LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$horarioId,':s'=>$sedeId]);if(!$stmt->fetch()){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El horario no pertenece a la sede del curso']);exit;}
+        $stmt=$pdo->prepare("SELECT id,hora_inicio,hora_fin FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND intensivo=1 LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$horarioId,':s'=>$sedeId]);$horarioNotificacion=$stmt->fetch();if(!$horarioNotificacion){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El horario no pertenece a la sede del curso']);exit;}
         $stmt=$pdo->prepare("SELECT id FROM curso_intensivo_alumnos WHERE curso_intensivo_id=:c AND alumno_id=:a LIMIT 1");$stmt->execute([':c'=>$cursoId,':a'=>$alumnoId]);if($stmt->fetch()){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El alumno ya está inscrito en este curso intensivo']);exit;}
         $stmt=$pdo->prepare("SELECT ci.id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.id<>:c AND ci.sede_id=:s AND ci.estado IN ('PROGRAMADO','EN_CURSO') LIMIT 1");$stmt->execute([':a'=>$alumnoId,':c'=>$cursoId,':s'=>$sedeId]);if($stmt->fetch()){$pdo->rollBack();http_response_code(409);echo json_encode(['ok'=>false,'error'=>'El alumno ya pertenece a otro curso intensivo activo']);exit;}
         $id=$pdo->query("SELECT UUID()")->fetchColumn();$stmt=$pdo->prepare("INSERT INTO curso_intensivo_alumnos(id,curso_intensivo_id,alumno_id,horario_id,observaciones,created_by) VALUES(:id,:c,:a,:h,:o,:u)");$stmt->execute([':id'=>$id,':c'=>$cursoId,':a'=>$alumnoId,':h'=>$horarioId,':o'=>$observaciones!==''?$observaciones:null,':u'=>$createdBy]);
-        $stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:a AND sede_id=:s AND estado_administrativo<>'BAJA'");$stmt->execute([':a'=>$alumnoId,':s'=>$sedeId]);regla_recalcular_alumno($pdo,$alumnoId);$pdo->commit();
-        http_response_code(201);echo json_encode(['ok'=>true,'mensaje'=>'Alumno agregado al curso intensivo correctamente','id'=>$id],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);exit;
+        $stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:a AND sede_id=:s AND estado_administrativo<>'BAJA'");$stmt->execute([':a'=>$alumnoId,':s'=>$sedeId]);$resultadoRecalculo=regla_recalcular_alumno($pdo,$alumnoId);$alumnoNotificacion['estado_administrativo']=(string)($resultadoRecalculo['estado']??$alumnoNotificacion['estado_administrativo']??'PENDIENTE');$pdo->commit();
+        http_response_code(201);echo json_encode(['ok'=>true,'mensaje'=>'Alumno agregado al curso intensivo correctamente','id'=>$id],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+        if(session_status()===PHP_SESSION_ACTIVE)session_write_close();
+        if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();
+        try{
+            hache_notificar_nueva_inscripcion($alumnoNotificacion,'INTENSIVO',[
+                'curso_inicio'=>(string)$curso['fecha_inicio'],
+                'horario'=>substr((string)$horarioNotificacion['hora_inicio'],0,5).' – '.substr((string)$horarioNotificacion['hora_fin'],0,5),
+            ]);
+        }catch(Throwable $e){
+            error_log('[notificaciones-email] Falló alerta de alta a intensivo: '.$e->getMessage());
+        }
+        exit;
     }
     http_response_code(405);echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);
 }catch(Throwable $e){if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();error_log('[intensivo-alumnos] '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'No se pudo procesar la solicitud'],JSON_UNESCAPED_UNICODE);}
