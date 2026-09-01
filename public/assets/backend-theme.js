@@ -69,6 +69,13 @@
     else if(typeof systemDark.addListener==='function') systemDark.addListener(syncSystem);
   }
 
+  // Sincroniza cambios hechos en el panel principal con iframes/tabs same-origin ya cargados.
+  window.addEventListener('storage',event=>{
+    if(event.key!==STORAGE_KEY) return;
+    const next=VALUES.has(event.newValue)?event.newValue:'system';
+    apply(next,{persist:false});
+  });
+
   const startMount=()=>{
     if(mountSwitcher()) return;
     const observer=new MutationObserver(()=>{if(mountSwitcher()) observer.disconnect()});
