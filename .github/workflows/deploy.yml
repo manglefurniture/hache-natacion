@@ -24,12 +24,13 @@ jobs:
     steps:
       - name: Configure SSH
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
@@ -44,6 +45,7 @@ jobs:
             -p "$DEPLOY_PORT" \
             -i "$HOME/.ssh/id_ed25519" \
             -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
