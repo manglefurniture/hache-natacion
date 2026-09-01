@@ -54,6 +54,8 @@ try {
         $stmt=$pdo->prepare("SELECT ci.id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.id<>:c AND ci.sede_id=:s AND ci.estado IN ('PROGRAMADO','EN_CURSO') LIMIT 1");$stmt->execute([':a'=>$alumnoId,':c'=>$cursoId,':s'=>$sedeId]);if($stmt->fetch()){$pdo->rollBack();http_response_code(409);echo json_encode(['ok'=>false,'error'=>'El alumno ya pertenece a otro curso intensivo activo']);exit;}
         $id=$pdo->query("SELECT UUID()")->fetchColumn();$stmt=$pdo->prepare("INSERT INTO curso_intensivo_alumnos(id,curso_intensivo_id,alumno_id,horario_id,observaciones,created_by) VALUES(:id,:c,:a,:h,:o,:u)");$stmt->execute([':id'=>$id,':c'=>$cursoId,':a'=>$alumnoId,':h'=>$horarioId,':o'=>$observaciones!==''?$observaciones:null,':u'=>$createdBy]);
         $stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:a AND sede_id=:s AND estado_administrativo<>'BAJA'");$stmt->execute([':a'=>$alumnoId,':s'=>$sedeId]);regla_recalcular_alumno($pdo,$alumnoId);$pdo->commit();
+        http_response_code(201);echo json_encode(['ok'=>true,'mensaje'=>'Alumno agregado al curso intensivo correctamente','id'=>$id],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+        if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();
         try{
             hache_notificar_nueva_inscripcion($alumnoNotificacion,'INTENSIVO',[
                 'curso_inicio'=>(string)$curso['fecha_inicio'],
@@ -62,7 +64,7 @@ try {
         }catch(Throwable $e){
             error_log('[notificaciones-email] Falló alerta de alta a intensivo: '.$e->getMessage());
         }
-        http_response_code(201);echo json_encode(['ok'=>true,'mensaje'=>'Alumno agregado al curso intensivo correctamente','id'=>$id],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);exit;
+        exit;
     }
     http_response_code(405);echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);
 }catch(Throwable $e){if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();error_log('[intensivo-alumnos] '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'No se pudo procesar la solicitud'],JSON_UNESCAPED_UNICODE);}
