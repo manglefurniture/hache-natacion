@@ -91,5 +91,28 @@ html[data-theme="dark"] .hache-person-chip{
   border-color:#3a4d65!important;
 }
 
+/* Alumnos: filtros-alumnos.js tiene un autocomplete independiente con colores light inyectados. */
+html[data-theme="dark"] .hache-search-suggestions{
+  color:var(--hache-ink)!important;
+  background:#0b1625!important;
+  border-color:#354861!important;
+  box-shadow:0 12px 30px rgba(0,0,0,.32)!important;
+}
+html[data-theme="dark"] .hache-search-option{
+  color:var(--hache-ink)!important;
+  background:#0f1b2b!important;
+  border-bottom-color:#29384c!important;
+}
+html[data-theme="dark"] .hache-search-option strong{
+  color:var(--hache-ink)!important;
+}
+html[data-theme="dark"] .hache-search-option span{
+  color:var(--hache-muted)!important;
+}
+html[data-theme="dark"] .hache-search-option:hover,
+html[data-theme="dark"] .hache-search-option.active{
+  background:#17263a!important;
+}
+
 /* Portal del alumno: selector de apariencia inline solo tras confirmar rol ALUMNO. */
 :where(main.wrap,main.box)>.hache-theme-switcher-inline{max-width:360px;margin:0 0 14px}
