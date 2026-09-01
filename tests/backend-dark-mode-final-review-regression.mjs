@@ -6,6 +6,7 @@ const fixes=fs.readFileSync(new URL('../public/assets/backend-theme-review-fixes
 const themeJs=fs.readFileSync(new URL('../public/assets/backend-theme.js',import.meta.url),'utf8');
 const responsive=fs.readFileSync(new URL('../public/assets/responsive-fixes.css',import.meta.url),'utf8');
 const personSearch=fs.readFileSync(new URL('../public/assets/person-search.js',import.meta.url),'utf8');
+const filtrosAlumnos=fs.readFileSync(new URL('../public/assets/filtros-alumnos.js',import.meta.url),'utf8');
 const sesiones=fs.readFileSync(new URL('../public/sesiones.php',import.meta.url),'utf8');
 const resumen=fs.readFileSync(new URL('../public/resumen-financiero.php',import.meta.url),'utf8');
 const conciliacion=fs.readFileSync(new URL('../public/conciliacion-proa.php',import.meta.url),'utf8');
@@ -20,7 +21,7 @@ const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.m
 const estadoSistema=fs.readFileSync(new URL('../public/estado-sistema.php',import.meta.url),'utf8');
 const intensivoDetalle=fs.readFileSync(new URL('../public/intensivo-detalle.php',import.meta.url),'utf8');
 
-assert.match(bootstrap,/backend-theme-review-fixes\.css\?v=20260831-2/);
+assert.match(bootstrap,/backend-theme-review-fixes\.css\?v=20260831-3/);
 const themePos=bootstrap.indexOf("['/assets/backend-theme.css'");
 const fixesPos=bootstrap.indexOf("['/assets/backend-theme-review-fixes.css'");
 assert.ok(themePos>=0&&fixesPos>themePos,'los fixes finales deben cargar después del theme principal');
@@ -87,6 +88,14 @@ assert.match(personSearch,/\.hache-person-box\{[\s\S]*?background:#fff/);
 assert.match(personSearch,/\.hache-person-suggest\{[\s\S]*?background:#fff/);
 assert.match(fixes,/html\[data-theme="dark"\] \.hache-person-box,[\s\S]*?html\[data-theme="dark"\] \.hache-person-suggest\{[\s\S]*?background:#0b1625!important/);
 assert.match(fixes,/html\[data-theme="dark"\] \.hache-person-option\{[\s\S]*?background:#0f1b2b!important/);
+
+// Hotfix alumnos: su autocomplete propio no puede conservar foregrounds light en dark.
+assert.match(filtrosAlumnos,/\.hache-search-suggestions\{[\s\S]*?background:#fff/);
+assert.match(filtrosAlumnos,/\.hache-search-option strong\{display:block;color:#172033/);
+assert.match(filtrosAlumnos,/\.hache-search-option span\{display:block;color:#64748b/);
+assert.match(fixes,/html\[data-theme="dark"\] \.hache-search-suggestions\{[\s\S]*?background:#0b1625!important/);
+assert.match(fixes,/html\[data-theme="dark"\] \.hache-search-option strong\{[\s\S]*?color:var\(--hache-ink\)!important/);
+assert.match(fixes,/html\[data-theme="dark"\] \.hache-search-option span\{[\s\S]*?color:var\(--hache-muted\)!important/);
 
 // P2 Codex: navegación de regreso del detalle de pago.
 assert.match(pagoDetalle,/class="back"/);
