@@ -20,7 +20,7 @@ const cierres=fs.readFileSync(new URL('../public/cierres-mensuales.php',import.m
 const mensajes=fs.readFileSync(new URL('../public/mensajes.php',import.meta.url),'utf8');
 
 // El theme se carga solo desde el bootstrap protegido del backend.
-assert.match(bootstrap,/backend-theme\.js\?v=20260831-1/);
+assert.match(bootstrap,/backend-theme\.js\?v=20260831-2/);
 assert.match(bootstrap,/backend-theme\.css\?v=20260831-1/);
 const themeJsPos=bootstrap.indexOf("['/assets/backend-theme.js'");
 const menuCssPos=bootstrap.indexOf("['/assets/backend-menu.css'");
@@ -41,6 +41,9 @@ assert.match(js,/data-hache-theme-value="dark"/);
 assert.match(js,/data-hache-theme-value="system"/);
 assert.match(js,/aria-pressed/);
 assert.match(js,/MutationObserver/);
+assert.match(js,/window\.addEventListener\('storage',event=>\{/);
+assert.match(js,/if\(event\.key!==STORAGE_KEY\) return/);
+assert.match(js,/apply\(next,\{persist:false\}\)/);
 
 // Dark mode transversal: tokens, shell, superficies, tablas, forms y menú.
 assert.match(css,/html\[data-theme="dark"\]\{/);
