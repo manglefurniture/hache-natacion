@@ -23,11 +23,7 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
     $batch=hache_sharky_orchestrator_batch_enqueue_and_wait($contact,$event,(int)($extraContext['batch_window_ms']??HACHE_SHARKY_BATCH_WINDOW_MS));
     if($batch===null)return ['skip'=>true,'code'=>'BATCH_DEFERRED'];
     $ids=is_array($batch['ids']??null)?$batch['ids']:[$id];
-    $latestReferral=null;
-    $batchEvents=is_array($batch['events']??null)?$batch['events']:[];
-    for($i=count($batchEvents)-1;$i>=0;$i--){
-        if(is_array($batchEvents[$i]['referral']??null)){$latestReferral=$batchEvents[$i]['referral'];break;}
-    }
+    $latestReferral=is_array($batch['referral']??null)?$batch['referral']:null;
     if($latestReferral===null&&is_array($event['referral']??null))$latestReferral=$event['referral'];
     $synthetic=[
         'id'=>'batch:'.hash('sha256',implode('|',$ids)),
