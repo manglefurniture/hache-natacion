@@ -2,6 +2,8 @@
 
 Estado: **laboratorio integrado detrás de feature flag / producción sin cambios por defecto**.
 
+Estado de activación: **laboratorio / no conectado al webhook de producción por defecto**. El router solo entra al adaptador nuevo cuando `SHARKY_ORCHESTRATOR_LAB_ENABLED=1`.
+
 Sharky 2.0 evoluciona el asistente conversacional hacia un agente capaz de ejecutar operaciones controladas sin entregar a la IA autoridad directa sobre la base de datos.
 
 ## Principio rector
