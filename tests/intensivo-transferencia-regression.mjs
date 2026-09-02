@@ -26,8 +26,8 @@ expect(
   'El importe mostrado debe salir del precio real del curso intensivo existente sin romper la serialización previa.'
 );
 expect(
-  registro.includes("':precio'=>$intensivoPrecio") && registro.includes('Total a pagar: $<?=e(number_format((float)$intensivoPrecio'),
-  'Los cursos nuevos y la pantalla final deben compartir la misma variable de precio.'
+  registro.includes("':precio'=>$intensivoPrecio") && registro.includes("number_format((float)$intensivoPrecio,2,'.',',')") && registro.includes("rtrim(rtrim(number_format((float)$intensivoPrecio,2,'.',','),'0'),'.')"),
+  'Los cursos nuevos y la pantalla final deben compartir la misma variable de precio sin redondear importes existentes con centavos.'
 );
 expect(
   registro.includes('id="copiar-clabe"') && registro.includes('navigator.clipboard.writeText(value)') && registro.includes("document.execCommand('copy')"),
