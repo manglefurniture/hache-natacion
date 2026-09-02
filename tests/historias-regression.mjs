@@ -96,6 +96,8 @@ assert.match(notifications,/notificacion_estado='ENVIANDO'/,'El envío debe recl
 assert.match(notifications,/notificacion_intentos<3/,'Los reintentos deben tener límite');
 assert.match(notifications,/JOIN historia_comentarios root ON root\.id=r\.parent_id AND root\.estado='APROBADO'/,'No debe enviarse un aviso si el hilo raíz dejó de ser público');
 assert.match(notifications,/historias_reintentar_correo_comentario/,'Debe existir una ruta explícita para reintentar fallos transitorios');
+assert.match(notifications,/historias-confirmacion\//,'La confirmación debe reutilizar una clave idempotente estable');
+assert.match(notifications,/historias-respuesta\//,'El aviso de respuesta debe reutilizar una clave idempotente estable');
 assert.match(notifications,/c\.estado='APROBADO'/,'Una respuesta solo puede notificar después de aprobarse');
 assert.match(notifications,/s\.estado='ACTIVA'/,'Solo un opt-in confirmado puede recibir respuesta');
 assert.match(notifications,/no te suscriben a promociones ni newsletters/);
@@ -113,6 +115,9 @@ assert.match(notificationPage,/confirm_expires_at/,'La confirmación debe expira
 assert.match(mailer,/function hache_enviar_correo_transaccional/,'Debe existir un transporte transaccional común');
 assert.match(mailer,/https:\/\/api\.resend\.com\/emails/,'El transporte debe seguir el patrón HTTPS de Hache Base');
 assert.match(mailer,/HACHE_RESEND_API_KEY/);
+assert.match(mailer,/Idempotency-Key:/,'Los reintentos deben propagarse a Resend con Idempotency-Key');
+assert.match(mailer,/strlen\(\$idempotencyKey\)>256/,'La clave de idempotencia debe respetar el límite del proveedor');
+assert.match(mailer,/str_contains\(\$idempotencyKey,"\\r"\)/,'La clave de idempotencia no debe permitir inyección de headers');
 
 assert.match(moderation,/page_require\(\['ADMIN','VERIFICADOR'\]\)/);
 assert.match(moderation,/Respuesta a \$\{item\.reply_to_autor/,'Moderación debe mostrar contexto de la respuesta');
