@@ -1,5 +1,5 @@
--- Sharky 2.0 — durable attribution, webhook idempotency and action audit.
--- Additive/idempotent. Conversation text/state remains ephemeral in /var/tmp.
+-- Sharky 2.0 — durable attribution, idempotency, conversation state, identity verification and action audit.
+-- Additive/idempotent. Do not run in production until the orchestrator adapter is enabled.
 
 CREATE TABLE IF NOT EXISTS sharky_message_receipts (
   message_id VARCHAR(191) NOT NULL PRIMARY KEY,
@@ -29,6 +29,30 @@ CREATE TABLE IF NOT EXISTS sharky_referrals (
   INDEX idx_sharky_referral_source (source_type, source_id),
   INDEX idx_sharky_referral_student (alumno_id, captured_at),
   CONSTRAINT fk_sharky_referral_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sharky_conversation_state (
+  contact_hash CHAR(64) NOT NULL PRIMARY KEY,
+  state_json JSON NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  INDEX idx_sharky_state_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sharky_identity_challenges (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  contact_hash CHAR(64) NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  status ENUM('PENDING','VERIFIED','EXPIRED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+  verified_student_id CHAR(36) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  verified_at DATETIME NULL,
+  UNIQUE KEY uq_sharky_identity_token (token_hash),
+  INDEX idx_sharky_identity_contact (contact_hash, created_at),
+  INDEX idx_sharky_identity_status (status, expires_at),
+  INDEX idx_sharky_identity_student (verified_student_id, verified_at),
+  CONSTRAINT fk_sharky_identity_student FOREIGN KEY (verified_student_id) REFERENCES alumnos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sharky_action_audit (
