@@ -180,7 +180,7 @@ foreach ($events as $event) {
     $actionResult = is_array($result['action_result'] ?? null) ? $result['action_result'] : null;
     if (is_array($actionResult)) {
         $studentId = trim((string) ($actionResult['result']['student_id'] ?? ''));
-        if ($studentId !== '') hache_sharky_draft_link_attribution($pdo, $contact, $studentId);
+        if ($studentId !== '') hache_sharky_draft_link_attribution($pdo, $contact, $studentId, is_array($result['state'] ?? null) ? $result['state'] : []);
         $registrationMessage = hache_sharky_draft_registration_message($actionResult, $business);
         if ($registrationMessage !== null) $out = hache_sharky_whatsapp_text_payload($contact, $registrationMessage);
     }
