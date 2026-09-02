@@ -31,7 +31,15 @@ if (str_starts_with($uri, '/api/')) {
             return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $body;
         });
     }
-    $publicApi = ['/api/login.php','/api/health.php','/api/sesion.php','/api/cambiar-password.php','/api/alumno-por-whatsapp.php'];
+    $publicApi = [
+        '/api/login.php',
+        '/api/health.php',
+        '/api/sesion.php',
+        '/api/cambiar-password.php',
+        '/api/alumno-por-whatsapp.php',
+        '/api/sharky.php',
+        '/api/whatsapp-webhook.php',
+    ];
     if (!in_array($uri, $publicApi, true)) {
         require_once __DIR__ . '/auth.php';
         if ($uri === '/api/portal-alumno.php') {
@@ -58,7 +66,15 @@ $config = is_file($localConfig) ? require $localConfig : [
 // Auditoría genérica de toda mutación de API. No interfiere con la respuesta si la tabla aún no existe.
 if (str_starts_with($uri, '/api/')) {
     $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
-    $skipAudit = ['/api/login.php','/api/health.php','/api/sesion.php','/api/cambiar-password.php','/api/auditoria.php'];
+    $skipAudit = [
+        '/api/login.php',
+        '/api/health.php',
+        '/api/sesion.php',
+        '/api/cambiar-password.php',
+        '/api/auditoria.php',
+        '/api/sharky.php',
+        '/api/whatsapp-webhook.php',
+    ];
     if (!in_array($method, ['GET','HEAD','OPTIONS'], true) && !in_array($uri, $skipAudit, true)) {
         $auditConfig = $config;
         $auditUri = $uri;
