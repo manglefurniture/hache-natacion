@@ -63,6 +63,9 @@ assert.match(publicApi,/respuestas'=>\[\]/,'La lectura pública debe exponer res
 assert.match(publicApi,/r\.parent_id IN \(/,'Las respuestas deben limitarse a los hilos raíz realmente mostrados antes del LIMIT');
 assert.match(publicApi,/ORDER BY c\.created_at DESC LIMIT 250/,'El tope global debe conservar primero las respuestas más recientes');
 assert.match(publicApi,/array_reverse\(\$st->fetchAll\(\)\)/,'Las respuestas recientes seleccionadas deben volver a mostrarse en orden cronológico');
+assert.match(publicApi,/comentario_objetivo/,'El permalink debe poder pedir explícitamente su hilo');
+assert.match(publicApi,/\$targetRootId!==null&&!isset\(\$positions\[\$targetRootId\]\)/,'La raíz enlazada debe cargarse aunque quede fuera de las 50 recientes');
+assert.match(publicApi,/\$targetReplyId!==null/,'La respuesta enlazada debe poder cargarse aunque quede fuera del tope global');
 assert.match(publicApi,/respuestas_habilitadas/,'La API debe declarar si la migración nueva está disponible');
 assert.match(publicApi,/information_schema\.TABLES/,'El código nuevo debe degradar con seguridad antes de aplicar la migración');
 assert.doesNotMatch(publicApi,/SELECT[^;]+s\.email[^;]+salida/si,'La API pública no debe exponer correos de suscripción');
@@ -85,6 +88,9 @@ assert.match(client,/notificar_respuestas: formData\.get\('notificar_respuestas'
 assert.match(client,/email\.required = notify\.checked/,'El correo debe ser obligatorio solo al pedir avisos');
 assert.match(client,/reply-form-wrap/,'Debe existir formulario de respuesta contextual');
 assert.match(client,/comentario-\$\{item\.id\}/,'Los comentarios necesitan anclas estables para el enlace del correo');
+assert.match(client,/location\.hash\.match/,'El cliente debe extraer el comentario objetivo desde el permalink');
+assert.match(client,/params\.set\('comentario_objetivo', target\)/,'El cliente debe solicitar explícitamente el hilo enlazado');
+assert.match(client,/requestAnimationFrame\(focusPermalinkTarget\)/,'El permalink debe enfocarse después del render asíncrono');
 assert.match(client,/setFeatureAvailability\(data\.respuestas_habilitadas === true\)/,'La UI debe ocultar replies/avisos mientras falte la migración');
 assert.match(styles,/\.comment-replies/);
 assert.match(styles,/\.notification-toggle/);
