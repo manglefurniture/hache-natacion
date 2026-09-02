@@ -38,4 +38,13 @@ expect_adapter(($birth['age']??0)===26,'Debe calcular la edad de forma determini
 $rejected=false;try{hache_sharky_business_validate_birthdate('2020-01-01',12,'2026-09-02');}catch(HacheSharkyBusinessException $e){$rejected=$e->codeName==='MIN_AGE';}
 expect_adapter($rejected,'Debe rechazar menores antes de emitir una acción.');
 
+$state=hache_sharky_orchestrator_flow(hache_sharky_orchestrator_state(null,1788382800),'identify_student','verify',['return_to'=>'absence'],1788382800);
+$resumed=hache_sharky_whatsapp_resume_verified_state($state,['verification'=>['verified'=>true,'student_id'=>'stu-1','name'=>'Ariel','sede_clave'=>'MONTEVERDE','status'=>'ACTIVO']],1788382810);
+expect_adapter(($resumed['identity']['verified']??false)===true,'La verificación web debe convertir el contacto en alumno verificado.');
+expect_adapter(($resumed['flow']['name']??'')==='absence'&&($resumed['flow']['step']??'')==='offer','Después de verificar debe retomar el flujo de ausencia.');
+
+$controlled=hache_sharky_orchestrator_flow(hache_sharky_orchestrator_state(null,1788382800),'register_intensive','confirm',['name'=>'Juan'],1788382800);
+expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'¿Aceptan tarjeta?','interactive_id'=>''])===true,'Una duda durante confirmación debe tratarse como pregunta lateral.');
+expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'confirmo','interactive_id'=>''])===false,'Confirmar no debe confundirse con pregunta lateral.');
+
 echo "SHARKY_WHATSAPP_ADAPTER_REGRESSION_OK\n";
