@@ -25,7 +25,15 @@ function hache_sharky_config_value_valid(string $key, string $value): bool
     if (in_array($key, ['sharky_pago_institucion','sharky_pago_beneficiario'], true)) return $value !== '' && mb_strlen($value) <= 100;
     if ($key === 'sharky_audio_habilitado') return in_array($value, ['0', '1'], true);
     if ($key === 'sharky_edad_minima') return ctype_digit($value) && (int)$value >= 1 && (int)$value <= 99;
-    if ($key === 'sharky_recargo_tarjeta_pct') return is_numeric($value) && (float)$value >= 0 && (float)$value <= 100;
+    if (in_array($key, [
+        'sharky_precio_intensivo',
+        'sharky_precio_regular_3',
+        'sharky_precio_regular_5',
+        'sharky_inscripcion_monteverde',
+        'sharky_inscripcion_palapas',
+        'sharky_kit_gorro_goggles',
+    ], true)) return ctype_digit($value) && (int)$value >= 0 && (int)$value <= 100000;
+    if ($key === 'sharky_recargo_tarjeta_pct') return ctype_digit($value) && (int)$value >= 0 && (int)$value <= 100;
     if ($key === 'sharky_audio_max_mb') return ctype_digit($value) && (int)$value >= 1 && (int)$value <= 20;
     if ($key === 'sharky_escalado_intentos') return ctype_digit($value) && (int)$value >= 1 && (int)$value <= 5;
     return is_numeric($value) && (float)$value >= 0 && (float)$value <= 1000000;
