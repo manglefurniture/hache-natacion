@@ -11,10 +11,16 @@ function hache_sharky_config_defaults(): array
         'sharky_precio_regular_5'=>['valor'=>'1200','descripcion'=>'Mensualidad de 5 clases por semana en MXN'],
         'sharky_inscripcion_monteverde'=>['valor'=>'500','descripcion'=>'Inscripción de Monteverde en MXN'],
         'sharky_inscripcion_palapas'=>['valor'=>'400','descripcion'=>'Inscripción de Palapas en MXN'],
-        'sharky_kit_gorro_goggles'=>['valor'=>'300','descripcion'=>'Kit de gorro + goggles en MXN'],
-        'sharky_recargo_tarjeta_pct'=>['valor'=>'5','descripcion'=>'Recargo porcentual por pago con tarjeta'],
+        'sharky_kit_gorro_goggles'=>['valor'=>'300','descripcion'=>'Kit opcional de gorro + goggles vendido por Hache, en MXN'],
+        'sharky_recargo_tarjeta_pct'=>['valor'=>'5','descripcion'=>'Recargo porcentual por pago con tarjeta, aplicable a todos los conceptos'],
         'sharky_whatsapp'=>['valor'=>'9902308165','descripcion'=>'WhatsApp oficial mostrado desde la web'],
-        'sharky_cupo_maximo_intensivo'=>['valor'=>'0','descripcion'=>'Cupo global por curso intensivo; 0 significa no informar disponibilidad'],
+        'sharky_link_registro_monteverde'=>['valor'=>'https://go.hnatacion.com/mv','descripcion'=>'Enlace corto oficial de inscripción a intensivos en Monteverde'],
+        'sharky_link_registro_palapas'=>['valor'=>'https://go.hnatacion.com/pal','descripcion'=>'Enlace corto oficial de inscripción a intensivos en Palapas'],
+        'sharky_maps_monteverde'=>['valor'=>'https://maps.app.goo.gl/Ld75bhLforGm2Tk68','descripcion'=>'Ubicación oficial de Monteverde en Google Maps'],
+        'sharky_maps_palapas'=>['valor'=>'https://maps.app.goo.gl/L7aEf9phtXtciUj78','descripcion'=>'Ubicación oficial de Palapas Protudec en Google Maps'],
+        'sharky_pago_institucion'=>['valor'=>'Mercado Pago W','descripcion'=>'Institución de la cuenta pública para pagos por transferencia'],
+        'sharky_pago_beneficiario'=>['valor'=>'Heidy Garcia Liranza','descripcion'=>'Beneficiario de la cuenta pública para pagos por transferencia'],
+        'sharky_pago_clabe'=>['valor'=>'722969010319748145','descripcion'=>'CLABE pública de 18 dígitos para pagos por transferencia'],
         'sharky_audio_habilitado'=>['valor'=>'1','descripcion'=>'1 permite transcribir notas de voz de WhatsApp; 0 las desactiva'],
         'sharky_audio_max_mb'=>['valor'=>'4','descripcion'=>'Tamaño máximo de audio aceptado para transcripción, en MB'],
         'sharky_escalado_intentos'=>['valor'=>'2','descripcion'=>'Respuestas consecutivas sin resolver antes de pasar a atención humana'],
@@ -72,7 +78,7 @@ function hache_sharky_config_int(array $values, string $key, int $fallback, int 
 
 function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
 {
-    if (!$pdo) return "DATOS DINÁMICOS\n- No fue posible consultar horarios o cursos en este momento. No inventes disponibilidad.";
+    if (!$pdo) return "DATOS DINÁMICOS\n- No fue posible consultar horarios o cursos en este momento. No inventes datos.";
     $lines = ['DATOS DINÁMICOS DEL SISTEMA','- Estos datos provienen del backend actual y prevalecen sobre horarios históricos.'];
     try {
         $rows = $pdo->query("SELECT s.nombre sede,h.hora_inicio,h.hora_fin,h.regular,h.intensivo FROM horarios h JOIN sedes s ON s.id=h.sede_id WHERE h.activo=1 AND s.activo=1 ORDER BY s.nombre,h.hora_inicio")->fetchAll();
@@ -91,25 +97,19 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
         $lines[]='- No se pudieron consultar los horarios activos; no inventes horarios.';
     }
     try {
-        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio,COUNT(cia.id) total_alumnos FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id LEFT JOIN curso_intensivo_alumnos cia ON cia.curso_intensivo_id=ci.id WHERE s.activo=1 AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND ci.fecha_fin>=CURDATE() GROUP BY ci.id,s.nombre,ci.fecha_inicio,ci.fecha_fin,ci.precio ORDER BY ci.fecha_inicio ASC LIMIT 8")->fetchAll();
+        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id WHERE s.activo=1 AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND ci.fecha_fin>=CURDATE() ORDER BY ci.fecha_inicio ASC LIMIT 8")->fetchAll();
         if (!$rows) {
             $lines[]='- No hay cursos intensivos vigentes o próximos registrados.';
         } else {
-            $capacity=hache_sharky_config_int($values,'sharky_cupo_maximo_intensivo',0,0,500);
             $lines[]='- Cursos intensivos vigentes o próximos:';
             foreach ($rows as $row) {
-                $availability='';
-                if ($capacity>0) {
-                    $enrolled=(int)($row['total_alumnos']??0);
-                    $availability=sprintf('; cupo global configurado %d, inscritos %d, lugares calculados %d',$capacity,$enrolled,max(0,$capacity-$enrolled));
-                }
                 $price=rtrim(rtrim(number_format((float)$row['precio'],2,'.',''),'0'),'.');
-                $lines[]=sprintf('  • %s: %s a %s; precio registrado $%s MXN%s',(string)$row['sede'],(string)$row['fecha_inicio'],(string)$row['fecha_fin'],$price,$availability);
+                $lines[]=sprintf('  • %s: %s a %s; precio registrado $%s MXN',(string)$row['sede'],(string)$row['fecha_inicio'],(string)$row['fecha_fin'],$price);
             }
-            if ($capacity===0) $lines[]='- La capacidad máxima no está configurada: NO afirmes si hay cupo; solo informa fechas y horarios registrados.';
         }
+        $lines[]='- Cupos, capacidad, inscritos y alumnos por carril NO se exponen a Sharky; esas preguntas se derivan a atención humana.';
     } catch (Throwable $e) {
-        $lines[]='- No se pudieron consultar cursos vigentes; no inventes fechas ni cupos.';
+        $lines[]='- No se pudieron consultar cursos vigentes; no inventes fechas.';
     }
     return implode("\n",$lines);
 }
@@ -135,8 +135,22 @@ function hache_sharky_normalize_text(string $text): string
     return strtr(mb_strtolower(trim($text),'UTF-8'),['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
 }
 
+function hache_sharky_capacity_request(string $text): bool
+{
+    $text=hache_sharky_normalize_text($text);
+    foreach ([
+        '/\b(cupo|cupos)\b/u',
+        '/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',
+        '/\b(cuantos?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
+        '/\b(cuantos?|numero de)\b.{0,20}\bpor carril\b/u',
+        '/\b(capacidad)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
+    ] as $pattern) if (preg_match($pattern,$text)===1) return true;
+    return false;
+}
+
 function hache_sharky_human_request(string $text): bool
 {
+    if (hache_sharky_capacity_request($text)) return true;
     $text=hache_sharky_normalize_text($text);
     $patterns=[
         '/\b(quiero|necesito|quisiera|puedo|podria)\b.{0,25}\b(hablar|contactar|comunicarme)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
