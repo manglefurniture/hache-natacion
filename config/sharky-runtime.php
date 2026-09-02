@@ -178,6 +178,9 @@ function hache_sharky_human_request(string $text): bool
         '/\b(me puedes|puedes|podrias|podria)\b.{0,20}\b(pasar|poner|comunicar)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
         '/\b(quiero|necesito|quisiera)\b.{0,18}\b(una persona|un humano|humano|un asesor|asesor|operador|atencion humana)\b/u',
         '/\b(asesor humano|atencion humana|operador humano|persona real)\b/u',
+        '/\b(quiero|quisiera|necesito|me quiero|ya quiero)\b.{0,24}\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta|empezar|comenzar|entrar)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(como|donde)\b.{0,18}\b(me inscribo|me registro|puedo inscribirme|puedo registrarme|hago la inscripcion)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
     ];
     foreach ($patterns as $pattern) if (preg_match($pattern,$text)===1) return true;
     return false;
