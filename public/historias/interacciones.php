@@ -116,9 +116,9 @@ try{
         if($extension&&$positions){
             $params=[':historia'=>$historia];$holders=[];$i=0;
             foreach(array_keys($positions) as $rootId){$key=':root'.$i++;$holders[]=$key;$params[$key]=$rootId;}
-            $sql="SELECT c.id,c.autor_nombre,c.comentario,c.created_at,r.parent_id,r.reply_to_id,target.autor_nombre target_autor FROM historia_respuestas r JOIN historia_comentarios c ON c.id=r.comentario_id JOIN historia_comentarios root ON root.id=r.parent_id AND root.estado='APROBADO' JOIN historia_comentarios target ON target.id=r.reply_to_id AND target.estado='APROBADO' WHERE c.historia_slug=:historia AND c.estado='APROBADO' AND r.parent_id IN (".implode(',',$holders).") ORDER BY c.created_at ASC LIMIT 250";
-            $st=$pdo->prepare($sql);$st->execute($params);
-            foreach($st->fetchAll() as $row){$parent=(string)$row['parent_id'];if(!isset($positions[$parent]))continue;$comments[$positions[$parent]]['respuestas'][]=['id'=>$row['id'],'autor'=>nombre_publico((string)$row['autor_nombre']),'comentario'=>$row['comentario'],'fecha'=>$row['created_at'],'respondio_a'=>nombre_publico((string)$row['target_autor'])];}
+            $sql="SELECT c.id,c.autor_nombre,c.comentario,c.created_at,r.parent_id,r.reply_to_id,target.autor_nombre target_autor FROM historia_respuestas r JOIN historia_comentarios c ON c.id=r.comentario_id JOIN historia_comentarios root ON root.id=r.parent_id AND root.estado='APROBADO' JOIN historia_comentarios target ON target.id=r.reply_to_id AND target.estado='APROBADO' WHERE c.historia_slug=:historia AND c.estado='APROBADO' AND r.parent_id IN (".implode(',',$holders).") ORDER BY c.created_at DESC LIMIT 250";
+            $st=$pdo->prepare($sql);$st->execute($params);$replyRows=array_reverse($st->fetchAll());
+            foreach($replyRows as $row){$parent=(string)$row['parent_id'];if(!isset($positions[$parent]))continue;$comments[$positions[$parent]]['respuestas'][]=['id'=>$row['id'],'autor'=>nombre_publico((string)$row['autor_nombre']),'comentario'=>$row['comentario'],'fecha'=>$row['created_at'],'respondio_a'=>nombre_publico((string)$row['target_autor'])];}
         }
         salida(['ok'=>true,'reacciones'=>$counts,'mi_reaccion'=>$mine,'comentarios'=>$comments,'respuestas_habilitadas'=>$extension]);
     }
