@@ -193,7 +193,7 @@ function hache_sharky_regular_enrollment_request(string $text): bool
 {
     $candidate=hache_sharky_normalize_text($text);
     $negativeMarker='(?:no|todavia no|aun no|por ahora no|tampoco|ni)';
-    $negativeIntent='(?:(?:me|yo)\s+)?(?:(?:quiero|necesito|quisiera|deseo|pienso|planeo|voy a)\s+)?';
+    $negativeIntent='(?:(?:me|yo)\s+)?(?:(?:quiero|quiere|quieren|necesito|necesita|necesitan|quisiera|deseo|desea|desean|pienso|piensa|piensan|planeo|planea|planean|voy a|va a|van a)\s+)?';
     $negativeAction='(?:inscribirme|registrarme|anotarme|apuntarme|inscribirse|registrarse|anotarse|apuntarse|inscribir|registrar|anotar|apuntar|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla|darme de alta|darse de alta|dar de alta|empezar|comenzar|entrar)';
     foreach ([
         '/\b'.$negativeMarker.'\s+'.$negativeIntent.$negativeAction.'\b/u',
