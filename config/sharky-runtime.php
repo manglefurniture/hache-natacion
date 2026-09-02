@@ -164,7 +164,10 @@ function hache_sharky_capacity_request(string $text): bool
     if (!$hasExplicitCapacity) {
         foreach ([
             '/\bdisponibilidad\s+(de|para)\s+(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|hora|horas|fecha|fechas|dia|dias)\b/u',
-            '/\b(horario|horarios|hora|horas|fecha|fechas|dia|dias)\b.{0,16}\b(disponibilidad|disponible|disponibles)\b/u',
+            '/\bdisponibilidad\s+(en|para)\s+(el\s+|la\s+)?(horario|horarios|turno|turnos)\b/u',
+            '/\bdisponibilidad\s+(en|por)\s+(la\s+)?(manana|tarde|noche)\b/u',
+            '/\bdisponibilidad\s+(a|para)\s+las?\s+\d{1,2}(?::\d{2})?\b/u',
+            '/\b(horario|horarios|hora|horas|fecha|fechas|dia|dias|turno|turnos|manana|tarde|noche)\b.{0,16}\b(disponibilidad|disponible|disponibles)\b/u',
         ] as $schedulePattern) if (preg_match($schedulePattern,$text)===1) return false;
     }
     foreach ([
@@ -192,12 +195,23 @@ function hache_sharky_human_request(string $text): bool
 {
     if (hache_sharky_capacity_request($text)) return true;
     $text=hache_sharky_normalize_text($text);
-    $patterns=[
+
+    $explicitHumanPatterns=[
         '/\b(quiero|necesito|quisiera|puedo|podria)\b.{0,25}\b(hablar|contactar|comunicarme)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
         '/\b(pasame|ponme|comunicame|dejame hablar)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
         '/\b(me puedes|puedes|podrias|podria)\b.{0,20}\b(pasar|poner|comunicar)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
         '/\b(quiero|necesito|quisiera)\b.{0,18}\b(una persona|un humano|humano|un asesor|asesor|operador|atencion humana)\b/u',
         '/\b(asesor humano|atencion humana|operador humano|persona real)\b/u',
+    ];
+    foreach ($explicitHumanPatterns as $pattern) if (preg_match($pattern,$text)===1) return true;
+
+    foreach ([
+        '/\b(no|todavia no|aun no|por ahora no)\s+(quiero|necesito|quisiera|deseo)?\s*(inscribirme|registrarme|anotarme|apuntarme|darme de alta|inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(no|todavia no|aun no|por ahora no)\s+me\s+(quiero|pienso|voy a)\s+(inscribir|registrar|anotar|apuntar|dar de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(no|todavia no|aun no|por ahora no)\b.{0,20}\b(quiero|necesito|quisiera|deseo)\b.{0,20}\b(inscribir|registrar|anotar|apuntar|dar de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+    ] as $negatedRegularPattern) if (preg_match($negatedRegularPattern,$text)===1) return false;
+
+    $patterns=[
         '/\b(quiero|quisiera|necesito|me quiero|ya quiero)\b.{0,24}\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta|empezar|comenzar|entrar)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
         '/\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
         '/\b(como|donde)\b.{0,18}\b(me inscribo|me registro|puedo inscribirme|puedo registrarme|hago la inscripcion)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
