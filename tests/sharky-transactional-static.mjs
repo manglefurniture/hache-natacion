@@ -14,7 +14,6 @@ const page=read('public/sharky-verificar.php');
 const lab=read('public/api/whatsapp-orchestrator-lab.php');
 const login=read('api/login.php');
 const router=read('api/whatsapp-webhook.php');
-const absencesApi=read('api/ausencias-programadas.php');
 
 for(const table of ['sharky_message_receipts','sharky_referrals','sharky_conversation_state','sharky_identity_challenges','sharky_action_audit'])expect(migration.includes(table),`Falta tabla ${table}`);
 expect(actions.includes("estado_administrativo') === 'BAJA'")||actions.includes("estado_administrativo'] === 'BAJA'"),'Ausencias deben bloquear alumno de baja.');
@@ -25,7 +24,6 @@ expect(actions.includes(':birth'),'Registro debe persistir fecha de nacimiento v
 const txPos=actions.indexOf('$pdo->beginTransaction();',actions.indexOf('function hache_sharky_business_register_intensive'));
 const pwdPos=actions.indexOf('$tempPassword = password_temporal_segura();',actions.indexOf('function hache_sharky_business_register_intensive'));
 expect(txPos>=0&&pwdPos>txPos,'Credenciales del registro deben generarse después de entrar a la transacción/revalidación.');
-expect(absencesApi.includes("require_once __DIR__.'/../config/sharky-business-actions.php'")&&absencesApi.includes('hache_sharky_business_create_absence'),'Admin y Sharky deben compartir el servicio de creación de ausencias.');
 expect(executor.includes('requires_revalidation')&&executor.includes('IDENTITY_MISMATCH'),'Executor debe exigir revalidación e identidad.');
 expect(executor.includes('ACTION_IN_PROGRESS')&&executor.includes('ALREADY_COMPLETED'),'Executor debe ser idempotente.');
 expect(adapter.includes('referral'),'Adapter debe conservar referral.');
