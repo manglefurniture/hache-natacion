@@ -38,6 +38,7 @@ function sharky_admin_valid_value(string $key, string $value): bool
     if (in_array($key, ['sharky_pago_institucion','sharky_pago_beneficiario'], true)) return $value !== '' && mb_strlen($value) <= 100;
     if ($key === 'sharky_audio_habilitado') return in_array($value, ['0', '1'], true);
     if ($key === 'sharky_edad_minima') return ctype_digit($value) && (int) $value >= 1 && (int) $value <= 99;
+    if ($key === 'sharky_precio_intensivo') return is_numeric($value) && abs((float)$value - 1200.0) < 0.001;
     if ($key === 'sharky_recargo_tarjeta_pct') return is_numeric($value) && (float) $value >= 0 && (float) $value <= 100;
     if ($key === 'sharky_audio_max_mb') return ctype_digit($value) && (int) $value >= 1 && (int) $value <= 20;
     if ($key === 'sharky_escalado_intentos') return ctype_digit($value) && (int) $value >= 1 && (int) $value <= 5;
