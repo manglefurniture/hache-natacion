@@ -106,6 +106,7 @@ assert.match(notifications,/JOIN historia_comentarios root ON root\.id=r\.parent
 assert.match(notifications,/historias_reintentar_correo_comentario/,'Debe existir una ruta explícita para reintentar fallos transitorios');
 assert.match(notifications,/historias-confirmacion\//,'La confirmación debe reutilizar una clave idempotente estable');
 assert.match(notifications,/historias-respuesta\//,'El aviso de respuesta debe reutilizar una clave idempotente estable');
+assert.match(notifications,/\$viewUrl=historias_url_comentario\(\(string\)\$row\['historia_slug'\],\$respuestaId\)/,'El aviso debe enlazar la respuesta aprobada que originó el correo');
 assert.match(notifications,/c\.estado='APROBADO'/,'Una respuesta solo puede notificar después de aprobarse');
 assert.match(notifications,/s\.estado='ACTIVA'/,'Solo un opt-in confirmado puede recibir respuesta');
 assert.match(notifications,/no te suscriben a promociones ni newsletters/);
