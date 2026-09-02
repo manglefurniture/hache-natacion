@@ -69,7 +69,7 @@ function historias_notificar_respuesta_aprobada(PDO $pdo,string $respuestaId,arr
     $rootCheck=$pdo->prepare("SELECT 1 FROM historia_comentarios WHERE id=:id AND estado='APROBADO' LIMIT 1");$rootCheck->execute([':id'=>$row['parent_id']]);
     if(!$rootCheck->fetchColumn()){$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='NO_APLICA',updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return false;}
 
-    $targetId=(string)$row['reply_to_id'];$cancelToken=historias_cancel_token($targetId,(string)$row['email'],$secret);$viewUrl=historias_url_comentario((string)$row['historia_slug'],$targetId);
+    $targetId=(string)$row['reply_to_id'];$cancelToken=historias_cancel_token($targetId,(string)$row['email'],$secret);$viewUrl=historias_url_comentario((string)$row['historia_slug'],$respuestaId);
     $cancelUrl='https://hnatacion.com/historias/notificaciones.php?accion=cancelar&comentario='.rawurlencode($targetId).'&token='.rawurlencode($cancelToken);
     $subject=trim((string)$row['autor_nombre']).' respondió a tu comentario · Historias Hache';
     $body="Hola ".trim((string)$row['target_autor']).",\n\n".
