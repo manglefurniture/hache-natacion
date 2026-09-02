@@ -4,8 +4,10 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('X-Robots-Tag: noindex, nofollow, noarchive');
 header('Cache-Control: no-store, max-age=0');
+header('X-Content-Type-Options: nosniff');
 
 $config=require __DIR__.'/../../config/database.php';
+require_once __DIR__.'/../../config/historias-notificaciones.php';
 $pdo=new PDO(
     "mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",
     $config['user'],
@@ -20,6 +22,15 @@ function salida(array $data,int $status=200): never
 {
     http_response_code($status);
     echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function salida_con_tarea(array $data,int $status,callable $task): never
+{
+    http_response_code($status);
+    echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    if(function_exists('fastcgi_finish_request'))@fastcgi_finish_request();
+    try{$task();}catch(Throwable $e){error_log('[historias/interacciones] Falló tarea posterior a respuesta: '.$e->getMessage());}
     exit;
 }
 
@@ -48,6 +59,21 @@ function visitante_valido(mixed $value): ?string
     return $id;
 }
 
+function comentario_id_valido(mixed $value): ?string
+{
+    $id=trim((string)$value);
+    if($id==='')return null;
+    return preg_match('/^[a-f0-9-]{36}$/i',$id)?$id:null;
+}
+
+function uuid_v4(): string
+{
+    $data=random_bytes(16);
+    $data[6]=chr((ord($data[6])&0x0f)|0x40);
+    $data[8]=chr((ord($data[8])&0x3f)|0x80);
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s',str_split(bin2hex($data),4));
+}
+
 function secreto_interacciones(array $config): string
 {
     $env=trim((string)(getenv('HACHE_PUBLIC_INTERACTION_SALT')?:''));
@@ -73,8 +99,8 @@ function mismo_origen(): bool
     foreach(['HTTP_ORIGIN','HTTP_REFERER'] as $key){
         $raw=trim((string)($_SERVER[$key]??''));
         if($raw==='')continue;
-        $source=strtolower((string)(parse_url($raw,PHP_URL_HOST)??''));
-        if($source!==''&&$source!==$host)return false;
+        $source=parse_url($raw,PHP_URL_HOST);
+        if(!is_string($source)||$source===''||strtolower($source)!==$host)return false;
     }
     return true;
 }
@@ -128,17 +154,37 @@ try{
             $st->execute([':historia'=>$historia,':visitante'=>$visitorHash]);
             $mine=$st->fetchColumn()?:null;
         }
-        $st=$pdo->prepare("SELECT id,autor_nombre,comentario,created_at FROM historia_comentarios WHERE historia_slug=:historia AND estado='APROBADO' ORDER BY created_at DESC LIMIT 50");
+
+        $st=$pdo->prepare("SELECT c.id,c.autor_nombre,c.comentario,c.created_at FROM historia_comentarios c LEFT JOIN historia_respuestas r ON r.comentario_id=c.id WHERE c.historia_slug=:historia AND c.estado='APROBADO' AND r.comentario_id IS NULL ORDER BY c.created_at DESC LIMIT 50");
         $st->execute([':historia'=>$historia]);
         $comments=[];
+        $positions=[];
         foreach($st->fetchAll() as $row){
-            $comments[]=['id'=>$row['id'],'autor'=>nombre_publico((string)$row['autor_nombre']),'comentario'=>$row['comentario'],'fecha'=>$row['created_at']];
+            $positions[(string)$row['id']]=count($comments);
+            $comments[]=['id'=>$row['id'],'autor'=>nombre_publico((string)$row['autor_nombre']),'comentario'=>$row['comentario'],'fecha'=>$row['created_at'],'respuestas'=>[]];
+        }
+        if($positions){
+            $st=$pdo->prepare("SELECT c.id,c.autor_nombre,c.comentario,c.created_at,r.parent_id,r.reply_to_id,target.autor_nombre target_autor FROM historia_respuestas r JOIN historia_comentarios c ON c.id=r.comentario_id JOIN historia_comentarios target ON target.id=r.reply_to_id WHERE c.historia_slug=:historia AND c.estado='APROBADO' ORDER BY c.created_at ASC LIMIT 250");
+            $st->execute([':historia'=>$historia]);
+            foreach($st->fetchAll() as $row){
+                $parent=(string)$row['parent_id'];
+                if(!isset($positions[$parent]))continue;
+                $comments[$positions[$parent]]['respuestas'][]=[
+                    'id'=>$row['id'],
+                    'autor'=>nombre_publico((string)$row['autor_nombre']),
+                    'comentario'=>$row['comentario'],
+                    'fecha'=>$row['created_at'],
+                    'respondio_a'=>nombre_publico((string)$row['target_autor']),
+                ];
+            }
         }
         salida(['ok'=>true,'reacciones'=>$counts,'mi_reaccion'=>$mine,'comentarios'=>$comments]);
     }
 
     if($method!=='POST')salida(['ok'=>false,'error'=>'Método no permitido'],405);
     if(!mismo_origen())salida(['ok'=>false,'error'=>'Origen no permitido'],403);
+    $contentType=strtolower(trim(explode(';',(string)($_SERVER['CONTENT_TYPE']??''),2)[0]));
+    if($contentType!=='application/json')salida(['ok'=>false,'error'=>'Tipo de contenido no permitido'],415);
     $input=json_decode((string)file_get_contents('php://input'),true);
     if(!is_array($input))salida(['ok'=>false,'error'=>'Solicitud inválida'],400);
     $historia=historia_valida($input['historia']??'');
@@ -158,16 +204,13 @@ try{
         $st->execute([':historia'=>$historia,':visitante'=>$visitorHash]);
         $existing=$st->fetch();
         if($existing&&$existing['tipo']===$tipo){
-            $del=$pdo->prepare('DELETE FROM historia_reacciones WHERE id=:id');
-            $del->execute([':id'=>$existing['id']]);
+            $pdo->prepare('DELETE FROM historia_reacciones WHERE id=:id')->execute([':id'=>$existing['id']]);
             salida(['ok'=>true,'mi_reaccion'=>null]);
         }
         if($existing){
-            $up=$pdo->prepare('UPDATE historia_reacciones SET tipo=:tipo,origen_hash=:origen,updated_at=NOW() WHERE id=:id');
-            $up->execute([':tipo'=>$tipo,':origen'=>$originHash,':id'=>$existing['id']]);
+            $pdo->prepare('UPDATE historia_reacciones SET tipo=:tipo,origen_hash=:origen,updated_at=NOW() WHERE id=:id')->execute([':tipo'=>$tipo,':origen'=>$originHash,':id'=>$existing['id']]);
         }else{
-            $ins=$pdo->prepare('INSERT INTO historia_reacciones(historia_slug,tipo,visitante_hash,origen_hash) VALUES(:historia,:tipo,:visitante,:origen)');
-            $ins->execute([':historia'=>$historia,':tipo'=>$tipo,':visitante'=>$visitorHash,':origen'=>$originHash]);
+            $pdo->prepare('INSERT INTO historia_reacciones(historia_slug,tipo,visitante_hash,origen_hash) VALUES(:historia,:tipo,:visitante,:origen)')->execute([':historia'=>$historia,':tipo'=>$tipo,':visitante'=>$visitorHash,':origen'=>$originHash]);
         }
         salida(['ok'=>true,'mi_reaccion'=>$tipo]);
     }
@@ -176,10 +219,24 @@ try{
         if(texto_limpio($input['website']??'',200)!=='')salida(['ok'=>true,'pendiente'=>true]);
         $nombre=texto_limpio($input['nombre']??'',80);
         $comentario=texto_limpio($input['comentario']??'',700);
+        $correo=trim((string)($input['correo']??''));
+        $notificar=($input['notificar_respuestas']??false)===true||($input['notificar_respuestas']??null)===1||($input['notificar_respuestas']??null)==='1';
+        $targetId=comentario_id_valido($input['responder_a']??null);
+        if(isset($input['responder_a'])&&trim((string)$input['responder_a'])!==''&&$targetId===null)salida(['ok'=>false,'error'=>'El comentario al que respondes ya no está disponible'],422);
         if(mb_strlen($nombre)<2||mb_strlen($nombre)>80||preg_match('/https?:\/\/|www\./iu',$nombre))salida(['ok'=>false,'error'=>'Escribe un nombre válido'],422);
         if(mb_strlen($comentario)<3||mb_strlen($comentario)>700)salida(['ok'=>false,'error'=>'El comentario debe tener entre 3 y 700 caracteres'],422);
+        if($notificar&&(!filter_var($correo,FILTER_VALIDATE_EMAIL)||strlen($correo)>254))salida(['ok'=>false,'error'=>'Escribe un correo válido para activar los avisos'],422);
         preg_match_all('/(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|mx|io)\b)/iu',$comentario,$links);
         if(count($links[0]??[])>1)salida(['ok'=>false,'error'=>'El comentario contiene demasiados enlaces'],422);
+
+        $target=null;
+        if($targetId!==null){
+            $st=$pdo->prepare("SELECT c.id,c.autor_nombre,r.parent_id FROM historia_comentarios c LEFT JOIN historia_respuestas r ON r.comentario_id=c.id WHERE c.id=:id AND c.historia_slug=:historia AND c.estado='APROBADO' LIMIT 1");
+            $st->execute([':id'=>$targetId,':historia'=>$historia]);
+            $target=$st->fetch();
+            if(!$target)salida(['ok'=>false,'error'=>'El comentario al que respondes ya no está disponible'],409);
+        }
+
         $st=$pdo->prepare('SELECT COUNT(*),MAX(created_at) ultima FROM historia_comentarios WHERE origen_hash=:origen AND created_at>=DATE_SUB(NOW(),INTERVAL 30 MINUTE)');
         $st->execute([':origen'=>$originHash]);
         $rate=$st->fetch();
@@ -188,15 +245,35 @@ try{
         $st=$pdo->prepare("SELECT 1 FROM historia_comentarios WHERE historia_slug=:historia AND origen_hash=:origen AND comentario=:comentario AND created_at>=DATE_SUB(NOW(),INTERVAL 1 DAY) LIMIT 1");
         $st->execute([':historia'=>$historia,':origen'=>$originHash,':comentario'=>$comentario]);
         if($st->fetchColumn())salida(['ok'=>false,'error'=>'Ese comentario ya fue enviado'],409);
+
+        $id=uuid_v4();
         $visitorHash=$visitante!==null?hash_privado($visitante,$secret):null;
         $flags=flags_comentario($comentario);
-        $ins=$pdo->prepare("INSERT INTO historia_comentarios(historia_slug,autor_nombre,comentario,estado,origen_hash,visitante_hash,flags) VALUES(:historia,:autor,:comentario,'PENDIENTE',:origen,:visitante,:flags)");
-        $ins->execute([':historia'=>$historia,':autor'=>$nombre,':comentario'=>$comentario,':origen'=>$originHash,':visitante'=>$visitorHash,':flags'=>$flags?implode(',',$flags):null]);
-        salida(['ok'=>true,'pendiente'=>true,'mensaje'=>'Gracias. Tu comentario quedó pendiente de moderación.'],201);
+        $pdo->beginTransaction();
+        $ins=$pdo->prepare("INSERT INTO historia_comentarios(id,historia_slug,autor_nombre,comentario,estado,origen_hash,visitante_hash,flags) VALUES(:id,:historia,:autor,:comentario,'PENDIENTE',:origen,:visitante,:flags)");
+        $ins->execute([':id'=>$id,':historia'=>$historia,':autor'=>$nombre,':comentario'=>$comentario,':origen'=>$originHash,':visitante'=>$visitorHash,':flags'=>$flags?implode(',',$flags):null]);
+        if($target){
+            $rootId=trim((string)($target['parent_id']??''))!==''?(string)$target['parent_id']:(string)$target['id'];
+            $pdo->prepare('INSERT INTO historia_respuestas(comentario_id,parent_id,reply_to_id) VALUES(:comentario,:parent,:target)')->execute([':comentario'=>$id,':parent'=>$rootId,':target'=>$target['id']]);
+        }
+        if($notificar){
+            $notificationSecret=historias_notificacion_secreto($config);
+            $confirmToken=historias_confirm_token($id,$correo,$notificationSecret);
+            $pdo->prepare("INSERT INTO historia_comentario_suscripciones(comentario_id,email,estado,confirm_token_hash,confirm_expires_at) VALUES(:comentario,:email,'PENDIENTE',:token,DATE_ADD(NOW(),INTERVAL 7 DAY))")->execute([':comentario'=>$id,':email'=>$correo,':token'=>hash('sha256',$confirmToken)]);
+        }
+        $pdo->commit();
+
+        $baseMessage=$target?'Gracias. Tu respuesta quedó pendiente de moderación.':'Gracias. Tu comentario quedó pendiente de moderación.';
+        if($notificar){
+            $payload=['ok'=>true,'pendiente'=>true,'aviso_pendiente'=>true,'mensaje'=>$baseMessage.' Te enviamos un correo para confirmar los avisos de respuestas.'];
+            salida_con_tarea($payload,201,static function() use($pdo,$id,$config): void {historias_enviar_confirmacion_comentario($pdo,$id,$config);});
+        }
+        salida(['ok'=>true,'pendiente'=>true,'mensaje'=>$baseMessage],201);
     }
 
     salida(['ok'=>false,'error'=>'Acción inválida'],422);
 }catch(Throwable $e){
+    if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();
     error_log('[historias/interacciones] '.$e->getMessage());
     salida(['ok'=>false,'error'=>'No se pudo procesar la interacción'],500);
 }
