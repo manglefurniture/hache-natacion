@@ -48,6 +48,7 @@ $mustHandoff = [
     'Mis hijos quieren anotarse a clases regulares',
     '¿Cómo puede registrarse mi esposa a clases regulares?',
     'No quiero información, quiero inscribirme a clases regulares',
+    'No necesito información, quiero registrar a mi hijo en regular',
     'No quiero inscribirme a regular, quiero hablar con una persona',
 ];
 $mustStayWithSharky = [
@@ -65,6 +66,8 @@ $mustStayWithSharky = [
     '¿Hay disponibilidad por la tarde?',
     '¿Hay disponibilidad en la noche?',
     '¿Hay disponibilidad a las 8?',
+    '¿Hay disponibilidad para las 8:00?',
+    '¿Hay disponibilidad en la mañana para el intensivo?',
     '¿Tienen disponibilidad de horario por la noche?',
     '¿Tienen disponibilidad de horarios para una persona?',
     '¿Hay disponibilidad de fechas para alumnos nuevos?',
@@ -86,6 +89,8 @@ $mustStayWithSharky = [
     'Aún no quiero anotarme a clases regulares',
     'Por ahora no quiero darme de alta en mensualidad',
     'No me quiero inscribir a regular todavía',
+    'No quiero registrar a mi hijo en clases regulares, solo quiero información',
+    'Todavía no quiero inscribir a mi esposa en regular',
     '¿Dónde queda Monteverde?',
     '¿Necesito cierta capacidad física para entrar al curso?',
     '¿Qué capacidad física necesito para aprender a nadar?',
