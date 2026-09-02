@@ -91,6 +91,35 @@ function hache_sharky_whatsapp_context(PDO $pdo,string $contact,array $extra=[])
     ]);
 }
 
+function hache_sharky_whatsapp_resume_verified_state(array $state,array $context,int $now): array
+{
+    $verification=$context['verification']??null;
+    if(!is_array($verification)||($verification['verified']??false)!==true)return $state;
+    if(($state['identity']['verified']??false)!==true){
+        $state['identity']=array_replace($state['identity'],[
+            'kind'=>'student','verified'=>true,'source'=>'verification','student_id'=>$verification['student_id']??null,'name'=>$verification['name']??null,'sede_clave'=>$verification['sede_clave']??null,'status'=>$verification['status']??null,
+        ]);
+    }
+    $flow=$state['flow']??null;
+    if(!is_array($flow)||($flow['name']??'')!=='identify_student')return $state;
+    $returnTo=(string)($flow['data']['return_to']??'');
+    if($returnTo==='absence')return hache_sharky_orchestrator_flow($state,'absence','offer',[],$now);
+    return hache_sharky_orchestrator_clear_flow($state);
+}
+
+function hache_sharky_whatsapp_is_side_question(array $state,array $event): bool
+{
+    $flow=$state['flow']??null;if(!is_array($flow))return false;
+    $step=(string)($flow['step']??'');
+    if(!in_array($step,['offer','sede','course','schedule','confirm'],true))return false;
+    if(trim((string)($event['interactive_id']??''))!=='')return false;
+    $text=trim((string)($event['text']??''));if($text==='')return false;
+    $intent=hache_sharky_orchestrator_intent($text,'');
+    if(in_array($intent,['yes','no','cancel','human','absence','register_intensive'],true))return false;
+    $t=hache_sharky_orchestrator_normalize($text);
+    return str_contains($text,'?')||preg_match('/^(cuanto|como|donde|cuando|que |aceptan|puedo|tienen|hay |cual)/u',$t)===1;
+}
+
 function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');$messageId=(string)($event['id']??'');
@@ -102,10 +131,19 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
     try{
         $state=hache_sharky_db_state_load($pdo,$contact);
         $context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
-        $result=hache_sharky_orchestrate($state,$event,$context);$state=$result['state'];$decision=$result['decision'];
+        $state=hache_sharky_whatsapp_resume_verified_state($state,$context,(int)$context['now']);
         $ref=hache_sharky_orchestrator_referral($event,(int)$context['now']);
         if($ref)hache_sharky_orchestrator_store_referral($pdo,$messageId,$contactHash,$ref,($context['identity']['found']??false)?(string)$context['identity']['student_id']:null);
 
+        if(hache_sharky_whatsapp_is_side_question($state,$event)){
+            $instruction='Responde solo la duda actual de forma breve. El usuario está dentro de un proceso controlado; no pierdas ni cambies ese proceso. No vuelvas a pedir datos ya capturados.';
+            $answer=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer((string)($event['text']??''),$instruction,$state,$context));
+            $answer=rtrim($answer)."\n\nCuando quieras, seguimos donde lo dejamos.";
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+            return ['skip'=>false,'state'=>$state,'decision'=>['kind'=>'side_question','message'=>$answer,'ui'=>[],'action'=>null],'payload'=>hache_sharky_whatsapp_text_payload($contact,$answer),'action_result'=>null];
+        }
+
+        $result=hache_sharky_orchestrate($state,$event,$context);$state=$result['state'];$decision=$result['decision'];
         $verificationUrl=null;
         if(($decision['ui']['type']??'')==='verification_link'){
             $challenge=hache_sharky_verification_issue($pdo,$contact,(string)($extraContext['verification_base_url']??'https://hnatacion.com/sharky-verificar.php'));
