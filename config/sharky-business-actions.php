@@ -195,16 +195,13 @@ function hache_sharky_business_register_intensive(PDO $pdo, array $action, ?stri
 
     $business = function_exists('hache_sharky_business_values') ? hache_sharky_business_values($pdo) : [];
     $price = (float)($business['sharky_precio_intensivo'] ?? 1200);
-    $tempPassword = password_temporal_segura();
-    $passwordHash = password_hash($tempPassword, PASSWORD_DEFAULT);
-    $studentId = hache_sharky_business_uuid($pdo);
 
     $pdo->beginTransaction();
     try {
         regla_bloquear_identidades_alumnos($pdo);
         $st = $pdo->prepare('SELECT id FROM alumnos WHERE whatsapp=:w LIMIT 1');
         $st->execute([':w'=>$phone]);
-        if ($existing = $st->fetchColumn()) throw new HacheSharkyBusinessException('Este WhatsApp ya tiene un registro.', 'PHONE_ALREADY_REGISTERED', 409);
+        if ($st->fetchColumn()) throw new HacheSharkyBusinessException('Este WhatsApp ya tiene un registro.', 'PHONE_ALREADY_REGISTERED', 409);
 
         $st = $pdo->prepare("SELECT id,hora_inicio,hora_fin FROM horarios WHERE id=:h AND sede_id=:s AND activo=1 AND intensivo=1 LIMIT 1 FOR UPDATE");
         $st->execute([':h'=>$scheduleId, ':s'=>$siteId]);
@@ -218,6 +215,9 @@ function hache_sharky_business_register_intensive(PDO $pdo, array $action, ?stri
             throw new HacheSharkyBusinessException('El curso seleccionado dejó de estar disponible.', 'COURSE_UNAVAILABLE', 409);
         }
 
+        $tempPassword = password_temporal_segura();
+        $passwordHash = password_hash($tempPassword, PASSWORD_DEFAULT);
+        $studentId = hache_sharky_business_uuid($pdo);
         $courseId = $course ? (string)$course['id'] : hache_sharky_business_uuid($pdo);
         if (!$course) {
             $end = (new DateTimeImmutable($date))->modify('+18 days')->format('Y-m-d');
