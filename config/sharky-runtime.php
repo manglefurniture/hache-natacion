@@ -102,7 +102,7 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
         $lines[]='- No se pudieron consultar los horarios activos; no inventes horarios.';
     }
     try {
-        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id WHERE s.activo=1 AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND ci.fecha_fin>=CURDATE() ORDER BY ci.fecha_inicio ASC LIMIT 8")->fetchAll();
+        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id WHERE s.activo=1 AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND ci.fecha_fin>=CURDATE() ORDER BY ci.fecha_inicio ASC,s.nombre ASC")->fetchAll();
         if (!$rows) {
             $lines[]='- No hay cursos intensivos vigentes o próximos registrados.';
         } else {
@@ -112,7 +112,7 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
                 $lines[]=sprintf('  • %s: %s a %s; precio registrado $%s MXN',(string)$row['sede'],(string)$row['fecha_inicio'],(string)$row['fecha_fin'],$price);
             }
         }
-        $lines[]='- Cupos, capacidad, inscritos y alumnos por carril NO se exponen a Sharky; esas preguntas se derivan a atención humana.';
+        $lines[]='- Cupos, capacidad de grupo, inscritos y alumnos por carril NO se exponen a Sharky; esas preguntas se derivan a atención humana.';
     } catch (Throwable $e) {
         $lines[]='- No se pudieron consultar cursos vigentes; no inventes fechas.';
     }
@@ -143,7 +143,7 @@ function hache_sharky_normalize_text(string $text): string
 function hache_sharky_capacity_request(string $text): bool
 {
     $text=hache_sharky_normalize_text($text);
-    $hasExplicitCapacity = preg_match('/\b(cupo|cupos|vacante|vacantes|lugar|lugares|espacio|espacios|capacidad|lleno|llena|llenos|llenas)\b/u',$text)===1
+    $hasExplicitCapacity = preg_match('/\b(cupo|cupos|vacante|vacantes|lugar|lugares|espacio|espacios|lleno|llena|llenos|llenas)\b/u',$text)===1
         || str_contains($text,'lista de espera')
         || preg_match('/\b(cuantos?|cuantas?|numero de)\b.{0,28}\b(alumnos|personas|nadadores)\b/u',$text)===1
         || preg_match('/\b(alumnos|personas|nadadores)\b.{0,28}\b(cuantos?|cuantas?|numero de)\b/u',$text)===1
@@ -163,7 +163,9 @@ function hache_sharky_capacity_request(string $text): bool
         '/\b(curso|grupo|clase|carril)\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,15}\b(hay|caben|entran|admite|acepta|permite)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,20}\bpor carril\b/u',
-        '/\b(capacidad)\b/u',
+        '/\bcapacidad(?:\s+maxima)?\s+(?:del|de la|de los|de las)\s+(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo)\b/u',
+        '/\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo)\b.{0,20}\bcapacidad(?:\s+maxima)?\b/u',
+        '/\bcapacidad\b.{0,16}\b(tiene|admite|permite|acepta)\b.{0,14}\b(el\s+|la\s+)?(grupo|curso|clase|carril|intensivo)\b/u',
         '/\b(esta|estan)\b.{0,15}\b(lleno|llena|llenos|llenas)\b/u',
         '/\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles)\b.{0,25}\b(se\s+(lleno|llena|llenaron|llenan))\b/u',
         '/\b(se\s+(lleno|llena|llenaron|llenan))\b.{0,25}\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles)\b/u',
@@ -189,6 +191,8 @@ function hache_sharky_human_request(string $text): bool
         '/\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
         '/\b(clases regulares|regular|regulares|mensualidad)\b.{0,55}\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b/u',
         '/\b(inscribo|inscribimos|registro|registramos|anoto|anotamos|apunto|apuntamos)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b.{0,45}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(clases regulares|regular|regulares|mensualidad)\b.{0,45}\b(inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b/u',
     ];
     foreach ($patterns as $pattern) if (preg_match($pattern,$text)===1) return true;
     return false;
