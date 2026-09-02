@@ -34,6 +34,9 @@ $sedeId = (string)$sede['id'];
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     if (($me['rol'] ?? '') === 'ADMIN') {
         $cfg = $pdo->query('SELECT clave,valor,descripcion,updated_at FROM configuracion ORDER BY clave')->fetchAll();
+        // Las claves de Sharky tienen validaciones más estrictas y se administran solo
+        // desde /sharky-admin.php. No se exponen aquí para evitar dos superficies de edición.
+        $cfg = array_values(array_filter($cfg, static fn(array $row): bool => !str_starts_with((string)($row['clave'] ?? ''), 'sharky_')));
     } else {
         $visibles = ['nombre_app','dias_clase','version_app','alerta_dias_fin_intensivo','minimo_proa_mensual'];
         $marcas = implode(',', array_fill(0, count($visibles), '?'));
@@ -58,6 +61,9 @@ if ($accion === 'CONFIG') {
     $valor = trim((string)($input['valor'] ?? ''));
     if (!preg_match('/^[a-z][a-z0-9_]{1,79}$/', $clave) || mb_strlen($valor) > 500) {
         out(['ok'=>false,'error'=>'Parámetro de configuración inválido'], 422);
+    }
+    if (str_starts_with($clave, 'sharky_')) {
+        out(['ok'=>false,'error'=>'La configuración de Sharky se modifica únicamente desde Sharky Admin'], 422);
     }
     $stmt = $pdo->prepare('UPDATE configuracion SET valor=:valor,updated_by=:usuario,updated_at=NOW() WHERE clave=:clave');
     $stmt->execute([':valor'=>$valor,':usuario'=>$me['id'],':clave'=>$clave]);
