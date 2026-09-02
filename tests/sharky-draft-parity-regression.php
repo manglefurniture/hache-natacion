@@ -43,7 +43,7 @@ expect_draft_parity(!hache_sharky_draft_escalation_update($contact,'respuesta re
 if($path!==''&&is_file($path))@unlink($path);
 
 $batching=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
-expect_draft_parity(str_contains($batching,"$batch['referral']")&&str_contains($batching,"$synthetic['referral']"),'El referral del batch debe llegar al turno sintético que verá Sharky.');
+expect_draft_parity(str_contains($batching,'$batch[\'referral\']')&&str_contains($batching,'$synthetic[\'referral\']'),'El referral del batch debe llegar al turno sintético que verá Sharky.');
 
 $helper=file_get_contents(__DIR__.'/../config/sharky-draft-parity.php')?:'';
 expect_draft_parity(str_contains($helper,'UPDATE sharky_referrals SET alumno_id=:a'),'La conversión debe vincular la atribución previa con el alumno creado.');
