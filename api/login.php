@@ -21,6 +21,7 @@ try {
     if($role==='ALUMNO' && empty($user['alumno_id'])){http_response_code(403);echo json_encode(['ok'=>false,'error'=>'Este usuario alumno no está vinculado a una ficha'],JSON_UNESCAPED_UNICODE);exit;}
     if($role==='VERIFICADOR' && (empty($user['sede_id'])||(int)($user['sede_activo']??0)!==1||!in_array(strtoupper((string)($user['sede_clave']??'')),['MONTEVERDE','PALAPAS'],true))){http_response_code(403);echo json_encode(['ok'=>false,'error'=>'Este verificador no tiene una sede activa asignada'],JSON_UNESCAPED_UNICODE);exit;}
     security_rate_limit_clear('login-account',$accountKey);auth_login($user);$pdo->prepare("UPDATE usuarios SET last_login=NOW() WHERE id=:id")->execute([':id'=>$user['id']]);$safe=auth_user();
-    $redirect=!empty($safe['debe_cambiar_password'])?'/cambiar-password.php':($safe['rol']==='ALUMNO'?'/mi-cuenta.php':'/dashboard.php');
+    $pendingVerification=is_string($_SESSION['sharky_verification_token']??null)&&preg_match('/^[a-f0-9]{64}$/',(string)$_SESSION['sharky_verification_token'])===1;
+    $redirect=!empty($safe['debe_cambiar_password'])?'/cambiar-password.php':($safe['rol']==='ALUMNO'&&$pendingVerification?'/sharky-verificar.php':($safe['rol']==='ALUMNO'?'/mi-cuenta.php':'/dashboard.php'));
     echo json_encode(['ok'=>true,'mensaje'=>'Login correcto','usuario'=>$safe,'redirect'=>$redirect],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
 } catch(Throwable $e){error_log('Hache login: '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'Error interno del servidor'],JSON_UNESCAPED_UNICODE);}
