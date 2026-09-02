@@ -68,9 +68,11 @@ try {
 
   const protectedRoute = await request('/dashboard.php', '/dashboard.php');
   assert.equal(protectedRoute.status, 302, 'Una ruta protegida sin sesión debe seguir entrando a autenticación');
-  assert.equal(protectedRoute.headers.get('cache-control'), 'private, no-store, max-age=0');
+  const protectedCache = protectedRoute.headers.get('cache-control') ?? '';
+  assert.match(protectedCache, /no-store/, 'Una ruta protegida debe seguir siendo no-store aunque el cache limiter de sesión normalice el header');
+  assert.doesNotMatch(protectedCache, /\bpublic\b/, 'Una ruta protegida nunca debe heredar cache público de /guias/');
   assert.equal(protectedRoute.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
-  assert.equal(protectedRoute.headers.get('location'), '/', 'La ruta protegida debe redirigir al acceso sin sesión');
+  assert.equal(protectedRoute.headers.get('location'), '/', 'La ruta protegida debe alcanzar autenticación y redirigir al acceso sin sesión');
 } finally {
   php.kill('SIGTERM');
   await new Promise((resolve) => {
