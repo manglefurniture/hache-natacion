@@ -23,6 +23,25 @@ assert.match(source, /\/api\/sharky\.php/);
 assert.match(source, /graph\.facebook\.com/);
 assert.match(source, /\/messages'/);
 assert.match(source, /processed text message sent=/);
-assert.doesNotMatch(source, /error_log\([^\n]*(?:\$raw|\$payload|\$message\['text'\]|\$job\['text'\]|\$job\['from'\])/);
+
+assert.match(source, /smb_message_echoes/);
+assert.match(source, /message_echoes/);
+assert.match(source, /whatsapp_extract_business_echoes/);
+assert.match(source, /whatsapp_mark_human_takeover/);
+assert.match(source, /whatsapp_human_takeover_active/);
+assert.match(source, /\/var\/tmp\/hache-whatsapp-human/);
+assert.match(source, /human takeover activated/);
+assert.match(source, /inbound text skipped human_takeover=1/);
+assert.match(source, /queued text skipped human_takeover=1/);
+assert.ok(
+  source.indexOf('whatsapp_extract_business_echoes($payload)') < source.indexOf('whatsapp_extract_text_messages($payload)'),
+  'Los ecos de atención humana deben procesarse antes de encolar mensajes del cliente'
+);
+assert.ok(
+  source.indexOf('whatsapp_human_takeover_active($job[\'from\'])') < source.indexOf('whatsapp_answer_with_history($job[\'from\'], $job[\'text\'])'),
+  'Debe revalidarse el takeover antes de llamar a Sharky'
+);
+
+assert.doesNotMatch(source, /error_log\([^\n]*(?:\$raw|\$payload|\$message\['text'\]|\$job\['text'\]|\$job\['from'\]|\$echo\['to'\])/);
 
 console.log('WhatsApp webhook static checks: OK');
