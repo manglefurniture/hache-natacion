@@ -29,7 +29,7 @@ declare(strict_types=1);
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="preload" as="image" href="/assets/file_00000000ddc881fba7297eac7c62765c.png" fetchpriority="high">
   <link rel="stylesheet" href="/assets/historia-maria-del-carmen.css?v=20260828-2">
-  <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260828-1">
+  <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260902-1">
 
   <script type="application/ld+json">
   {
@@ -38,7 +38,7 @@ declare(strict_types=1);
     "headline": "Del miedo al agua a un logro de vida",
     "description": "María del Carmen cuenta cómo pasó del miedo al agua a aprender a nadar en Cancún.",
     "datePublished": "2026-08-28",
-    "dateModified": "2026-08-28",
+    "dateModified": "2026-09-02",
     "inLanguage": "es-MX",
     "mainEntityOfPage": "https://hnatacion.com/historias/maria-del-carmen.php",
     "image": [
@@ -165,7 +165,7 @@ declare(strict_types=1);
         <header class="community-heading">
           <p class="kicker blue">LA HISTORIA SIGUE EN COMUNIDAD</p>
           <h2 id="community-title">¿Qué te hizo sentir esta historia?</h2>
-          <p>Reacciona o deja unas palabras para María del Carmen y para quienes todavía están pensando en entrar al agua. Los comentarios son públicos después de ser revisados por Hache Natación.</p>
+          <p>Reacciona, comenta o responde a otras personas. Comentarios y respuestas se publican únicamente después de ser revisados por Hache Natación.</p>
         </header>
         <section class="reaction-panel" aria-label="Reacciones a la historia">
           <h3>Reacciona a esta historia</h3>
@@ -180,18 +180,21 @@ declare(strict_types=1);
         <div class="comments-layout">
           <section class="comment-form-panel">
             <h3>Deja un comentario</h3>
-            <p class="comment-help">Solo pedimos tu nombre. No publiques teléfonos, correos ni otros datos personales. Tu comentario quedará pendiente hasta que un moderador lo apruebe.</p>
+            <p class="comment-help">No publiques teléfonos, correos ni otros datos personales dentro del comentario. Si quieres recibir avisos de respuestas, puedes dejar tu correo en el campo privado y opcional de abajo.</p>
             <form class="comment-form" data-comment-form>
               <label>Tu nombre<input type="text" name="nombre" maxlength="80" autocomplete="name" required></label>
+              <label>Correo electrónico (opcional)<input type="email" name="correo" maxlength="254" autocomplete="email" inputmode="email"><span class="field-hint">Solo lo usaremos si activas los avisos de respuestas.</span></label>
+              <label class="notification-toggle"><input type="checkbox" name="notificar_respuestas" value="1"><span>Avísame por correo si alguien responde a mi comentario.</span></label>
+              <p class="notification-help">Si activas los avisos, te enviaremos un correo de confirmación. Puedes cancelarlos desde cualquier aviso y esto no te suscribe a promociones.</p>
               <label>Comentario<textarea name="comentario" maxlength="700" required></textarea></label>
               <label class="comment-honeypot" aria-hidden="true">Sitio web<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
               <button type="submit">Enviar para moderación</button>
             </form>
-            <p class="community-status" data-community-status hidden></p>
+            <p class="community-status" data-community-status role="status" aria-live="polite" hidden></p>
           </section>
           <section class="comments-panel" aria-labelledby="comments-title">
             <h3 id="comments-title">Comentarios publicados</h3>
-            <p class="comment-help">Mostramos únicamente el primer nombre de quien comenta.</p>
+            <p class="comment-help">Mostramos únicamente el primer nombre. Puedes responder a cualquier comentario publicado.</p>
             <div class="comments-list" data-comments-list aria-live="polite"><p class="comments-empty">Cargando comentarios…</p></div>
           </section>
         </div>
@@ -219,6 +222,6 @@ declare(strict_types=1);
     <p>Cancún · Quintana Roo</p>
     <a href="/privacidad/">Política de privacidad</a>
   </footer>
-  <script src="/assets/historias-interacciones.js?v=20260828-1" defer></script>
+  <script src="/assets/historias-interacciones.js?v=20260902-1" defer></script>
 </body>
 </html>

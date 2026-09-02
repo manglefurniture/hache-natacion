@@ -7,45 +7,19 @@ header('Content-Type: text/html; charset=UTF-8');
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,follow">
-  <meta name="description" content="Política de privacidad de Hache Natación para el sitio web, formularios y atención por WhatsApp.">
+  <meta name="description" content="Política de privacidad de Hache Natación para el sitio web, formularios, Historias Hache y atención por WhatsApp.">
   <title>Política de privacidad | Hache Natación</title>
   <link rel="canonical" href="https://hnatacion.com/privacidad/">
   <style>
-    :root {
-      --bg: #071521;
-      --panel: #0d2232;
-      --text: #f4f8fb;
-      --muted: #a9bdca;
-      --accent: #43c6b8;
-      --line: rgba(255,255,255,.12);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--text);
-      background: linear-gradient(180deg, #071521 0%, #0a1a27 100%);
-      line-height: 1.65;
-    }
-    main { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 72px; }
-    .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .82rem; }
-    h1 { font-size: clamp(2rem, 7vw, 3.4rem); line-height: 1.08; margin: 10px 0 12px; }
-    .lead { color: var(--muted); max-width: 740px; font-size: 1.05rem; margin-bottom: 28px; }
-    .card { background: rgba(13,34,50,.86); border: 1px solid var(--line); border-radius: 20px; padding: 26px; }
-    section + section { border-top: 1px solid var(--line); margin-top: 26px; padding-top: 26px; }
-    h2 { font-size: 1.2rem; margin: 0 0 10px; }
-    p, li { color: #d9e4eb; }
-    ul { padding-left: 22px; }
-    a { color: var(--accent); }
-    .meta { color: var(--muted); font-size: .92rem; margin-top: 26px; }
-    footer { color: var(--muted); margin-top: 30px; font-size: .9rem; }
+    :root {--bg:#071521;--panel:#0d2232;--text:#f4f8fb;--muted:#a9bdca;--accent:#43c6b8;--line:rgba(255,255,255,.12)}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:linear-gradient(180deg,#071521 0%,#0a1a27 100%);line-height:1.65}main{width:min(920px,calc(100% - 32px));margin:0 auto;padding:48px 0 72px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:.82rem}h1{font-size:clamp(2rem,7vw,3.4rem);line-height:1.08;margin:10px 0 12px}.lead{color:var(--muted);max-width:740px;font-size:1.05rem;margin-bottom:28px}.card{background:rgba(13,34,50,.86);border:1px solid var(--line);border-radius:20px;padding:26px}section+section{border-top:1px solid var(--line);margin-top:26px;padding-top:26px}h2{font-size:1.2rem;margin:0 0 10px}p,li{color:#d9e4eb}ul{padding-left:22px}a{color:var(--accent)}.meta{color:var(--muted);font-size:.92rem;margin-top:26px}footer{color:var(--muted);margin-top:30px;font-size:.9rem}
   </style>
 </head>
 <body>
 <main>
   <div class="eyebrow">Hache Natación</div>
   <h1>Política de privacidad</h1>
-  <p class="lead">Esta política explica cómo Hache Natación recopila, utiliza y protege la información personal de quienes visitan nuestro sitio, solicitan información o se comunican con nosotros por WhatsApp.</p>
+  <p class="lead">Esta política explica cómo Hache Natación recopila, utiliza y protege la información personal de quienes visitan nuestro sitio, participan en Historias Hache, solicitan información o se comunican con nosotros por WhatsApp.</p>
 
   <div class="card">
     <section>
@@ -57,7 +31,8 @@ header('Content-Type: text/html; charset=UTF-8');
 
     <section>
       <h2>2. Datos que podemos recopilar</h2>
-      <p>Dependiendo de la interacción, podemos recibir datos como nombre, número de teléfono, contenido de mensajes, interés en clases, sede u horario de preferencia, así como la información que la persona decida proporcionar voluntariamente.</p>
+      <p>Dependiendo de la interacción, podemos recibir datos como nombre, número de teléfono, correo electrónico, contenido de mensajes o comentarios, interés en clases, sede u horario de preferencia, así como la información que la persona decida proporcionar voluntariamente.</p>
+      <p>En Historias Hache, el correo electrónico es opcional y solo se solicita cuando una persona desea recibir avisos sobre respuestas a su comentario. Ese correo no se muestra públicamente.</p>
     </section>
 
     <section>
@@ -66,6 +41,8 @@ header('Content-Type: text/html; charset=UTF-8');
         <li>Responder solicitudes de información y preguntas sobre nuestros servicios.</li>
         <li>Dar seguimiento a personas interesadas en clases de natación.</li>
         <li>Gestionar conversaciones y solicitudes recibidas por WhatsApp.</li>
+        <li>Moderar comentarios y respuestas publicados en Historias Hache.</li>
+        <li>Enviar, únicamente cuando la persona lo solicita y confirma, avisos transaccionales sobre respuestas a su comentario. Este consentimiento no se utiliza para suscribirla a promociones o newsletters.</li>
         <li>Mejorar nuestros procesos de atención y servicio.</li>
         <li>Cumplir obligaciones legales o regulatorias aplicables.</li>
       </ul>
@@ -78,31 +55,37 @@ header('Content-Type: text/html; charset=UTF-8');
     </section>
 
     <section>
-      <h2>5. Proveedores y encargados de tratamiento</h2>
-      <p>Podemos utilizar proveedores tecnológicos necesarios para operar nuestros servicios, por ejemplo plataformas de mensajería, automatización, alojamiento e inteligencia artificial. Estos proveedores únicamente reciben la información necesaria para prestar el servicio correspondiente y están sujetos a sus propias obligaciones de privacidad y seguridad.</p>
+      <h2>5. Avisos de respuestas en Historias Hache</h2>
+      <p>Si eliges recibir avisos de respuestas, te enviaremos primero un correo de confirmación. Los avisos solo se activan después de esa confirmación y únicamente se envían cuando una respuesta dirigida a tu comentario ha sido aprobada por moderación.</p>
+      <p>Cada aviso incluye una opción para dejar de recibir notificaciones de ese comentario. Puedes cancelar los avisos en cualquier momento sin eliminar el comentario público.</p>
     </section>
 
     <section>
-      <h2>6. Conservación y seguridad</h2>
-      <p>Conservamos la información durante el tiempo razonablemente necesario para atender la solicitud, mantener la relación con la persona interesada o cumplir obligaciones legales. Aplicamos medidas técnicas y organizativas destinadas a reducir riesgos de acceso, alteración, pérdida o divulgación no autorizada.</p>
+      <h2>6. Proveedores y encargados de tratamiento</h2>
+      <p>Podemos utilizar proveedores tecnológicos necesarios para operar nuestros servicios, por ejemplo plataformas de mensajería, correo transaccional, automatización, alojamiento e inteligencia artificial. Estos proveedores únicamente reciben la información necesaria para prestar el servicio correspondiente y están sujetos a sus propias obligaciones de privacidad y seguridad.</p>
     </section>
 
     <section>
-      <h2>7. Derechos sobre tus datos</h2>
-      <p>Puedes solicitar acceso, rectificación, cancelación u oposición al tratamiento de tus datos (derechos ARCO), así como pedir que dejemos de utilizar tu información para fines de seguimiento. También puedes solicitar la eliminación de la información asociada a tus conversaciones, salvo cuando exista una obligación legal de conservarla. Las solicitudes pueden enviarse a <a href="mailto:privacidad@hnatacion.com">privacidad@hnatacion.com</a>.</p>
+      <h2>7. Conservación y seguridad</h2>
+      <p>Conservamos la información durante el tiempo razonablemente necesario para atender la solicitud, mantener la relación con la persona interesada, operar la función solicitada o cumplir obligaciones legales. Aplicamos medidas técnicas y organizativas destinadas a reducir riesgos de acceso, alteración, pérdida o divulgación no autorizada.</p>
     </section>
 
     <section>
-      <h2>8. Transferencias y divulgación</h2>
+      <h2>8. Derechos sobre tus datos</h2>
+      <p>Puedes solicitar acceso, rectificación, cancelación u oposición al tratamiento de tus datos (derechos ARCO), así como pedir que dejemos de utilizar tu información para fines de seguimiento. También puedes solicitar la eliminación de la información asociada a tus conversaciones o avisos, salvo cuando exista una obligación legal de conservarla. Las solicitudes pueden enviarse a <a href="mailto:privacidad@hnatacion.com">privacidad@hnatacion.com</a>.</p>
+    </section>
+
+    <section>
+      <h2>9. Transferencias y divulgación</h2>
       <p>No vendemos datos personales. La información solo podrá compartirse con proveedores indispensables para operar los servicios, por requerimiento legal o cuando sea necesario para proteger derechos y seguridad.</p>
     </section>
 
     <section>
-      <h2>9. Cambios a esta política</h2>
+      <h2>10. Cambios a esta política</h2>
       <p>Podemos actualizar esta política cuando cambien nuestros servicios, procesos o requisitos legales. La versión vigente estará siempre disponible en esta página.</p>
     </section>
 
-    <p class="meta"><strong>Última actualización:</strong> 25 de agosto de 2026.</p>
+    <p class="meta"><strong>Última actualización:</strong> 2 de septiembre de 2026.</p>
   </div>
 
   <footer><a href="/">← Volver a Hache Natación</a><br>© <?php echo date('Y'); ?> Hache Natación. Todos los derechos reservados.</footer>
