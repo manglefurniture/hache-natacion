@@ -114,6 +114,47 @@ function whatsapp_extract_text_messages(array $payload): array
     return $messages;
 }
 
+function whatsapp_extract_business_echoes(array $payload): array
+{
+    $echoes = [];
+
+    foreach (($payload['entry'] ?? []) as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        foreach (($entry['changes'] ?? []) as $change) {
+            if (!is_array($change) || ($change['field'] ?? '') !== 'smb_message_echoes') {
+                continue;
+            }
+            $value = $change['value'] ?? null;
+            if (!is_array($value)) {
+                continue;
+            }
+
+            $phoneNumberId = trim((string) ($value['metadata']['phone_number_id'] ?? ''));
+            foreach (($value['message_echoes'] ?? []) as $echo) {
+                if (!is_array($echo)) {
+                    continue;
+                }
+
+                $id = trim((string) ($echo['id'] ?? ''));
+                $to = preg_replace('/\D+/', '', (string) ($echo['to'] ?? '')) ?: '';
+                if ($id === '' || $to === '') {
+                    continue;
+                }
+
+                $echoes[] = [
+                    'id' => $id,
+                    'to' => $to,
+                    'phone_number_id' => $phoneNumberId,
+                ];
+            }
+        }
+    }
+
+    return $echoes;
+}
+
 function whatsapp_claim_message(string $messageId): bool
 {
     $dir = rtrim(sys_get_temp_dir(), '/').'/hache-whatsapp-dedupe';
@@ -147,6 +188,39 @@ function whatsapp_history_key(string $from): string
 {
     $secret = whatsapp_secret('META_APP_SECRET');
     return hash_hmac('sha256', $from, $secret !== '' ? $secret : 'hache-whatsapp-history');
+}
+
+function whatsapp_human_takeover_path(string $contact): string
+{
+    $candidates = [
+        '/var/tmp/hache-whatsapp-human',
+        rtrim(sys_get_temp_dir(), '/').'/hache-whatsapp-human',
+    ];
+
+    foreach ($candidates as $dir) {
+        if ((is_dir($dir) || @mkdir($dir, 0700, true)) && is_writable($dir)) {
+            return $dir.'/'.whatsapp_history_key($contact);
+        }
+    }
+
+    return '';
+}
+
+function whatsapp_mark_human_takeover(string $contact): bool
+{
+    $path = whatsapp_human_takeover_path($contact);
+    if ($path === '') {
+        error_log('[whatsapp-webhook] human takeover storage unavailable');
+        return false;
+    }
+
+    return @file_put_contents($path, (string) time(), LOCK_EX) !== false;
+}
+
+function whatsapp_human_takeover_active(string $contact): bool
+{
+    $path = whatsapp_human_takeover_path($contact);
+    return $path !== '' && is_file($path);
 }
 
 function whatsapp_sharky_answer(string $message, array $history): string
@@ -335,9 +409,23 @@ if ($method === 'POST') {
     error_log(sprintf('[whatsapp-webhook] accepted object=%s entries=%d', $object, $entryCount));
 
     $configuredPhoneId = whatsapp_secret('WHATSAPP_PHONE_NUMBER_ID');
+
+    foreach (whatsapp_extract_business_echoes($payload) as $echo) {
+        if ($configuredPhoneId !== '' && $echo['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $echo['phone_number_id'])) {
+            continue;
+        }
+        if (whatsapp_mark_human_takeover($echo['to'])) {
+            error_log('[whatsapp-webhook] human takeover activated');
+        }
+    }
+
     $jobs = [];
     foreach (whatsapp_extract_text_messages($payload) as $message) {
         if ($configuredPhoneId !== '' && $message['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $message['phone_number_id'])) {
+            continue;
+        }
+        if (whatsapp_human_takeover_active($message['from'])) {
+            error_log('[whatsapp-webhook] inbound text skipped human_takeover=1');
             continue;
         }
         if (!whatsapp_claim_message($message['id'])) {
@@ -351,6 +439,13 @@ if ($method === 'POST') {
     @set_time_limit(70);
 
     foreach ($jobs as $job) {
+        // Re-check after acknowledging to close the race where a human reply
+        // arrives while an inbound message is already queued for Sharky.
+        if (whatsapp_human_takeover_active($job['from'])) {
+            error_log('[whatsapp-webhook] queued text skipped human_takeover=1');
+            continue;
+        }
+
         $answer = whatsapp_answer_with_history($job['from'], $job['text']);
         if ($answer === '') {
             $answer = 'Sharky no puede responder ahora mismo. Intenta de nuevo en unos minutos.';
