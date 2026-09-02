@@ -51,7 +51,7 @@ function historias_enviar_confirmacion_comentario(PDO $pdo,string $comentarioId,
         "El enlace de confirmación vence en 7 días. Estos avisos son solo para respuestas a tu comentario; no te suscriben a promociones ni newsletters.\n\n".
         "Hache Natación";
 
-    $sent=hache_enviar_correo_transaccional($email,$subject,$body);
+    $sent=hache_enviar_correo_transaccional($email,$subject,$body,'historias-confirmacion/'.$comentarioId);
     if($sent){$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='ENVIADA',confirmacion_enviada_at=NOW(),updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);return true;}
     $pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);return false;
 }
@@ -79,7 +79,7 @@ function historias_notificar_respuesta_aprobada(PDO $pdo,string $respuestaId,arr
         "Ver la conversación:\n".$viewUrl."\n\n".
         "Dejar de recibir avisos de este comentario:\n".$cancelUrl."\n\n".
         "Hache Natación";
-    $sent=hache_enviar_correo_transaccional((string)$row['email'],$subject,$body);
+    $sent=hache_enviar_correo_transaccional((string)$row['email'],$subject,$body,'historias-respuesta/'.$respuestaId);
     if($sent){$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='ENVIADA',notificacion_enviada_at=NOW(),updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return true;}
     $pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return false;
 }
