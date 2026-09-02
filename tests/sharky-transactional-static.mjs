@@ -21,6 +21,9 @@ expect(actions.includes("SELECT id FROM alumnos WHERE whatsapp=:w LIMIT 1"),'Reg
 expect(actions.includes('FOR UPDATE'),'Registro/ausencia deben revalidar bajo bloqueo.');
 expect(actions.includes("'PENDIENTE'"),'Registro conversacional debe quedar PENDIENTE.');
 expect(actions.includes(':birth'),'Registro debe persistir fecha de nacimiento validada.');
+const txPos=actions.indexOf('$pdo->beginTransaction();',actions.indexOf('function hache_sharky_business_register_intensive'));
+const pwdPos=actions.indexOf('$tempPassword = password_temporal_segura();',actions.indexOf('function hache_sharky_business_register_intensive'));
+expect(txPos>=0&&pwdPos>txPos,'Credenciales del registro deben generarse después de entrar a la transacción/revalidación.');
 expect(executor.includes('requires_revalidation')&&executor.includes('IDENTITY_MISMATCH'),'Executor debe exigir revalidación e identidad.');
 expect(executor.includes('ACTION_IN_PROGRESS')&&executor.includes('ALREADY_COMPLETED'),'Executor debe ser idempotente.');
 expect(adapter.includes('referral'),'Adapter debe conservar referral.');
