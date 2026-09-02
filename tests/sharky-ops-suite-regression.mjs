@@ -10,6 +10,8 @@ const runtime = read('config/sharky-runtime.php');
 const database = read('config/database.php');
 const transfer = read('config/transferencia-publica.php');
 const adminApi = read('api/sharky-admin.php');
+const genericConfigApi = read('api/configuracion.php');
+const publicRegistration = read('public/registro.php');
 const adminPage = read('public/sharky-admin.php');
 const configPage = read('public/configuracion.php');
 
@@ -44,11 +46,16 @@ assert.match(runtime, /'sharky_maps_palapas'/);
 assert.match(runtime, /'sharky_pago_clabe'/);
 assert.doesNotMatch(runtime, /sharky_cupo_maximo_intensivo/);
 assert.doesNotMatch(runtime, /COUNT\(cia\.id\)|lugares calculados|total_alumnos/);
+assert.doesNotMatch(runtime, /cursos_intensivos[\s\S]{0,500}LIMIT\s+8/i);
+assert.match(runtime, /ORDER BY ci\.fecha_inicio ASC,s\.nombre ASC/);
 assert.match(runtime, /function hache_sharky_capacity_request/);
 assert.match(runtime, /function hache_sharky_human_request/);
 assert.match(runtime, /function hache_sharky_frustration/);
 assert.match(runtime, /function hache_sharky_takeover_resume_hash/);
 assert.match(runtime, /function hache_sharky_metric_increment/);
+
+assert.match(publicRegistration, /intensivo_lunes_registro\(10\)/);
+assert.match(publicRegistration, /\$intensivoPrecio\s*=\s*1200\.0/);
 
 assert.match(transfer, /hache_sharky_business_values/);
 assert.match(transfer, /sharky_pago_institucion/);
@@ -73,6 +80,11 @@ assert.match(adminApi, /go\.hnatacion\.com/);
 assert.match(adminApi, /maps\.app\.goo\.gl/);
 assert.match(adminApi, /sharky_pago_clabe/);
 assert.match(adminApi, /\$key === 'sharky_precio_intensivo'[\s\S]{0,160}1200\.0/);
+
+assert.match(genericConfigApi, /array_filter\([\s\S]{0,220}str_starts_with\([\s\S]{0,100}'sharky_'/);
+assert.match(genericConfigApi, /if \(str_starts_with\(\$clave, 'sharky_'\)\)/);
+assert.match(genericConfigApi, /únicamente desde Sharky Admin/);
+
 assert.match(adminPage, /page_require\(\['ADMIN'\]\)/);
 assert.match(adminPage, /Reactivar Sharky/);
 assert.match(adminPage, /Fuente de verdad comercial/);
