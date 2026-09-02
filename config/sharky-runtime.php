@@ -161,19 +161,17 @@ function hache_sharky_capacity_request(string $text): bool
         || preg_match('/\b(cuantos?|cuantas?|numero de)\b.{0,28}\b(alumnos|personas|nadadores)\b/u',$text)===1
         || preg_match('/\b(alumnos|personas|nadadores)\b.{0,28}\b(cuantos?|cuantas?|numero de)\b/u',$text)===1
         || preg_match('/\bpor carril\b/u',$text)===1;
-    if (!$hasExplicitCapacity) {
-        foreach ([
-            '/\bdisponibilidad\s+(de|para)\s+(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|hora|horas|fecha|fechas|dia|dias)\b/u',
-            '/\bdisponibilidad\s+(en|para)\s+(el\s+|la\s+)?(horario|horarios|turno|turnos)\b/u',
-            '/\bdisponibilidad\s+(en|por)\s+(la\s+)?(manana|tarde|noche)\b/u',
-            '/\bdisponibilidad\s+(a|para)\s+las?\s+\d{1,2}(?::\d{2})?\b/u',
-            '/\b(horario|horarios|hora|horas|fecha|fechas|dia|dias|turno|turnos|manana|tarde|noche)\b.{0,16}\b(disponibilidad|disponible|disponibles)\b/u',
-        ] as $schedulePattern) if (preg_match($schedulePattern,$text)===1) return false;
+    if (!$hasExplicitCapacity && preg_match('/\b(disponibilidad|disponible|disponibles)\b/u',$text)===1) {
+        $spokenHour='(?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciseis|diecisiete|dieciocho|diecinueve|veinte|veintiuna|veintidos|veintitres)';
+        $hasScheduleQualifier = preg_match('/\b(horario|horarios|hora|horas|fecha|fechas|dia|dias|turno|turnos|manana|tarde|noche)\b/u',$text)===1
+            || preg_match('/\blas?\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')(?:\s+y\s+(?:cuarto|media))?\b/u',$text)===1;
+        if ($hasScheduleQualifier) return false;
     }
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
-        '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(disponibilidad|lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
+        '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
         '/\b(disponibilidad)\b.{0,35}\b(intensivo|curso|grupo|clase|carril)\b/u',
+        '/\b(intensivo|curso|grupo|clase|carril)\b.{0,35}\b(disponibilidad)\b/u',
         '/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
         '/\b(curso|grupo|clase|carril)\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
@@ -191,6 +189,37 @@ function hache_sharky_capacity_request(string $text): bool
     return false;
 }
 
+function hache_sharky_regular_enrollment_request(string $text): bool
+{
+    $candidate=hache_sharky_normalize_text($text);
+    $negativeMarker='(?:no|todavia no|aun no|por ahora no|tampoco|ni)';
+    $negativeIntent='(?:(?:me|yo)\s+)?(?:(?:quiero|necesito|quisiera|deseo|pienso|planeo|voy a)\s+)?';
+    $negativeAction='(?:inscribirme|registrarme|anotarme|apuntarme|inscribirse|registrarse|anotarse|apuntarse|inscribir|registrar|anotar|apuntar|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla|darme de alta|darse de alta|dar de alta|empezar|comenzar|entrar)';
+    foreach ([
+        '/\b'.$negativeMarker.'\s+'.$negativeIntent.$negativeAction.'\b/u',
+        '/\b'.$negativeMarker.'\s+'.$negativeIntent.'(?:(?:hacer|completar|confirmar|tramitar|realizar|iniciar|finalizar)\s+)?(?:(?:mi|la|el|una|un)\s+)?(?:inscripcion|alta|registro)\b/u',
+        '/\bno\s+(?:tengo\s+)?(?:intencion|planes?)\s+de\s+'.$negativeAction.'\b/u',
+    ] as $negativePattern) {
+        $candidate=preg_replace($negativePattern,' ',$candidate)??$candidate;
+    }
+
+    $regular='(?:clases regulares|regular|regulares|mensualidad)';
+    $patterns=[
+        '/\b(quiero|quisiera|necesito|me quiero|ya quiero)\b.{0,24}\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta|empezar|comenzar|entrar)\b.{0,32}\b'.$regular.'\b/u',
+        '/\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta)\b.{0,32}\b'.$regular.'\b/u',
+        '/\b(como|donde)\b.{0,18}\b(me inscribo|me registro|puedo inscribirme|puedo registrarme|hago la inscripcion)\b.{0,32}\b'.$regular.'\b/u',
+        '/\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b.{0,55}\b'.$regular.'\b/u',
+        '/\b'.$regular.'\b.{0,55}\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b/u',
+        '/\b(inscribo|inscribimos|registro|registramos|anoto|anotamos|apunto|apuntamos)\b.{0,55}\b'.$regular.'\b/u',
+        '/\b(inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b.{0,45}\b'.$regular.'\b/u',
+        '/\b'.$regular.'\b.{0,45}\b(inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b/u',
+        '/\b(quiero|necesito|quisiera|deseo)\s+(?:(?:hacer|completar|confirmar|tramitar|realizar|iniciar|finalizar)\s+)?(?:(?:mi|la|el|una|un)\s+)?(inscripcion|alta|registro)\b.{0,40}\b'.$regular.'\b/u',
+        '/\b'.$regular.'\b.{0,45}\b(quiero|necesito|quisiera|deseo)\s+(?:(?:hacer|completar|confirmar|tramitar|realizar|iniciar|finalizar)\s+)?(?:(?:mi|la|el|una|un)\s+)?(inscripcion|alta|registro)\b/u',
+    ];
+    foreach ($patterns as $pattern) if (preg_match($pattern,$candidate)===1) return true;
+    return false;
+}
+
 function hache_sharky_human_request(string $text): bool
 {
     if (hache_sharky_capacity_request($text)) return true;
@@ -205,24 +234,7 @@ function hache_sharky_human_request(string $text): bool
     ];
     foreach ($explicitHumanPatterns as $pattern) if (preg_match($pattern,$text)===1) return true;
 
-    foreach ([
-        '/\b(no|todavia no|aun no|por ahora no)\s+(quiero|necesito|quisiera|deseo)?\s*(inscribirme|registrarme|anotarme|apuntarme|darme de alta|inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(no|todavia no|aun no|por ahora no)\s+me\s+(quiero|pienso|voy a)\s+(inscribir|registrar|anotar|apuntar|dar de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(no|todavia no|aun no|por ahora no)\s+(quiero|necesito|quisiera|deseo)\s+(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-    ] as $negatedRegularPattern) if (preg_match($negatedRegularPattern,$text)===1) return false;
-
-    $patterns=[
-        '/\b(quiero|quisiera|necesito|me quiero|ya quiero)\b.{0,24}\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta|empezar|comenzar|entrar)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(como|donde)\b.{0,18}\b(me inscribo|me registro|puedo inscribirme|puedo registrarme|hago la inscripcion)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(clases regulares|regular|regulares|mensualidad)\b.{0,55}\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b/u',
-        '/\b(inscribo|inscribimos|registro|registramos|anoto|anotamos|apunto|apuntamos)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b.{0,45}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(clases regulares|regular|regulares|mensualidad)\b.{0,45}\b(inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b/u',
-    ];
-    foreach ($patterns as $pattern) if (preg_match($pattern,$text)===1) return true;
-    return false;
+    return hache_sharky_regular_enrollment_request($text);
 }
 
 function hache_sharky_frustration(string $text): bool
