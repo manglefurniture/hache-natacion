@@ -33,6 +33,8 @@ assert.match(sharky, /Sharky SÍ puede conducir el cierre comercial del intensiv
 assert.match(sharky, /NO cierra la inscripción de clases regulares/);
 assert.match(sharky, /max_output_tokens'\s*=>\s*600/);
 
+assert.match(runtime, /'sharky_precio_intensivo'\s*=>\s*\[\s*'valor'\s*=>\s*'1200'/);
+assert.match(runtime, /\$values\['sharky_precio_intensivo'\]\s*=\s*\(string\)\$defaults\['sharky_precio_intensivo'\]\['valor'\]/);
 assert.match(runtime, /'sharky_inscripcion_monteverde'\s*=>\s*\[\s*'valor'\s*=>\s*'500'/);
 assert.match(runtime, /'sharky_kit_gorro_goggles'\s*=>\s*\[\s*'valor'\s*=>\s*'300'/);
 assert.match(runtime, /'sharky_link_registro_monteverde'/);
@@ -70,6 +72,7 @@ assert.match(adminApi, /ON DUPLICATE KEY UPDATE/);
 assert.match(adminApi, /go\.hnatacion\.com/);
 assert.match(adminApi, /maps\.app\.goo\.gl/);
 assert.match(adminApi, /sharky_pago_clabe/);
+assert.match(adminApi, /\$key === 'sharky_precio_intensivo'[\s\S]{0,160}1200\.0/);
 assert.match(adminPage, /page_require\(\['ADMIN'\]\)/);
 assert.match(adminPage, /Reactivar Sharky/);
 assert.match(adminPage, /Fuente de verdad comercial/);
