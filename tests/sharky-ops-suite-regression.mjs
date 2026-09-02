@@ -35,6 +35,7 @@ assert.match(sharky, /Sharky SÍ puede conducir el cierre comercial del intensiv
 assert.match(sharky, /NO cierra la inscripción de clases regulares/);
 assert.match(sharky, /max_output_tokens'\s*=>\s*600/);
 
+assert.match(runtime, /require_once __DIR__\.['"]\/intensivos-estado\.php['"]/);
 assert.match(runtime, /'sharky_precio_intensivo'\s*=>\s*\[\s*'valor'\s*=>\s*'1200'/);
 assert.match(runtime, /\$values\['sharky_precio_intensivo'\]\s*=\s*\(string\)\$defaults\['sharky_precio_intensivo'\]\['valor'\]/);
 assert.match(runtime, /'sharky_inscripcion_monteverde'\s*=>\s*\[\s*'valor'\s*=>\s*'500'/);
@@ -47,6 +48,9 @@ assert.match(runtime, /'sharky_pago_clabe'/);
 assert.doesNotMatch(runtime, /sharky_cupo_maximo_intensivo/);
 assert.doesNotMatch(runtime, /COUNT\(cia\.id\)|lugares calculados|total_alumnos/);
 assert.doesNotMatch(runtime, /cursos_intensivos[\s\S]{0,500}LIMIT\s+8/i);
+assert.match(runtime, /\$selectableDates\s*=\s*intensivo_lunes_registro\(10\)/);
+assert.match(runtime, /ci\.fecha_inicio IN \(\$marks\)/);
+assert.match(runtime, /Fechas de inicio que el registro público acepta actualmente/);
 assert.match(runtime, /ORDER BY ci\.fecha_inicio ASC,s\.nombre ASC/);
 assert.match(runtime, /function hache_sharky_capacity_request/);
 assert.match(runtime, /function hache_sharky_human_request/);
@@ -56,6 +60,7 @@ assert.match(runtime, /function hache_sharky_metric_increment/);
 
 assert.match(publicRegistration, /intensivo_lunes_registro\(10\)/);
 assert.match(publicRegistration, /\$intensivoPrecio\s*=\s*1200\.0/);
+assert.match(publicRegistration, /solo puede incorporarse hasta el martes/);
 
 assert.match(transfer, /hache_sharky_business_values/);
 assert.match(transfer, /sharky_pago_institucion/);
