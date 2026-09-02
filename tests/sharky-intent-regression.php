@@ -11,6 +11,15 @@ $mustHandoff = [
     '¿Cuántos alumnos hay por carril?',
     '¿Cuál es la capacidad del grupo?',
     '¿Tienen lugares disponibles en el curso?',
+    '¿Hay disponibilidad para el intensivo?',
+    '¿Quedan lugares?',
+    '¿Cuántas personas admite el grupo?',
+    'En el curso, ¿cuántos alumnos hay?',
+    '¿Hay vacantes?',
+    '¿Está lleno el grupo?',
+    '¿Hay espacio en el curso del lunes?',
+    '¿Está disponible el intensivo de septiembre?',
+    '¿Tienen lista de espera?',
 ];
 $mustStayWithSharky = [
     'Quiero hablar de precios',
@@ -18,6 +27,7 @@ $mustStayWithSharky = [
     '¿Puedo hablar de los horarios?',
     'Quiero saber si tienen goggles',
     '¿Qué horarios están disponibles?',
+    '¿Qué fechas tienen disponibles?',
     '¿Dónde queda Monteverde?',
 ];
 
