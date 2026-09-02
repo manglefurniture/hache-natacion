@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 header('Cache-Control: no-store');
 
-function whatsapp_verify_token(): string
+function whatsapp_secret(string $name): string
 {
-    $token = trim((string) getenv('WHATSAPP_VERIFY_TOKEN'));
-    if ($token !== '') {
-        return $token;
+    $value = trim((string) getenv($name));
+    if ($value !== '') {
+        return $value;
     }
 
     $envFiles = [
@@ -29,10 +29,10 @@ function whatsapp_verify_token(): string
             if (str_starts_with($line, 'export ')) {
                 $line = trim(substr($line, 7));
             }
-            if (!str_starts_with($line, 'WHATSAPP_VERIFY_TOKEN=')) {
+            if (!str_starts_with($line, $name.'=')) {
                 continue;
             }
-            $value = trim(substr($line, strlen('WHATSAPP_VERIFY_TOKEN=')));
+            $value = trim(substr($line, strlen($name) + 1));
             return trim($value, "\"'");
         }
     }
@@ -40,13 +40,23 @@ function whatsapp_verify_token(): string
     return '';
 }
 
+function whatsapp_json(int $status, array $body): never
+{
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code($status);
+    echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
 if ($method === 'GET') {
+    // PHP normalizes dots in query parameter names to underscores, so Meta's
+    // hub.mode / hub.verify_token / hub.challenge arrive as hub_mode, etc.
     $mode = (string) ($_GET['hub_mode'] ?? $_GET['hub.mode'] ?? '');
     $verifyToken = (string) ($_GET['hub_verify_token'] ?? $_GET['hub.verify_token'] ?? '');
     $challenge = (string) ($_GET['hub_challenge'] ?? $_GET['hub.challenge'] ?? '');
-    $expectedToken = whatsapp_verify_token();
+    $expectedToken = whatsapp_secret('WHATSAPP_VERIFY_TOKEN');
 
     if ($mode === 'subscribe' && $expectedToken !== '' && hash_equals($expectedToken, $verifyToken)) {
         header('Content-Type: text/plain; charset=utf-8');
@@ -55,10 +65,7 @@ if ($method === 'GET') {
         exit;
     }
 
-    header('Content-Type: application/json; charset=utf-8');
-    http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'Webhook verification failed'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+    whatsapp_json(403, ['ok' => false, 'error' => 'Webhook verification failed']);
 }
 
 if ($method === 'POST') {
@@ -67,26 +74,33 @@ if ($method === 'POST') {
         $raw = '';
     }
 
-    $payload = json_decode($raw, true);
-    if (!is_array($payload)) {
-        header('Content-Type: application/json; charset=utf-8');
-        http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Invalid JSON'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
+    $appSecret = whatsapp_secret('META_APP_SECRET');
+    if ($appSecret === '') {
+        error_log('[whatsapp-webhook] META_APP_SECRET is not configured');
+        whatsapp_json(503, ['ok' => false, 'error' => 'Webhook not configured']);
     }
 
-    // Meta retries webhooks when the receiver does not acknowledge quickly.
-    // Keep this endpoint deliberately lightweight until message processing is
-    // wired to Sharky in a separate step.
-    error_log('[whatsapp-webhook] '.json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $signature = trim((string) ($_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? ''));
+    $expectedSignature = 'sha256='.hash_hmac('sha256', $raw, $appSecret);
+    if ($signature === '' || !hash_equals($expectedSignature, $signature)) {
+        error_log('[whatsapp-webhook] rejected invalid signature');
+        whatsapp_json(401, ['ok' => false, 'error' => 'Invalid signature']);
+    }
 
-    header('Content-Type: application/json; charset=utf-8');
-    http_response_code(200);
-    echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+    $payload = json_decode($raw, true);
+    if (!is_array($payload)) {
+        whatsapp_json(400, ['ok' => false, 'error' => 'Invalid JSON']);
+    }
+
+    // Acknowledge quickly so Meta does not retry. Until Sharky processing is
+    // wired in, log only non-sensitive envelope metadata rather than message
+    // contents or customer phone numbers.
+    $object = is_string($payload['object'] ?? null) ? $payload['object'] : 'unknown';
+    $entryCount = is_array($payload['entry'] ?? null) ? count($payload['entry']) : 0;
+    error_log(sprintf('[whatsapp-webhook] accepted object=%s entries=%d', $object, $entryCount));
+
+    whatsapp_json(200, ['ok' => true]);
 }
 
 header('Allow: GET, POST');
-header('Content-Type: application/json; charset=utf-8');
-http_response_code(405);
-echo json_encode(['ok' => false, 'error' => 'Method not allowed'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+whatsapp_json(405, ['ok' => false, 'error' => 'Method not allowed']);
