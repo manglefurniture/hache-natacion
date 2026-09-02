@@ -79,7 +79,7 @@ Una pregunta lateral durante el flujo —por ejemplo “¿aceptan tarjeta?” mi
 9. Revalidar alumno/estado/duplicado dentro de transacción.
 10. Escribir `avisos_ausencia` y auditar el resultado.
 
-La creación de ausencias ya quedó centralizada: `api/ausencias-programadas.php` y Sharky llaman al mismo servicio `hache_sharky_business_create_absence()`.
+El servicio transaccional de Sharky reproduce las mismas invariantes de serialización y duplicados que protege el endpoint administrativo existente. La extracción completa hacia un único servicio de dominio se deja para la fase de integración, para no romper las regresiones actuales mientras #72 sigue moviéndose.
 
 ### Registro de intensivo
 
@@ -98,7 +98,7 @@ La creación de ausencias ya quedó centralizada: `api/ausencias-programadas.php
 13. Crear alumno `PENDIENTE`, usuario, registro público y vínculo al intensivo.
 14. Auditar resultado.
 
-El nuevo servicio transaccional usa las mismas tablas, reglas de acceso, configuración de intensivos y fuentes de negocio del sistema actual. **Pendiente estructural antes de producción:** extraer la creación común que todavía está embebida en `public/registro.php` para que formulario web y Sharky invoquen exactamente el mismo servicio de alta de intensivos, sin dos caminos de escritura equivalentes.
+El nuevo servicio transaccional usa las mismas tablas, reglas de acceso, configuración de intensivos y fuentes de negocio del sistema actual. La extracción final de la creación común de `public/registro.php` también se mantiene como tarea previa a producción.
 
 ## Persistencia
 
@@ -149,13 +149,12 @@ La suite cubre, entre otros:
 - pregunta lateral sin perder flujo;
 - takeover humano;
 - feature flag apagado por defecto;
-- firma Meta y fail-closed del laboratorio;
-- uso compartido del servicio de ausencias entre admin y Sharky.
+- firma Meta y fail-closed del laboratorio.
 
 ## Pendiente antes de producción
 
 1. Mantener el Draft sincronizado con el HEAD del PR #72 mientras éste siga cambiando.
-2. Extraer el motor de alta de intensivos que sigue embebido en `public/registro.php` para que web y Sharky compartan exactamente un único servicio.
+2. Extraer/reutilizar el motor de escritura común de registro y ausencias cuando #72 quede estable, conservando las regresiones de serialización existentes.
 3. Ejecutar la migración únicamente en un entorno controlado y probar persistencia real.
 4. Habilitar el lab de forma controlada y ejecutar pruebas end-to-end con Meta/WhatsApp.
 5. Corregir cualquier hallazgo interno.
