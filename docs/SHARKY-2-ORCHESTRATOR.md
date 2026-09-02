@@ -1,128 +1,160 @@
 # Sharky 2.0 — Conversation Orchestrator
 
-Estado: **laboratorio / no conectado al webhook de producción**.
+Estado: **laboratorio integrado detrás de feature flag / producción sin cambios por defecto**.
 
-Este módulo define la arquitectura aprobada para evolucionar Sharky desde un asistente conversacional a un agente que puede iniciar operaciones de negocio sin entregar el control de la base de datos al modelo de IA.
+Sharky 2.0 evoluciona el asistente conversacional hacia un agente capaz de ejecutar operaciones controladas sin entregar a la IA autoridad directa sobre la base de datos.
 
 ## Principio rector
 
 **Reconocer → conversar → entender → pedir permiso → controlar → revalidar → ejecutar → auditar → volver a conversar.**
 
-La conversación empieza siempre en lenguaje natural. Un flujo controlado solo comienza cuando una intención accionable fue detectada y el usuario acepta expresamente iniciar la operación.
+La conversación empieza siempre en lenguaje natural. Detectar una intención nunca basta para ejecutar una operación: Sharky la ofrece, el usuario acepta entrar al flujo controlado y vuelve a confirmar antes de cualquier cambio de negocio.
 
-## P0
+## P0 implementados
 
-1. **Referral / atribución de Meta**
-   - Capturar `referral` antes de cualquier clasificación.
-   - Conservar `source_type`, `source_id`, `source_url`, `headline`, `body`, `media_type` y `ctwa_clid` cuando Meta los entregue.
-   - Mantener first-touch y latest-touch en el estado conversacional.
-   - Persistir el referral durablemente en `sharky_referrals`.
-   - Un referral nunca convierte automáticamente a alguien en prospecto: un alumno existente también puede tocar un anuncio.
+### Referral / atribución Meta
 
-2. **Idempotencia**
-   - `message_id` de Meta es único en `sharky_message_receipts`.
-   - Cada acción usa una llave de idempotencia propia en `sharky_action_audit`.
-   - Un reintento de Meta o un doble toque nunca puede ejecutar dos operaciones.
+El adaptador conserva `referral` antes de clasificar identidad o intención. Se mantienen first-touch y latest-touch y se persisten `source_type`, `source_id`, `source_url`, `headline`, `body`, `media_type` y `ctwa_clid` cuando Meta los entrega.
 
-3. **Serialización por contacto + debounce**
-   - Una conversación por WhatsApp no puede ejecutar dos respuestas de Sharky en paralelo.
-   - Mensajes enviados en ráfaga se agrupan durante una ventana corta (2.8 s por defecto, tope duro de 8 s).
-   - “quiero información” + “buenas noches” + “soy principiante” debe producir **una** llamada al modelo y **una** respuesta.
+Un referral aporta contexto y atribución, pero no convierte automáticamente al contacto en prospecto. Un alumno existente puede tocar un anuncio y seguir siendo alumno.
 
-4. **Human takeover**
-   - Si el equipo responde manualmente, Sharky permanece en silencio.
-   - Debe revalidarse el takeover inmediatamente antes de invocar IA o ejecutar una acción.
+### Idempotencia
 
-5. **Backend como autoridad**
-   - Sharky puede proponer una acción; nunca escribe directamente en MySQL.
-   - Curso, horario, edad, identidad, estado, duplicados y disponibilidad se revalidan al ejecutar.
-   - Ninguna respuesta de IA puede considerarse confirmación de una operación.
+- `message_id` original de Meta se reclama en `sharky_message_receipts`.
+- Cada acción transaccional usa una llave independiente en `sharky_action_audit`.
+- Una acción `COMPLETED` no vuelve a ejecutarse.
+- Una acción `PENDING` no abre una ejecución paralela.
+- Una acción `FAILED` exige una nueva confirmación.
+
+### Serialización + burst batching
+
+Cada contacto usa un lock exclusivo. Los mensajes de texto enviados en ráfaga se agrupan durante una ventana corta antes de invocar la conversación IA. Las respuestas interactivas no se agrupan.
+
+El caso real que motivó esta protección —consulta del intensivo + saludo + “soy principiante” enviados casi juntos— debe convertirse en un único turno y una sola respuesta.
+
+### Human takeover
+
+El laboratorio contempla ecos de mensajes manuales de WhatsApp/Coexistence. Cuando se detecta una respuesta humana, se marca takeover y Sharky permanece en silencio. La solicitud explícita “hablar con alguien” también activa handoff.
+
+### Backend como autoridad
+
+La IA nunca escribe MySQL. El core solo produce decisiones y propuestas de acción. Antes de ejecutar se vuelven a validar identidad, estado, sede, curso, horario, fecha, duplicados y edad cuando corresponda.
 
 ## Identidad
 
 ### Número conocido
 
-Si el WhatsApp entrante coincide inequívocamente con un alumno, el backend lo marca como `student + verified + whatsapp_number`. Sharky continúa en conversación natural sin mostrar un menú de identidad.
+Si el WhatsApp coincide inequívocamente con un alumno, se reconoce silenciosamente como alumno verificado por número y la conversación continúa natural.
 
-### Número desconocido
+### Número desconocido que dice ser alumno
 
-Sharky responde primero la consulta breve y pregunta de forma natural si ya es alumno:
+Decir “soy alumno” no autentica a nadie. El sistema genera un challenge de un solo uso con TTL y guarda únicamente el hash del token. El alumno abre `/sharky-verificar.php`, inicia sesión con su cuenta de Hache Natación y confirma la vinculación de esa conversación. La página exige rol `ALUMNO`, `alumno_id` real y CSRF.
 
-- `Ya soy alumno`
-- `Soy nuevo`
-
-Decir “soy alumno” desde un número desconocido **no es autenticación**. Antes de una operación de alumno se requiere un mecanismo de verificación.
-
-### Referral + alumno conocido
-
-Se conserva simultáneamente identidad de alumno y atribución del anuncio/post. La intención actual del usuario manda sobre el contenido del anuncio.
+Si el login ocurre con una verificación pendiente, `api/login.php` devuelve al alumno a `/sharky-verificar.php`. Después de verificar, el adaptador recupera la identidad y puede retomar el flujo que estaba pendiente, por ejemplo reportar una ausencia.
 
 ## Modos
 
 ### `conversation`
 
-IA libre dentro de las reglas comerciales. Debe responder breve, contextual y sin repetir información ya resuelta.
+Conversación IA libre dentro de las reglas comerciales. El renderer exige respuestas cortas y estructuradas: no repetir presentación, responder primero la duda actual, evitar volcados masivos y hacer como máximo una pregunta útil para avanzar.
 
 ### `controlled`
 
-Estado determinista. La IA no decide opciones válidas ni ejecuta acciones. Se usan botones/listas/valores provenientes del backend. Cancelar, pedir humano o expirar el TTL devuelve la conversación a `conversation`.
+Estado determinista. Las opciones válidas provienen del backend y se renderizan como botones/listas reales de WhatsApp. Cancelar, pedir humano o expirar el TTL devuelve la conversación a modo natural.
 
-## Flujos iniciales
+Una pregunta lateral durante el flujo —por ejemplo “¿aceptan tarjeta?” mientras se está confirmando un registro— se responde sin destruir el estado controlado; después se ofrece continuar donde quedó.
+
+## Flujos transaccionales
 
 ### Reportar ausencia
 
-1. Detectar intención en conversación.
-2. Preguntar `¿Quieres que registre tu ausencia?`.
-3. Confirmación positiva → pedir fecha.
-4. Resolver fecha relativa a fecha concreta.
-5. Mostrar resumen y pedir confirmación final.
-6. Emitir `create_absence` con `requires_revalidation=true`.
-7. El adaptador valida identidad/alumno/sede/duplicado y ejecuta.
+1. Detectar intención conversacional.
+2. Preguntar si desea registrar la ausencia.
+3. Aceptación explícita.
+4. Pedir/normalizar fecha.
+5. Mostrar resumen.
+6. Confirmación final.
+7. Emitir `create_absence` con `requires_revalidation=true`.
+8. Revalidar identidad contra el número conocido o challenge de portal.
+9. Revalidar alumno/estado/duplicado dentro de transacción.
+10. Escribir `avisos_ausencia` y auditar el resultado.
 
 ### Registro de intensivo
 
-1. Orientación comercial normal.
-2. Preguntar `¿Quieres que te ayude a registrarte?`.
-3. Sí → flujo controlado.
+1. Orientación comercial natural.
+2. Preguntar si desea registrarse.
+3. Aceptación explícita.
 4. Sede mediante botones.
-5. Curso/fecha mediante lista desde backend.
-6. Horario mediante lista desde backend.
+5. Curso/fecha mediante lista generada con opciones activas del backend.
+6. Horario mediante lista real.
 7. Nombre completo.
-8. Fecha de nacimiento; edad mínima validada deterministicamente.
+8. Fecha de nacimiento y edad mínima determinista.
 9. Resumen.
 10. Confirmación final.
 11. Emitir `register_intensive` con `requires_revalidation=true`.
-12. El adaptador final debe reutilizar el motor de registro público; no debe existir una segunda implementación de las reglas de alta.
+12. Revalidar teléfono, sede, curso/fecha y horario dentro de transacción.
+13. Crear alumno `PENDIENTE`, usuario, registro público y vínculo al intensivo.
+14. Auditar resultado.
 
-## Situaciones cubiertas por diseño
+El nuevo servicio transaccional usa las mismas tablas, reglas de acceso, configuración de intensivos y fuentes de negocio del sistema actual. **Pendiente estructural antes de producción:** extraer la creación común que todavía está embebida en `public/registro.php` y `api/ausencias-programadas.php` para que web/admin/Sharky invoquen exactamente un único servicio de dominio en vez de mantener dos caminos de escritura equivalentes.
 
-- alumno desde otro número;
-- alumno que tocó un anuncio;
-- prospecto nuevo;
-- identidad no verificada;
-- ausencia;
-- cancelación en cualquier paso;
-- humano interviene;
-- doble entrega de webhook;
-- mensajes rápidos;
-- estado controlado expirado;
-- curso/horario que cambia antes de confirmar;
-- menor de edad;
-- fallo de backend antes de ejecutar;
-- first-touch/latest-touch de campañas.
+## Persistencia
 
-## Persistencia y privacidad
+La migración aditiva `database/migrations/20260902_sharky_orchestrator.sql` prepara:
 
-Se persiste durablemente solo lo necesario para idempotencia, atribución y auditoría. El número de WhatsApp se representa mediante `contact_hash`; el log de acciones guarda hash del payload, no el payload con datos personales.
+- `sharky_message_receipts`
+- `sharky_referrals`
+- `sharky_conversation_state`
+- `sharky_identity_challenges`
+- `sharky_action_audit`
 
-El estado conversacional temporal vive en `/var/tmp/hache-sharky-state` con permisos restrictivos y expira. Si se pierde, la operación falla cerrada y se vuelve a confirmar; nunca se reconstruye una acción por suposición.
+El estado conversacional puede persistirse en BD con expiración. Si esas tablas aún no existen, el laboratorio conserva el fallback local restrictivo utilizado durante desarrollo. Los registros de orquestación usan `contact_hash`; no agregan una columna con el número de WhatsApp crudo.
 
-## Estrategia de integración
+**No ejecutar esta migración en producción hasta la prueba controlada del adaptador.**
 
-Este PR está apilado sobre el PR #72 y no cambia todavía la ruta viva de WhatsApp. Primero se valida el core con pruebas deterministas que no llaman OpenAI ni Codex. Cuando #72 quede estable:
+## Adaptador WhatsApp de laboratorio
 
-1. sincronizar la rama con el HEAD de #72;
-2. extraer/reutilizar los servicios reales de registro/ausencia;
-3. conectar el adaptador del webhook al orquestador;
-4. ejecutar pruebas end-to-end controladas;
-5. solicitar revisión de Codex **solo al final**.
+`public/api/whatsapp-orchestrator-lab.php` implementa:
+
+- verificación del webhook;
+- validación de `X-Hub-Signature-256` con `META_APP_SECRET`;
+- extracción de texto, botones, listas y referral;
+- burst batching;
+- persistencia e idempotencia;
+- botones/listas Meta de salida;
+- ejecución transaccional;
+- takeover humano;
+- fail-closed si la BD no está disponible.
+
+El router `api/whatsapp-webhook.php` usa el laboratorio **solo** con `SHARKY_ORCHESTRATOR_LAB_ENABLED=1`. Sin ese flag continúa enviando a `public/api/whatsapp-webhook-v2.php`, por lo que el comportamiento productivo actual no cambia.
+
+## Pruebas sin OpenAI/Codex
+
+La suite cubre, entre otros:
+
+- first-touch/latest-touch y alumno que llegó desde anuncio;
+- número conocido/desconocido;
+- verificación desde otro número;
+- ausencia completa y duplicados;
+- registro intensivo completo;
+- edad mínima;
+- cancelación;
+- flujo expirado;
+- cambio de opciones antes de confirmar;
+- mensajes Meta duplicados;
+- ráfaga de tres mensajes → un turno;
+- límites de 3 botones y 10 filas;
+- pregunta lateral sin perder flujo;
+- takeover humano;
+- feature flag apagado por defecto;
+- firma Meta y fail-closed del laboratorio.
+
+## Pendiente antes de producción
+
+1. Mantener el Draft sincronizado con el HEAD del PR #72 mientras éste siga cambiando.
+2. Extraer el motor de escritura común de registro/ausencias para eliminar la duplicación estructural entre canales.
+3. Ejecutar la migración únicamente en un entorno controlado y probar persistencia real.
+4. Habilitar el lab de forma controlada y ejecutar pruebas end-to-end con Meta/WhatsApp.
+5. Corregir cualquier hallazgo interno.
+6. Solicitar revisión de Codex **solo al final**, con nuestra suite ya verde.
+7. Tras aprobación, integrar gradualmente el adaptador en la ruta productiva.
