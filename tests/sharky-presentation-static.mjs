@@ -10,5 +10,9 @@ assert.match(source, /viñetas con “•”/);
 assert.match(source, /PRIMERA RESPUESTA OBLIGATORIA/);
 assert.match(source, /No vuelvas a presentarte en los siguientes turnos/);
 assert.match(source, /'max_output_tokens' => 320/);
+assert.match(source, /Monteverde: \$500 MXN/);
+assert.match(source, /Kit de gorro \+ goggles: \$300 MXN/);
+assert.doesNotMatch(source, /Monteverde: \$300 MXN/);
+assert.doesNotMatch(source, /Kit de gorro \+ goggles: \$350 MXN/);
 
 console.log('Sharky presentation static checks: OK');
