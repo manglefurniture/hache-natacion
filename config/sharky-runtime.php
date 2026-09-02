@@ -139,11 +139,18 @@ function hache_sharky_capacity_request(string $text): bool
 {
     $text=hache_sharky_normalize_text($text);
     foreach ([
-        '/\b(cupo|cupos)\b/u',
+        '/\b(cupo|cupos|vacante|vacantes)\b/u',
+        '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(disponibilidad|lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
+        '/\b(disponibilidad)\b.{0,35}\b(intensivo|curso|grupo|clase|carril)\b/u',
         '/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',
-        '/\b(cuantos?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
-        '/\b(cuantos?|numero de)\b.{0,20}\bpor carril\b/u',
-        '/\b(capacidad)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
+        '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
+        '/\b(curso|grupo|clase|carril)\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
+        '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,15}\b(hay|caben|entran|admite|acepta|permite)\b/u',
+        '/\b(cuantos?|cuantas?|numero de)\b.{0,20}\bpor carril\b/u',
+        '/\b(capacidad)\b/u',
+        '/\b(esta|estan)\b.{0,15}\b(lleno|llena|llenos|llenas)\b/u',
+        '/\b(esta|estan|hay)\b.{0,12}\b(disponible|disponibles)\b.{0,20}\b(curso|intensivo|grupo)\b/u',
+        '/\blista de espera\b/u',
     ] as $pattern) if (preg_match($pattern,$text)===1) return true;
     return false;
 }
