@@ -102,13 +102,15 @@ assert.match(notifications,/hash_hmac\('sha256'/,'Los enlaces deben estar firmad
 assert.match(notifications,/confirmacion_estado='ENVIANDO'/,'La confirmación debe reclamarse antes de contactar al proveedor');
 assert.match(notifications,/notificacion_estado='ENVIANDO'/,'El envío debe reclamarse antes de llamar al proveedor');
 assert.match(notifications,/notificacion_intentos<3/,'Los reintentos deben tener límite');
-assert.match(notifications,/JOIN historia_comentarios root ON root\.id=r\.parent_id AND root\.estado='APROBADO'/,'No debe enviarse un aviso si el hilo raíz dejó de ser público');
+assert.match(notifications,/EXISTS\(SELECT 1 FROM historia_comentarios root WHERE root\.id=historia_respuestas\.parent_id AND root\.estado='APROBADO'\)/,'El claim debe exigir que la raíz siga pública');
+assert.match(notifications,/SELECT id,estado FROM historia_comentarios WHERE id IN \(:root,:target,:reply\) ORDER BY id FOR UPDATE/,'El envío debe serializar cambios de visibilidad del hilo');
+assert.match(notifications,/SELECT email FROM historia_comentario_suscripciones WHERE comentario_id=:id AND estado='ACTIVA' FOR UPDATE/,'La baja debe serializarse con cualquier envío pendiente');
 assert.match(notifications,/historias_reintentar_correo_comentario/,'Debe existir una ruta explícita para reintentar fallos transitorios');
 assert.match(notifications,/historias-confirmacion\//,'La confirmación debe reutilizar una clave idempotente estable');
 assert.match(notifications,/historias-respuesta\//,'El aviso de respuesta debe reutilizar una clave idempotente estable');
 assert.match(notifications,/\$viewUrl=historias_url_comentario\(\(string\)\$row\['historia_slug'\],\$respuestaId\)/,'El aviso debe enlazar la respuesta aprobada que originó el correo');
-assert.match(notifications,/c\.estado='APROBADO'/,'Una respuesta solo puede notificar después de aprobarse');
-assert.match(notifications,/s\.estado='ACTIVA'/,'Solo un opt-in confirmado puede recibir respuesta');
+assert.match(notifications,/\(\$states\[\$respuestaId\]\?\?null\)!=='APROBADO'/,'La respuesta debe seguir aprobada justo antes del envío');
+assert.match(notifications,/s\.estado='ACTIVA'/,'Solo un opt-in confirmado puede alcanzar el claim de respuesta');
 assert.match(notifications,/no te suscriben a promociones ni newsletters/);
 assert.match(notifications,/Dejar de recibir avisos de este comentario/);
 assert.doesNotMatch(notifications,/error_log\([^\n]*(?:email|correo|body)/i,'No se deben registrar cuerpos o correos en logs');
