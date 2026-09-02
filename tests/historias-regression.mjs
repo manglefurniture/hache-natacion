@@ -39,6 +39,7 @@ assert.match(repliesMigration,/email VARCHAR\(254\) NOT NULL/,'El correo opciona
 assert.match(repliesMigration,/estado ENUM\('PENDIENTE','ACTIVA','CANCELADA'\)/,'El consentimiento debe ser confirmable y cancelable');
 assert.match(repliesMigration,/confirm_token_hash CHAR\(64\) NOT NULL/,'El token de confirmación debe persistirse solo como hash');
 assert.match(repliesMigration,/notificacion_estado ENUM\('NO_APLICA','PENDIENTE','ENVIANDO','ENVIADA','FALLO'\)/,'El envío debe tener un estado persistente/idempotente');
+assert.match(repliesMigration,/confirmacion_estado ENUM\('PENDIENTE','ENVIANDO','ENVIADA','FALLO'\)/,'El double opt-in también debe reclamarse idempotentemente');
 assert.match(migrator,/20260902_historias_respuestas_notificaciones\.sql/,'El migrador de Historias debe aplicar la extensión nueva');
 
 assert.match(publicApi,/const HISTORIAS_PUBLICAS=\['maria-del-carmen'\]/);
@@ -59,6 +60,9 @@ assert.match(publicApi,/\$pdo->commit\(\);\$baseMessage=/,'Los efectos por corre
 assert.match(publicApi,/salida_con_tarea/,'La respuesta HTTP debe poder terminar antes del correo transaccional');
 assert.match(publicApi,/estado='APROBADO'/,'Solo comentarios aprobados deben salir en la lectura pública');
 assert.match(publicApi,/respuestas'=>\[\]/,'La lectura pública debe exponer respuestas agrupadas');
+assert.match(publicApi,/r\.parent_id IN \(/,'Las respuestas deben limitarse a los hilos raíz realmente mostrados antes del LIMIT');
+assert.match(publicApi,/respuestas_habilitadas/,'La API debe declarar si la migración nueva está disponible');
+assert.match(publicApi,/information_schema\.TABLES/,'El código nuevo debe degradar con seguridad antes de aplicar la migración');
 assert.doesNotMatch(publicApi,/SELECT[^;]+s\.email[^;]+salida/si,'La API pública no debe exponer correos de suscripción');
 assert.match(publicApi,/demasiados enlaces/,'Debe existir filtro básico de enlaces');
 assert.match(publicApi,/lenguaje_revisar/,'Debe existir señal básica para revisión de lenguaje');
@@ -79,6 +83,7 @@ assert.match(client,/notificar_respuestas: formData\.get\('notificar_respuestas'
 assert.match(client,/email\.required = notify\.checked/,'El correo debe ser obligatorio solo al pedir avisos');
 assert.match(client,/reply-form-wrap/,'Debe existir formulario de respuesta contextual');
 assert.match(client,/comentario-\$\{item\.id\}/,'Los comentarios necesitan anclas estables para el enlace del correo');
+assert.match(client,/setFeatureAvailability\(data\.respuestas_habilitadas === true\)/,'La UI debe ocultar replies/avisos mientras falte la migración');
 assert.match(styles,/\.comment-replies/);
 assert.match(styles,/\.notification-toggle/);
 assert.match(styles,/:focus-visible/,'Los controles nuevos deben conservar foco visible');
@@ -86,8 +91,11 @@ assert.match(styles,/:focus-visible/,'Los controles nuevos deben conservar foco 
 assert.match(notifications,/historias_confirm_token/);
 assert.match(notifications,/historias_cancel_token/);
 assert.match(notifications,/hash_hmac\('sha256'/,'Los enlaces deben estar firmados');
+assert.match(notifications,/confirmacion_estado='ENVIANDO'/,'La confirmación debe reclamarse antes de contactar al proveedor');
 assert.match(notifications,/notificacion_estado='ENVIANDO'/,'El envío debe reclamarse antes de llamar al proveedor');
 assert.match(notifications,/notificacion_intentos<3/,'Los reintentos deben tener límite');
+assert.match(notifications,/JOIN historia_comentarios root ON root\.id=r\.parent_id AND root\.estado='APROBADO'/,'No debe enviarse un aviso si el hilo raíz dejó de ser público');
+assert.match(notifications,/historias_reintentar_correo_comentario/,'Debe existir una ruta explícita para reintentar fallos transitorios');
 assert.match(notifications,/c\.estado='APROBADO'/,'Una respuesta solo puede notificar después de aprobarse');
 assert.match(notifications,/s\.estado='ACTIVA'/,'Solo un opt-in confirmado puede recibir respuesta');
 assert.match(notifications,/no te suscriben a promociones ni newsletters/);
@@ -97,6 +105,7 @@ assert.doesNotMatch(notifications,/error_log\([^\n]*(?:email|correo|body)/i,'No 
 assert.match(notificationPage,/X-Robots-Tag: noindex, nofollow, noarchive/);
 assert.match(notificationPage,/hash\('sha256',\$token\)/,'La confirmación debe buscar por hash y no por token en claro');
 assert.match(notificationPage,/hash_equals\(\$expected,\$token\)/,'La cancelación debe validar el token en tiempo constante');
+assert.match(notificationPage,/method="post" action="\/historias\/notificaciones\.php"/,'Confirmar o cancelar debe requerir un POST explícito');
 assert.match(notificationPage,/estado='ACTIVA'/);
 assert.match(notificationPage,/estado='CANCELADA'/);
 assert.match(notificationPage,/confirm_expires_at/,'La confirmación debe expirar');
@@ -108,10 +117,13 @@ assert.match(mailer,/HACHE_RESEND_API_KEY/);
 assert.match(moderation,/page_require\(\['ADMIN','VERIFICADOR'\]\)/);
 assert.match(moderation,/Respuesta a \$\{item\.reply_to_autor/,'Moderación debe mostrar contexto de la respuesta');
 assert.match(moderation,/avisos: \$\{String\(item\.aviso_estado\)/,'Moderación puede mostrar estado de avisos sin mostrar correo');
-assert.doesNotMatch(moderation,/item\.email|item\.correo/,'Moderación no debe renderizar el correo privado');
+assert.match(moderation,/REINTENTAR_CORREO/,'Moderación debe ofrecer el reintento explícito cuando corresponda');
+assert.doesNotMatch(moderation,/item\.(?:email|correo)(?![_a-zA-Z0-9])/,'Moderación no debe renderizar el correo privado');
 assert.match(moderationApi,/auth_require\(\['ADMIN','VERIFICADOR'\]\)/);
 assert.match(moderationApi,/auth_csrf_validate/,'La moderación debe validar CSRF');
 assert.match(moderationApi,/historias_notificar_respuesta_aprobada/,'La notificación debe dispararse desde la aprobación');
+assert.match(moderationApi,/REINTENTAR_CORREO/,'La API de moderación debe soportar el reintento explícito');
+assert.match(moderationApi,/information_schema\.TABLES/,'La moderación debe seguir funcionando antes de aplicar la migración');
 assert.doesNotMatch(moderationApi,/s\.email/,'La API de moderación no debe devolver el correo privado');
 for(const action of ['APROBAR','RECHAZAR','OCULTAR','ELIMINAR','BLOQUEAR_ORIGEN','DESBLOQUEAR_ORIGEN'])assert.ok(moderationApi.includes(action),`Falta acción de moderación ${action}`);
 
