@@ -38,6 +38,18 @@ function mod_extension_disponible(PDO $pdo): bool
     $st=$pdo->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('historia_respuestas','historia_comentario_suscripciones')");
     return (int)$st->fetchColumn()===2;
 }
+function confirmacion_vigente(mixed $expiresAt): bool
+{
+    $value=trim((string)$expiresAt);if($value==='')return false;$timestamp=strtotime($value);return $timestamp!==false&&$timestamp>=time();
+}
+function correo_reintentable_detalle(PDO $pdo,string $id): bool
+{
+    $st=$pdo->prepare("SELECT c.estado,r.reply_to_id,r.notificacion_estado,r.notificacion_intentos,s.estado aviso_estado,s.confirmacion_estado,s.confirmacion_intentos,s.confirm_expires_at FROM historia_comentarios c LEFT JOIN historia_respuestas r ON r.comentario_id=c.id LEFT JOIN historia_comentario_suscripciones s ON s.comentario_id=c.id WHERE c.id=:id LIMIT 1");
+    $st->execute([':id'=>$id]);$item=$st->fetch();if(!$item||$item['estado']!=='APROBADO')return false;
+    $replyRetry=$item['reply_to_id']!==null&&!in_array((string)$item['notificacion_estado'],['ENVIADA','NO_APLICA'],true)&&(int)$item['notificacion_intentos']<3;
+    $confirmRetry=$item['aviso_estado']==='PENDIENTE'&&!in_array((string)$item['confirmacion_estado'],['ENVIADA'],true)&&(int)$item['confirmacion_intentos']<3&&confirmacion_vigente($item['confirm_expires_at']);
+    return $replyRetry||$confirmRetry;
+}
 
 try{
     $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));$extension=mod_extension_disponible($pdo);
@@ -46,15 +58,16 @@ try{
         foreach($pdo->query('SELECT estado,COUNT(*) total FROM historia_comentarios GROUP BY estado')->fetchAll() as $row){if(isset($counts[$row['estado']]))$counts[$row['estado']]=(int)$row['total'];}
         $order=$estado==='PENDIENTE'?'ASC':'DESC';
         if($extension){
-            $sql="SELECT c.id,c.historia_slug,c.autor_nombre,c.comentario,c.estado,c.flags,c.created_at,c.moderado_at,c.moderado_por,r.parent_id,r.reply_to_id,r.notificacion_estado,r.notificacion_intentos,target.autor_nombre reply_to_autor,target.comentario reply_to_comentario,s.estado aviso_estado,s.confirmacion_estado,s.confirmacion_intentos,EXISTS(SELECT 1 FROM historia_bloqueos b WHERE b.origen_hash=c.origen_hash AND b.activo=1) origen_bloqueado FROM historia_comentarios c LEFT JOIN historia_respuestas r ON r.comentario_id=c.id LEFT JOIN historia_comentarios target ON target.id=r.reply_to_id LEFT JOIN historia_comentario_suscripciones s ON s.comentario_id=c.id WHERE c.estado=:estado ORDER BY c.created_at {$order} LIMIT 100";
+            $sql="SELECT c.id,c.historia_slug,c.autor_nombre,c.comentario,c.estado,c.flags,c.created_at,c.moderado_at,c.moderado_por,r.parent_id,r.reply_to_id,r.notificacion_estado,r.notificacion_intentos,target.autor_nombre reply_to_autor,target.comentario reply_to_comentario,s.estado aviso_estado,s.confirmacion_estado,s.confirmacion_intentos,s.confirm_expires_at,EXISTS(SELECT 1 FROM historia_bloqueos b WHERE b.origen_hash=c.origen_hash AND b.activo=1) origen_bloqueado FROM historia_comentarios c LEFT JOIN historia_respuestas r ON r.comentario_id=c.id LEFT JOIN historia_comentarios target ON target.id=r.reply_to_id LEFT JOIN historia_comentario_suscripciones s ON s.comentario_id=c.id WHERE c.estado=:estado ORDER BY c.created_at {$order} LIMIT 100";
         }else{
-            $sql="SELECT c.id,c.historia_slug,c.autor_nombre,c.comentario,c.estado,c.flags,c.created_at,c.moderado_at,c.moderado_por,NULL parent_id,NULL reply_to_id,NULL notificacion_estado,0 notificacion_intentos,NULL reply_to_autor,NULL reply_to_comentario,NULL aviso_estado,NULL confirmacion_estado,0 confirmacion_intentos,EXISTS(SELECT 1 FROM historia_bloqueos b WHERE b.origen_hash=c.origen_hash AND b.activo=1) origen_bloqueado FROM historia_comentarios c WHERE c.estado=:estado ORDER BY c.created_at {$order} LIMIT 100";
+            $sql="SELECT c.id,c.historia_slug,c.autor_nombre,c.comentario,c.estado,c.flags,c.created_at,c.moderado_at,c.moderado_por,NULL parent_id,NULL reply_to_id,NULL notificacion_estado,0 notificacion_intentos,NULL reply_to_autor,NULL reply_to_comentario,NULL aviso_estado,NULL confirmacion_estado,0 confirmacion_intentos,NULL confirm_expires_at,EXISTS(SELECT 1 FROM historia_bloqueos b WHERE b.origen_hash=c.origen_hash AND b.activo=1) origen_bloqueado FROM historia_comentarios c WHERE c.estado=:estado ORDER BY c.created_at {$order} LIMIT 100";
         }
         $st=$pdo->prepare($sql);$st->execute([':estado'=>$estado]);$items=$st->fetchAll();
         foreach($items as &$item){
             $replyRetry=$item['reply_to_id']!==null&&$item['estado']==='APROBADO'&&!in_array((string)$item['notificacion_estado'],['ENVIADA','NO_APLICA'],true)&&(int)$item['notificacion_intentos']<3;
-            $confirmRetry=$item['aviso_estado']==='PENDIENTE'&&$item['estado']==='APROBADO'&&!in_array((string)$item['confirmacion_estado'],['ENVIADA'],true)&&(int)$item['confirmacion_intentos']<3;
+            $confirmRetry=$item['aviso_estado']==='PENDIENTE'&&$item['estado']==='APROBADO'&&!in_array((string)$item['confirmacion_estado'],['ENVIADA'],true)&&(int)$item['confirmacion_intentos']<3&&confirmacion_vigente($item['confirm_expires_at']);
             $item['correo_reintentable']=$extension&&($replyRetry||$confirmRetry);
+            unset($item['confirm_expires_at']);
         }unset($item);
         mod_out(['ok'=>true,'estado'=>$estado,'conteos'=>$counts,'comentarios'=>$items,'csrf'=>auth_csrf_token(),'extension_habilitada'=>$extension]);
     }
@@ -85,6 +98,7 @@ try{
     if($accion==='REINTENTAR_CORREO'){
         if(!$extension)mod_out(['ok'=>false,'error'=>'La extensión de respuestas todavía no está migrada.'],503);
         if($comment['estado']!=='APROBADO')mod_out(['ok'=>false,'error'=>'Solo se reintentan correos de comentarios aprobados.'],409);
+        if(!correo_reintentable_detalle($pdo,$id))mod_out(['ok'=>false,'error'=>'Este correo ya no tiene un reintento disponible.'],409);
         mod_out_after(['ok'=>true,'reintento_iniciado'=>true],200,static function() use($pdo,$id,$config): void {historias_reintentar_correo_comentario($pdo,$id,$config);});
     }
 
