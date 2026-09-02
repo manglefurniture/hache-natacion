@@ -27,33 +27,42 @@ function historias_url_comentario(string $slug,string $comentarioId): string{ret
 
 function historias_enviar_confirmacion_comentario(PDO $pdo,string $comentarioId,array $config): bool
 {
-    $claim=$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='ENVIANDO',confirmacion_intentos=confirmacion_intentos+1,updated_at=NOW() WHERE comentario_id=:id AND estado='PENDIENTE' AND confirm_expires_at>=NOW() AND confirmacion_intentos<3 AND (confirmacion_estado IN ('PENDIENTE','FALLO') OR (confirmacion_estado='ENVIANDO' AND updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE)))");
-    $claim->execute([':id'=>$comentarioId]);
-    if($claim->rowCount()!==1)return false;
+    try{
+        $pdo->beginTransaction();
+        // El UPDATE reclama y bloquea la suscripción hasta terminar el intento. Así una baja
+        // concurrente gana antes del claim (y no se envía) o espera a que finalice el envío.
+        $claim=$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='ENVIANDO',confirmacion_intentos=confirmacion_intentos+1,updated_at=NOW() WHERE comentario_id=:id AND estado='PENDIENTE' AND confirm_expires_at>=NOW() AND confirmacion_intentos<3 AND (confirmacion_estado IN ('PENDIENTE','FALLO') OR (confirmacion_estado='ENVIANDO' AND updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE)))");
+        $claim->execute([':id'=>$comentarioId]);
+        if($claim->rowCount()!==1){$pdo->rollBack();return false;}
 
-    $st=$pdo->prepare("SELECT c.historia_slug,c.autor_nombre,c.comentario,s.email FROM historia_comentarios c JOIN historia_comentario_suscripciones s ON s.comentario_id=c.id WHERE c.id=:id AND s.estado='PENDIENTE' LIMIT 1");
-    $st->execute([':id'=>$comentarioId]);$row=$st->fetch();
-    if(!$row){$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);return false;}
+        $st=$pdo->prepare("SELECT c.historia_slug,c.autor_nombre,c.comentario,s.email FROM historia_comentarios c JOIN historia_comentario_suscripciones s ON s.comentario_id=c.id WHERE c.id=:id AND s.estado='PENDIENTE' LIMIT 1 FOR UPDATE");
+        $st->execute([':id'=>$comentarioId]);$row=$st->fetch();
+        if(!$row){$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);$pdo->commit();return false;}
 
-    try{$secret=historias_notificacion_secreto($config);}catch(Throwable $e){
-        error_log('[historias-notificaciones] No se pudo construir el token de confirmación: '.$e->getMessage());
-        $pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);return false;
+        try{$secret=historias_notificacion_secreto($config);}catch(Throwable $e){
+            error_log('[historias-notificaciones] No se pudo construir el token de confirmación: '.$e->getMessage());
+            $pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);$pdo->commit();return false;
+        }
+        $email=(string)$row['email'];$token=historias_confirm_token($comentarioId,$email,$secret);$cancelToken=historias_cancel_token($comentarioId,$email,$secret);
+        $confirmUrl='https://hnatacion.com/historias/notificaciones.php?accion=confirmar&token='.rawurlencode($token);
+        $cancelUrl='https://hnatacion.com/historias/notificaciones.php?accion=cancelar&comentario='.rawurlencode($comentarioId).'&token='.rawurlencode($cancelToken);
+        $subject='Confirma los avisos de respuestas · Historias Hache';
+        $body="Hola ".trim((string)$row['autor_nombre']).",\n\n".
+            "Pediste recibir un aviso cuando alguien responda a tu comentario en Historias Hache.\n\n".
+            "Tu comentario:\n“".historias_resumen_texto((string)$row['comentario'])."”\n\n".
+            "Confirma los avisos aquí:\n".$confirmUrl."\n\n".
+            "Si no solicitaste estos avisos, puedes cancelarlos aquí:\n".$cancelUrl."\n\n".
+            "El enlace de confirmación vence en 7 días. Estos avisos son solo para respuestas a tu comentario; no te suscriben a promociones ni newsletters.\n\n".
+            "Hache Natación";
+
+        $sent=hache_enviar_correo_transaccional($email,$subject,$body,'historias-confirmacion/'.$comentarioId);
+        $pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado=:estado,confirmacion_enviada_at=CASE WHEN :estado_fecha='ENVIADA' THEN NOW() ELSE confirmacion_enviada_at END,updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':estado'=>$sent?'ENVIADA':'FALLO',':estado_fecha'=>$sent?'ENVIADA':'FALLO',':id'=>$comentarioId]);
+        $pdo->commit();return $sent;
+    }catch(Throwable $e){
+        if($pdo->inTransaction())$pdo->rollBack();
+        try{$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);}catch(Throwable $markError){error_log('[historias-notificaciones] No se pudo liberar el claim de confirmación: '.$markError->getMessage());}
+        error_log('[historias-notificaciones] Falló la coordinación del correo de confirmación: '.$e->getMessage());return false;
     }
-    $email=(string)$row['email'];$token=historias_confirm_token($comentarioId,$email,$secret);$cancelToken=historias_cancel_token($comentarioId,$email,$secret);
-    $confirmUrl='https://hnatacion.com/historias/notificaciones.php?accion=confirmar&token='.rawurlencode($token);
-    $cancelUrl='https://hnatacion.com/historias/notificaciones.php?accion=cancelar&comentario='.rawurlencode($comentarioId).'&token='.rawurlencode($cancelToken);
-    $subject='Confirma los avisos de respuestas · Historias Hache';
-    $body="Hola ".trim((string)$row['autor_nombre']).",\n\n".
-        "Pediste recibir un aviso cuando alguien responda a tu comentario en Historias Hache.\n\n".
-        "Tu comentario:\n“".historias_resumen_texto((string)$row['comentario'])."”\n\n".
-        "Confirma los avisos aquí:\n".$confirmUrl."\n\n".
-        "Si no solicitaste estos avisos, puedes cancelarlos aquí:\n".$cancelUrl."\n\n".
-        "El enlace de confirmación vence en 7 días. Estos avisos son solo para respuestas a tu comentario; no te suscriben a promociones ni newsletters.\n\n".
-        "Hache Natación";
-
-    $sent=hache_enviar_correo_transaccional($email,$subject,$body,'historias-confirmacion/'.$comentarioId);
-    if($sent){$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='ENVIADA',confirmacion_enviada_at=NOW(),updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);return true;}
-    $pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);return false;
 }
 
 function historias_notificar_respuesta_aprobada(PDO $pdo,string $respuestaId,array $config): bool
