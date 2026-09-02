@@ -23,14 +23,11 @@ function hache_sharky_verification_issue(PDO $pdo, string $contact, string $base
     $raw=bin2hex(random_bytes(32));
     $hash=hash('sha256',$raw);
     $id=(string)$pdo->query('SELECT UUID()')->fetchColumn();
+    $expires=(new DateTimeImmutable())->modify('+'.$ttlSeconds.' seconds')->format('Y-m-d H:i:s');
     $st=$pdo->prepare("UPDATE sharky_identity_challenges SET status='EXPIRED' WHERE contact_hash=:c AND status='PENDING'");
     $st->execute([':c'=>$contactHash]);
-    $st=$pdo->prepare("INSERT INTO sharky_identity_challenges(id,contact_hash,token_hash,status,expires_at) VALUES(:id,:c,:t,'PENDING',DATE_ADD(NOW(),INTERVAL :ttl SECOND))");
-    $st->bindValue(':id',$id);
-    $st->bindValue(':c',$contactHash);
-    $st->bindValue(':t',$hash);
-    $st->bindValue(':ttl',$ttlSeconds,PDO::PARAM_INT);
-    $st->execute();
+    $st=$pdo->prepare("INSERT INTO sharky_identity_challenges(id,contact_hash,token_hash,status,expires_at) VALUES(:id,:c,:t,'PENDING',:expires)");
+    $st->execute([':id'=>$id,':c'=>$contactHash,':t'=>$hash,':expires'=>$expires]);
     $sep=str_contains($baseUrl,'?')?'&':'?';
     return ['id'=>$id,'url'=>$baseUrl.$sep.'token='.rawurlencode($raw),'expires_in'=>$ttlSeconds];
 }
