@@ -6,7 +6,7 @@ function hache_sharky_config_defaults(): array
 {
     return [
         'sharky_edad_minima'=>['valor'=>'12','descripcion'=>'Edad mínima atendida por Hache Natación'],
-        'sharky_precio_intensivo'=>['valor'=>'1200','descripcion'=>'Precio del curso intensivo en MXN'],
+        'sharky_precio_intensivo'=>['valor'=>'1200','descripcion'=>'Precio general del curso intensivo en MXN; sincronizado con el alta automática del registro público'],
         'sharky_precio_regular_3'=>['valor'=>'1000','descripcion'=>'Mensualidad de 3 clases por semana en MXN'],
         'sharky_precio_regular_5'=>['valor'=>'1200','descripcion'=>'Mensualidad de 5 clases por semana en MXN'],
         'sharky_inscripcion_monteverde'=>['valor'=>'500','descripcion'=>'Inscripción de Monteverde en MXN'],
@@ -53,20 +53,25 @@ function hache_sharky_business_values(?PDO $pdo = null): array
     $defaults = hache_sharky_config_defaults();
     $values = array_map(static fn(array $row): string => (string) $row['valor'], $defaults);
     $pdo ??= hache_sharky_pdo();
-    if (!$pdo) return $values;
-    try {
-        $keys = array_keys($defaults);
-        $marks = implode(',', array_fill(0, count($keys), '?'));
-        $stmt = $pdo->prepare("SELECT clave,valor FROM configuracion WHERE clave IN ($marks)");
-        $stmt->execute($keys);
-        foreach ($stmt->fetchAll() as $row) {
-            $key = (string) ($row['clave'] ?? '');
-            $value = trim((string) ($row['valor'] ?? ''));
-            if (isset($values[$key]) && $value !== '') $values[$key] = $value;
+    if ($pdo) {
+        try {
+            $keys = array_keys($defaults);
+            $marks = implode(',', array_fill(0, count($keys), '?'));
+            $stmt = $pdo->prepare("SELECT clave,valor FROM configuracion WHERE clave IN ($marks)");
+            $stmt->execute($keys);
+            foreach ($stmt->fetchAll() as $row) {
+                $key = (string) ($row['clave'] ?? '');
+                $value = trim((string) ($row['valor'] ?? ''));
+                if (isset($values[$key]) && $value !== '') $values[$key] = $value;
+            }
+        } catch (Throwable $e) {
+            error_log('[sharky-runtime] configuration read failed');
         }
-    } catch (Throwable $e) {
-        error_log('[sharky-runtime] configuration read failed');
     }
+    // El registro público crea cursos intensivos nuevos a $1,200. Mientras ese flujo
+    // siga usando ese precio contractual, Sharky no puede anunciar otro precio general.
+    // Los cursos ya existentes conservan y exponen su propio precio desde el backend.
+    $values['sharky_precio_intensivo'] = (string)$defaults['sharky_precio_intensivo']['valor'];
     return $values;
 }
 
@@ -181,6 +186,9 @@ function hache_sharky_human_request(string $text): bool
         '/\b(quiero|quisiera|necesito|me quiero|ya quiero)\b.{0,24}\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta|empezar|comenzar|entrar)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
         '/\b(inscribirme|registrarme|anotarme|apuntarme|darme de alta)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
         '/\b(como|donde)\b.{0,18}\b(me inscribo|me registro|puedo inscribirme|puedo registrarme|hago la inscripcion)\b.{0,32}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(clases regulares|regular|regulares|mensualidad)\b.{0,55}\b(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b/u',
+        '/\b(inscribo|inscribimos|registro|registramos|anoto|anotamos|apunto|apuntamos)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
     ];
     foreach ($patterns as $pattern) if (preg_match($pattern,$text)===1) return true;
     return false;
