@@ -9,6 +9,7 @@
   const form = root.querySelector('[data-comment-form]');
   const reactionButtons = [...root.querySelectorAll('[data-reaction]')];
   let repliesEnabled = false;
+  let permalinkFocused = false;
 
   function visitorId() {
     const key = 'hache_story_visitor_v1';
@@ -25,6 +26,23 @@
   }
 
   const visitor = visitorId();
+
+  function permalinkTarget() {
+    const match = location.hash.match(/^#comentario-([a-f0-9-]{36})$/i);
+    return match ? match[1] : null;
+  }
+
+  function focusPermalinkTarget() {
+    if (permalinkFocused) return;
+    const target = permalinkTarget();
+    if (!target) return;
+    const node = document.getElementById(`comentario-${target}`);
+    if (!node) return;
+    permalinkFocused = true;
+    node.tabIndex = -1;
+    node.scrollIntoView({ block: 'center' });
+    node.focus({ preventScroll: true });
+  }
 
   function message(text, type = '') {
     if (!status) return;
@@ -326,12 +344,15 @@
   async function load() {
     try {
       const params = new URLSearchParams({ historia: story, visitante: visitor });
+      const target = permalinkTarget();
+      if (target) params.set('comentario_objetivo', target);
       const response = await fetch(`${endpoint}?${params}`, { cache: 'no-store', credentials: 'same-origin' });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo cargar la conversación');
       setFeatureAvailability(data.respuestas_habilitadas === true);
       applyReactions(data.reacciones, data.mi_reaccion);
       renderComments(data.comentarios);
+      requestAnimationFrame(focusPermalinkTarget);
     } catch (error) {
       message(error.message || 'No se pudieron cargar las interacciones.', 'error');
     }
