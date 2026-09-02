@@ -7,13 +7,19 @@ $baseName = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: $scriptName;
 $requestHost = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
 $requestHost = explode(':', $requestHost, 2)[0];
+$isPublicGuide = $currentPath === '/guias' || str_starts_with($currentPath, '/guias/');
 
 if (!headers_sent()) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-    header('Cache-Control: private, no-store, max-age=0');
+    if ($isPublicGuide) {
+        header('Cache-Control: public, max-age=300, stale-while-revalidate=60');
+        header('X-Robots-Tag: index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
+    } else {
+        header('Cache-Control: private, no-store, max-age=0');
+    }
 }
 
 if ($requestHost === 'www.hnatacion.com') {
@@ -30,7 +36,7 @@ $publicPages = [
 ];
 $isPublicStory = str_starts_with($currentPath, '/historias/');
 
-if ($baseName === 'index.php' || str_starts_with($scriptName, '/api/') || $isPublicStory || in_array($currentPath, $publicPages, true)) return;
+if ($baseName === 'index.php' || str_starts_with($scriptName, '/api/') || $isPublicGuide || $isPublicStory || in_array($currentPath, $publicPages, true)) return;
 
 if (!headers_sent()) header('X-Robots-Tag: noindex, nofollow, noarchive');
 
