@@ -26,6 +26,10 @@ $mustHandoff = [
     '¿Hay espacio en el curso del lunes?',
     '¿Está disponible el intensivo de septiembre?',
     '¿Tienen lista de espera?',
+    'Quiero inscribirme a clases regulares',
+    '¿Cómo me registro en regular?',
+    'Quiero darme de alta en mensualidad',
+    'Ya quiero empezar con las clases regulares',
 ];
 $mustStayWithSharky = [
     'Quiero hablar de precios',
@@ -44,6 +48,11 @@ $mustStayWithSharky = [
     '¿Hay horarios disponibles en Monteverde?',
     '¿Cuáles son las fechas disponibles del intensivo?',
     '¿Qué días están disponibles para empezar?',
+    'Quiero inscribirme al intensivo',
+    '¿Cómo me registro al intensivo?',
+    'Quiero información de clases regulares',
+    '¿Cuánto cuestan las clases regulares?',
+    '¿Qué horarios hay de regular?',
     '¿Dónde queda Monteverde?',
 ];
 
