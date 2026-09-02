@@ -103,6 +103,14 @@ try{
     $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));$secret=secreto_interacciones($config);$originHash=hash_privado(origen_ip(),$secret);$extension=historias_extension_disponible($pdo);
     if($method==='GET'){
         $historia=historia_valida($_GET['historia']??'');$visitante=visitante_valido($_GET['visitante']??null);$counts=array_fill_keys(REACCIONES_PUBLICAS,0);
+        $targetRaw=trim((string)($_GET['comentario_objetivo']??''));$targetId=$targetRaw!==''?comentario_id_valido($targetRaw):null;
+        if($targetRaw!==''&&$targetId===null)salida(['ok'=>false,'error'=>'Comentario objetivo inválido'],422);
+        $targetRootId=null;$targetReplyId=null;
+        if($extension&&$targetId!==null){
+            $st=$pdo->prepare("SELECT c.id,r.parent_id FROM historia_comentarios c LEFT JOIN historia_respuestas r ON r.comentario_id=c.id LEFT JOIN historia_comentarios root ON root.id=r.parent_id WHERE c.id=:id AND c.historia_slug=:historia AND c.estado='APROBADO' AND (r.parent_id IS NULL OR root.estado='APROBADO') LIMIT 1");
+            $st->execute([':id'=>$targetId,':historia'=>$historia]);$target=$st->fetch();
+            if($target){$targetRootId=trim((string)($target['parent_id']??''))!==''?(string)$target['parent_id']:(string)$target['id'];$targetReplyId=$targetRootId===$targetId?null:$targetId;}
+        }
         $st=$pdo->prepare('SELECT tipo,COUNT(*) total FROM historia_reacciones WHERE historia_slug=:historia GROUP BY tipo');$st->execute([':historia'=>$historia]);
         foreach($st->fetchAll() as $row){if(isset($counts[$row['tipo']]))$counts[$row['tipo']]=(int)$row['total'];}
         $mine=null;
@@ -112,12 +120,25 @@ try{
         else $st=$pdo->prepare("SELECT c.id,c.autor_nombre,c.comentario,c.created_at FROM historia_comentarios c WHERE c.historia_slug=:historia AND c.estado='APROBADO' ORDER BY c.created_at DESC LIMIT 50");
         $st->execute([':historia'=>$historia]);$comments=[];$positions=[];
         foreach($st->fetchAll() as $row){$positions[(string)$row['id']]=count($comments);$comments[]=['id'=>$row['id'],'autor'=>nombre_publico((string)$row['autor_nombre']),'comentario'=>$row['comentario'],'fecha'=>$row['created_at'],'respuestas'=>[]];}
+        if($extension&&$targetRootId!==null&&!isset($positions[$targetRootId])){
+            $st=$pdo->prepare("SELECT c.id,c.autor_nombre,c.comentario,c.created_at FROM historia_comentarios c LEFT JOIN historia_respuestas r ON r.comentario_id=c.id WHERE c.id=:id AND c.historia_slug=:historia AND c.estado='APROBADO' AND r.comentario_id IS NULL LIMIT 1");
+            $st->execute([':id'=>$targetRootId,':historia'=>$historia]);$row=$st->fetch();
+            if($row){$positions[(string)$row['id']]=count($comments);$comments[]=['id'=>$row['id'],'autor'=>nombre_publico((string)$row['autor_nombre']),'comentario'=>$row['comentario'],'fecha'=>$row['created_at'],'respuestas'=>[]];}
+        }
 
         if($extension&&$positions){
             $params=[':historia'=>$historia];$holders=[];$i=0;
             foreach(array_keys($positions) as $rootId){$key=':root'.$i++;$holders[]=$key;$params[$key]=$rootId;}
             $sql="SELECT c.id,c.autor_nombre,c.comentario,c.created_at,r.parent_id,r.reply_to_id,target.autor_nombre target_autor FROM historia_respuestas r JOIN historia_comentarios c ON c.id=r.comentario_id JOIN historia_comentarios root ON root.id=r.parent_id AND root.estado='APROBADO' JOIN historia_comentarios target ON target.id=r.reply_to_id AND target.estado='APROBADO' WHERE c.historia_slug=:historia AND c.estado='APROBADO' AND r.parent_id IN (".implode(',',$holders).") ORDER BY c.created_at DESC LIMIT 250";
             $st=$pdo->prepare($sql);$st->execute($params);$replyRows=array_reverse($st->fetchAll());
+            if($targetReplyId!==null){
+                $found=false;foreach($replyRows as $row){if((string)$row['id']===$targetReplyId){$found=true;break;}}
+                if(!$found){
+                    $st=$pdo->prepare("SELECT c.id,c.autor_nombre,c.comentario,c.created_at,r.parent_id,r.reply_to_id,target.autor_nombre target_autor FROM historia_respuestas r JOIN historia_comentarios c ON c.id=r.comentario_id JOIN historia_comentarios root ON root.id=r.parent_id AND root.estado='APROBADO' JOIN historia_comentarios target ON target.id=r.reply_to_id AND target.estado='APROBADO' WHERE c.id=:id AND c.historia_slug=:historia AND c.estado='APROBADO' LIMIT 1");
+                    $st->execute([':id'=>$targetReplyId,':historia'=>$historia]);$targetReply=$st->fetch();if($targetReply)$replyRows[]=$targetReply;
+                }
+                usort($replyRows,static fn(array $a,array $b): int=>strcmp((string)$a['created_at'],(string)$b['created_at']));
+            }
             foreach($replyRows as $row){$parent=(string)$row['parent_id'];if(!isset($positions[$parent]))continue;$comments[$positions[$parent]]['respuestas'][]=['id'=>$row['id'],'autor'=>nombre_publico((string)$row['autor_nombre']),'comentario'=>$row['comentario'],'fecha'=>$row['created_at'],'respondio_a'=>nombre_publico((string)$row['target_autor'])];}
         }
         salida(['ok'=>true,'reacciones'=>$counts,'mi_reaccion'=>$mine,'comentarios'=>$comments,'respuestas_habilitadas'=>$extension]);
