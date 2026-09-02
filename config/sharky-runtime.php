@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/intensivos-estado.php';
+
 function hache_sharky_config_defaults(): array
 {
     return [
@@ -102,11 +104,16 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
         $lines[]='- No se pudieron consultar los horarios activos; no inventes horarios.';
     }
     try {
-        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id WHERE s.activo=1 AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND ci.fecha_fin>=CURDATE() ORDER BY ci.fecha_inicio ASC,s.nombre ASC")->fetchAll();
+        $selectableDates = intensivo_lunes_registro(10);
+        $lines[]='- Fechas de inicio que el registro público acepta actualmente: '.implode(', ',$selectableDates).'.';
+        $marks = implode(',', array_fill(0, count($selectableDates), '?'));
+        $stmt = $pdo->prepare("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id WHERE s.activo=1 AND ci.fecha_inicio IN ($marks) ORDER BY ci.fecha_inicio ASC,s.nombre ASC");
+        $stmt->execute($selectableDates);
+        $rows = $stmt->fetchAll();
         if (!$rows) {
-            $lines[]='- No hay cursos intensivos vigentes o próximos registrados.';
+            $lines[]='- No hay cursos precreados para esas fechas; cuando corresponda usa el precio general del intensivo.';
         } else {
-            $lines[]='- Cursos intensivos vigentes o próximos:';
+            $lines[]='- Cursos ya creados dentro de esas fechas; su precio registrado prevalece sobre el precio general:';
             foreach ($rows as $row) {
                 $price=rtrim(rtrim(number_format((float)$row['precio'],2,'.',''),'0'),'.');
                 $lines[]=sprintf('  • %s: %s a %s; precio registrado $%s MXN',(string)$row['sede'],(string)$row['fecha_inicio'],(string)$row['fecha_fin'],$price);
@@ -114,7 +121,7 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
         }
         $lines[]='- Cupos, capacidad de grupo, inscritos y alumnos por carril NO se exponen a Sharky; esas preguntas se derivan a atención humana.';
     } catch (Throwable $e) {
-        $lines[]='- No se pudieron consultar cursos vigentes; no inventes fechas.';
+        $lines[]='- No se pudieron consultar cursos o fechas vigentes; no inventes fechas.';
     }
     return implode("\n",$lines);
 }
