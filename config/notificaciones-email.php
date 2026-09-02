@@ -23,7 +23,7 @@ function hache_email_config(): array
     ];
 }
 
-function hache_enviar_correo_transaccional(string $to,string $subject,string $body): bool
+function hache_enviar_correo_transaccional(string $to,string $subject,string $body,?string $idempotencyKey=null): bool
 {
     $to=trim($to);
     $cfg=hache_email_config();
@@ -36,7 +36,7 @@ function hache_enviar_correo_transaccional(string $to,string $subject,string $bo
         return false;
     }
     try{
-        return hache_resend_send($cfg['api_key'],$cfg['from'],$cfg['from_name'],$to,$subject,$body);
+        return hache_resend_send($cfg['api_key'],$cfg['from'],$cfg['from_name'],$to,$subject,$body,$idempotencyKey);
     }catch(Throwable $e){
         error_log('[notificaciones-email] No se pudo enviar correo transaccional: '.$e->getMessage());
         return false;
@@ -88,7 +88,7 @@ function hache_notificar_nueva_inscripcion(array $alumno,string $tipoIngreso,arr
     return hache_enviar_correo_transaccional($to,$alerta['subject'],$alerta['body']);
 }
 
-function hache_resend_send(string $apiKey,string $from,string $fromName,string $to,string $subject,string $body): bool
+function hache_resend_send(string $apiKey,string $from,string $fromName,string $to,string $subject,string $body,?string $idempotencyKey=null): bool
 {
     if(!function_exists('curl_init')){
         throw new RuntimeException('La extensión cURL es necesaria para enviar correos.');
@@ -101,17 +101,26 @@ function hache_resend_send(string $apiKey,string $from,string $fromName,string $
         'text'=>$body,
     ],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
 
+    $headers=[
+        'Authorization: Bearer '.$apiKey,
+        'Content-Type: application/json',
+        'Accept: application/json',
+    ];
+    if($idempotencyKey!==null){
+        $idempotencyKey=trim($idempotencyKey);
+        if($idempotencyKey===''||strlen($idempotencyKey)>256||str_contains($idempotencyKey,"\r")||str_contains($idempotencyKey,"\n")){
+            throw new InvalidArgumentException('Clave de idempotencia de correo inválida.');
+        }
+        $headers[]='Idempotency-Key: '.$idempotencyKey;
+    }
+
     $ch=curl_init('https://api.resend.com/emails');
     if($ch===false)throw new RuntimeException('No se pudo iniciar la conexión con Resend.');
 
     curl_setopt_array($ch,[
         CURLOPT_RETURNTRANSFER=>true,
         CURLOPT_POST=>true,
-        CURLOPT_HTTPHEADER=>[
-            'Authorization: Bearer '.$apiKey,
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ],
+        CURLOPT_HTTPHEADER=>$headers,
         CURLOPT_POSTFIELDS=>$payload,
         CURLOPT_CONNECTTIMEOUT=>8,
         CURLOPT_TIMEOUT=>20,
