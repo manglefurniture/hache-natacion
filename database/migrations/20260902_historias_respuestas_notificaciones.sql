@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS historia_comentario_suscripciones (
   estado ENUM('PENDIENTE','ACTIVA','CANCELADA') NOT NULL DEFAULT 'PENDIENTE',
   confirm_token_hash CHAR(64) NOT NULL,
   confirm_expires_at DATETIME NOT NULL,
+  confirmacion_estado ENUM('PENDIENTE','ENVIANDO','ENVIADA','FALLO') NOT NULL DEFAULT 'PENDIENTE',
+  confirmacion_intentos TINYINT UNSIGNED NOT NULL DEFAULT 0,
   confirmacion_enviada_at DATETIME NULL,
   confirmado_at DATETIME NULL,
   cancelado_at DATETIME NULL,
@@ -32,5 +34,6 @@ CREATE TABLE IF NOT EXISTS historia_comentario_suscripciones (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_historia_suscripcion_comentario FOREIGN KEY (comentario_id) REFERENCES historia_comentarios(id) ON DELETE CASCADE,
   UNIQUE KEY uq_historia_suscripcion_confirm_token (confirm_token_hash),
-  KEY idx_historia_suscripcion_estado (estado,updated_at)
+  KEY idx_historia_suscripcion_estado (estado,updated_at),
+  KEY idx_historia_suscripcion_confirmacion (confirmacion_estado,updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
