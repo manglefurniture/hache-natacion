@@ -58,14 +58,17 @@ function historias_enviar_confirmacion_comentario(PDO $pdo,string $comentarioId,
 
 function historias_notificar_respuesta_aprobada(PDO $pdo,string $respuestaId,array $config): bool
 {
-    $claim=$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='ENVIANDO',notificacion_intentos=notificacion_intentos+1,updated_at=NOW() WHERE comentario_id=:id AND notificacion_intentos<3 AND (notificacion_estado IN ('NO_APLICA','PENDIENTE','FALLO') OR (notificacion_estado='ENVIANDO' AND updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE))) AND EXISTS(SELECT 1 FROM historia_comentario_suscripciones s WHERE s.comentario_id=historia_respuestas.reply_to_id AND s.estado='ACTIVA')");
+    $claim=$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='ENVIANDO',notificacion_intentos=notificacion_intentos+1,updated_at=NOW() WHERE comentario_id=:id AND notificacion_intentos<3 AND (notificacion_estado IN ('NO_APLICA','PENDIENTE','FALLO') OR (notificacion_estado='ENVIANDO' AND updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE))) AND EXISTS(SELECT 1 FROM historia_comentario_suscripciones s WHERE s.comentario_id=historia_respuestas.reply_to_id AND s.estado='ACTIVA') AND EXISTS(SELECT 1 FROM historia_comentarios root WHERE root.id=historia_respuestas.parent_id AND root.estado='APROBADO')");
     $claim->execute([':id'=>$respuestaId]);if($claim->rowCount()!==1)return false;
-    $st=$pdo->prepare("SELECT r.parent_id,r.reply_to_id,c.historia_slug,c.autor_nombre,c.comentario,target.autor_nombre target_autor,target.comentario target_comentario,s.email FROM historia_respuestas r JOIN historia_comentarios c ON c.id=r.comentario_id JOIN historia_comentarios target ON target.id=r.reply_to_id JOIN historia_comentario_suscripciones s ON s.comentario_id=r.reply_to_id AND s.estado='ACTIVA' WHERE r.comentario_id=:id AND c.estado='APROBADO' LIMIT 1");
+    $st=$pdo->prepare("SELECT r.parent_id,r.reply_to_id,c.historia_slug,c.autor_nombre,c.comentario,target.autor_nombre target_autor,target.comentario target_comentario,s.email FROM historia_respuestas r JOIN historia_comentarios c ON c.id=r.comentario_id JOIN historia_comentarios root ON root.id=r.parent_id AND root.estado='APROBADO' JOIN historia_comentarios target ON target.id=r.reply_to_id AND target.estado='APROBADO' JOIN historia_comentario_suscripciones s ON s.comentario_id=r.reply_to_id AND s.estado='ACTIVA' WHERE r.comentario_id=:id AND c.estado='APROBADO' LIMIT 1");
     $st->execute([':id'=>$respuestaId]);$row=$st->fetch();
     if(!$row){$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='NO_APLICA',updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return false;}
     try{$secret=historias_notificacion_secreto($config);}catch(Throwable $e){
         error_log('[historias-notificaciones] No se pudo construir el token de cancelación: '.$e->getMessage());$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return false;
     }
+    $rootCheck=$pdo->prepare("SELECT 1 FROM historia_comentarios WHERE id=:id AND estado='APROBADO' LIMIT 1");$rootCheck->execute([':id'=>$row['parent_id']]);
+    if(!$rootCheck->fetchColumn()){$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='NO_APLICA',updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return false;}
+
     $targetId=(string)$row['reply_to_id'];$cancelToken=historias_cancel_token($targetId,(string)$row['email'],$secret);$viewUrl=historias_url_comentario((string)$row['historia_slug'],$targetId);
     $cancelUrl='https://hnatacion.com/historias/notificaciones.php?accion=cancelar&comentario='.rawurlencode($targetId).'&token='.rawurlencode($cancelToken);
     $subject=trim((string)$row['autor_nombre']).' respondió a tu comentario · Historias Hache';
@@ -79,4 +82,15 @@ function historias_notificar_respuesta_aprobada(PDO $pdo,string $respuestaId,arr
     $sent=hache_enviar_correo_transaccional((string)$row['email'],$subject,$body);
     if($sent){$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='ENVIADA',notificacion_enviada_at=NOW(),updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return true;}
     $pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);return false;
+}
+
+function historias_reintentar_correo_comentario(PDO $pdo,string $comentarioId,array $config): bool
+{
+    $st=$pdo->prepare("SELECT estado,confirmacion_estado,confirmacion_intentos,confirm_expires_at FROM historia_comentario_suscripciones WHERE comentario_id=:id LIMIT 1");$st->execute([':id'=>$comentarioId]);$subscription=$st->fetch();
+    if($subscription&&$subscription['estado']==='PENDIENTE'&&(int)$subscription['confirmacion_intentos']<3&&strtotime((string)$subscription['confirm_expires_at'])>=time()){
+        if(historias_enviar_confirmacion_comentario($pdo,$comentarioId,$config))return true;
+    }
+    $st=$pdo->prepare("SELECT notificacion_estado,notificacion_intentos FROM historia_respuestas WHERE comentario_id=:id LIMIT 1");$st->execute([':id'=>$comentarioId]);$reply=$st->fetch();
+    if($reply&&$reply['notificacion_estado']!=='ENVIADA'&&(int)$reply['notificacion_intentos']<3)return historias_notificar_respuesta_aprobada($pdo,$comentarioId,$config);
+    return false;
 }
