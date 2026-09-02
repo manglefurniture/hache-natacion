@@ -20,6 +20,10 @@ $mustHandoff = [
     '¿Quedan lugares?',
     '¿Cuántas personas admite el grupo?',
     'En el curso, ¿cuántos alumnos hay?',
+    '¿Cuánta gente hay en el grupo?',
+    '¿Qué cantidad de gente entra en el curso?',
+    '¿Cuánta gente cabe por carril?',
+    '¿Cuál es el aforo del grupo?',
     '¿Hay vacantes?',
     '¿Está lleno el grupo?',
     '¿El grupo ya se llenó?',
@@ -75,6 +79,8 @@ $mustStayWithSharky = [
     '¿Qué capacidad física necesito para aprender a nadar?',
     'Quiero mejorar mi capacidad pulmonar nadando',
     '¿Se necesita alguna capacidad de aprendizaje especial?',
+    '¿Hay gente de mi edad en el grupo?',
+    '¿Va gente que ya sabe nadar?',
 ];
 
 foreach ($mustHandoff as $text) {
