@@ -21,7 +21,7 @@ $admin = $me['rol'] === 'ADMIN';
   <div id="msg" class="msg" role="status"></div>
   <div class="panel">
     <h3>Accesos de configuración</h3>
-    <div class="links"><a class="hache-relation-action" href="/horarios.php">Horarios</a><?php if ($admin): ?><a class="hache-relation-action" href="/usuarios.php">Usuarios</a><?php endif; ?></div>
+    <div class="links"><a class="hache-relation-action" href="/horarios.php">Horarios</a><?php if ($admin): ?><a class="hache-relation-action" href="/sharky-admin.php">Sharky</a><a class="hache-relation-action" href="/usuarios.php">Usuarios</a><?php endif; ?></div>
   </div>
   <div class="panel">
     <h3>Planes</h3>
