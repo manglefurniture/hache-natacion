@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/intensivos-estado.php';
+require_once __DIR__.'/sharky-validation.php';
+
 function hache_sharky_config_defaults(): array
 {
     return [
@@ -53,25 +56,25 @@ function hache_sharky_business_values(?PDO $pdo = null): array
     $defaults = hache_sharky_config_defaults();
     $values = array_map(static fn(array $row): string => (string) $row['valor'], $defaults);
     $pdo ??= hache_sharky_pdo();
-    if ($pdo) {
-        try {
-            $keys = array_keys($defaults);
-            $marks = implode(',', array_fill(0, count($keys), '?'));
-            $stmt = $pdo->prepare("SELECT clave,valor FROM configuracion WHERE clave IN ($marks)");
-            $stmt->execute($keys);
-            foreach ($stmt->fetchAll() as $row) {
-                $key = (string) ($row['clave'] ?? '');
-                $value = trim((string) ($row['valor'] ?? ''));
-                if (isset($values[$key]) && $value !== '') $values[$key] = $value;
+    if (!$pdo) return $values;
+    try {
+        $keys = array_keys($defaults);
+        $marks = implode(',', array_fill(0, count($keys), '?'));
+        $stmt = $pdo->prepare("SELECT clave,valor FROM configuracion WHERE clave IN ($marks)");
+        $stmt->execute($keys);
+        foreach ($stmt->fetchAll() as $row) {
+            $key = (string) ($row['clave'] ?? '');
+            $value = trim((string) ($row['valor'] ?? ''));
+            if (!isset($values[$key]) || $value === '') continue;
+            if (!hache_sharky_config_value_valid($key, $value)) {
+                error_log('[sharky-runtime] invalid stored configuration ignored: '.$key);
+                continue;
             }
-        } catch (Throwable $e) {
-            error_log('[sharky-runtime] configuration read failed');
+            $values[$key] = $value;
         }
+    } catch (Throwable $e) {
+        error_log('[sharky-runtime] configuration read failed');
     }
-    // El registro público crea cursos intensivos nuevos a $1,200. Mientras ese flujo
-    // siga usando ese precio contractual, Sharky no puede anunciar otro precio general.
-    // Los cursos ya existentes conservan y exponen su propio precio desde el backend.
-    $values['sharky_precio_intensivo'] = (string)$defaults['sharky_precio_intensivo']['valor'];
     return $values;
 }
 
@@ -102,11 +105,16 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
         $lines[]='- No se pudieron consultar los horarios activos; no inventes horarios.';
     }
     try {
-        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id WHERE s.activo=1 AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND ci.fecha_fin>=CURDATE() ORDER BY ci.fecha_inicio ASC,s.nombre ASC")->fetchAll();
+        $selectableDates = intensivo_lunes_registro(10);
+        $lines[]='- Fechas de inicio que el registro público acepta actualmente: '.implode(', ',$selectableDates).'.';
+        $marks = implode(',', array_fill(0, count($selectableDates), '?'));
+        $stmt = $pdo->prepare("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id WHERE s.activo=1 AND ci.fecha_inicio IN ($marks) ORDER BY ci.fecha_inicio ASC,s.nombre ASC");
+        $stmt->execute($selectableDates);
+        $rows = $stmt->fetchAll();
         if (!$rows) {
-            $lines[]='- No hay cursos intensivos vigentes o próximos registrados.';
+            $lines[]='- No hay cursos precreados para esas fechas; cuando corresponda usa el precio general del intensivo.';
         } else {
-            $lines[]='- Cursos intensivos vigentes o próximos:';
+            $lines[]='- Cursos ya creados dentro de esas fechas; su precio registrado prevalece sobre el precio general:';
             foreach ($rows as $row) {
                 $price=rtrim(rtrim(number_format((float)$row['precio'],2,'.',''),'0'),'.');
                 $lines[]=sprintf('  • %s: %s a %s; precio registrado $%s MXN',(string)$row['sede'],(string)$row['fecha_inicio'],(string)$row['fecha_fin'],$price);
@@ -114,7 +122,7 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
         }
         $lines[]='- Cupos, capacidad de grupo, inscritos y alumnos por carril NO se exponen a Sharky; esas preguntas se derivan a atención humana.';
     } catch (Throwable $e) {
-        $lines[]='- No se pudieron consultar cursos vigentes; no inventes fechas.';
+        $lines[]='- No se pudieron consultar cursos o fechas vigentes; no inventes fechas.';
     }
     return implode("\n",$lines);
 }
