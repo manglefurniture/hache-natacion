@@ -56,6 +56,10 @@ if($data===null){
 }
 $message = trim((string)($data['message'] ?? ''));
 $history = is_array($data['history'] ?? null) ? $data['history'] : [];
+$requestedChannel = strtolower(trim((string)($data['channel'] ?? '')));
+$remoteAddr = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+$isLoopback = in_array($remoteAddr, ['127.0.0.1', '::1'], true);
+$channel = ($requestedChannel === 'whatsapp' || ($requestedChannel === '' && $isLoopback)) ? 'whatsapp' : 'web';
 $hasAssistantHistory = false;
 foreach ($history as $turn) {
     if (!is_array($turn)) continue;
@@ -247,6 +251,27 @@ Respuesta adecuada: “Sí. Puedes escribirnos directamente por WhatsApp al 9902
 Usuario: “¿Cuáles son sus redes?”
 Respuesta adecuada: “Instagram: @hache.natacion — https://www.instagram.com/hache.natacion/ Facebook: https://www.facebook.com/share/1C24ty435B/”
 TXT;
+
+if ($channel === 'whatsapp') {
+    $instructions .= <<<'TXT'
+
+CANAL ACTUAL: WHATSAPP
+Estas reglas de canal prevalecen sobre cualquier instrucción o ejemplo anterior que sugiera enviar al usuario a WhatsApp.
+- Esta conversación ya ocurre dentro del WhatsApp oficial de Hache Natación.
+- NUNCA repitas el número de WhatsApp ni el enlace wa.me en este canal, salvo que el usuario pida explícitamente el número para compartirlo con otra persona.
+- No digas “escríbenos por WhatsApp”, “contacta por WhatsApp” ni envíes al usuario a abrir otro chat.
+- Si el usuario pide hablar con una persona, indica de forma breve que puede continuar por este mismo chat y que una persona del equipo puede atenderlo aquí.
+- Si falta un dato dinámico como horario, cupo, fecha o disponibilidad, di que ese dato debe confirmarlo el equipo de Hache Natación y que puede continuar por aquí para atención humana.
+- Mantén la conversación natural: el usuario ya está en el canal correcto.
+TXT;
+} else {
+    $instructions .= <<<'TXT'
+
+CANAL ACTUAL: WEB
+- Esta conversación ocurre en el asistente de la web de Hache Natación.
+- Cuando sea necesario derivar a atención humana o confirmar un dato dinámico, sí puedes proporcionar el WhatsApp oficial y su enlace directo según las reglas anteriores.
+TXT;
+}
 
 if ($isFirstTurn) {
     $instructions .= <<<'TXT'
