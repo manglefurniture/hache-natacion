@@ -8,6 +8,7 @@
   const list = root.querySelector('[data-comments-list]');
   const form = root.querySelector('[data-comment-form]');
   const reactionButtons = [...root.querySelectorAll('[data-reaction]')];
+  let repliesEnabled = false;
 
   function visitorId() {
     const key = 'hache_story_visitor_v1';
@@ -100,6 +101,28 @@
     };
     notify.addEventListener('change', syncRequired);
     syncRequired();
+  }
+
+  function setFeatureAvailability(enabled) {
+    repliesEnabled = Boolean(enabled);
+    const email = form?.querySelector('input[name="correo"]');
+    const notify = form?.querySelector('input[name="notificar_respuestas"]');
+    const emailLabel = email?.closest('label');
+    const notifyLabel = notify?.closest('label');
+    const notifyHelp = form?.querySelector('.notification-help');
+    if (email) email.disabled = !repliesEnabled;
+    if (notify) {
+      notify.disabled = !repliesEnabled;
+      if (!repliesEnabled) notify.checked = false;
+    }
+    if (emailLabel) emailLabel.hidden = !repliesEnabled;
+    if (notifyLabel) notifyLabel.hidden = !repliesEnabled;
+    if (notifyHelp) notifyHelp.hidden = !repliesEnabled;
+    const commentsHelp = root.querySelector('.comments-panel .comment-help');
+    if (commentsHelp) commentsHelp.textContent = repliesEnabled
+      ? 'Mostramos únicamente el primer nombre. Puedes responder a cualquier comentario publicado.'
+      : 'Mostramos únicamente el primer nombre de quien comenta.';
+    wireExistingNotificationFields(form);
   }
 
   async function submitComment(targetForm, replyTo = null, targetStatus = status) {
@@ -210,6 +233,7 @@
   }
 
   function addReplyButton(card, item) {
+    if (!repliesEnabled) return;
     const actions = document.createElement('div');
     actions.className = 'comment-actions';
     const button = document.createElement('button');
@@ -305,6 +329,7 @@
       const response = await fetch(`${endpoint}?${params}`, { cache: 'no-store', credentials: 'same-origin' });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo cargar la conversación');
+      setFeatureAvailability(data.respuestas_habilitadas === true);
       applyReactions(data.reacciones, data.mi_reaccion);
       renderComments(data.comentarios);
     } catch (error) {
@@ -335,7 +360,7 @@
     });
   }
 
-  wireExistingNotificationFields(form);
+  setFeatureAvailability(false);
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     await submitComment(form, null, status);
