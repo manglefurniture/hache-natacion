@@ -30,6 +30,12 @@ $mustHandoff = [
     '¿Cómo me registro en regular?',
     'Quiero darme de alta en mensualidad',
     'Ya quiero empezar con las clases regulares',
+    'Quiero inscribir a mi hijo a clases regulares',
+    '¿Puedo registrar a mi esposa en regular?',
+    'Necesito anotar a mi hija en clases regulares',
+    'Para clases regulares quiero inscribir a mi esposo',
+    '¿Cómo puedo dar de alta a mi mamá en mensualidad?',
+    'Voy a inscribirlo a regular',
 ];
 $mustStayWithSharky = [
     'Quiero hablar de precios',
@@ -50,6 +56,8 @@ $mustStayWithSharky = [
     '¿Qué días están disponibles para empezar?',
     'Quiero inscribirme al intensivo',
     '¿Cómo me registro al intensivo?',
+    'Quiero inscribir a mi hijo al intensivo',
+    '¿Puedo registrar a mi esposa en el intensivo?',
     'Quiero información de clases regulares',
     '¿Cuánto cuestan las clases regulares?',
     '¿Qué horarios hay de regular?',
