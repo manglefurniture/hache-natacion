@@ -2,4 +2,4 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/../public/api/whatsapp-webhook.php';
+require __DIR__ . '/../public/api/whatsapp-webhook-v2.php';
