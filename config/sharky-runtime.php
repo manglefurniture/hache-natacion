@@ -149,6 +149,8 @@ function hache_sharky_capacity_request(string $text): bool
         '/\b(cuantos?|cuantas?|numero de)\b.{0,20}\bpor carril\b/u',
         '/\b(capacidad)\b/u',
         '/\b(esta|estan)\b.{0,15}\b(lleno|llena|llenos|llenas)\b/u',
+        '/\b(grupo|curso|clase|carril)\b.{0,25}\b(se\s+(lleno|llena|llenaron|llenan))\b/u',
+        '/\b(se\s+(lleno|llena|llenaron|llenan))\b.{0,25}\b(grupo|curso|clase|carril)\b/u',
         '/\b(esta|estan|hay)\b.{0,12}\b(disponible|disponibles)\b.{0,20}\b(curso|intensivo|grupo)\b/u',
         '/\blista de espera\b/u',
     ] as $pattern) if (preg_match($pattern,$text)===1) return true;
