@@ -39,9 +39,10 @@ function hache_sharky_db_state_save(PDO $pdo,string $contact,array $state,int $t
     $hash=hache_sharky_orchestrator_contact_hash($contact);
     $json=json_encode($state,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
     if($json===false)return false;
+    $expires=(new DateTimeImmutable())->modify('+'.$ttl.' seconds')->format('Y-m-d H:i:s');
     try{
-        $st=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,expires_at) VALUES(:c,:s,DATE_ADD(NOW(),INTERVAL :ttl SECOND)) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),expires_at=VALUES(expires_at),updated_at=NOW()');
-        $st->bindValue(':c',$hash);$st->bindValue(':s',$json);$st->bindValue(':ttl',$ttl,PDO::PARAM_INT);$st->execute();return true;
+        $st=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,expires_at) VALUES(:c,:s,:e) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),expires_at=VALUES(expires_at),updated_at=NOW()');
+        $st->execute([':c'=>$hash,':s'=>$json,':e'=>$expires]);return true;
     }catch(Throwable $e){error_log('[sharky-orchestrator] db state save failed');return hache_sharky_orchestrator_state_save($contact,$state);}
 }
 
