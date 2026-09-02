@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const registro = fs.readFileSync(new URL('../public/registro.php', import.meta.url), 'utf8');
 const transferencia = fs.readFileSync(new URL('../config/transferencia-publica.php', import.meta.url), 'utf8');
+const runtime = fs.readFileSync(new URL('../config/sharky-runtime.php', import.meta.url), 'utf8');
 const telefono = fs.readFileSync(new URL('../public/assets/telefono-internacional.js', import.meta.url), 'utf8');
 
 function expect(condition, message) {
@@ -50,12 +51,19 @@ expect(
   'Los campos del registro deben quedar asociados programáticamente con sus etiquetas visibles.'
 );
 expect(
-  /'clabe'\s*=>\s*'\d{18}'/.test(transferencia),
-  'La CLABE pública debe tener exactamente 18 dígitos.'
+  transferencia.includes('hache_sharky_business_values') &&
+    transferencia.includes("['sharky_pago_institucion']") &&
+    transferencia.includes("['sharky_pago_beneficiario']") &&
+    transferencia.includes("['sharky_pago_clabe']"),
+  'El registro público y Sharky deben compartir una única fuente configurable de datos de transferencia.'
 );
 expect(
-  transferencia.includes("'institucion' => 'Mercado Pago W'") && transferencia.includes("'beneficiario' => 'Heidy Garcia Liranza'"),
-  'Los datos públicos de transferencia deben mantener la institución y beneficiario configurados.'
+  /'sharky_pago_clabe'\s*=>\s*\[\s*'valor'\s*=>\s*'\d{18}'/.test(runtime),
+  'La CLABE por defecto debe conservar exactamente 18 dígitos.'
+);
+expect(
+  runtime.includes("'sharky_pago_institucion'=>['valor'=>'Mercado Pago W'") && runtime.includes("'sharky_pago_beneficiario'=>['valor'=>'Heidy Garcia Liranza'"),
+  'La fuente de verdad debe conservar la institución y beneficiario actuales como valores por defecto.'
 );
 
 console.log('INTENSIVO_TRANSFERENCIA_REGRESSION_OK');
