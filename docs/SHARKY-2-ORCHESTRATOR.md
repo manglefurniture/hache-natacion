@@ -14,7 +14,7 @@ La conversación empieza siempre en lenguaje natural. Detectar una intención nu
 
 ## P0 implementados
 
-### Referral / atribución Meta
+### Referral / atribución de Meta
 
 El adaptador conserva `referral` antes de clasificar identidad o intención. Se mantienen first-touch y latest-touch y se persisten `source_type`, `source_id`, `source_url`, `headline`, `body`, `media_type` y `ctwa_clid` cuando Meta los entrega.
 
