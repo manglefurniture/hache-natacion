@@ -10,6 +10,8 @@ $mustHandoff = [
     '¿Hay cupo para el intensivo?',
     '¿Cuántos alumnos hay por carril?',
     '¿Cuál es la capacidad del grupo?',
+    '¿Qué capacidad tiene el grupo?',
+    '¿Cuál es la capacidad máxima del intensivo?',
     '¿Tienen lugares disponibles en el curso?',
     '¿Hay disponibilidad para el intensivo?',
     '¿Hay disponibilidad para el intensivo en el horario de las 8?',
@@ -36,6 +38,11 @@ $mustHandoff = [
     'Para clases regulares quiero inscribir a mi esposo',
     '¿Cómo puedo dar de alta a mi mamá en mensualidad?',
     'Voy a inscribirlo a regular',
+    'Mi esposa quiere inscribirse a clases regulares',
+    'Mi hijo desea registrarse en regular',
+    'Ella quiere darse de alta en mensualidad',
+    'Mis hijos quieren anotarse a clases regulares',
+    '¿Cómo puede registrarse mi esposa a clases regulares?',
 ];
 $mustStayWithSharky = [
     'Quiero hablar de precios',
@@ -58,10 +65,16 @@ $mustStayWithSharky = [
     '¿Cómo me registro al intensivo?',
     'Quiero inscribir a mi hijo al intensivo',
     '¿Puedo registrar a mi esposa en el intensivo?',
+    'Mi esposa quiere inscribirse al intensivo',
+    'Mi hijo desea registrarse al intensivo',
     'Quiero información de clases regulares',
     '¿Cuánto cuestan las clases regulares?',
     '¿Qué horarios hay de regular?',
     '¿Dónde queda Monteverde?',
+    '¿Necesito cierta capacidad física para entrar al curso?',
+    '¿Qué capacidad física necesito para aprender a nadar?',
+    'Quiero mejorar mi capacidad pulmonar nadando',
+    '¿Se necesita alguna capacidad de aprendizaje especial?',
 ];
 
 foreach ($mustHandoff as $text) {
