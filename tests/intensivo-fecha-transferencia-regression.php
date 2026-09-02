@@ -24,8 +24,8 @@ $tz=new DateTimeZone('America/Cancun');
 $viernes=new DateTimeImmutable('2026-08-28 12:00:00',$tz);
 $opciones=intensivo_lunes_registro(4,$viernes);
 check(
-    $opciones===['2026-08-31','2026-08-24','2026-09-07','2026-09-14'],
-    'En viernes el próximo lunes debe ser la opción predeterminada y el lunes en curso debe seguir disponible como inscripción tardía.'
+    $opciones===['2026-08-31','2026-09-07','2026-09-14','2026-09-21'],
+    'Después del martes el curso de la semana actual ya no debe ofrecerse; el próximo lunes debe ser la primera opción.'
 );
 
 $lunes=new DateTimeImmutable('2026-08-31 08:00:00',$tz);
@@ -33,6 +33,28 @@ $opcionesLunes=intensivo_lunes_registro(4,$lunes);
 check(
     $opcionesLunes===['2026-08-31','2026-09-07','2026-09-14','2026-09-21'],
     'En lunes el curso que inicia ese mismo día debe seguir siendo la primera opción.'
+);
+
+$martes=new DateTimeImmutable('2026-09-01 12:00:00',$tz);
+$opcionesMartes=intensivo_lunes_registro(4,$martes);
+check(
+    $opcionesMartes===['2026-09-07','2026-08-31','2026-09-14','2026-09-21'],
+    'En martes todavía debe permitirse incorporarse al curso iniciado el lunes, pero el próximo lunes queda como opción predeterminada.'
+);
+
+$miercoles=new DateTimeImmutable('2026-09-02 12:00:00',$tz);
+$opcionesMiercoles=intensivo_lunes_registro(4,$miercoles);
+check(
+    $opcionesMiercoles===['2026-09-07','2026-09-14','2026-09-21','2026-09-28'],
+    'Desde el miércoles el curso iniciado esa semana debe desaparecer de las opciones.'
+);
+check(
+    intensivo_cierre_inscripcion('2026-08-31')==='2026-09-01',
+    'La ventana de incorporación del intensivo debe cerrar el martes.'
+);
+check(
+    intensivo_inscripcion_abierta('2026-08-31',$martes)===true && intensivo_inscripcion_abierta('2026-08-31',$miercoles)===false,
+    'El alta debe admitirse lunes/martes y rechazarse desde el miércoles.'
 );
 
 // P1 Codex: un alumno regular no debe heredar la regla de "solo lunes".
