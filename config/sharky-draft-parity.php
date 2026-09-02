@@ -108,14 +108,40 @@ function hache_sharky_draft_transcribe_audio(array $event, array $business, call
     return mb_substr(is_array($data) ? trim((string) ($data['text'] ?? '')) : '', 0, 700);
 }
 
-function hache_sharky_draft_link_attribution(PDO $pdo, string $contact, string $studentId): int
+function hache_sharky_draft_link_attribution(PDO $pdo, string $contact, string $studentId, array $state = []): int
 {
     $studentId = trim($studentId);
     if ($studentId === '' || !function_exists('hache_sharky_orchestrator_contact_hash')) return 0;
     try {
         $hash = hache_sharky_orchestrator_contact_hash($contact);
-        $st = $pdo->prepare('UPDATE sharky_referrals SET alumno_id=:a WHERE contact_hash=:c AND alumno_id IS NULL');
-        $st->execute([':a'=>$studentId, ':c'=>$hash]);
+        $sourceIds = [];
+        $clickIds = [];
+        foreach (['first','latest'] as $touch) {
+            $ref = $state['referral'][$touch] ?? null;
+            if (!is_array($ref)) continue;
+            $sourceId = trim((string) ($ref['source_id'] ?? ''));
+            $clickId = trim((string) ($ref['ctwa_clid'] ?? ''));
+            if ($sourceId !== '') $sourceIds[$sourceId] = true;
+            if ($clickId !== '') $clickIds[$clickId] = true;
+        }
+
+        $params = [':a'=>$studentId, ':c'=>$hash];
+        $clauses = [];
+        foreach (array_keys($sourceIds) as $i=>$value) {
+            $key = ':sid'.$i;
+            $params[$key] = $value;
+            $clauses[] = 'source_id='.$key;
+        }
+        foreach (array_keys($clickIds) as $i=>$value) {
+            $key = ':clid'.$i;
+            $params[$key] = $value;
+            $clauses[] = 'ctwa_clid='.$key;
+        }
+        $scope = $clauses
+            ? ' AND ('.implode(' OR ', $clauses).')'
+            : ' AND captured_at >= (NOW() - INTERVAL 2 DAY)';
+        $st = $pdo->prepare('UPDATE sharky_referrals SET alumno_id=:a WHERE contact_hash=:c AND alumno_id IS NULL'.$scope);
+        $st->execute($params);
         return $st->rowCount();
     } catch (Throwable $e) {
         error_log('[sharky-orchestrator] attribution link failed');
