@@ -91,7 +91,7 @@ function hache_sharky_dynamic_context(?PDO $pdo, array $values): string
         $lines[]='- No se pudieron consultar los horarios activos; no inventes horarios.';
     }
     try {
-        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio,COUNT(cia.id) total_alumnos FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id LEFT JOIN curso_intensivo_alumnos cia ON cia.curso_intensivo_id=ci.id WHERE s.activo=1 AND ci.fecha_fin>=CURDATE() GROUP BY ci.id,s.nombre,ci.fecha_inicio,ci.fecha_fin,ci.precio ORDER BY ci.fecha_inicio ASC LIMIT 8")->fetchAll();
+        $rows = $pdo->query("SELECT s.nombre sede,ci.fecha_inicio,ci.fecha_fin,ci.precio,COUNT(cia.id) total_alumnos FROM cursos_intensivos ci JOIN sedes s ON s.id=ci.sede_id LEFT JOIN curso_intensivo_alumnos cia ON cia.curso_intensivo_id=ci.id WHERE s.activo=1 AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND ci.fecha_fin>=CURDATE() GROUP BY ci.id,s.nombre,ci.fecha_inicio,ci.fecha_fin,ci.precio ORDER BY ci.fecha_inicio ASC LIMIT 8")->fetchAll();
         if (!$rows) {
             $lines[]='- No hay cursos intensivos vigentes o próximos registrados.';
         } else {
@@ -141,6 +141,7 @@ function hache_sharky_human_request(string $text): bool
     $patterns=[
         '/\b(quiero|necesito|quisiera|puedo|podria)\b.{0,25}\b(hablar|contactar|comunicarme)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
         '/\b(pasame|ponme|comunicame|dejame hablar)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
+        '/\b(me puedes|puedes|podrias|podria)\b.{0,20}\b(pasar|poner|comunicar)\b.{0,35}\b(persona|humano|asesor|operador|alguien|equipo)\b/u',
         '/\b(quiero|necesito|quisiera)\b.{0,18}\b(una persona|un humano|humano|un asesor|asesor|operador|atencion humana)\b/u',
         '/\b(asesor humano|atencion humana|operador humano|persona real)\b/u',
     ];
