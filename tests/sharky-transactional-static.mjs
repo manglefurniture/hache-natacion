@@ -37,9 +37,9 @@ expect(page.includes('auth_csrf_validate'),'Página de verificación debe exigir
 expect(page.includes("($me['rol']??'')!=='ALUMNO'"),'Verificación web debe restringirse a rol ALUMNO.');
 expect(login.includes('sharky_verification_token')&&login.includes('/sharky-verificar.php'),'Login debe regresar al alumno a la verificación pendiente.');
 expect(router.includes('SHARKY_ORCHESTRATOR_LAB_ENABLED')&&router.includes('whatsapp-webhook-v2.php'),'El router debe conservar v2 como ruta productiva por defecto.');
-expect(lab.includes("SHARKY_ORCHESTRATOR_LAB_ENABLED")&&lab.includes("!=='1'"),'Webhook laboratorio debe permanecer apagado por defecto.');
+expect(/SHARKY_ORCHESTRATOR_LAB_ENABLED[\s\S]{0,80}!==?\s*['"]1['"]/.test(lab),'Webhook laboratorio debe permanecer apagado por defecto.');
 expect(lab.includes('X_HUB_SIGNATURE_256')||lab.includes('HTTP_X_HUB_SIGNATURE_256'),'Webhook laboratorio debe validar firma Meta.');
-expect(lab.includes('if(!$pdo instanceof PDO)')&&lab.includes('event ignored safely'),'Si la BD no está disponible, el lab debe fallar cerrado sin ejecutar acciones.');
+expect(/if\s*\(\s*!\s*\$pdo\s+instanceof\s+PDO\s*\)/.test(lab)&&lab.includes('event ignored safely'),'Si la BD no está disponible, el lab debe fallar cerrado sin ejecutar acciones.');
 expect(lab.includes('hache_sharky_takeover_mark')&&lab.includes('manual'),'Una respuesta humana detectada debe silenciar Sharky.');
 expect(!migration.includes('whatsapp VARCHAR'),'Persistencia del orquestador no debe almacenar teléfono crudo.');
 
