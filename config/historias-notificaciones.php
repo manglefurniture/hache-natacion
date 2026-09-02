@@ -65,14 +65,14 @@ function historias_enviar_confirmacion_comentario(PDO $pdo,string $comentarioId,
         "Hache Natación";
 
     if(!hache_enviar_correo_transaccional((string)$row['email'],$subject,$body))return false;
-    $up=$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_enviada_at=NOW(),updated_at=NOW() WHERE comentario_id=:id AND estado='PENDIENTE'");
+    $up=$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_enviada_at=NOW(),updated_at=NOW() WHERE comentario_id=:id AND estado='PENDIENTE' AND confirmacion_enviada_at IS NULL");
     $up->execute([':id'=>$comentarioId]);
     return true;
 }
 
 function historias_notificar_respuesta_aprobada(PDO $pdo,string $respuestaId,array $config): bool
 {
-    $claim=$pdo->prepare("UPDATE historia_respuestas r SET r.notificacion_estado='ENVIANDO',r.notificacion_intentos=r.notificacion_intentos+1,r.updated_at=NOW() WHERE r.comentario_id=:id AND r.notificacion_intentos<3 AND (r.notificacion_estado IN ('NO_APLICA','PENDIENTE','FALLO') OR (r.notificacion_estado='ENVIANDO' AND r.updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE))) AND EXISTS(SELECT 1 FROM historia_comentario_suscripciones s WHERE s.comentario_id=r.reply_to_id AND s.estado='ACTIVA')");
+    $claim=$pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='ENVIANDO',notificacion_intentos=notificacion_intentos+1,updated_at=NOW() WHERE comentario_id=:id AND notificacion_intentos<3 AND (notificacion_estado IN ('NO_APLICA','PENDIENTE','FALLO') OR (notificacion_estado='ENVIANDO' AND updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE))) AND EXISTS(SELECT 1 FROM historia_comentario_suscripciones s WHERE s.comentario_id=historia_respuestas.reply_to_id AND s.estado='ACTIVA')");
     $claim->execute([':id'=>$respuestaId]);
     if($claim->rowCount()!==1)return false;
 
@@ -86,7 +86,7 @@ function historias_notificar_respuesta_aprobada(PDO $pdo,string $respuestaId,arr
 
     try{$secret=historias_notificacion_secreto($config);}catch(Throwable $e){
         error_log('[historias-notificaciones] No se pudo construir el token de cancelación: '.$e->getMessage());
-        $pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id")->execute([':id'=>$respuestaId]);
+        $pdo->prepare("UPDATE historia_respuestas SET notificacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND notificacion_estado='ENVIANDO'")->execute([':id'=>$respuestaId]);
         return false;
     }
 
