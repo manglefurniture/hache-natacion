@@ -7,12 +7,18 @@ $mustHandoff = [
     'Necesito un asesor',
     '¿Me puedes pasar con alguien del equipo?',
     'Quisiera comunicarme con un humano',
+    '¿Hay cupo para el intensivo?',
+    '¿Cuántos alumnos hay por carril?',
+    '¿Cuál es la capacidad del grupo?',
+    '¿Tienen lugares disponibles en el curso?',
 ];
 $mustStayWithSharky = [
     'Quiero hablar de precios',
     'Necesito información del curso intensivo',
     '¿Puedo hablar de los horarios?',
     'Quiero saber si tienen goggles',
+    '¿Qué horarios están disponibles?',
+    '¿Dónde queda Monteverde?',
 ];
 
 foreach ($mustHandoff as $text) {
