@@ -61,6 +61,8 @@ assert.match(publicApi,/salida_con_tarea/,'La respuesta HTTP debe poder terminar
 assert.match(publicApi,/estado='APROBADO'/,'Solo comentarios aprobados deben salir en la lectura pública');
 assert.match(publicApi,/respuestas'=>\[\]/,'La lectura pública debe exponer respuestas agrupadas');
 assert.match(publicApi,/r\.parent_id IN \(/,'Las respuestas deben limitarse a los hilos raíz realmente mostrados antes del LIMIT');
+assert.match(publicApi,/ORDER BY c\.created_at DESC LIMIT 250/,'El tope global debe conservar primero las respuestas más recientes');
+assert.match(publicApi,/array_reverse\(\$st->fetchAll\(\)\)/,'Las respuestas recientes seleccionadas deben volver a mostrarse en orden cronológico');
 assert.match(publicApi,/respuestas_habilitadas/,'La API debe declarar si la migración nueva está disponible');
 assert.match(publicApi,/information_schema\.TABLES/,'El código nuevo debe degradar con seguridad antes de aplicar la migración');
 assert.doesNotMatch(publicApi,/SELECT[^;]+s\.email[^;]+salida/si,'La API pública no debe exponer correos de suscripción');
@@ -128,6 +130,8 @@ assert.match(moderationApi,/auth_require\(\['ADMIN','VERIFICADOR'\]\)/);
 assert.match(moderationApi,/auth_csrf_validate/,'La moderación debe validar CSRF');
 assert.match(moderationApi,/historias_notificar_respuesta_aprobada/,'La notificación debe dispararse desde la aprobación');
 assert.match(moderationApi,/REINTENTAR_CORREO/,'La API de moderación debe soportar el reintento explícito');
+assert.match(moderationApi,/confirmacion_vigente\(\$item\['confirm_expires_at'\]\)/,'Un retry de confirmación solo debe mostrarse mientras el enlace siga vigente');
+assert.match(moderationApi,/correo_reintentable_detalle/,'La acción POST debe revalidar que todavía exista un reintento posible');
 assert.match(moderationApi,/information_schema\.TABLES/,'La moderación debe seguir funcionando antes de aplicar la migración');
 assert.doesNotMatch(moderationApi,/s\.email/,'La API de moderación no debe devolver el correo privado');
 for(const action of ['APROBAR','RECHAZAR','OCULTAR','ELIMINAR','BLOQUEAR_ORIGEN','DESBLOQUEAR_ORIGEN'])assert.ok(moderationApi.includes(action),`Falta acción de moderación ${action}`);
