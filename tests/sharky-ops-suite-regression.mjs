@@ -7,12 +7,15 @@ const whatsappWrapper = read('api/whatsapp-webhook.php');
 const sharky = read('public/api/sharky-v2.php');
 const webhook = read('public/api/whatsapp-webhook-v2.php');
 const runtime = read('config/sharky-runtime.php');
+const database = read('config/database.php');
 const adminApi = read('api/sharky-admin.php');
 const adminPage = read('public/sharky-admin.php');
 const configPage = read('public/configuracion.php');
 
 assert.match(sharkyWrapper, /sharky-v2\.php/);
 assert.match(whatsappWrapper, /whatsapp-webhook-v2\.php/);
+assert.match(database, /\$publicApi\s*=\s*\[[\s\S]*'\/api\/sharky\.php'[\s\S]*'\/api\/whatsapp-webhook\.php'/);
+assert.match(database, /\$skipAudit\s*=\s*\[[\s\S]*'\/api\/sharky\.php'[\s\S]*'\/api\/whatsapp-webhook\.php'/);
 
 assert.match(sharky, /CANAL ACTUAL: WHATSAPP/);
 assert.match(sharky, /NUNCA le des al cliente el número de WhatsApp ni un enlace wa\.me/);
