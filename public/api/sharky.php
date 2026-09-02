@@ -141,13 +141,13 @@ CLASES REGULARES
 - En el plan de 5 clases por semana no hay reposiciones.
 
 INSCRIPCIÓN
-- Monteverde: $300 MXN.
+- Monteverde: $500 MXN.
 - Palapas: $400 MXN.
 - No confundas inscripción con mensualidad o costo del curso.
 
 EQUIPO
-- Kit de gorro + goggles: $350 MXN.
-- Si preguntan si es obligatorio, indica que el equipo requerido para las clases incluye gorro y goggles y que Hache dispone del kit por $350 MXN.
+- Kit de gorro + goggles: $300 MXN.
+- Si preguntan si es obligatorio, indica que el equipo requerido para las clases incluye gorro y goggles y que Hache dispone del kit por $300 MXN.
 
 PAGOS
 - Formas conocidas: efectivo, transferencia y tarjeta.
