@@ -208,7 +208,7 @@ function hache_sharky_human_request(string $text): bool
     foreach ([
         '/\b(no|todavia no|aun no|por ahora no)\s+(quiero|necesito|quisiera|deseo)?\s*(inscribirme|registrarme|anotarme|apuntarme|darme de alta|inscribirse|registrarse|anotarse|apuntarse|darse de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
         '/\b(no|todavia no|aun no|por ahora no)\s+me\s+(quiero|pienso|voy a)\s+(inscribir|registrar|anotar|apuntar|dar de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
-        '/\b(no|todavia no|aun no|por ahora no)\b.{0,20}\b(quiero|necesito|quisiera|deseo)\b.{0,20}\b(inscribir|registrar|anotar|apuntar|dar de alta)\b.{0,40}\b(clases regulares|regular|regulares|mensualidad)\b/u',
+        '/\b(no|todavia no|aun no|por ahora no)\s+(quiero|necesito|quisiera|deseo)\s+(inscribir|registrar|anotar|apuntar|dar de alta|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla)\b.{0,55}\b(clases regulares|regular|regulares|mensualidad)\b/u',
     ] as $negatedRegularPattern) if (preg_match($negatedRegularPattern,$text)===1) return false;
 
     $patterns=[
