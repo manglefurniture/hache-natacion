@@ -138,6 +138,14 @@ function hache_sharky_normalize_text(string $text): string
 function hache_sharky_capacity_request(string $text): bool
 {
     $text=hache_sharky_normalize_text($text);
+    $hasExplicitCapacity = preg_match('/\b(cupo|cupos|vacante|vacantes|lugar|lugares|espacio|espacios|capacidad|lleno|llena|llenos|llenas|alumno|alumnos|persona|personas|nadador|nadadores|carril|carriles)\b/u',$text)===1
+        || str_contains($text,'lista de espera');
+    if (!$hasExplicitCapacity) {
+        foreach ([
+            '/\bdisponibilidad\s+(de|para)\s+(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|hora|horas|fecha|fechas|dia|dias)\b/u',
+            '/\b(horario|horarios|hora|horas|fecha|fechas|dia|dias)\b.{0,16}\b(disponibilidad|disponible|disponibles)\b/u',
+        ] as $schedulePattern) if (preg_match($schedulePattern,$text)===1) return false;
+    }
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
         '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(disponibilidad|lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
