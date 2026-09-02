@@ -6,8 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/sharky-runtime.php';
 
-$me = auth_require(['ADMIN','VERIFICADOR']);
-$admin = ($me['rol'] ?? '') === 'ADMIN';
+$me = auth_require(['ADMIN']);
 
 function sharky_admin_out(array $body, int $status = 200): never
 {
@@ -39,12 +38,11 @@ if ($method === 'GET') {
     $config = [];
     foreach ($defaults as $key => $row) {
         $config[] = [
-            'clave' => $key,
-            'valor' => (string) ($values[$key] ?? $row['valor']),
-            'descripcion' => (string) $row['descripcion'],
+            'clave'=>$key,
+            'valor'=>(string) ($values[$key] ?? $row['valor']),
+            'descripcion'=>(string) $row['descripcion'],
         ];
     }
-
     $metrics = hache_sharky_metrics(7);
     $totals = [];
     foreach ($metrics as $day) {
@@ -52,20 +50,10 @@ if ($method === 'GET') {
             $totals[$key] = (int) ($totals[$key] ?? 0) + (int) $value;
         }
     }
-
-    sharky_admin_out([
-        'ok'=>true,
-        'admin'=>$admin,
-        'configuracion'=>$config,
-        'takeovers'=>hache_sharky_takeover_list(),
-        'metrics'=>$metrics,
-        'totals'=>$totals,
-    ]);
+    sharky_admin_out(['ok'=>true, 'admin'=>true, 'configuracion'=>$config, 'takeovers'=>hache_sharky_takeover_list(), 'metrics'=>$metrics, 'totals'=>$totals]);
 }
 
 if ($method !== 'POST') sharky_admin_out(['ok'=>false, 'error'=>'Método no permitido'], 405);
-if (!$admin) sharky_admin_out(['ok'=>false, 'error'=>'Solo un administrador puede modificar Sharky'], 403);
-
 $input = json_decode(file_get_contents('php://input'), true);
 if (!is_array($input)) sharky_admin_out(['ok'=>false, 'error'=>'Solicitud JSON inválida'], 400);
 $action = strtoupper(trim((string) ($input['accion'] ?? '')));
@@ -81,21 +69,13 @@ if ($action === 'CONFIG') {
     $key = trim((string) ($input['clave'] ?? ''));
     $value = trim((string) ($input['valor'] ?? ''));
     $defaults = hache_sharky_config_defaults();
-    if (!isset($defaults[$key]) || !sharky_admin_valid_value($key, $value)) {
-        sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
-    }
+    if (!isset($defaults[$key]) || !sharky_admin_valid_value($key, $value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
     if ($key === 'sharky_whatsapp') $value = preg_replace('/\D+/', '', $value) ?: '';
-
     $stmt = $pdo->prepare(
         'INSERT INTO configuracion(clave,valor,descripcion,updated_by,updated_at) VALUES(:clave,:valor,:descripcion,:usuario,NOW()) '
         .'ON DUPLICATE KEY UPDATE valor=VALUES(valor),descripcion=VALUES(descripcion),updated_by=VALUES(updated_by),updated_at=NOW()'
     );
-    $stmt->execute([
-        ':clave'=>$key,
-        ':valor'=>$value,
-        ':descripcion'=>(string) $defaults[$key]['descripcion'],
-        ':usuario'=>(string) $me['id'],
-    ]);
+    $stmt->execute([':clave'=>$key, ':valor'=>$value, ':descripcion'=>(string) $defaults[$key]['descripcion'], ':usuario'=>(string) $me['id']]);
     hache_sharky_metric_increment('config_updates');
     sharky_admin_out(['ok'=>true]);
 }
