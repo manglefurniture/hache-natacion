@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/intensivos-estado.php';
+require_once __DIR__.'/sharky-validation.php';
 
 function hache_sharky_config_defaults(): array
 {
@@ -55,25 +56,25 @@ function hache_sharky_business_values(?PDO $pdo = null): array
     $defaults = hache_sharky_config_defaults();
     $values = array_map(static fn(array $row): string => (string) $row['valor'], $defaults);
     $pdo ??= hache_sharky_pdo();
-    if ($pdo) {
-        try {
-            $keys = array_keys($defaults);
-            $marks = implode(',', array_fill(0, count($keys), '?'));
-            $stmt = $pdo->prepare("SELECT clave,valor FROM configuracion WHERE clave IN ($marks)");
-            $stmt->execute($keys);
-            foreach ($stmt->fetchAll() as $row) {
-                $key = (string) ($row['clave'] ?? '');
-                $value = trim((string) ($row['valor'] ?? ''));
-                if (isset($values[$key]) && $value !== '') $values[$key] = $value;
+    if (!$pdo) return $values;
+    try {
+        $keys = array_keys($defaults);
+        $marks = implode(',', array_fill(0, count($keys), '?'));
+        $stmt = $pdo->prepare("SELECT clave,valor FROM configuracion WHERE clave IN ($marks)");
+        $stmt->execute($keys);
+        foreach ($stmt->fetchAll() as $row) {
+            $key = (string) ($row['clave'] ?? '');
+            $value = trim((string) ($row['valor'] ?? ''));
+            if (!isset($values[$key]) || $value === '') continue;
+            if (!hache_sharky_config_value_valid($key, $value)) {
+                error_log('[sharky-runtime] invalid stored configuration ignored: '.$key);
+                continue;
             }
-        } catch (Throwable $e) {
-            error_log('[sharky-runtime] configuration read failed');
+            $values[$key] = $value;
         }
+    } catch (Throwable $e) {
+        error_log('[sharky-runtime] configuration read failed');
     }
-    // El registro público crea cursos intensivos nuevos a $1,200. Mientras ese flujo
-    // siga usando ese precio contractual, Sharky no puede anunciar otro precio general.
-    // Los cursos ya existentes conservan y exponen su propio precio desde el backend.
-    $values['sharky_precio_intensivo'] = (string)$defaults['sharky_precio_intensivo']['valor'];
     return $values;
 }
 
