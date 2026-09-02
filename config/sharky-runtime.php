@@ -151,6 +151,11 @@ function hache_sharky_normalize_text(string $text): string
 function hache_sharky_capacity_request(string $text): bool
 {
     $text=hache_sharky_normalize_text($text);
+    if (
+        preg_match('/\b(cuantos?|cuantas?|numero de|cantidad de)\b.{0,28}\bgente\b/u',$text)===1
+        || preg_match('/\bgente\b.{0,28}\b(cuantos?|cuantas?|numero de|cantidad de)\b/u',$text)===1
+        || preg_match('/\baforo\b/u',$text)===1
+    ) return true;
     $hasExplicitCapacity = preg_match('/\b(cupo|cupos|vacante|vacantes|lugar|lugares|espacio|espacios|lleno|llena|llenos|llenas)\b/u',$text)===1
         || str_contains($text,'lista de espera')
         || preg_match('/\b(cuantos?|cuantas?|numero de)\b.{0,28}\b(alumnos|personas|nadadores)\b/u',$text)===1
