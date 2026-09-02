@@ -30,6 +30,14 @@ expect(
   'Los cursos nuevos y la pantalla final deben compartir la misma variable de precio sin redondear importes existentes con centavos.'
 );
 expect(
+  registro.includes("$intensivoReservaMinima=($ok&&$tipo==='INTENSIVO'&&$intensivoPrecio!==null)?((float)$intensivoPrecio/2):null") &&
+    registro.includes('Total del curso: $<?=e(rtrim(rtrim(number_format((float)$intensivoPrecio') &&
+    registro.includes('Reserva mínima (50%): $<?=e(rtrim(rtrim(number_format((float)$intensivoReservaMinima') &&
+    registro.includes('Transfiere el total o, como mínimo, el 50% para reservar') &&
+    registro.includes('El saldo restante debe quedar pagado antes del curso o, como máximo, el mismo día que inicia.'),
+  'El checkout intensivo debe mostrar total, reserva mínima del 50% y la regla de liquidación del saldo.'
+);
+expect(
   registro.includes('id="copiar-clabe"') && registro.includes('navigator.clipboard.writeText(value)') && registro.includes("document.execCommand('copy')"),
   'La pantalla intensiva debe permitir copiar la CLABE con fallback.'
 );
