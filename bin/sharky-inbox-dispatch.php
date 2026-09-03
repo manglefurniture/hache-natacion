@@ -9,6 +9,9 @@ require_once __DIR__.'/../config/sharky-lab-worker.php';
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
 try{
+    if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
+        fwrite(STDOUT,"{\"disabled\":true,\"worker\":\"inbox\"}\n");exit(0);
+    }
     if(strlen(hache_sharky_orchestrator_secret('SHARKY_CONTACT_HASH_KEY'))<32)throw new RuntimeException('SHARKY_CONTACT_HASH_KEY missing');
     if(strlen(hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY'))<32)throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY missing');
     $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
