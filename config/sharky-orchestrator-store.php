@@ -58,9 +58,10 @@ function hache_sharky_orchestrator_store_referral(PDO $pdo, string $messageId, s
     $messageId=trim($messageId);
     if($messageId==='') return false;
     try {
+        $referralJson=json_encode($referral,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
         $sql='INSERT IGNORE INTO sharky_referrals('
-            .'message_id,contact_hash,alumno_id,source_type,source_id,ctwa_clid,source_url,headline,body,media_type,captured_at'
-            .') VALUES(:m,:c,:a,:st,:si,:clid,:url,:h,:b,:mt,NOW())';
+            .'message_id,contact_hash,alumno_id,source_type,source_id,ctwa_clid,source_url,headline,body,media_type,image_url,video_url,thumbnail_url,referral_json,captured_at'
+            .') VALUES(:m,:c,:a,:st,:si,:clid,:url,:h,:b,:mt,:img,:vid,:thumb,:json,NOW())';
         $st=$pdo->prepare($sql);
         $st->execute([
             ':m'=>mb_substr($messageId,0,191),':c'=>$contactHash,':a'=>$studentId,
@@ -71,6 +72,10 @@ function hache_sharky_orchestrator_store_referral(PDO $pdo, string $messageId, s
             ':h'=>isset($referral['headline'])?mb_substr((string)$referral['headline'],0,500):null,
             ':b'=>isset($referral['body'])?mb_substr((string)$referral['body'],0,1000):null,
             ':mt'=>isset($referral['media_type'])?mb_substr((string)$referral['media_type'],0,30):null,
+            ':img'=>isset($referral['image_url'])?mb_substr((string)$referral['image_url'],0,1000):null,
+            ':vid'=>isset($referral['video_url'])?mb_substr((string)$referral['video_url'],0,1000):null,
+            ':thumb'=>isset($referral['thumbnail_url'])?mb_substr((string)$referral['thumbnail_url'],0,1000):null,
+            ':json'=>$referralJson===false?null:$referralJson,
         ]);
         return $st->rowCount() === 1;
     } catch (Throwable $e) {
