@@ -81,11 +81,17 @@ function hache_sharky_whatsapp_context(PDO $pdo,string $contact,array $extra=[])
 {
     $identity=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
     $verification=hache_sharky_verification_status($pdo,$contact);
+    $operationalToday=(new DateTimeImmutable('today',new DateTimeZone('America/Cancun')))->format('Y-m-d');
+    $today=(string)($extra['today']??$operationalToday);
+    $intensiveOptions=array_values(array_filter(
+        hache_sharky_business_intensive_options($pdo),
+        static fn(array $option):bool=>hache_sharky_start_authority_intensive_date_allowed((string)($option['fecha_inicio']??''),$today)
+    ));
     return array_replace($extra,[
         'identity'=>$identity,
         'verification'=>$verification,
-        'intensive_options'=>hache_sharky_business_intensive_options($pdo),
-        'today'=>(string)($extra['today']??date('Y-m-d')),
+        'intensive_options'=>$intensiveOptions,
+        'today'=>$today,
         'now'=>(int)($extra['now']??time()),
         'min_age'=>(int)($extra['min_age']??12),
     ]);
@@ -177,6 +183,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
     if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$contactHash,(string)($event['type']??'text')))return ['skip'=>true,'code'=>'DUPLICATE'];
 
     $lock=hache_sharky_orchestrator_lock($contact);
+    if(!is_resource($lock))return ['skip'=>true,'code'=>'CONTACT_LOCK_UNAVAILABLE'];
     try{
         $state=hache_sharky_db_state_load($pdo,$contact);
         $context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
