@@ -9,9 +9,22 @@ declare(strict_types=1);
  * WhatsApp v2 path without moving ownership of those rules into the lab.
  */
 
+function hache_sharky_draft_third_party_registration(string $text): bool
+{
+    $normalized = function_exists('hache_sharky_normalize_text')
+        ? hache_sharky_normalize_text($text)
+        : strtr(mb_strtolower(trim($text),'UTF-8'),['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
+    $hasAction = preg_match('/\b(inscribir|inscribirme|inscribirlo|inscribirla|registrar|registrarme|registrarlo|registrarla|anotar|anotarlo|anotarla|apuntar|apuntarlo|apuntarla|dar de alta)\b/u', $normalized) === 1;
+    $hasThirdParty = preg_match('/\b(mi|a mi|para mi|para|a)\s+(hijo|hija|esposo|esposa|pareja|hermano|hermana|mama|madre|papa|padre|amigo|amiga|sobrino|sobrina)\b/u', $normalized) === 1
+        || preg_match('/\b(otra persona|alguien mas|un tercero|una tercera persona)\b/u', $normalized) === 1;
+    return $hasAction && $hasThirdParty;
+}
+
 function hache_sharky_draft_requires_handoff(string $text): bool
 {
-    return function_exists('hache_sharky_human_request') && hache_sharky_human_request($text);
+    if (function_exists('hache_sharky_human_request') && hache_sharky_human_request($text)) return true;
+    if (function_exists('hache_sharky_frustration') && hache_sharky_frustration($text)) return true;
+    return hache_sharky_draft_third_party_registration($text);
 }
 
 function hache_sharky_draft_extract_audio_events(array $payload): array
