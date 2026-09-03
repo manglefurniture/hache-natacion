@@ -75,7 +75,7 @@ function hache_sharky_whatsapp_commercial_ready_message(array $state,string $pre
     $program=($commercial['program']??null)==='regular'?'clases regulares':'curso intensivo';
     $sede=($commercial['sede_clave']??null)==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
     $age=is_int($commercial['age']??null)?(int)$commercial['age']:null;
-    $summary=$program.' en '.$sede.($age!==null?' para '.$age.' años':'');
+    $summary=$program.' en '.$sede.($age!==null?' para una persona de '.$age.' años':'');
     if(($commercial['program']??null)==='intensive')return rtrim($prefix).' Ya tengo: '.$summary.'. ¿Quieres que te muestre horarios disponibles o prefieres que te ayude a inscribirte?';
     return rtrim($prefix).' Ya tengo: '.$summary.'. ¿Quieres que te muestre horarios o precios?';
 }
@@ -85,13 +85,14 @@ function hache_sharky_whatsapp_low_information_reengagement(string $text): bool
     $t=hache_sharky_orchestrator_normalize($text);
     if($t==='')return true;
     if(preg_match('/[\p{L}\p{N}]/u',$t)!==1)return true;
-    return preg_match('/^(?:hola|holi|buenas|hey|ey|que\s+tal|ola)[!.?¿¡ ]*$/u',$t)===1;
+    $greeting=preg_replace('/^[.!?¿¡\s]+|[.!?¿¡\s]+$/u','',$t)??$t;
+    return preg_match('/^(?:hola|holi|buenas|hey|ey|que\s+tal|ola)$/u',$greeting)===1;
 }
 
 function hache_sharky_whatsapp_user_asks_assistant_identity(string $text): bool
 {
     $t=hache_sharky_orchestrator_normalize($text);
-    return preg_match('/\b(?:quien\s+eres|como\s+te\s+llamas|eres\s+sharky|que\s+eres)\b/u',$t)===1;
+    return preg_match('/\b(?:quien\s+eres|quien\s+es\s+sharky|como\s+te\s+llamas|eres\s+sharky|que\s+eres)\b/u',$t)===1;
 }
 
 function hache_sharky_whatsapp_enforce_no_reintroduction(string $answer,array $state,string $userText=''): string
@@ -115,7 +116,7 @@ function hache_sharky_whatsapp_enforce_no_reintroduction(string $answer,array $s
     }
     if(!$removed)return $answer;
     $safe=hache_sharky_whatsapp_clean_answer(implode("\n\n",$kept));
-    if($safe!=='')return $safe;
+    if($safe!==''&&!hache_sharky_whatsapp_low_information_reengagement($safe))return $safe;
     if(hache_sharky_whatsapp_commercial_ready($state))return hache_sharky_whatsapp_commercial_ready_message($state,'Sigo contigo.');
     $next=hache_sharky_orchestrator_next_required_step($state);$prompt=trim((string)($next['prompt']??''));
     return $prompt!==''?'Sigo contigo. '.$prompt:'Sigo contigo. ¿En qué te ayudo?';
