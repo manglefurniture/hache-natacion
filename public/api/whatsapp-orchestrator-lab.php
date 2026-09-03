@@ -40,7 +40,15 @@ foreach($durable as $event)if(!hache_sharky_inbox_store($pdo,$event))sharky_lab_
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);
 
 $business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
-// Opportunistically recover older outbound failures, then process this webhook's durable events.
+
+// A manual echo wins over every automatic send in the same webhook. Persist/process
+// echoes first, then normal messages. Only after that may leftovers in the outbox run.
+$processing=array_merge($echoes,$events);
+usort($processing,static function(array $a,array $b):int{
+    $ak=($a['kind']??'')==='echo'?0:1;$bk=($b['kind']??'')==='echo'?0:1;
+    if($ak!==$bk)return $ak<=>$bk;
+    return (int)($a['timestamp_ms']??0)<=>(int)($b['timestamp_ms']??0);
+});
+foreach($processing as $event)hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
 hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
-foreach($durable as $event)hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
 exit;
