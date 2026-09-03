@@ -40,9 +40,34 @@ foreach([
     post72_expect(!hache_sharky_post72_payment_exception_request($phrase),'Ordinary payment question must not hand off: '.$phrase);
 }
 
+// Autoridad de fechas de inicio: intensivo solo lunes; regulares según sede.
+$ref=new DateTimeImmutable('2026-09-01 12:00:00',new DateTimeZone('America/Cancun')); // martes
+foreach([
+    '¿Puedo empezar el intensivo el martes?',
+    'Quiero incorporarme al curso intensivo el miércoles.',
+    '¿Puedo empezar el intensivo hoy?',
+    'Quiero empezar clases regulares el día 20.',
+    '¿Puedo comenzar regular a mitad de mes en Monteverde?',
+    '¿Puedo iniciar clases regulares a final de mes en Palapas?',
+] as $phrase){
+    post72_expect(is_array(hache_sharky_start_authority_handoff($phrase,$ref)),'Start-date exception must hand off: '.$phrase);
+}
+foreach([
+    '¿Cuándo empieza el intensivo?',
+    'Quiero empezar el intensivo el lunes.',
+    '¿Las clases regulares empiezan a principios de mes?',
+    'En Palapas, ¿puedo iniciar regular alrededor del 15?',
+    'Quiero información de los horarios del intensivo por la mañana.',
+] as $phrase){
+    post72_expect(hache_sharky_start_authority_handoff($phrase,$ref)===null,'Normal start-date question must stay with Sharky: '.$phrase);
+}
+post72_expect(hache_sharky_start_authority_intensive_date_allowed('2026-09-07','2026-09-01'),'Future Monday must be automatable.');
+post72_expect(!hache_sharky_start_authority_intensive_date_allowed('2026-09-01','2026-09-01'),'Tuesday must never be automatable.');
+post72_expect(!hache_sharky_start_authority_intensive_date_allowed('2026-08-31','2026-09-01'),'Past Monday must require human authority.');
+
 $policy=hache_sharky_post72_whatsapp_style_policy();
-foreach(['sepáralos por sede o categoría','cada horario debe ir en una viñeta','Separa claramente precios de horarios','no inventes datos','al menos 50%'] as $needle){
-    post72_expect(str_contains($policy,$needle),'WhatsApp style/payment policy missing: '.$needle);
+foreach(['sepáralos por sede o categoría','cada horario debe ir en una viñeta','Separa claramente precios de horarios','no inventes datos','al menos 50%','COMIENZAN LOS LUNES','Monteverde: inicio normal a inicios de mes','Palapas Protudec: inicio normal a inicios de mes o alrededor del día 15'] as $needle){
+    post72_expect(str_contains($policy,$needle),'WhatsApp style/payment/start policy missing: '.$needle);
 }
 
 $business=[
@@ -69,6 +94,8 @@ $worker=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
 $outbox=file_get_contents(__DIR__.'/../config/sharky-outbox.php')?:'';
 $db=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:'';
 $batching=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
+$store=file_get_contents(__DIR__.'/../config/sharky-orchestrator-store.php')?:'';
+$recovery=file_get_contents(__DIR__.'/../config/sharky-action-recovery.php')?:'';
 
 // Presentación: el adaptador no hardcodea los horarios/precios del ejemplo y exige datos actuales.
 post72_expect(str_contains($adapter,'cada horario'),'WhatsApp adapter must request one schedule per bullet.');
@@ -83,6 +110,17 @@ post72_expect(str_contains($worker,'$pdo->beginTransaction()')&&str_contains($wo
 post72_expect(str_contains($worker,"'defer_receipt_completion'=>true"),'Lab adapter must defer receipt completion until outbox is durable.');
 post72_expect(str_contains($batching,"defer_receipt_completion"),'Batching must preserve deferred receipt completion.');
 
+// P1 Codex follow-up: las escrituras finales de la frontera no pueden ocultar fallos.
+post72_expect(str_contains($worker,'if(!hache_sharky_action_delivery_queued_by_message'),'Delivery queue mark failure must abort the transaction.');
+post72_expect(str_contains($worker,'if(!hache_sharky_orchestrator_mark_processed'),'Receipt completion failure must abort the transaction.');
+post72_expect(str_contains($recovery,'function hache_sharky_action_delivery_queued_by_message(PDO $pdo,string $messageId): bool'),'Delivery queue marker must return success/failure.');
+post72_expect(str_contains($store,'function hache_sharky_orchestrator_mark_processed(PDO $pdo,string $messageId): bool'),'Receipt marker must return success/failure.');
+
+// P1 Codex follow-up: echo manual no puede despachar si takeover no quedó persistido.
+$echoGuard=strpos($worker,"if(!hache_sharky_takeover_mark($contact,'manual'");
+$echoDispatch=strpos($worker,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20)");
+post72_expect($echoGuard!==false&&$echoDispatch!==false&&$echoGuard<$echoDispatch,'Manual takeover must persist before pending outbox dispatch/cancellation.');
+
 // P2 Codex: cada envío reclama su fila justo antes de mandar a Meta.
 post72_expect(str_contains($outbox,'hache_sharky_outbox_claim($pdo,1)'),'Outbox dispatcher must claim one row immediately before send.');
 
@@ -94,5 +132,9 @@ post72_expect(!str_contains($db,'return hache_sharky_orchestrator_state_load($co
 // P2 Codex: un recovery de alta rota una credencial nueva que sí puede entregarse.
 post72_expect(str_contains($db,"debe_cambiar_password=1"),'Recovered portal credential must force password change.');
 post72_expect(str_contains($db,"'temporary_password'=>\$temporaryPassword"),'Recovered registration must return a deliverable temporary password.');
+
+// Autoridad dura: el executor jamás automatiza un inicio intensivo fuera de lunes/futuro.
+post72_expect(str_contains($db,'hache_sharky_start_authority_intensive_date_allowed'),'Executor must revalidate intensive start authority before business write.');
+post72_expect(str_contains($db,'START_DATE_REQUIRES_HUMAN'),'Unauthorized intensive start date must have an explicit handoff code.');
 
 fwrite(STDOUT,"SHARKY_POST_PR72_OK\n");
