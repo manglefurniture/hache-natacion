@@ -22,6 +22,20 @@ expect_adapter(substr_count($clean,'Hola')===1,'Debe quitar líneas repetidas co
 expect_adapter(substr_count($clean,'Precio: 1200')===1,'Debe evitar repetición semántica exacta consecutiva.');
 expect_adapter(mb_strlen(hache_sharky_whatsapp_clean_answer(str_repeat('texto largo. ',300)))<=1401,'Debe limitar una respuesta excesivamente larga.');
 
+$confirmed=hache_sharky_orchestrator_state(null,1788382800);
+$confirmed['identity']=array_replace($confirmed['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
+$confirmed['commercial_context']=array_replace($confirmed['commercial_context'],['program'=>'intensive','sede_clave'=>'PALAPAS']);
+$guarded=hache_sharky_whatsapp_enforce_confirmed_context('El intensivo cuesta $1,200. ¿Buscas intensivo o clases regulares? ¿En qué sede: Monteverde o Palapas?',$confirmed);
+expect_adapter(str_contains($guarded,'cuesta $1,200'),'El enforcement debe conservar la respuesta útil del modelo.');
+expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($guarded,'program'),'El payload final no puede volver a preguntar un programa confirmado.');
+expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($guarded,'sede'),'El payload final no puede volver a preguntar una sede confirmada.');
+expect_adapter(hache_sharky_whatsapp_answer_asks_slot($guarded,'age'),'Tras bloquear preguntas repetidas debe continuar con el único slot realmente pendiente.');
+$confirmedAge=$confirmed;$confirmedAge['commercial_context']['age']=43;
+$fullyGuarded=hache_sharky_whatsapp_enforce_confirmed_context('¿Intensivo o regular? ¿Palapas o Monteverde?',$confirmedAge);
+expect_adapter($fullyGuarded==='Perfecto, ya tengo esos datos.','Con discovery completo no debe inventar otro slot ni reenviar preguntas contradictorias.');
+$identityOnce='Claro. Antes de seguir, ¿ya eres alumno de Hache Natación?';
+expect_adapter(hache_sharky_whatsapp_answer_asks_slot($identityOnce,'identity'),'Debe detectar cuando el modelo ya incluyó la pregunta de identidad para no duplicarla.');
+
 $decision=hache_sharky_orchestrator_decision('x','Elige',['type'=>'buttons','buttons'=>[
     hache_sharky_orchestrator_button('a','Uno'),hache_sharky_orchestrator_button('b','Dos'),hache_sharky_orchestrator_button('c','Tres'),hache_sharky_orchestrator_button('d','Cuatro')
 ]]);
