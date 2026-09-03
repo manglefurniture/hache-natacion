@@ -16,7 +16,7 @@ outbox_expect(str_contains($outbox,'contact_hash=:c'),'A worker holding one cont
 outbox_expect(str_contains($outbox,'owner_token=:o'),'Each claimed row must receive a fenced owner token.');
 outbox_expect(str_contains($outbox,'AND owner_token=:o'),'Outbox mutations must require the current owner token.');
 outbox_expect(str_contains($outbox,'function hache_sharky_outbox_renew_owner'),'A row must prove/renew ownership after waiting for the delivery lock.');
-outbox_expect(str_contains($outbox,"$lockedHash=$lockedContact!==''?hache_sharky_orchestrator_contact_hash($lockedContact):''"),'Dispatcher must derive the already-locked contact scope.');
+outbox_expect(str_contains($outbox,'$lockedHash=$lockedContact!==\'\'?hache_sharky_orchestrator_contact_hash($lockedContact):\'\''),'Dispatcher must derive the already-locked contact scope.');
 outbox_expect(str_contains($outbox,'hache_sharky_outbox_claim($pdo,1,$lockedHash):hache_sharky_outbox_claim($pdo,1)'),'A worker-owned delivery lock must never claim another contact and invert lock order.');
 $renewPos=strpos($outbox,'hache_sharky_outbox_renew_owner($pdo,$id,$owner)');
 $takeoverPos=strpos($outbox,'hache_sharky_takeover_active($contact)',$renewPos===false?0:$renewPos);
