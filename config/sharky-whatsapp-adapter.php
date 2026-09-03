@@ -71,7 +71,7 @@ function hache_sharky_whatsapp_question_targets_slot(string $text,string $slot):
     if($slot==='identity')return preg_match('/\b(?:ya\s+)?eres\s+(?:alumno|alumna|estudiante)\b|\b(?:alumno|alumna|estudiante)\s+o\s+(?:nuevo|nueva)\b/u',$t)===1;
     if($slot==='program'){
         $intensive='(?:curso\s+intensivo|intensivo)';
-        $regular='(?:clases?\s+regulares|curso\s+regular|regulares?)';
+        $regular='(?:clases?\s+regulares|curso\s+regular|regular(?:es)?)';
         $alternatives=preg_match('/\b'.$intensive.'\b.{0,60}\b'.$regular.'\b|\b'.$regular.'\b.{0,60}\b'.$intensive.'\b/u',$t)===1;
         $generic=preg_match('/\b(?:que|cual)\s+(?:tipo\s+de\s+)?(?:curso|programa)\b/u',$t)===1;
         $single=preg_match('/\b(?:prefieres|eliges|escoges|te\s+quedas\s+con|vas\s+con|quieres|buscas)\s+(?:(?:tomar|hacer|llevar)\s+)?(?:(?:el|un|las?|unas?)\s+)?(?:'.$intensive.'|'.$regular.')\b/u',$t)===1;
