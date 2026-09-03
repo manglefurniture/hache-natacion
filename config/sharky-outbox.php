@@ -60,6 +60,11 @@ function hache_sharky_outbox_mark_sent(PDO $pdo,string $id): void
     $pdo->prepare("UPDATE sharky_outbox SET status='SENT',sent_at=NOW(),lease_until=NULL,last_error=NULL WHERE id=:id AND status='PENDING'")->execute([':id'=>$id]);
 }
 
+function hache_sharky_outbox_mark_cancelled(PDO $pdo,string $id,string $reason='HUMAN_TAKEOVER'): void
+{
+    $pdo->prepare("UPDATE sharky_outbox SET status='CANCELLED',lease_until=NULL,last_error=:e WHERE id=:id AND status='PENDING'")->execute([':e'=>mb_substr($reason,0,255),':id'=>$id]);
+}
+
 function hache_sharky_outbox_mark_failed(PDO $pdo,string $id,int $attempts,string $error='SEND_FAILED'): void
 {
     $next=$attempts+1;$status=$next>=8?'DEAD':'PENDING';$delay=min(3600,30*(2**min(6,$next-1)));
@@ -67,16 +72,20 @@ function hache_sharky_outbox_mark_failed(PDO $pdo,string $id,int $attempts,strin
     $st->execute([':s'=>$status,':a'=>$next,':e'=>mb_substr($error,0,255),':id'=>$id]);
 }
 
-/** @return array{sent:int,failed:int,dead:int} */
+/** @return array{sent:int,failed:int,dead:int,cancelled:int} */
 function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10): array
 {
-    $stats=['sent'=>0,'failed'=>0,'dead'=>0];$limit=max(1,min(50,$limit));
+    $stats=['sent'=>0,'failed'=>0,'dead'=>0,'cancelled'=>0];$limit=max(1,min(50,$limit));
     // Reclama una fila justo antes de enviarla. Así el lease de una confirmación
     // nunca empieza a correr mientras espera detrás de otras llamadas lentas a Meta.
     for($i=0;$i<$limit;$i++){
         $claimed=hache_sharky_outbox_claim($pdo,1);if(!$claimed)break;$row=$claimed[0];
         $payload=hache_sharky_outbox_decrypt($row);
         if($payload===null){hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],7,'DECRYPT_FAILED');$stats['dead']++;continue;}
+        $contact=preg_replace('/\D+/','',(string)($payload['to']??''))?:'';
+        if($contact!==''&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
+            hache_sharky_outbox_mark_cancelled($pdo,(string)$row['id']);$stats['cancelled']++;continue;
+        }
         $ok=false;try{$ok=$sender($payload)===true;}catch(Throwable $e){$ok=false;}
         if($ok){hache_sharky_outbox_mark_sent($pdo,(string)$row['id']);$stats['sent']++;}
         else{hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],(int)$row['attempt_count']);$stats['failed']++;}
