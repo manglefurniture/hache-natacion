@@ -43,6 +43,64 @@ function hache_sharky_whatsapp_clean_answer(string $answer): string
     return $answer;
 }
 
+function hache_sharky_whatsapp_question_targets_slot(string $text,string $slot): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if($t==='')return false;
+    $looksLikeQuestion=str_contains($text,'?')||str_contains($text,'¿')
+        || preg_match('/^(?:antes de seguir,?\s*)?(?:que|cual|cuales|en que|donde|eres|ya eres|tienes|cuantos|cuantas|prefieres|buscas)\b/u',$t)===1;
+    if(!$looksLikeQuestion)return false;
+
+    if($slot==='identity')return preg_match('/\b(?:ya\s+)?eres\s+(?:alumno|alumna|estudiante)\b|\b(?:alumno|alumna|estudiante)\s+o\s+(?:nuevo|nueva)\b/u',$t)===1;
+    if($slot==='program')return preg_match('/\b(?:intensivo|curso\s+intensivo)\b.{0,60}\b(?:regular|regulares|clases\s+regulares)\b|\b(?:regular|regulares|clases\s+regulares)\b.{0,60}\b(?:intensivo|curso\s+intensivo)\b|\b(?:que|cual)\s+(?:tipo\s+de\s+)?(?:curso|programa|modalidad|clases)\b/u',$t)===1;
+    if($slot==='sede')return preg_match('/\bpalapas(?:\s+protudec)?\b.{0,60}\bmonteverde\b|\bmonteverde\b.{0,60}\bpalapas(?:\s+protudec)?\b|\b(?:en\s+que|cual|que)\s+sede\b|\bdonde\s+(?:quieres|prefieres|tomarias|serian)\b/u',$t)===1;
+    if($slot==='age')return preg_match('/\b(?:que\s+edad|cuantos?\s+anos|edad\s+tiene|tienes\s+cuantos?)\b/u',$t)===1;
+    return false;
+}
+
+function hache_sharky_whatsapp_answer_asks_slot(string $answer,string $slot): bool
+{
+    foreach(preg_split('/\n+|(?<=[.!?])\s+|(?=¿)/u',$answer)?:[] as $part){
+        if(hache_sharky_whatsapp_question_targets_slot(trim((string)$part),$slot))return true;
+    }
+    return false;
+}
+
+/**
+ * Last line of defence for model output: confirmed facts cannot be requested
+ * again even when the model ignores its prompt. Useful content is preserved;
+ * only contradictory discovery questions are removed.
+ */
+function hache_sharky_whatsapp_enforce_confirmed_context(string $answer,array $state): string
+{
+    $confirmed=[];
+    if(($state['identity']['kind']??'unknown')!=='unknown')$confirmed[]='identity';
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    if(in_array(($commercial['program']??null),['intensive','regular'],true))$confirmed[]='program';
+    if(in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))$confirmed[]='sede';
+    if(is_int($commercial['age']??null))$confirmed[]='age';
+    if(!$confirmed)return $answer;
+
+    $kept=[];$removed=false;
+    foreach(preg_split('/\n+|(?<=[.!?])\s+|(?=¿)/u',$answer)?:[] as $part){
+        $part=trim((string)$part);if($part==='')continue;
+        $repeats=false;
+        foreach($confirmed as $slot){
+            if(hache_sharky_whatsapp_question_targets_slot($part,$slot)){$repeats=true;break;}
+        }
+        if($repeats){$removed=true;continue;}
+        $kept[]=$part;
+    }
+    if(!$removed)return $answer;
+
+    $safe=hache_sharky_whatsapp_clean_answer(implode("\n\n",$kept));
+    if($safe==='')$safe='Perfecto, ya tengo esos datos.';
+    $next=hache_sharky_orchestrator_next_required_step($state);
+    $slot=(string)($next['slot']??'');$prompt=trim((string)($next['prompt']??''));
+    if($slot!==''&&$prompt!==''&&!hache_sharky_whatsapp_answer_asks_slot($safe,$slot))$safe=rtrim($safe)."\n\n".$prompt;
+    return $safe;
+}
+
 function hache_sharky_whatsapp_style_instruction(array $decision,array $state): string
 {
     $instruction='Responde para WhatsApp en español natural. Sé breve y fácil de escanear en móvil. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar. Si muestras horarios, precios, formas de pago o información estructurada, sepárala por sede o categoría con encabezados cortos y saltos de línea; cuando haya varios horarios, pon cada horario en una viñeta breve y nunca una tira larga de horas en una sola línea. Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad: usa solo datos actuales del backend/contexto.';
@@ -218,6 +276,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         if(hache_sharky_whatsapp_is_side_question($state,$event)){
             $instruction=hache_sharky_whatsapp_style_instruction(['kind'=>'side_question'],$state).' El usuario está dentro de un proceso controlado: responde solo la duda actual, no pierdas ni cambies ese proceso y no vuelvas a pedir datos ya capturados.';
             $answer=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer((string)($event['text']??''),$instruction,$state,$context));
+            $answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state);
             $answer=rtrim($answer)."\n\nCuando quieras, seguimos donde lo dejamos.";
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>['kind'=>'side_question','message'=>$answer,'ui'=>[],'action'=>null],'payload'=>hache_sharky_whatsapp_text_payload($contact,$answer),'action_result'=>null];
@@ -235,7 +294,8 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         if(in_array((string)($decision['kind']??''),['conversation','conversation_identity_prompt'],true)){
             $instruction=hache_sharky_whatsapp_style_instruction($decision,$state);
             $conversation=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer((string)($event['text']??''),$instruction,$state,$context));
-            if(($decision['kind']??'')==='conversation_identity_prompt')$conversation=rtrim($conversation)."\n\nAntes de seguir, ¿ya eres alumno de Hache Natación?";
+            $conversation=hache_sharky_whatsapp_enforce_confirmed_context($conversation,$state);
+            if(($decision['kind']??'')==='conversation_identity_prompt'&&!hache_sharky_whatsapp_answer_asks_slot($conversation,'identity'))$conversation=rtrim($conversation)."\n\nAntes de seguir, ¿ya eres alumno de Hache Natación?";
         }
 
         $actionResult=null;
