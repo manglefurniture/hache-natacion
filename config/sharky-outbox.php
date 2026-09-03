@@ -118,6 +118,11 @@ function hache_sharky_outbox_mark_failed(PDO $pdo,string $id,string $ownerToken,
 function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,string $lockedContact=''): array
 {
     $stats=['sent'=>0,'failed'=>0,'dead'=>0,'cancelled'=>0];$limit=max(1,min(50,$limit));$lockedContact=preg_replace('/\D+/','',$lockedContact)?:'';
+    // A rollback to the documented explicit flag value must stop even an
+    // in-flight lab request before it can claim/send another outbound row.
+    // Empty/unset is left untouched here so isolated regressions can exercise
+    // the pure dispatcher without manufacturing production activation state.
+    if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='0')return $stats;
     $lockedHash=$lockedContact!==''?hache_sharky_orchestrator_contact_hash($lockedContact):'';
     // A row is claimed immediately before send. If this worker already owns a
     // contact lock, it may only claim that contact's rows, preventing A→B/B→A
