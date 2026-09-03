@@ -64,8 +64,8 @@ function hache_sharky_lab_persist_deferred_state(PDO $pdo,?array $deferredState)
 
 /**
  * Estado conversacional, respuesta pendiente y finalización del inbox comparten
- * una misma transacción. Si el outbox no puede persistirse, el flujo durable
- * tampoco avanza y ningún receipt se completa.
+ * una misma transacción. Si cualquiera de las escrituras críticas falla, se
+ * revierte todo y el inbox conserva el turno para recovery.
  */
 function hache_sharky_lab_queue_and_complete(PDO $pdo,string $contact,array $payload,string $dedupeSeed,string $sourceMessageId,array $batchedIds=[],?array $deferredState=null): bool
 {
@@ -74,8 +74,10 @@ function hache_sharky_lab_queue_and_complete(PDO $pdo,string $contact,array $pay
         $pdo->beginTransaction();
         hache_sharky_lab_persist_deferred_state($pdo,$deferredState);
         if(!hache_sharky_outbox_enqueue($pdo,$contact,$payload,$dedupeSeed))throw new RuntimeException('Unable to persist Sharky outbound payload');
-        hache_sharky_action_delivery_queued_by_message($pdo,$sourceMessageId);
-        foreach(hache_sharky_lab_receipt_ids($sourceMessageId,$batchedIds) as $messageId)hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+        if(!hache_sharky_action_delivery_queued_by_message($pdo,$sourceMessageId))throw new RuntimeException('Unable to mark Sharky action delivery as queued');
+        foreach(hache_sharky_lab_receipt_ids($sourceMessageId,$batchedIds) as $messageId){
+            if(!hache_sharky_orchestrator_mark_processed($pdo,$messageId))throw new RuntimeException('Unable to complete Sharky inbox receipt');
+        }
         $pdo->commit();
     }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();error_log('[sharky-lab] durable delivery boundary failed');return false;}
     // El envío ocurre después del commit. Si Meta falla, el outbox conserva la respuesta.
@@ -89,7 +91,9 @@ function hache_sharky_lab_complete_without_outbox(PDO $pdo,string $sourceMessage
         if($pdo->inTransaction())throw new RuntimeException('Unexpected open transaction before Sharky completion boundary');
         $pdo->beginTransaction();
         hache_sharky_lab_persist_deferred_state($pdo,$deferredState);
-        foreach(hache_sharky_lab_receipt_ids($sourceMessageId,$batchedIds) as $messageId)hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+        foreach(hache_sharky_lab_receipt_ids($sourceMessageId,$batchedIds) as $messageId){
+            if(!hache_sharky_orchestrator_mark_processed($pdo,$messageId))throw new RuntimeException('Unable to complete Sharky inbox receipt');
+        }
         $pdo->commit();return true;
     }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();error_log('[sharky-lab] durable completion boundary failed');return false;}
 }
@@ -104,10 +108,14 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     if($kind==='echo'){
         $contact=preg_replace('/\D+/','',(string)($event['to']??''))?:'';if($contact==='')return false;
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'echo'))return false;
-        hache_sharky_takeover_mark($contact,'manual','Respuesta manual detectada por WhatsApp coexistence.');
-        // Cualquier respuesta automática aún pendiente queda cancelada antes de poder salir.
+        if(!hache_sharky_takeover_mark($contact,'manual','Respuesta manual detectada por WhatsApp coexistence.')){
+            error_log('[sharky-lab] manual takeover persistence failed; automatic outbox remains blocked from dispatch in this worker');
+            return false;
+        }
+        // Solo después de persistir takeover se permite al dispatcher cancelar pendientes.
         hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
-        hache_sharky_orchestrator_mark_processed($pdo,(string)$event['id']);return true;
+        if(!hache_sharky_orchestrator_mark_processed($pdo,(string)$event['id']))return false;
+        return true;
     }
 
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';if($contact==='')return false;$eventId=(string)($event['id']??'event');
@@ -126,15 +134,19 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         }
         $event['type']='text';$event['text']=$text;
     }
-    $text=trim((string)($event['text']??''));$paymentException=$text!==''&&hache_sharky_post72_payment_exception_request($text);
-    if($text!==''&&($paymentException||hache_sharky_draft_requires_handoff($text))){
+    $text=trim((string)($event['text']??''));
+    $paymentException=$text!==''&&hache_sharky_post72_payment_exception_request($text);
+    $startAuthority=$text!==''?hache_sharky_start_authority_handoff($text):null;
+    if($text!==''&&(is_array($startAuthority)||$paymentException||hache_sharky_draft_requires_handoff($text))){
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'text')))return false;
-        $message=$paymentException
-            ? 'Para asegurar tu lugar, la reserva se realiza por anticipado pagando el total o al menos el 50%. Si deseas pagar todo hasta el día de inicio sin reserva previa, necesito dejarte con una persona del equipo para que confirme esa excepción.'
-            : 'Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.';
+        if(is_array($startAuthority))$message=(string)$startAuthority['message'];
+        elseif($paymentException)$message='Para asegurar tu lugar, la reserva se realiza por anticipado pagando el total o al menos el 50%. Si deseas pagar todo hasta el día de inicio sin reserva previa, necesito dejarte con una persona del equipo para que confirme esa excepción.';
+        else $message='Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.';
         $payload=hache_sharky_whatsapp_text_payload($contact,$message);
         if(!hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|handoff',$eventId))return false;
-        hache_sharky_takeover_mark($contact,$paymentException?'payment_exception':'shared_v2_policy',$paymentException?'Excepción comercial: 0% anticipado y pago total al inicio.':'Handoff decidido por la misma regla vigente del webhook v2.');
+        $reason=is_array($startAuthority)?'start_date_exception':($paymentException?'payment_exception':'shared_v2_policy');
+        $summary=is_array($startAuthority)?'Excepción de fecha de inicio fuera de la autoridad de Sharky.':($paymentException?'Excepción comercial: 0% anticipado y pago total al inicio.':'Handoff decidido por la misma regla vigente del webhook v2.');
+        if(!hache_sharky_takeover_mark($contact,$reason,$summary))error_log('[sharky-lab] takeover mark failed after handoff notice reason='.$reason);
         return true;
     }
 
@@ -152,6 +164,10 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     $shouldTakeover=is_array($action)&&($action['type']??'')==='human_takeover';
     $out=is_array($result['payload']??null)?$result['payload']:null;$actionResult=is_array($result['action_result']??null)?$result['action_result']:null;
     if(is_array($actionResult)){
+        if((string)($actionResult['code']??'')==='START_DATE_REQUIRES_HUMAN'){
+            $shouldTakeover=true;
+            $out=hache_sharky_whatsapp_text_payload($contact,'Los cursos intensivos comienzan los lunes. Para incorporarte en otra fecha necesito dejarte con una persona del equipo que autorice la excepción.');
+        }
         $studentId=trim((string)($actionResult['result']['student_id']??''));if($studentId!=='')hache_sharky_draft_link_attribution($pdo,$contact,$studentId,is_array($result['state']??null)?$result['state']:[]);
         $registrationMessage=hache_sharky_post72_registration_message($actionResult,$business)??hache_sharky_draft_registration_message($actionResult,$business);if($registrationMessage!==null)$out=hache_sharky_whatsapp_text_payload($contact,$registrationMessage);
     }
@@ -173,6 +189,6 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     }else{
         if(!hache_sharky_lab_complete_without_outbox($pdo,$deliverySource,$batchedIds,$deferredState))return false;
     }
-    if($shouldTakeover)hache_sharky_takeover_mark($contact,$decisionKind==='conversation'?'unresolved':'requested_human','Sharky 2.0 controlled handoff');
+    if($shouldTakeover&&!hache_sharky_takeover_mark($contact,$decisionKind==='conversation'?'unresolved':'requested_human','Sharky 2.0 controlled handoff'))error_log('[sharky-lab] controlled takeover mark failed');
     return true;
 }
