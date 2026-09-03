@@ -33,6 +33,7 @@ function hache_sharky_orchestrator_state(?array $state = null, ?int $now = null)
         'flow' => null,
         'referral' => ['first' => null, 'latest' => null],
         'seen_message_ids' => [],
+        'assistant_presentation_queued' => false,
         'last_user_text' => '',
     ];
     if (!is_array($state)) return $base;
@@ -40,6 +41,9 @@ function hache_sharky_orchestrator_state(?array $state = null, ?int $now = null)
     $out = $base;
     foreach (['version','updated_at','mode','flow','last_user_text'] as $key) {
         if (array_key_exists($key, $state)) $out[$key] = $state[$key];
+    }
+    if (array_key_exists('assistant_presentation_queued', $state)) {
+        $out['assistant_presentation_queued'] = $state['assistant_presentation_queued'] === true;
     }
     if (is_array($state['identity'] ?? null)) $out['identity'] = array_replace($base['identity'], $state['identity']);
     if (is_array($state['referral'] ?? null)) $out['referral'] = array_replace($base['referral'], $state['referral']);

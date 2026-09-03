@@ -47,4 +47,21 @@ $controlled=hache_sharky_orchestrator_flow(hache_sharky_orchestrator_state(null,
 expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'¿Aceptan tarjeta?','interactive_id'=>''])===true,'Una duda durante confirmación debe tratarse como pregunta lateral.');
 expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'confirmo','interactive_id'=>''])===false,'Confirmar no debe confundirse con pregunta lateral.');
 
+$freshPresentationState=hache_sharky_orchestrator_state(null,1788382800);
+expect_adapter(($freshPresentationState['assistant_presentation_queued']??true)===false,'Una conversación nueva no debe asumir que Sharky ya se presentó.');
+$flowBeforePresentation=hache_sharky_orchestrator_flow($freshPresentationState,'register_intensive','offer',[],1788382810);
+expect_adapter(($flowBeforePresentation['assistant_presentation_queued']??true)===false,'Abrir un flujo controlado no equivale a haber encolado la presentación de Sharky.');
+$restoredPresentationState=hache_sharky_orchestrator_state(['assistant_presentation_queued'=>true],1788382820);
+expect_adapter(($restoredPresentationState['assistant_presentation_queued']??false)===true,'La marca durable de presentación encolada debe sobrevivir la normalización del estado.');
+
+$labSource=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
+expect_adapter(str_contains($labSource,'function hache_sharky_lab_presentation_queued'),'El lab debe consultar una marca durable de presentación encolada.');
+expect_adapter(str_contains($labSource,'function hache_sharky_lab_answer_contains_presentation'),'El lab debe reconocer la presentación real antes de marcarla.');
+expect_adapter(str_contains($labSource,'function hache_sharky_lab_mark_presentation_queued'),'La presentación debe marcarse sobre el estado diferido que comparte frontera con el outbox.');
+expect_adapter(!str_contains($labSource,"count(\$seen)>1||is_array(\$state['flow']??null)"),'Mensajes vistos o un flujo activo no deben fingir que la presentación ya salió.');
+expect_adapter(str_contains($labSource,"if(hache_sharky_lab_presentation_queued(\$state))\$history[]=['role'=>'assistant','content'=>'Ya me presenté como Sharky; la conversación ya está en curso.'];"),'Solo una presentación ya encolada debe suprimir el saludo de turnos posteriores.');
+$markPos=strpos($labSource,'$deferredState=hache_sharky_lab_mark_presentation_queued($deferredState,$out);');
+$queuePos=$markPos===false?false:strpos($labSource,'return hache_sharky_lab_queue_and_complete($pdo,$contact,$out',$markPos);
+expect_adapter($markPos!==false&&$queuePos!==false&&$markPos<$queuePos,'La marca debe decidirse desde el payload final y persistirse en la misma frontera que lo encola.');
+
 echo "SHARKY_WHATSAPP_ADAPTER_REGRESSION_OK\n";

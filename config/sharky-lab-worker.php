@@ -36,12 +36,34 @@ function hache_sharky_lab_send(array $payload): bool
     return $response!==false&&$error===''&&$status>=200&&$status<300;
 }
 
+function hache_sharky_lab_presentation_queued(array $state): bool
+{
+    return ($state['assistant_presentation_queued']??false)===true;
+}
+
+function hache_sharky_lab_answer_contains_presentation(string $answer): bool
+{
+    $head=hache_sharky_orchestrator_normalize(mb_substr(trim($answer),0,300));
+    return str_contains($head,'soy sharky')&&str_contains($head,'hache natacion');
+}
+
+function hache_sharky_lab_mark_presentation_queued(?array $deferredState,array $payload): ?array
+{
+    if(!is_array($deferredState)||!is_array($deferredState['state']??null))return $deferredState;
+    if(hache_sharky_lab_presentation_queued($deferredState['state']))return $deferredState;
+    $answer=hache_sharky_draft_payload_text($payload);
+    if($answer!==''&&hache_sharky_lab_answer_contains_presentation($answer))$deferredState['state']['assistant_presentation_queued']=true;
+    return $deferredState;
+}
+
 function hache_sharky_lab_answer(string $text,string $instruction,array $state,array $context): string
 {
     $history=[];$ref=$state['referral']['latest']??null;
     if(is_array($ref)&&!empty($ref['headline']))$history[]=['role'=>'system','content'=>'Origen de campaña: '.mb_substr((string)$ref['headline'],0,180)];
     $instruction=rtrim($instruction)."\n\n".hache_sharky_post72_whatsapp_style_policy();
-    $history[]=['role'=>'system','content'=>$instruction];$payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
+    $history[]=['role'=>'system','content'=>$instruction];
+    if(hache_sharky_lab_presentation_queued($state))$history[]=['role'=>'assistant','content'=>'Ya me presenté como Sharky; la conversación ya está en curso.'];
+    $payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
     $ch=curl_init('https://hnatacion.com/api/sharky.php');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_POSTFIELDS=>$payload,CURLOPT_RESOLVE=>['hnatacion.com:443:127.0.0.1']]);
     $response=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);if($response===false||$status<200||$status>=300)return '';
     $data=json_decode((string)$response,true);return is_array($data)&&($data['ok']??false)===true?trim((string)($data['answer']??'')):'';
@@ -230,6 +252,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $deliveryPending=hache_sharky_action_delivery_pending_for_message($pdo,$deliverySource);
         if($deliveryPending&&!is_array($out))return false;
         if(is_array($out)){
+            $deferredState=hache_sharky_lab_mark_presentation_queued($deferredState,$out);
             $payloadHash=hash('sha256',json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');
             return hache_sharky_lab_queue_and_complete($pdo,$contact,$out,$deliverySource.'|'.$decisionKind.'|'.$payloadHash,$deliverySource,$batchedIds,$deferredState);
         }
