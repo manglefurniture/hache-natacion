@@ -6,6 +6,7 @@ require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-business-actions.php';
 require_once __DIR__.'/sharky-identity-verification.php';
 require_once __DIR__.'/sharky-action-recovery.php';
+require_once __DIR__.'/sharky-start-authority.php';
 
 function hache_sharky_db_state_ready(PDO $pdo): bool
 {
@@ -115,6 +116,10 @@ function hache_sharky_execute_action(PDO $pdo,string $contact,array $action,stri
             hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,$code,$result,$message);return ['ok'=>true,'code'=>$code,'message'=>$message,'result'=>$result];
         }
         if($type==='register_intensive'){
+            $startDate=trim((string)($action['fecha_inicio']??''));
+            if(!hache_sharky_start_authority_intensive_date_allowed($startDate,isset($context['today'])?(string)$context['today']:null)){
+                throw new HacheSharkyBusinessException('Los cursos intensivos comienzan los lunes. Una incorporación en otra fecha necesita autorización humana.','START_DATE_REQUIRES_HUMAN',409);
+            }
             $fresh=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
             if(($fresh['found']??false)===true){$recovered=hache_sharky_recover_intensive($pdo,$fresh,$action);if($recovered!==null){$message='Listo. Tu registro fue recibido y quedó pendiente de confirmación/pago.';hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,'RECOVERED',$recovered,$message);return ['ok'=>true,'duplicate'=>true,'code'=>'RECOVERED','message'=>$message,'result'=>$recovered];}throw new HacheSharkyBusinessException('Este WhatsApp ya pertenece a un alumno registrado.','PHONE_ALREADY_REGISTERED',409);}
             $result=hache_sharky_business_register_intensive($pdo,$action,null,(int)($context['min_age']??12),$context['today']??null);$message='Listo. Tu registro fue recibido y quedó pendiente de confirmación/pago.';
