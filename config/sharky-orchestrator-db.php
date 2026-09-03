@@ -9,9 +9,54 @@ require_once __DIR__.'/sharky-action-recovery.php';
 require_once __DIR__.'/sharky-start-authority.php';
 require_once __DIR__.'/sharky-registration-recovery.php';
 
+function hache_sharky_db_state_key(): string
+{
+    $secret=hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY');
+    if(strlen($secret)<32){
+        if(PHP_SAPI==='cli')$secret='hache-sharky-state-cli-regression-key-2026';
+        else throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY is required before enabling Sharky 2.0');
+    }
+    return hash_hmac('sha256','hache-sharky-state-v1',$secret,true);
+}
+
 function hache_sharky_db_state_ready(PDO $pdo): bool
 {
-    try{$st=$pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=:t');$st->execute([':t'=>'sharky_conversation_state']);return(int)$st->fetchColumn()===1;}catch(Throwable $e){return false;}
+    try{
+        $st=$pdo->prepare("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sharky_conversation_state'");
+        $st->execute();
+        $columns=array_fill_keys(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)),true);
+        foreach(['contact_hash','state_ciphertext','state_iv','state_tag','expires_at'] as $column)if(!isset($columns[$column]))return false;
+        return true;
+    }catch(Throwable $e){return false;}
+}
+
+function hache_sharky_db_state_encrypt(array $state): array
+{
+    $json=json_encode($state,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    if($json===false)throw new RuntimeException('Unable to encode durable Sharky state');
+    $iv=random_bytes(12);$tag='';
+    $cipher=openssl_encrypt($json,'aes-256-gcm',hache_sharky_db_state_key(),OPENSSL_RAW_DATA,$iv,$tag,'sharky-state-v1');
+    if(!is_string($cipher)||strlen($tag)!==16)throw new RuntimeException('Unable to encrypt durable Sharky state');
+    return ['ciphertext'=>base64_encode($cipher),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag)];
+}
+
+function hache_sharky_db_state_decrypt(array $row): ?array
+{
+    $cipher=base64_decode((string)($row['state_ciphertext']??''),true);
+    $iv=base64_decode((string)($row['state_iv']??''),true);
+    $tag=base64_decode((string)($row['state_tag']??''),true);
+    if(!is_string($cipher)||!is_string($iv)||!is_string($tag)||strlen($iv)!==12||strlen($tag)!==16)return null;
+    $json=openssl_decrypt($cipher,'aes-256-gcm',hache_sharky_db_state_key(),OPENSSL_RAW_DATA,$iv,$tag,'sharky-state-v1');
+    if(!is_string($json))return null;
+    $decoded=json_decode($json,true);
+    return is_array($decoded)?$decoded:null;
+}
+
+function hache_sharky_db_state_purge_expired(PDO $pdo,int $limit=100): int
+{
+    $limit=max(1,min(1000,$limit));
+    try{return (int)$pdo->exec('DELETE FROM sharky_conversation_state WHERE expires_at<NOW() LIMIT '.$limit);}
+    catch(Throwable $e){error_log('[sharky-orchestrator] expired state purge failed');return 0;}
 }
 
 function hache_sharky_db_state_load(PDO $pdo,string $contact): array
@@ -19,10 +64,29 @@ function hache_sharky_db_state_load(PDO $pdo,string $contact): array
     if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
     $hash=hache_sharky_orchestrator_contact_hash($contact);
     try{
-        $st=$pdo->prepare('SELECT state_json,expires_at FROM sharky_conversation_state WHERE contact_hash=:c LIMIT 1');$st->execute([':c'=>$hash]);$row=$st->fetch(PDO::FETCH_ASSOC);
+        hache_sharky_db_state_purge_expired($pdo);
+        $st=$pdo->prepare('SELECT state_json,state_ciphertext,state_iv,state_tag,expires_at FROM sharky_conversation_state WHERE contact_hash=:c LIMIT 1');
+        $st->execute([':c'=>$hash]);$row=$st->fetch(PDO::FETCH_ASSOC);
         if(!$row)return hache_sharky_orchestrator_state();
-        if(strtotime((string)$row['expires_at'])<time()){$pdo->prepare('DELETE FROM sharky_conversation_state WHERE contact_hash=:c')->execute([':c'=>$hash]);return hache_sharky_orchestrator_state();}
-        $decoded=json_decode((string)$row['state_json'],true);return hache_sharky_orchestrator_state(is_array($decoded)?$decoded:null);
+        if(strtotime((string)$row['expires_at'])<time()){
+            $pdo->prepare('DELETE FROM sharky_conversation_state WHERE contact_hash=:c')->execute([':c'=>$hash]);
+            return hache_sharky_orchestrator_state();
+        }
+
+        $decoded=null;
+        if(trim((string)($row['state_ciphertext']??''))!==''){
+            $decoded=hache_sharky_db_state_decrypt($row);
+            if(!is_array($decoded))throw new RuntimeException('Unable to decrypt durable Sharky state');
+        }elseif(trim((string)($row['state_json']??''))!==''){
+            // One-time compatibility path for staging databases created before state
+            // encryption existed. Read the legacy JSON, immediately reseal it and
+            // clear the plaintext column.
+            $legacy=json_decode((string)$row['state_json'],true);
+            if(!is_array($legacy))throw new RuntimeException('Invalid legacy durable Sharky state');
+            $decoded=$legacy;
+            hache_sharky_db_state_save_now($pdo,$contact,$legacy,max(HACHE_SHARKY_FLOW_TTL,(int)max(1,strtotime((string)$row['expires_at'])-time())));
+        }
+        return hache_sharky_orchestrator_state(is_array($decoded)?$decoded:null);
     }catch(Throwable $e){error_log('[sharky-orchestrator] db state load failed');throw new RuntimeException('Unable to load durable Sharky state',0,$e);}
 }
 
@@ -50,10 +114,14 @@ function hache_sharky_db_state_save_now(PDO $pdo,string $contact,array $state,in
 {
     $ttl=max(HACHE_SHARKY_FLOW_TTL,min(172800,$ttl));
     if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
-    $hash=hache_sharky_orchestrator_contact_hash($contact);$json=json_encode($state,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)throw new RuntimeException('Unable to encode durable Sharky state');
+    $hash=hache_sharky_orchestrator_contact_hash($contact);$sealed=hache_sharky_db_state_encrypt($state);
     $expires=(new DateTimeImmutable())->modify('+'.$ttl.' seconds')->format('Y-m-d H:i:s');
-    try{$st=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,expires_at) VALUES(:c,:s,:e) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),expires_at=VALUES(expires_at),updated_at=NOW()');$st->execute([':c'=>$hash,':s'=>$json,':e'=>$expires]);return true;}
-    catch(Throwable $e){error_log('[sharky-orchestrator] db state save failed');throw new RuntimeException('Unable to save durable Sharky state',0,$e);}
+    try{
+        hache_sharky_db_state_purge_expired($pdo);
+        $st=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,state_ciphertext,state_iv,state_tag,expires_at) VALUES(:c,NULL,:s,:iv,:tag,:e) ON DUPLICATE KEY UPDATE state_json=NULL,state_ciphertext=VALUES(state_ciphertext),state_iv=VALUES(state_iv),state_tag=VALUES(state_tag),expires_at=VALUES(expires_at),updated_at=NOW()');
+        $st->execute([':c'=>$hash,':s'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':e'=>$expires]);
+        return true;
+    }catch(Throwable $e){error_log('[sharky-orchestrator] db state save failed');throw new RuntimeException('Unable to save durable Sharky state',0,$e);}
 }
 
 function hache_sharky_db_state_save(PDO $pdo,string $contact,array $state,int $ttl=86400): bool
