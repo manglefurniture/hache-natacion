@@ -89,19 +89,19 @@ expect_war(str_contains($worker,"require_once __DIR__.'/sharky-inbox.php'"),'Wor
 expect_war(str_contains($store,'function hache_sharky_orchestrator_delivery_lock'),'A delivery lock per contact is required.');
 expect_war(str_contains($batching,"'defer_delivery_unlock'"),'Batching must be able to transfer the delivery lock to the worker.');
 expect_war(str_contains($worker,"'defer_delivery_unlock'=>true"),'Worker must hold the delivery lock through the durable boundary.');
-expect_war(str_contains($worker,"$result['_delivery_lock']??null")&&str_contains($worker,'hache_sharky_lab_release_delivery_lock($deliveryLock)'),'Worker must release the transferred lock after its durable boundary.');
+expect_war(str_contains($worker,'$result[\'_delivery_lock\']??null')&&str_contains($worker,'hache_sharky_lab_release_delivery_lock($deliveryLock)'),'Worker must release the transferred lock after its durable boundary.');
 
 // Final batching pass: text can be capped, but every claimed receipt ID must complete with the batch.
 expect_war(str_contains($store,"'receipt_ids'=>[]"),'Batch storage must track all claimed receipt IDs separately from capped text events.');
-expect_war(str_contains($store,"$stored['receipt_ids'][]=$eventId"),'Every claimed event ID must be retained.');
-expect_war(str_contains($store,"$stored['events']=array_slice($stored['events'],-8)")&&str_contains($store,"array_merge(is_array($stored['receipt_ids']"),'Capping visible batch text must not discard receipt completion IDs.');
+expect_war(str_contains($store,'$stored[\'receipt_ids\'][]=$eventId'),'Every claimed event ID must be retained.');
+expect_war(str_contains($store,'$stored[\'events\']=array_slice($stored[\'events\'],-8)')&&str_contains($store,'array_merge(is_array($stored[\'receipt_ids\']'),'Capping visible batch text must not discard receipt completion IDs.');
 
 // Final takeover pass: persist human control before any pending automatic dispatch.
 $preflightTakeover=strpos($worker,'hache_sharky_takeover_mark($contact,$reason,$summary)');
 $preflightQueue=strpos($worker,'hache_sharky_lab_queue_and_complete($pdo,$contact,$payload',$preflightTakeover===false?0:$preflightTakeover);
 expect_war($preflightTakeover!==false&&$preflightQueue!==false&&$preflightTakeover<$preflightQueue,'Preflight handoff must persist takeover before queue/dispatch.');
 expect_war(str_contains($worker,'hache_sharky_outbox_allow_during_takeover'),'Only the handoff notice may bypass takeover cancellation.');
-expect_war(str_contains($outbox,"unset($payload['_sharky_allow_takeover'])"),'Internal takeover bypass flag must never be sent to Meta.');
+expect_war(str_contains($outbox,'unset($payload[\'_sharky_allow_takeover\'])'),'Internal takeover bypass flag must never be sent to Meta.');
 
 // Final timezone pass: conversational dates use the same Cancun operational day as business rules.
 expect_war(str_contains($adapter,"new DateTimeZone('America/Cancun')"),'Adapter must calculate today explicitly in Cancun.');
