@@ -69,9 +69,11 @@ function hache_sharky_orchestrator_claim_message(PDO $pdo,string $messageId,stri
 function hache_sharky_orchestrator_mark_processed(PDO $pdo,string $messageId): void
 {
     if(!hache_sharky_orchestrator_store_ready($pdo)) return;
+    $messageId=mb_substr(trim($messageId),0,191);if($messageId==='')return;
+    if(function_exists('hache_sharky_action_delivery_pending_for_message')&&hache_sharky_action_delivery_pending_for_message($pdo,$messageId))return;
     try{
         $st=$pdo->prepare('UPDATE sharky_message_receipts SET processed_at=COALESCE(processed_at,NOW()),lease_until=NULL WHERE message_id=:m');
-        $st->execute([':m'=>mb_substr(trim($messageId),0,191)]);
+        $st->execute([':m'=>$messageId]);
     }catch(Throwable $e){error_log('[sharky-orchestrator] message processed mark failed');}
 }
 
