@@ -68,6 +68,7 @@ expect_war(str_contains($migration,'payload_ciphertext MEDIUMTEXT NOT NULL'),'Ou
 expect_war(str_contains($outbox,'aes-256-gcm'),'Outbox payloads must be authenticated-encrypted at rest.');
 expect_war(str_contains($outbox,"status='PENDING'"),'Failed outbound messages must remain retryable.');
 expect_war(str_contains($outbox,'lease_until'),'Concurrent outbox dispatchers need a send lease.');
+expect_war(str_contains($outbox,'hache_sharky_outbox_claim($pdo,1)'),'Each outbound row must be claimed immediately before its send.');
 
 // P0 transactional handoff: do not close the inbox receipt after DB commit until reply is durably queued.
 $actionRecovery=file_get_contents(__DIR__.'/../config/sharky-action-recovery.php')?:'';
@@ -78,7 +79,9 @@ expect_war(str_contains($actionRecovery,'hache_sharky_action_delivery_pending_fo
 expect_war(str_contains($actionRecovery,'hache_sharky_action_delivery_queued_by_message'),'Durable reply queueing must be recorded on the action.');
 expect_war(str_contains($store,'hache_sharky_action_delivery_pending_for_message'),'Message receipt cannot close while a completed action lacks durable delivery.');
 expect_war(str_contains($batching,'hache_sharky_action_delivery_pending_for_message'),'Batched receipts must honor transactional delivery pending state.');
-expect_war(str_contains($worker,'hache_sharky_lab_finish_delivery'),'Worker must close action delivery only after durable queueing.');
+expect_war(str_contains($worker,'hache_sharky_lab_queue_and_complete'),'Worker must close action delivery only inside the durable queue transaction.');
+$queuePos=strpos($worker,'hache_sharky_outbox_enqueue');$receiptPos=strpos($worker,'hache_sharky_orchestrator_mark_processed',$queuePos===false?0:$queuePos);
+expect_war($queuePos!==false&&$receiptPos!==false&&$queuePos<$receiptPos,'Outbox persistence must happen before receipt completion.');
 expect_war(str_contains($worker,'hache_sharky_inbox.php'),'Worker must load durable inbox helpers directly.');
 
 // P1 privacy: contact identifiers use keyed HMAC rather than enumerable plain SHA-256.
