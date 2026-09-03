@@ -18,6 +18,8 @@ $inbox=file_get_contents($root.'/bin/sharky-inbox-dispatch.php')?:'';
 $outboxWorker=file_get_contents($root.'/bin/sharky-outbox-dispatch.php')?:'';
 $outboxCore=file_get_contents($root.'/config/sharky-outbox.php')?:'';
 $runbook=file_get_contents($root.'/docs/SHARKY-2-ACTIVATION.md')?:'';
+$inboxService=file_get_contents($root.'/ops/systemd/hache-sharky-inbox.service')?:'';
+$outboxService=file_get_contents($root.'/ops/systemd/hache-sharky-outbox.service')?:'';
 
 sharky_activation_expect(str_contains($migrator,"SHARKY_ORCHESTRATOR_LAB_ENABLED")&&str_contains($migrator,"Refusing migration"),'Migration runner must refuse to run while the lab is enabled.');
 sharky_activation_expect(str_contains($migrator,"GET_LOCK('hache_sharky_orchestrator_migration',10)"),'Migration runner must serialize execution with a DB advisory lock.');
@@ -38,6 +40,9 @@ sharky_activation_expect(str_contains($inbox,"SHARKY_ORCHESTRATOR_LAB_ENABLED')=
 sharky_activation_expect(str_contains($outboxWorker,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'")&&str_contains($outboxWorker,'disabled'),'Outbox worker must stop sending automatically when the lab flag is off.');
 sharky_activation_expect(str_contains($outboxCore,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'")&&str_contains($outboxCore,'return $stats'),'Outbox dispatch must fail closed unless the lab feature flag is exactly enabled.');
 sharky_activation_expect(str_contains($runbook,'Rollback inmediato')&&str_contains($runbook,'SHARKY_ORCHESTRATOR_LAB_ENABLED=0'),'Runbook must define an explicit rollback path.');
+sharky_activation_expect(str_contains($runbook,'sudo -u www-data test -r .env')&&str_contains($runbook,'sudo -u www-data php /var/www/hache-natacion/bin/sharky-orchestrator-preflight.php'),'Runbook must validate secrets/preflight using the same www-data identity as workers.');
+sharky_activation_expect(str_contains($inboxService,'User=www-data')&&str_contains($outboxService,'User=www-data'),'Both systemd workers must run as www-data.');
+sharky_activation_expect(str_contains($inboxService,'TimeoutStartSec=10min')&&str_contains($outboxService,'TimeoutStartSec=10min'),'Worker units need an explicit bounded runtime longer than the network retry budget.');
 
 $sql="-- semicolon ; in comment\nCREATE TABLE x (v VARCHAR(10) DEFAULT ';');\n/* block ; */\nINSERT INTO x(v) VALUES('a;b');\n";
 $parts=hache_sharky_activation_split_sql($sql);
