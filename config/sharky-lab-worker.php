@@ -55,7 +55,7 @@ function hache_sharky_lab_claim_early(PDO $pdo,array $event,string $contact,stri
 function hache_sharky_lab_receipt_ids(string $sourceMessageId,array $batchedIds=[]): array
 {
     $ids=[];$sourceMessageId=trim($sourceMessageId);if($sourceMessageId!=='')$ids[$sourceMessageId]=true;
-    foreach($batchedIds as $id){$id=trim((string)$id;if($id!=='')$ids[$id]=true;}
+    foreach($batchedIds as $id){$id=trim((string)$id);if($id!=='')$ids[$id]=true;}
     return array_keys($ids);
 }
 
