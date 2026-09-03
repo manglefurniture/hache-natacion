@@ -1,14 +1,17 @@
--- Sharky 2.0 — durable attribution, idempotency, conversation state, identity verification and action audit.
--- Additive/idempotent. Do not run in production until the orchestrator adapter is enabled.
+-- Sharky 2.0 — durable attribution, idempotency, conversation state, identity verification, action audit and outbound recovery.
+-- Additive/idempotent for a fresh Sharky 2.0 install. Do not run in production until the orchestrator adapter is enabled.
 
 CREATE TABLE IF NOT EXISTS sharky_message_receipts (
   message_id VARCHAR(191) NOT NULL PRIMARY KEY,
   contact_hash CHAR(64) NOT NULL,
   message_type VARCHAR(30) NOT NULL,
   received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  lease_until DATETIME NULL,
+  attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   processed_at DATETIME NULL,
   INDEX idx_sharky_receipts_contact (contact_hash, received_at),
-  INDEX idx_sharky_receipts_processed (processed_at)
+  INDEX idx_sharky_receipts_processed (processed_at),
+  INDEX idx_sharky_receipts_lease (processed_at, lease_until)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sharky_referrals (
@@ -75,4 +78,24 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
   INDEX idx_sharky_action_student (alumno_id, created_at),
   INDEX idx_sharky_action_status (status, created_at),
   CONSTRAINT fk_sharky_action_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Outbound messages are encrypted at rest. The raw WhatsApp number lives only inside
+-- the encrypted payload, never in a searchable/plaintext column.
+CREATE TABLE IF NOT EXISTS sharky_outbox (
+  id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  dedupe_key CHAR(64) NOT NULL,
+  contact_hash CHAR(64) NOT NULL,
+  payload_ciphertext MEDIUMTEXT NOT NULL,
+  payload_iv VARCHAR(32) NOT NULL,
+  payload_tag VARCHAR(32) NOT NULL,
+  status ENUM('PENDING','SENT','DEAD') NOT NULL DEFAULT 'PENDING',
+  attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+  available_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_error VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at DATETIME NULL,
+  UNIQUE KEY uq_sharky_outbox_dedupe (dedupe_key),
+  INDEX idx_sharky_outbox_pending (status, available_at),
+  INDEX idx_sharky_outbox_contact (contact_hash, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
