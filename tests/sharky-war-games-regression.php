@@ -114,14 +114,14 @@ expect_war(str_contains($worker,'hache_sharky_takeover_active($contact)&&!$hando
 
 // Second hardening pass: manual echoes beat opportunistic outbound recovery in the entrypoint.
 $processingPos=strpos($webhook,'$processing=array_merge($echoes,$events)');
-$finalDispatchPos=strrpos($webhook,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20)");
+$finalDispatchPos=strrpos($webhook,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_lab_send',20)");
 expect_war($processingPos!==false&&$finalDispatchPos!==false&&$processingPos<$finalDispatchPos,'Webhook must process echoes before its opportunistic outbox dispatch.');
 
 // Second hardening pass: takeover revalidation and Meta send share the delivery lock.
 expect_war(str_contains($outbox,'string $lockedContact=\'\''),'Outbox dispatcher must accept proof of an already-held contact lock.');
 expect_war(str_contains($outbox,'hache_sharky_orchestrator_delivery_lock($contact)'),'CLI/outside dispatchers must acquire the per-contact delivery lock.');
 expect_war(str_contains($outbox,'$callerOwnsLock=$lockedContact!==\'\'&&hash_equals($lockedContact,$contact)'),'Worker-owned locks must avoid self-deadlock while preserving serialization.');
-expect_war(str_contains($worker,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10,$contact)"),'Worker dispatch must declare the delivery lock it already owns.');
+expect_war(str_contains($worker,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_lab_send',10,\$contact)"),'Worker dispatch must declare the delivery lock it already owns.');
 expect_war(str_contains($batching,'hache_sharky_takeover_active($contact)'),'A text leaving the debounce window must revalidate takeover under the delivery lock.');
 
 // Second hardening pass: expired action owners cannot finalize a lease stolen by another worker.
