@@ -7,6 +7,7 @@ require_once __DIR__.'/sharky-business-actions.php';
 require_once __DIR__.'/sharky-identity-verification.php';
 require_once __DIR__.'/sharky-action-recovery.php';
 require_once __DIR__.'/sharky-start-authority.php';
+require_once __DIR__.'/sharky-registration-recovery.php';
 
 function hache_sharky_db_state_ready(PDO $pdo): bool
 {
@@ -69,28 +70,6 @@ function hache_sharky_action_status(PDO $pdo,string $idempotencyKey): ?array
     return hache_sharky_action_recovery_status($pdo,$idempotencyKey);
 }
 
-function hache_sharky_recover_intensive(PDO $pdo,array $fresh,array $action): ?array
-{
-    if(($fresh['found']??false)!==true)return null;
-    $st=$pdo->prepare("SELECT a.id student_id,ci.id course_id,ci.precio,s.clave sede_clave,s.nombre sede_nombre,ci.fecha_inicio,h.hora_inicio,h.hora_fin,u.id portal_user_id,u.usuario username FROM alumnos a JOIN sedes s ON s.id=a.sede_id JOIN curso_intensivo_alumnos cia ON cia.alumno_id=a.id JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id JOIN horarios h ON h.id=cia.horario_id JOIN usuarios u ON u.alumno_id=a.id AND u.rol='ALUMNO' AND u.activo=1 WHERE a.id=:a AND a.nombre=:n AND s.clave=:s AND ci.fecha_inicio=:f AND cia.horario_id=:h LIMIT 1");
-    $st->execute([':a'=>(string)$fresh['student_id'],':n'=>(string)($action['name']??''),':s'=>strtoupper((string)($action['sede_clave']??'')),':f'=>(string)($action['fecha_inicio']??''),':h'=>(string)($action['schedule_id']??'')]);$row=$st->fetch(PDO::FETCH_ASSOC);if(!$row)return null;
-
-    $temporaryPassword=password_temporal_segura();$passwordHash=password_hash($temporaryPassword,PASSWORD_DEFAULT);
-    $st=$pdo->prepare('UPDATE usuarios SET password_hash=:p,debe_cambiar_password=1 WHERE id=:u AND alumno_id=:a');
-    $st->execute([':p'=>$passwordHash,':u'=>(string)$row['portal_user_id'],':a'=>(string)$row['student_id']]);
-    if($st->rowCount()!==1)throw new RuntimeException('Unable to rotate recovered portal credential');
-
-    return [
-        'ok'=>true,'code'=>'CREATED','recovered'=>true,
-        'student_id'=>(string)$row['student_id'],'course_id'=>(string)$row['course_id'],
-        'username'=>(string)$row['username'],'temporary_password'=>$temporaryPassword,
-        'sede_clave'=>(string)$row['sede_clave'],'sede_nombre'=>(string)$row['sede_nombre'],
-        'fecha_inicio'=>(string)$row['fecha_inicio'],
-        'schedule_label'=>substr((string)$row['hora_inicio'],0,5).'–'.substr((string)$row['hora_fin'],0,5),
-        'price'=>(float)$row['precio'],
-    ];
-}
-
 function hache_sharky_action_audit_pending_result(): array
 {
     return ['ok'=>false,'retryable'=>true,'code'=>'ACTION_AUDIT_PENDING','message'=>'La operación quedó pendiente de reconciliación segura. No la repitas manualmente; el sistema la recuperará.'];
@@ -124,19 +103,24 @@ function hache_sharky_execute_action(PDO $pdo,string $contact,array $action,stri
             if(!hache_sharky_start_authority_intensive_date_allowed($startDate,isset($context['today'])?(string)$context['today']:null)){
                 throw new HacheSharkyBusinessException('Los cursos intensivos comienzan los lunes. Una incorporación en otra fecha necesita autorización humana.','START_DATE_REQUIRES_HUMAN',409);
             }
-            $fresh=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
-            if(($fresh['found']??false)===true){
-                $recovered=hache_sharky_recover_intensive($pdo,$fresh,$action);
-                if($recovered!==null){
-                    $message='Listo. Tu registro fue recibido y quedó pendiente de confirmación/pago.';
-                    if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,'RECOVERED',$recovered,$message,$ownerToken))return hache_sharky_action_audit_pending_result();
-                    return ['ok'=>true,'duplicate'=>true,'code'=>'RECOVERED','message'=>$message,'result'=>$recovered];
-                }
-                throw new HacheSharkyBusinessException('Este WhatsApp ya pertenece a un alumno registrado.','PHONE_ALREADY_REGISTERED',409);
+
+            // No identity precheck is authoritative here. The business service owns
+            // the identity lock. If another worker committed after this action lease
+            // was stolen, PHONE_ALREADY_REGISTERED is reconciled under that same
+            // identity serialization instead of being persisted as a false failure.
+            try{
+                $result=hache_sharky_business_register_intensive($pdo,$action,null,(int)($context['min_age']??12),$context['today']??null);
+            }catch(HacheSharkyBusinessException $registrationError){
+                if($registrationError->codeName!=='PHONE_ALREADY_REGISTERED')throw $registrationError;
+                $result=hache_sharky_registration_recover_locked($pdo,$contact,$action);
+                if($result===null)throw $registrationError;
             }
-            $result=hache_sharky_business_register_intensive($pdo,$action,null,(int)($context['min_age']??12),$context['today']??null);$message='Listo. Tu registro fue recibido y quedó pendiente de confirmación/pago.';
-            if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,(string)($result['code']??'CREATED'),$result,$message,$ownerToken))return hache_sharky_action_audit_pending_result();
-            return ['ok'=>true,'code'=>(string)($result['code']??'CREATED'),'message'=>$message,'result'=>$result];
+
+            $code=(string)($result['code']??'CREATED');
+            $recovered=($result['recovered']??false)===true||$code==='RECOVERED';
+            $message='Listo. Tu registro fue recibido y quedó pendiente de confirmación/pago.';
+            if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,$recovered?'RECOVERED':$code,$result,$message,$ownerToken))return hache_sharky_action_audit_pending_result();
+            return ['ok'=>true,'duplicate'=>$recovered,'code'=>$recovered?'RECOVERED':$code,'message'=>$message,'result'=>$result];
         }
         if($type==='human_takeover'){
             $message='La conversación quedó en manos del equipo.';
