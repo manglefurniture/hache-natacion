@@ -364,6 +364,39 @@ function hache_sharky_orchestrator_decision(string $kind, string $message = '', 
     return ['kind'=>$kind, 'message'=>$message, 'ui'=>$ui, 'action'=>$action];
 }
 
+/**
+ * Returns the next unresolved discovery slot without letting the LLM decide it.
+ * Controlled flows remain authoritative through state.flow and are deliberately
+ * excluded from this commercial-discovery helper.
+ */
+function hache_sharky_orchestrator_next_required_step(array $state): array
+{
+    $state=hache_sharky_orchestrator_state($state);
+    if(is_array($state['flow']??null))return ['slot'=>null,'prompt'=>null];
+
+    $identity=(string)($state['identity']['kind']??'unknown');
+    if($identity==='unknown')return [
+        'slot'=>'identity',
+        'prompt'=>'Antes de seguir, ¿ya eres alumno de Hache Natación?',
+    ];
+    if($identity!=='prospect')return ['slot'=>null,'prompt'=>null];
+
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    if(!in_array(($commercial['program']??null),['intensive','regular'],true))return [
+        'slot'=>'program',
+        'prompt'=>'¿Buscas un curso intensivo o clases regulares?',
+    ];
+    if(!in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))return [
+        'slot'=>'sede',
+        'prompt'=>'¿En qué sede prefieres tomar las clases: Monteverde o Palapas Protudec?',
+    ];
+    if(!is_int($commercial['age']??null))return [
+        'slot'=>'age',
+        'prompt'=>'¿Qué edad tiene la persona que tomaría las clases?',
+    ];
+    return ['slot'=>null,'prompt'=>null];
+}
+
 function hache_sharky_orchestrator_identity_prompt(): array
 {
     return hache_sharky_orchestrator_decision(
