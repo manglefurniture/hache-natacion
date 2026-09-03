@@ -45,7 +45,7 @@ function hache_sharky_whatsapp_clean_answer(string $answer): string
 
 function hache_sharky_whatsapp_style_instruction(array $decision,array $state): string
 {
-    $instruction='Responde para WhatsApp en español natural. Máximo 3 párrafos cortos o 5 viñetas. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar.';
+    $instruction='Responde para WhatsApp en español natural. Sé breve y fácil de escanear en móvil. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar. Si muestras horarios, precios, formas de pago o información estructurada, sepárala por sede o categoría con encabezados cortos y saltos de línea; cuando haya varios horarios, pon cada horario en una viñeta breve y nunca una tira larga de horas en una sola línea. Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad: usa solo datos actuales del backend/contexto.';
     $latest=$state['referral']['latest']??null;
     if(is_array($latest)&&!empty($latest['headline']))$instruction.=' El usuario llegó desde un anuncio cuyo contexto es: '.mb_substr((string)$latest['headline'],0,180).'. Úsalo como contexto, pero no asumas que sigue siendo su intención actual.';
     if(($decision['kind']??'')==='conversation_identity_prompt')$instruction.=' Después de responder brevemente, pregunta si ya es alumno de Hache Natación.';
@@ -163,6 +163,12 @@ function hache_sharky_whatsapp_is_side_question(array $state,array $event): bool
     return str_contains($text,'?')||preg_match('/^(cuanto|como|donde|cuando|que |aceptan|puedo|tienen|hay |cual)/u',$t)===1;
 }
 
+function hache_sharky_whatsapp_complete_receipt(PDO $pdo,string $messageId,array $extraContext): void
+{
+    if(($extraContext['defer_receipt_completion']??false)===true)return;
+    hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+}
+
 function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');$messageId=(string)($event['id']??'');
@@ -180,7 +186,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
 
         if(!hache_sharky_whatsapp_interactive_is_current($state,$event)){
             $decision=hache_sharky_orchestrator_decision('stale_interactive','Esa opción pertenece a un paso anterior. No hice ningún cambio; continuemos desde la opción que tienes activa ahora.');
-            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
 
@@ -188,15 +194,15 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         if(!is_array($state['flow']??null)&&$preIntent==='register_intensive'&&(($context['identity']['found']??false)===true||(($state['identity']['kind']??'')==='student'&&($state['identity']['verified']??false)===true))){
             $state=hache_sharky_orchestrator_clear_flow($state);
             $decision=hache_sharky_orchestrator_decision('existing_student_intensive_handoff','Veo que este número ya está vinculado a un alumno. Para evitar duplicar tu expediente, el equipo continuará contigo la inscripción al intensivo por este mismo chat.',[],['type'=>'human_takeover']);
-            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>['ok'=>true,'code'=>'HANDOFF']];
         }
 
         if(hache_sharky_whatsapp_is_side_question($state,$event)){
-            $instruction='Responde solo la duda actual de forma breve. El usuario está dentro de un proceso controlado; no pierdas ni cambies ese proceso. No vuelvas a pedir datos ya capturados.';
+            $instruction=hache_sharky_whatsapp_style_instruction(['kind'=>'side_question'],$state).' El usuario está dentro de un proceso controlado: responde solo la duda actual, no pierdas ni cambies ese proceso y no vuelvas a pedir datos ya capturados.';
             $answer=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer((string)($event['text']??''),$instruction,$state,$context));
             $answer=rtrim($answer)."\n\nCuando quieras, seguimos donde lo dejamos.";
-            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>['kind'=>'side_question','message'=>$answer,'ui'=>[],'action'=>null],'payload'=>hache_sharky_whatsapp_text_payload($contact,$answer),'action_result'=>null];
         }
 
@@ -228,7 +234,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         }
 
         hache_sharky_db_state_save($pdo,$contact,$state);
-        hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+        hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
         return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision,$conversation,$verificationUrl),'action_result'=>$actionResult];
     }finally{hache_sharky_orchestrator_unlock($lock);}
 }
