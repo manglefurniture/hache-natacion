@@ -7,6 +7,7 @@ require_once __DIR__.'/sharky-whatsapp-batching.php';
 require_once __DIR__.'/sharky-whatsapp-echoes.php';
 require_once __DIR__.'/sharky-draft-parity.php';
 require_once __DIR__.'/sharky-outbox.php';
+require_once __DIR__.'/sharky-inbox.php';
 
 function hache_sharky_lab_secret(string $name): string
 {
@@ -50,6 +51,13 @@ function hache_sharky_lab_claim_early(PDO $pdo,array $event,string $contact,stri
     return hache_sharky_orchestrator_claim_message($pdo,(string)($event['id']??''),hache_sharky_orchestrator_contact_hash($contact),$type);
 }
 
+function hache_sharky_lab_finish_delivery(PDO $pdo,string $sourceMessageId,array $batchedIds=[]): void
+{
+    hache_sharky_action_delivery_queued_by_message($pdo,$sourceMessageId);
+    hache_sharky_orchestrator_mark_processed($pdo,$sourceMessageId);
+    foreach($batchedIds as $messageId)hache_sharky_orchestrator_mark_processed($pdo,(string)$messageId);
+}
+
 function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?int $minAge=null,?int $escalationThreshold=null): bool
 {
     $kind=(string)($event['kind']??'message');$configured=hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID');
@@ -74,8 +82,8 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $text=hache_sharky_draft_transcribe_audio($event,$business,$secretResolver);
         if($text===''){
             if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'audio'))return false;
-            hache_sharky_lab_queue($pdo,$contact,hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.'),$eventId.'|audio-fallback');
-            hache_sharky_orchestrator_mark_processed($pdo,$eventId);return true;
+            $queued=hache_sharky_lab_queue($pdo,$contact,hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.'),$eventId.'|audio-fallback');
+            if(!$queued)return false;hache_sharky_orchestrator_mark_processed($pdo,$eventId);return true;
         }
         $event['type']='text';$event['text']=$text;
     }
@@ -83,8 +91,8 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     if($text!==''&&hache_sharky_draft_requires_handoff($text)){
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'text')))return false;
         hache_sharky_takeover_mark($contact,'shared_v2_policy','Handoff decidido por la misma regla vigente del webhook v2.');
-        hache_sharky_lab_queue($pdo,$contact,hache_sharky_whatsapp_text_payload($contact,'Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.'),$eventId.'|handoff');
-        hache_sharky_orchestrator_mark_processed($pdo,$eventId);return true;
+        $queued=hache_sharky_lab_queue($pdo,$contact,hache_sharky_whatsapp_text_payload($contact,'Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.'),$eventId.'|handoff');
+        if(!$queued)return false;hache_sharky_orchestrator_mark_processed($pdo,$eventId);return true;
     }
 
     $result=hache_sharky_whatsapp_enqueue($pdo,$event,'hache_sharky_lab_answer',['verification_base_url'=>'https://hnatacion.com/sharky-verificar.php','min_age'=>$minAge]);
@@ -104,9 +112,15 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
             $out=hache_sharky_whatsapp_text_payload($contact,'Para no hacerte dar vueltas, te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.');
         }
     }
+
+    $deliverySource=(string)($result['synthetic_id']??$eventId);$batchedIds=is_array($result['batched_ids']??null)?$result['batched_ids']:[];
+    $deliveryPending=hache_sharky_action_delivery_pending_for_message($pdo,$deliverySource);
+    if($deliveryPending&&!is_array($out))return false;
     if(is_array($out)){
         $payloadHash=hash('sha256',json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');
-        hache_sharky_lab_queue($pdo,$contact,$out,$eventId.'|'.$decisionKind.'|'.$payloadHash);
+        $queued=hache_sharky_lab_queue($pdo,$contact,$out,$deliverySource.'|'.$decisionKind.'|'.$payloadHash);
+        if(!$queued&&$deliveryPending)return false;
+        if($queued&&$deliveryPending)hache_sharky_lab_finish_delivery($pdo,$deliverySource,$batchedIds);
     }
     return true;
 }
