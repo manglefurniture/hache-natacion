@@ -47,4 +47,9 @@ $controlled=hache_sharky_orchestrator_flow(hache_sharky_orchestrator_state(null,
 expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'¿Aceptan tarjeta?','interactive_id'=>''])===true,'Una duda durante confirmación debe tratarse como pregunta lateral.');
 expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'confirmo','interactive_id'=>''])===false,'Confirmar no debe confundirse con pregunta lateral.');
 
+$labSource=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
+expect_adapter(str_contains($labSource,'function hache_sharky_lab_has_prior_turn'),'El lab debe distinguir primera respuesta de conversación ya iniciada.');
+expect_adapter(str_contains($labSource,"count(\$seen)>1||is_array(\$state['flow']??null)"),'La detección debe conservar el saludo inicial y suprimirlo en turnos posteriores o flujos activos.');
+expect_adapter(str_contains($labSource,"['role'=>'assistant','content'=>'Ya me presenté como Sharky; la conversación ya está en curso.']"),'Los turnos posteriores deben enviar historial de asistente para que sharky.php no los trate como primera respuesta.');
+
 echo "SHARKY_WHATSAPP_ADAPTER_REGRESSION_OK\n";
