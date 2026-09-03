@@ -199,6 +199,14 @@ function hache_sharky_business_register_intensive(PDO $pdo, array $action, ?stri
     $pdo->beginTransaction();
     try {
         regla_bloquear_identidades_alumnos($pdo);
+
+        // Use the same stable site-row lock as api/intensivos.php before checking
+        // whether the course exists. FOR UPDATE on an absent course row alone does
+        // not serialize Sharky against an administrative course creation.
+        $st = $pdo->prepare('SELECT id FROM sedes WHERE id=:s AND activo=1 LIMIT 1 FOR UPDATE');
+        $st->execute([':s'=>$siteId]);
+        if (!$st->fetchColumn()) throw new HacheSharkyBusinessException('La sede ya no está disponible.', 'SITE_UNAVAILABLE', 409);
+
         $st = $pdo->prepare('SELECT id FROM alumnos WHERE whatsapp=:w LIMIT 1');
         $st->execute([':w'=>$phone]);
         if ($st->fetchColumn()) throw new HacheSharkyBusinessException('Este WhatsApp ya tiene un registro.', 'PHONE_ALREADY_REGISTERED', 409);
