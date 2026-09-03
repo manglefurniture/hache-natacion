@@ -36,6 +36,20 @@ expect_adapter($fullyGuarded==='Perfecto, ya tengo esos datos.','Con discovery c
 $identityOnce='Claro. Antes de seguir, ¿ya eres alumno de Hache Natación?';
 expect_adapter(hache_sharky_whatsapp_answer_asks_slot($identityOnce,'identity'),'Debe detectar cuando el modelo ya incluyó la pregunta de identidad para no duplicarla.');
 
+// Post-discovery: al completar identidad/programa/sede/edad ya existe un siguiente paso útil y estable.
+expect_adapter(hache_sharky_whatsapp_commercial_ready($confirmedAge),'Prospecto con programa, sede y edad confirmados debe considerarse listo.');
+$readyMessage=hache_sharky_whatsapp_commercial_ready_message($confirmedAge);
+expect_adapter(str_contains($readyMessage,'curso intensivo')&&str_contains($readyMessage,'Palapas Protudec')&&str_contains($readyMessage,'43 años'),'El cierre de discovery debe resumir el contexto confirmado.');
+expect_adapter(str_contains($readyMessage,'horarios disponibles')&&str_contains($readyMessage,'inscribirte'),'El intensivo completo debe terminar con opciones útiles, no con un callejón sin salida.');
+expect_adapter(hache_sharky_whatsapp_low_information_reengagement('??'),'Solo signos debe tratarse como reenganche, no como nueva conversación libre.');
+expect_adapter(hache_sharky_whatsapp_low_information_reengagement('Hola'),'Un saludo con contexto completo debe reenganchar la conversación vigente.');
+expect_adapter(!hache_sharky_whatsapp_low_information_reengagement('¿Cuánto cuesta?'),'Una pregunta sustantiva debe seguir llegando al modelo.');
+$reintro=hache_sharky_whatsapp_enforce_no_reintroduction('¡Hola! Soy Sharky, asistente IA de Hache Natación en Cancún.',$confirmedAge,'Hola');
+expect_adapter(!str_contains(hache_sharky_orchestrator_normalize($reintro),'soy sharky'),'Una conversación ya encaminada no puede volver a presentarse como primer contacto.');
+expect_adapter(str_contains($reintro,'Sigo contigo'),'Si la re-presentación era todo el mensaje debe reemplazarse por reenganche contextual.');
+$identityAsked='Soy Sharky, asistente IA de Hache Natación en Cancún.';
+expect_adapter(hache_sharky_whatsapp_enforce_no_reintroduction($identityAsked,$confirmedAge,'¿Quién eres?')===$identityAsked,'Si el usuario pregunta explícitamente quién es Sharky, sí puede responder su identidad.');
+
 // Review hardening: detectar repreguntas de una sola opción sin comerse preguntas de otros dominios.
 expect_adapter(hache_sharky_whatsapp_question_targets_slot('¿Prefieres el curso intensivo?','program'),'Una repregunta de programa de una sola opción debe detectarse.');
 expect_adapter(hache_sharky_whatsapp_question_targets_slot('¿Prefieres tomar clases en Palapas?','sede'),'Una repregunta de sede de una sola opción debe detectarse.');
@@ -60,6 +74,9 @@ expect_adapter(!hache_sharky_whatsapp_nado_libre_request('¿Puedo tomar clases r
 expect_adapter(str_contains(hache_sharky_whatsapp_nado_libre_message(),'no ofrece nado libre'),'La respuesta determinista debe negar explícitamente el nado libre.');
 $adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 expect_adapter(str_contains($adapterSource,"'nado_libre_unavailable'"),'El adapter debe interceptar nado libre antes de delegar al LLM.');
+expect_adapter(str_contains($adapterSource,"'commercial_reengagement'"),'El adapter debe interceptar saludos/signos después de discovery completo.');
+expect_adapter(str_contains($adapterSource,"'commercial_ready'"),'Completar el último slot debe producir un cierre determinista antes de llamar al LLM.');
+expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_enforce_no_reintroduction'),'Toda conversación libre debe pasar por el guard contra re-presentaciones tardías.');
 
 $decision=hache_sharky_orchestrator_decision('x','Elige',['type'=>'buttons','buttons'=>[
     hache_sharky_orchestrator_button('a','Uno'),hache_sharky_orchestrator_button('b','Dos'),hache_sharky_orchestrator_button('c','Tres'),hache_sharky_orchestrator_button('d','Cuatro')
