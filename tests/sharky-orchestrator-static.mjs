@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const core = fs.readFileSync(new URL('../config/sharky-orchestrator.php', import.meta.url), 'utf8');
+const adapter = fs.readFileSync(new URL('../config/sharky-whatsapp-adapter.php', import.meta.url), 'utf8');
 const store = fs.readFileSync(new URL('../config/sharky-orchestrator-store.php', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../database/migrations/20260902_sharky_orchestrator.sql', import.meta.url), 'utf8');
 const docs = fs.readFileSync(new URL('../docs/SHARKY-2-ORCHESTRATOR.md', import.meta.url), 'utf8');
@@ -18,7 +19,12 @@ for (const marker of [
 ]) assert.ok(core.includes(marker), `core must contain ${marker}`);
 
 assert.ok(core.indexOf('hache_sharky_orchestrator_capture_referral') < core.indexOf("$intent = hache_sharky_orchestrator_contextual_intent"), 'referral is captured before contextual intent classification');
+assert.ok(core.includes('hache_sharky_orchestrator_next_required_step'), 'the deterministic core must own the next unresolved discovery slot');
 assert.doesNotMatch(core, /curl_(?:init|exec)|api\.openai\.com|graph\.facebook\.com|\bINSERT\b|\bUPDATE\b|\bDELETE\b/i, 'deterministic core cannot call remote services or mutate DB');
+
+assert.ok(adapter.includes('hache_sharky_whatsapp_enforce_confirmed_context'), 'the adapter must enforce confirmed context after model generation');
+assert.match(adapter, /\$conversation=hache_sharky_whatsapp_enforce_confirmed_context\(\$conversation,\$state\)/, 'free conversation output must pass through deterministic enforcement');
+assert.match(adapter, /\$answer=hache_sharky_whatsapp_enforce_confirmed_context\(\$answer,\$state\)/, 'side-question output must pass through deterministic enforcement');
 
 for (const marker of [
   'sharky_message_receipts',
