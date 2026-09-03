@@ -40,8 +40,14 @@ function hache_sharky_action_recovery_status(PDO $pdo,string $idempotencyKey): ?
         $st=$pdo->prepare('SELECT status,result_code,action_type,source_message_id,delivery_queued_at,lease_until,attempt_count,result_json,result_ciphertext,result_iv,result_tag,result_message,completed_at FROM sharky_action_audit WHERE idempotency_key=:k LIMIT 1');
         $st->execute([':k'=>hash('sha256',$idempotencyKey)]);$row=$st->fetch(PDO::FETCH_ASSOC);if(!$row)return null;
         $sealed=trim((string)($row['result_ciphertext']??''));
-        if($sealed!=='')$row['result']=hache_sharky_action_result_decrypt($row);
-        else{$decoded=json_decode((string)($row['result_json']??''),true);$row['result']=is_array($decoded)?$decoded:null;}
+        if($sealed!==''){
+            $decoded=hache_sharky_action_result_decrypt($row);
+            $row['result']=$decoded;
+            $row['result_decrypt_failed']=!is_array($decoded);
+            if($row['result_decrypt_failed'])error_log('[sharky-action] encrypted result decrypt failed; recovery required');
+        }else{
+            $decoded=json_decode((string)($row['result_json']??''),true);$row['result']=is_array($decoded)?$decoded:null;$row['result_decrypt_failed']=false;
+        }
         return $row;
     }catch(Throwable $e){return null;}
 }
@@ -81,6 +87,29 @@ function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,boo
         $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>hash('sha256',$idempotencyKey),':o'=>$ownerToken]);
         return $st->rowCount()===1;
     }catch(Throwable $e){error_log('[sharky-action] finish failed');return false;}
+}
+
+/**
+ * Re-seals a completed but unreadable registration result after the business
+ * registration has been reconciled under the identity lock and a fresh portal
+ * password has been rotated. Delivery must still be pending; otherwise a
+ * completed/delivered audit is never mutated by a replay.
+ */
+function hache_sharky_action_recovery_reseal_completed(PDO $pdo,string $idempotencyKey,string $resultCode,array $result,string $message): bool
+{
+    if(!hache_sharky_orchestrator_store_ready($pdo))return false;
+    $public=$result;$sealed=null;
+    if(array_key_exists('temporary_password',$public)){
+        $sealed=hache_sharky_action_result_encrypt($public);
+        unset($public['temporary_password']);
+    }
+    if($sealed===null)return false;
+    $json=json_encode($public,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)return false;
+    try{
+        $st=$pdo->prepare("UPDATE sharky_action_audit SET result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=COALESCE(completed_at,NOW()) WHERE idempotency_key=:k AND status='COMPLETED' AND delivery_queued_at IS NULL");
+        $st->execute([':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':m'=>mb_substr($message,0,500),':k'=>hash('sha256',$idempotencyKey)]);
+        return $st->rowCount()===1;
+    }catch(Throwable $e){error_log('[sharky-action] completed result reseal failed');return false;}
 }
 
 function hache_sharky_action_lease_active(?array $status): bool
