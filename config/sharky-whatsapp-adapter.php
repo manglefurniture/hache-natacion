@@ -72,7 +72,7 @@ function hache_sharky_whatsapp_weather_cancellation_request(string $text): bool
 
 function hache_sharky_whatsapp_weather_cancellation_message(): string
 {
-    return 'La lluvia normal no cancela las clases. Solo se cancelan cuando hay tormenta eléctrica. Si está lloviendo pero no hay tormenta eléctrica, la clase se mantiene.';
+    return 'La lluvia normal no cancela las clases. Si hay tormenta eléctrica, la clase se cancela. Si está lloviendo pero no hay tormenta eléctrica, la clase se mantiene.';
 }
 
 function hache_sharky_whatsapp_daypart(string $text,string $interactiveId=''): ?string
@@ -93,6 +93,7 @@ function hache_sharky_whatsapp_detect_venue_preference(string $text,string $inte
     if($id==='sede:monteverde')return 'MONTEVERDE';
     $existing=hache_sharky_orchestrator_sede_choice($text);
     if($existing!==null)return $existing;
+    if(str_contains($text,'?')||str_contains($text,'¿'))return null;
     $t=hache_sharky_orchestrator_normalize($text);
     $palapas=preg_match('/\bpalapas(?:\s+protudec)?\b.{0,24}\b(?:me\s+queda\s+mejor|me\s+conviene|me\s+queda\s+mas\s+cerca)\b/u',$t)===1
         || preg_match('/\b(?:me\s+queda\s+mejor|me\s+conviene|me\s+queda\s+mas\s+cerca)\b.{0,24}\bpalapas(?:\s+protudec)?\b/u',$t)===1;
@@ -124,6 +125,7 @@ function hache_sharky_whatsapp_regular_schedule_message(PDO $pdo,array $state,st
         $hour=(int)substr($start,0,2);
         if(($daypart==='morning'&&$hour<12)||($daypart==='evening'&&$hour>=12))$hours[]=$start.'–'.$end;
     }
+    $hours=array_values(array_unique($hours));
     $period=$daypart==='morning'?'matutinos':'vespertinos';
     if(!$hours)return 'Ahora mismo no encuentro horarios regulares '.$period.' activos en '.$label.'. Si quieres, puedo mostrarte el otro turno o dejarte con el equipo para revisarlo.';
     return 'Horarios regulares '.$period.' activos en '.$label.':'."\n\n".implode("\n",array_map(static fn(string $h):string=>'• '.$h,$hours));
@@ -131,7 +133,10 @@ function hache_sharky_whatsapp_regular_schedule_message(PDO $pdo,array $state,st
 
 function hache_sharky_whatsapp_qualification_start(array $state,int $now): array
 {
-    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','swim',[],$now);
+    $data=[];
+    $preferred=(string)($state['commercial_context']['program']??'');
+    if(in_array($preferred,['intensive','regular'],true))$data['preferred_program']=$preferred;
+    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','swim',$data,$now);
     $decision=hache_sharky_orchestrator_decision('prospect_swim_prompt','Para orientarte por lo que necesitas: ¿ya sabes nadar o estás empezando desde cero?',['type'=>'buttons','buttons'=>[
         hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),
         hache_sharky_orchestrator_button('qualify:beginner','Desde cero'),
@@ -139,11 +144,20 @@ function hache_sharky_whatsapp_qualification_start(array $state,int $now): array
     return [$state,$decision];
 }
 
+function hache_sharky_whatsapp_qualification_sede_step(array $state,array $data,int $now,string $message): array
+{
+    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',$data,$now);
+    return [$state,hache_sharky_orchestrator_decision('prospect_program_recommendation',$message.' ¿Qué sede te queda mejor?',['type'=>'buttons','buttons'=>[
+        hache_sharky_orchestrator_button('sede:monteverde','Monteverde'),
+        hache_sharky_orchestrator_button('sede:palapas','Palapas'),
+    ]])];
+}
+
 function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $event,int $now): ?array
 {
     $flow=$state['flow']??null;
     if(!is_array($flow)||($flow['name']??'')!=='qualify_prospect')return null;
-    $step=(string)($flow['step']??'');$id=strtolower(trim((string)($event['interactive_id']??'')));$text=trim((string)($event['text']??''));$t=hache_sharky_orchestrator_normalize($text);
+    $step=(string)($flow['step']??'');$data=is_array($flow['data']??null)?$flow['data']:[];$id=strtolower(trim((string)($event['interactive_id']??'')));$text=trim((string)($event['text']??''));$t=hache_sharky_orchestrator_normalize($text);
 
     if($step==='swim'){
         $beginner=$id==='qualify:beginner'||preg_match('/^(?:no|no\s+se\s+nadar|no\s+nado|desde\s+cero|estoy\s+empezando|nunca\s+he\s+nadado)[.! ]*$/u',$t)===1;
@@ -152,11 +166,9 @@ function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $
             hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),hache_sharky_orchestrator_button('qualify:beginner','Desde cero')]])];
         if($beginner){
             $state['commercial_context']['program']='intensive';
-            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',[],$now);
-            return [$state,hache_sharky_orchestrator_decision('prospect_program_recommendation','Si estás empezando desde cero, el curso intensivo es el mejor punto de partida. ¿Qué sede te queda mejor?',['type'=>'buttons','buttons'=>[
-                hache_sharky_orchestrator_button('sede:monteverde','Monteverde'),hache_sharky_orchestrator_button('sede:palapas','Palapas')]])];
+            return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Si estás empezando desde cero, el curso intensivo es el mejor punto de partida.');
         }
-        $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','background',[],$now);
+        $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','background',$data,$now);
         return [$state,hache_sharky_orchestrator_decision('prospect_background_prompt','Perfecto. ¿Has tomado clases de natación antes o aprendiste por tu cuenta?',['type'=>'buttons','buttons'=>[
             hache_sharky_orchestrator_button('qualify:formal','He tomado clases'),hache_sharky_orchestrator_button('qualify:self','Por mi cuenta')]])];
     }
@@ -166,11 +178,33 @@ function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $
         $self=$id==='qualify:self'||preg_match('/^(?:no|por\s+mi\s+cuenta|aprendi\s+solo|aprendi\s+sola|nunca\s+he\s+tomado\s+clases|autodidacta)[.! ]*$/u',$t)===1;
         if(!$formal&&!$self)return [$state,hache_sharky_orchestrator_decision('prospect_background_prompt','¿Has tomado clases antes o aprendiste por tu cuenta?',['type'=>'buttons','buttons'=>[
             hache_sharky_orchestrator_button('qualify:formal','He tomado clases'),hache_sharky_orchestrator_button('qualify:self','Por mi cuenta')]])];
-        $state['commercial_context']['program']=$formal?'regular':'intensive';
-        $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',[],$now);
-        $why=$formal?'Como ya has tomado clases, las clases regulares son una buena opción para seguir técnica, resistencia y estilos.':'Aunque ya nades, si aprendiste por tu cuenta te recomendamos comenzar por el intensivo para ordenar fundamentos y técnica.';
-        return [$state,hache_sharky_orchestrator_decision('prospect_program_recommendation',$why.' ¿Qué sede te queda mejor?',['type'=>'buttons','buttons'=>[
-            hache_sharky_orchestrator_button('sede:monteverde','Monteverde'),hache_sharky_orchestrator_button('sede:palapas','Palapas')]])];
+        if($self){
+            $state['commercial_context']['program']='intensive';
+            return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Aunque ya nades, si aprendiste por tu cuenta te recomendamos comenzar por el intensivo para ordenar fundamentos y técnica.');
+        }
+        $preferred=(string)($data['preferred_program']??'');
+        if(in_array($preferred,['intensive','regular'],true)){
+            $state['commercial_context']['program']=$preferred;
+            $why=$preferred==='intensive'?'Como ya tomaste clases, también puedes elegir el intensivo si buscas un bloque temporal o trabajar técnica.':'Como ya has tomado clases, las clases regulares son una buena opción para seguir técnica, resistencia y estilos.';
+            return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,$why);
+        }
+        $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',$data,$now);
+        return [$state,hache_sharky_orchestrator_decision('prospect_program_prompt','Como ya sabes nadar y has tomado clases, ¿qué buscas ahora: un curso intensivo temporal o clases regulares mensuales?',['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),
+            hache_sharky_orchestrator_button('qualify:regular','Regulares'),
+        ]])];
+    }
+
+    if($step==='program'){
+        $program='';
+        if($id==='qualify:intensive')$program='intensive';
+        elseif($id==='qualify:regular')$program='regular';
+        else $program=(string)(hache_sharky_orchestrator_program_choice($text)??'');
+        if(!in_array($program,['intensive','regular'],true))return [$state,hache_sharky_orchestrator_decision('prospect_program_prompt','¿Prefieres un curso intensivo temporal o clases regulares mensuales?',['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),hache_sharky_orchestrator_button('qualify:regular','Regulares')]])];
+        $state['commercial_context']['program']=$program;
+        $why=$program==='intensive'?'Perfecto, podemos orientarte por el intensivo.':'Perfecto, seguimos por clases regulares.';
+        return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,$why);
     }
 
     if($step==='sede'){
@@ -179,7 +213,7 @@ function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $
             hache_sharky_orchestrator_button('sede:monteverde','Monteverde'),hache_sharky_orchestrator_button('sede:palapas','Palapas')]])];
         $state['commercial_context']['sede_clave']=$sede;
         if(($state['commercial_context']['program']??null)==='regular'){
-            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','daypart',[],$now);
+            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','daypart',$data,$now);
             $label=$sede==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
             return [$state,hache_sharky_orchestrator_decision('prospect_daypart_prompt','Perfecto. Para clases regulares en '.$label.', ¿prefieres horario matutino o vespertino?',['type'=>'buttons','buttons'=>[
                 hache_sharky_orchestrator_button('daypart:morning','Matutino'),hache_sharky_orchestrator_button('daypart:evening','Vespertino')]])];
@@ -462,6 +496,7 @@ function hache_sharky_whatsapp_interactive_is_current(array $state,array $event)
     if($name==='qualify_prospect'){
         if($step==='swim')return in_array($id,['qualify:swims','qualify:beginner'],true);
         if($step==='background')return in_array($id,['qualify:formal','qualify:self'],true);
+        if($step==='program')return in_array($id,['qualify:intensive','qualify:regular'],true);
         if($step==='sede')return str_starts_with($id,'sede:');
         if($step==='daypart')return str_starts_with($id,'daypart:');
         return false;
@@ -504,7 +539,7 @@ function hache_sharky_whatsapp_is_side_question(array $state,array $event): bool
     $flow=$state['flow']??null;if(!is_array($flow))return false;
     $name=(string)($flow['name']??'');$step=(string)($flow['step']??'');
     if($name==='qualify_prospect'){
-        if(!in_array($step,['swim','background','sede','daypart'],true))return false;
+        if(!in_array($step,['swim','background','program','sede','daypart'],true))return false;
     }elseif(!in_array($step,['offer','sede','course','schedule','confirm'],true))return false;
     if(trim((string)($event['interactive_id']??''))!=='')return false;
     $text=trim((string)($event['text']??''));if($text==='')return false;
@@ -618,7 +653,10 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             if(($state['commercial_context']['program']??null)==='intensive')[$state,$decision]=hache_sharky_whatsapp_registration_offer_from_context($state,(int)$context['now']);
             else $decision=hache_sharky_orchestrator_decision('commercial_ready',hache_sharky_whatsapp_commercial_ready_message($state));
         }
-        if(($decision['kind']??'')==='conversation_identity_prompt')$decision['message']='Antes de seguir, necesito saber una sola cosa: ¿ya eres alumno de Hache Natación?';
+        if(($decision['kind']??'')==='conversation_identity_prompt'){
+            $intro=($state['assistant_presentation_queued']??false)===true?'':'¡Hola! Soy Sharky 🦈, el asistente IA de Hache Natación.' . "\n\n";
+            $decision['message']=$intro.'Antes de seguir, necesito saber una sola cosa: ¿ya eres alumno de Hache Natación?';
+        }
         [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
         $verificationUrl=null;
         if(($decision['ui']['type']??'')==='verification_link'){
