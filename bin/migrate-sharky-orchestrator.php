@@ -6,6 +6,30 @@ require_once __DIR__.'/../config/sharky-activation.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
+function hache_sharky_migration_foreign_key_ddl(): array
+{
+    return [
+        'fk_sharky_referral_alumno'=>'ALTER TABLE sharky_referrals ADD CONSTRAINT fk_sharky_referral_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL',
+        'fk_sharky_identity_student'=>'ALTER TABLE sharky_identity_challenges ADD CONSTRAINT fk_sharky_identity_student FOREIGN KEY (verified_student_id) REFERENCES alumnos(id) ON DELETE SET NULL',
+        'fk_sharky_action_alumno'=>'ALTER TABLE sharky_action_audit ADD CONSTRAINT fk_sharky_action_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL',
+    ];
+}
+
+function hache_sharky_migration_ensure_constraints(PDO $pdo): void
+{
+    $ddl=hache_sharky_migration_foreign_key_ddl();
+    foreach(hache_sharky_activation_foreign_key_specs() as $spec){
+        if(hache_sharky_activation_constraint_present($pdo,$spec))continue;
+        $st=$pdo->prepare("SELECT COUNT(*) FROM information_schema.key_column_usage WHERE table_schema=DATABASE() AND table_name=:t AND column_name=:c AND referenced_table_name IS NOT NULL");
+        $st->execute([':t'=>(string)$spec['table'],':c'=>(string)$spec['column']]);
+        if((int)$st->fetchColumn()>0)throw new RuntimeException('Incompatible existing foreign key on '.(string)$spec['table'].'.'.(string)$spec['column']);
+        $name=(string)$spec['name'];
+        if(!isset($ddl[$name]))throw new RuntimeException('Missing migration DDL for foreign key '.$name);
+        $pdo->exec($ddl[$name]);
+        if(!hache_sharky_activation_constraint_present($pdo,$spec))throw new RuntimeException('Unable to verify foreign key '.$name);
+    }
+}
+
 $root=dirname(__DIR__);
 $migrations=[
     $root.'/database/migrations/20260902_sharky_orchestrator.sql',
@@ -30,7 +54,7 @@ try{
                 catch(Throwable $e){throw new RuntimeException(basename($file).' statement '.($index+1).' failed',0,$e);}
             }
         }
-        hache_sharky_activation_ensure_constraints($pdo);
+        hache_sharky_migration_ensure_constraints($pdo);
         $schema=hache_sharky_activation_schema_report($pdo);
         if(($schema['ok']??false)!==true){
             throw new RuntimeException('Schema verification failed: '.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
