@@ -14,7 +14,7 @@ $migrations=[
 
 try{
     $flag=hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED');
-    if($flag==='1')throw new RuntimeException('Refusing migration while SHARKY_ORCHESTRATOR_LAB_ENABLED=1. Set it to 0 first.');
+    if($flag!=='0')throw new RuntimeException('Refusing migration unless SHARKY_ORCHESTRATOR_LAB_ENABLED=0 explicitly.');
     /** @var PDO $pdo */
     $pdo=require $root.'/config/pdo.php';
     $lock=(int)$pdo->query("SELECT GET_LOCK('hache_sharky_orchestrator_migration',10)")->fetchColumn();
@@ -30,6 +30,7 @@ try{
                 catch(Throwable $e){throw new RuntimeException(basename($file).' statement '.($index+1).' failed',0,$e);}
             }
         }
+        hache_sharky_activation_ensure_constraints($pdo);
         $schema=hache_sharky_activation_schema_report($pdo);
         if(($schema['ok']??false)!==true){
             throw new RuntimeException('Schema verification failed: '.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
