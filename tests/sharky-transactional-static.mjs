@@ -12,6 +12,9 @@ const echoes=read('config/sharky-whatsapp-echoes.php');
 const verify=read('config/sharky-identity-verification.php');
 const page=read('public/sharky-verificar.php');
 const lab=read('public/api/whatsapp-orchestrator-lab.php');
+const worker=read('config/sharky-lab-worker.php');
+const recovery=read('config/sharky-action-recovery.php');
+const outbox=read('config/sharky-outbox.php');
 const login=read('api/login.php');
 const router=read('api/whatsapp-webhook.php');
 
@@ -49,5 +52,22 @@ expect(lab.includes("'Database unavailable'")&&lab.includes("'Sharky migration i
 expect(lab.includes('hache_sharky_lab_process_event')&&lab.indexOf('hache_sharky_lab_process_event')>ackPos,'Las acciones solo pueden ejecutarse después de persistir y ACKear el evento durable.');
 expect(lab.includes('hache_sharky_outbox_dispatch'),'El lab debe reintentar respuestas durables pendientes.');
 expect(!migration.includes('whatsapp VARCHAR'),'Persistencia del orquestador no debe almacenar teléfono crudo.');
+
+// P1 final delivery boundary: no durable flow advance before outbox + receipts commit.
+expect(executor.includes('hache_sharky_db_state_defer_begin')&&executor.includes('hache_sharky_db_state_save_now'),'El estado debe poder diferirse hasta la frontera durable de entrega.');
+expect(worker.includes('hache_sharky_db_state_defer_begin()')&&worker.includes('hache_sharky_db_state_defer_take()'),'El worker debe diferir el estado mientras procesa el turno.');
+const statePos=worker.indexOf('hache_sharky_lab_persist_deferred_state($pdo,$deferredState)');
+const queuePos=worker.indexOf('hache_sharky_outbox_enqueue($pdo,$contact,$payload',$statePos);
+const receiptPos=worker.indexOf('hache_sharky_orchestrator_mark_processed($pdo,$messageId)',$queuePos);
+expect(statePos>=0&&queuePos>statePos&&receiptPos>queuePos,'Estado, outbox y receipts deben quedar en la misma transacción y en ese orden.');
+
+// P1 privacy: temporary_password nunca queda en JSON de auditoría en claro.
+for(const field of ['result_ciphertext','result_iv','result_tag'])expect(migration.includes(field),`Falta campo cifrado de resultado ${field}`);
+expect(recovery.includes('aes-256-gcm')&&recovery.includes('hache-sharky-action-result-v1'),'Resultados sensibles deben cifrarse autenticadamente.');
+expect(recovery.includes("unset($public['temporary_password'])"),'La contraseña temporal debe eliminarse del result_json público.');
+
+// P1 takeover: una respuesta humana invalida cualquier mensaje automático pendiente.
+expect(migration.includes("'PENDING','SENT','DEAD','CANCELLED'"),'Outbox debe poder cancelar mensajes pendientes por takeover.');
+expect(outbox.includes('hache_sharky_takeover_active($contact)')&&outbox.includes('hache_sharky_outbox_mark_cancelled'),'Dispatcher debe revalidar takeover antes de cada envío.');
 
 console.log('SHARKY_TRANSACTIONAL_STATIC_OK');
