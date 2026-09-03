@@ -46,17 +46,14 @@ function hache_sharky_activation_foreign_key_specs(): array
         [
             'table'=>'sharky_referrals','name'=>'fk_sharky_referral_alumno','column'=>'alumno_id',
             'ref_table'=>'alumnos','ref_column'=>'id','delete_rule'=>'SET NULL',
-            'ddl'=>'ALTER TABLE sharky_referrals ADD CONSTRAINT fk_sharky_referral_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL',
         ],
         [
             'table'=>'sharky_identity_challenges','name'=>'fk_sharky_identity_student','column'=>'verified_student_id',
             'ref_table'=>'alumnos','ref_column'=>'id','delete_rule'=>'SET NULL',
-            'ddl'=>'ALTER TABLE sharky_identity_challenges ADD CONSTRAINT fk_sharky_identity_student FOREIGN KEY (verified_student_id) REFERENCES alumnos(id) ON DELETE SET NULL',
         ],
         [
             'table'=>'sharky_action_audit','name'=>'fk_sharky_action_alumno','column'=>'alumno_id',
             'ref_table'=>'alumnos','ref_column'=>'id','delete_rule'=>'SET NULL',
-            'ddl'=>'ALTER TABLE sharky_action_audit ADD CONSTRAINT fk_sharky_action_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL',
         ],
     ];
 }
@@ -87,18 +84,6 @@ function hache_sharky_activation_constraint_present(PDO $pdo,array $spec): bool
         ':rt'=>(string)$spec['ref_table'],':rc'=>(string)$spec['ref_column'],':dr'=>(string)$spec['delete_rule'],
     ]);
     return (int)$st->fetchColumn()>0;
-}
-
-function hache_sharky_activation_ensure_constraints(PDO $pdo): void
-{
-    foreach(hache_sharky_activation_foreign_key_specs() as $spec){
-        if(hache_sharky_activation_constraint_present($pdo,$spec))continue;
-        $st=$pdo->prepare("SELECT COUNT(*) FROM information_schema.key_column_usage WHERE table_schema=DATABASE() AND table_name=:t AND column_name=:c AND referenced_table_name IS NOT NULL");
-        $st->execute([':t'=>(string)$spec['table'],':c'=>(string)$spec['column']]);
-        if((int)$st->fetchColumn()>0)throw new RuntimeException('Incompatible existing foreign key on '.(string)$spec['table'].'.'.(string)$spec['column']);
-        $pdo->exec((string)$spec['ddl']);
-        if(!hache_sharky_activation_constraint_present($pdo,$spec))throw new RuntimeException('Unable to verify foreign key '.(string)$spec['name']);
-    }
 }
 
 function hache_sharky_activation_schema_report(PDO $pdo): array
