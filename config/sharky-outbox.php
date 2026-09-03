@@ -27,6 +27,12 @@ function hache_sharky_outbox_decrypt(array $row): ?array
     $payload=json_decode($json,true);return is_array($payload)?$payload:null;
 }
 
+function hache_sharky_outbox_allow_during_takeover(array $payload): array
+{
+    $payload['_sharky_allow_takeover']=true;
+    return $payload;
+}
+
 function hache_sharky_outbox_enqueue(PDO $pdo,string $contact,array $payload,string $dedupeSeed): bool
 {
     if(!hache_sharky_orchestrator_store_ready($pdo))return false;
@@ -82,8 +88,9 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10): 
         $claimed=hache_sharky_outbox_claim($pdo,1);if(!$claimed)break;$row=$claimed[0];
         $payload=hache_sharky_outbox_decrypt($row);
         if($payload===null){hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],7,'DECRYPT_FAILED');$stats['dead']++;continue;}
+        $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
         $contact=preg_replace('/\D+/','',(string)($payload['to']??''))?:'';
-        if($contact!==''&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
+        if(!$allowTakeover&&$contact!==''&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
             hache_sharky_outbox_mark_cancelled($pdo,(string)$row['id']);$stats['cancelled']++;continue;
         }
         $ok=false;try{$ok=$sender($payload)===true;}catch(Throwable $e){$ok=false;}
