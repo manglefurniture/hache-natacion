@@ -127,6 +127,17 @@ coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,$reverseB
 $commaCorrection=hache_sharky_orchestrate($step1['state'],['id'=>'coh.p2.comma.program','from'=>$contact,'text'=>'No quiero intensivo, prefiero regulares'],['now'=>$now+22,'today'=>$today]);
 coherence_eq($commaCorrection['state']['commercial_context']['program'],'regular','comma-separated correction must let the later explicit program choice win');
 
+// Internal pre-review hardening: bare rejections clear stale memory, and a superseded "ya no" cannot cancel a later positive correction.
+$bareProgramRejection=hache_sharky_orchestrate($step1['state'],['id'=>'coh.internal.bare.program','from'=>$contact,'text'=>'Ya no intensivo'],['now'=>$now+23,'today'=>$today]);
+coherence_eq($bareProgramRejection['state']['commercial_context']['program'],null,'bare program rejection must clear an already remembered intensive choice');
+$bareVenueRejection=hache_sharky_orchestrate($shortVenue['state'],['id'=>'coh.internal.bare.venue','from'=>$contact,'text'=>'Ya no Palapas'],['now'=>$now+24,'today'=>$today]);
+coherence_eq($bareVenueRejection['state']['commercial_context']['sede_clave'],null,'bare venue rejection must clear an already remembered venue');
+$softCancelCorrection="Ya no quiero inscribirme a regulares\nQuiero inscribirme al intensivo";
+coherence_eq(hache_sharky_orchestrator_registration_polarity($softCancelCorrection),true,'later positive correction must override earlier ya-no registration clause');
+coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,$softCancelCorrection),'register_intensive','superseded ya-no clause must not cancel a later positive existing-student handoff');
+$softCancelProspect=hache_sharky_orchestrate($state,['id'=>'coh.internal.soft.cancel','from'=>$contact,'text'=>$softCancelCorrection],['now'=>$now+25,'today'=>$today]);
+coherence_eq($softCancelProspect['decision']['kind'],'registration_offer','superseded ya-no clause must not cancel the later positive registration request');
+
 $adapter=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 coherence_ok(str_contains($adapter,'Contexto comercial ya confirmado por el usuario'),'model instruction must receive confirmed commercial context');
 coherence_ok(str_contains($adapter,'No vuelvas a preguntar estos datos'),'model must be explicitly forbidden from asking confirmed commercial fields again');
