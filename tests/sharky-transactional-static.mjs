@@ -57,8 +57,8 @@ expect(!migration.includes('whatsapp VARCHAR'),'Persistencia del orquestador no 
 expect(executor.includes('hache_sharky_db_state_defer_begin')&&executor.includes('hache_sharky_db_state_save_now'),'El estado debe poder diferirse hasta la frontera durable de entrega.');
 expect(worker.includes('hache_sharky_db_state_defer_begin()')&&worker.includes('hache_sharky_db_state_defer_take()'),'El worker debe diferir el estado mientras procesa el turno.');
 const statePos=worker.indexOf('hache_sharky_lab_persist_deferred_state($pdo,$deferredState)');
-const queuePos=worker.indexOf('hache_sharky_outbox_enqueue($pdo,$contact,$payload',$statePos);
-const receiptPos=worker.indexOf('hache_sharky_orchestrator_mark_processed($pdo,$messageId)',$queuePos);
+const queuePos=worker.indexOf('hache_sharky_outbox_enqueue($pdo,$contact,$payload',statePos);
+const receiptPos=worker.indexOf('hache_sharky_orchestrator_mark_processed($pdo,$messageId)',queuePos);
 expect(statePos>=0&&queuePos>statePos&&receiptPos>queuePos,'Estado, outbox y receipts deben quedar en la misma transacción y en ese orden.');
 
 // P1 privacy: temporary_password nunca queda en JSON de auditoría en claro.
