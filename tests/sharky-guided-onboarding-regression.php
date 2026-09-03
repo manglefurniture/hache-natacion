@@ -88,6 +88,54 @@ guided_ok(
     'Known intensive program and venue should leave the prospect commercially ready.'
 );
 
+// Codex review P1: a guided prospect must always be able to cancel or request a human.
+$escapeState=hache_sharky_orchestrator_flow($prospect,'qualify_prospect','swim',[],1788383040);
+$cancelEscape=hache_sharky_whatsapp_qualification_escape($escapeState,['text'=>'cancelar','interactive_id'=>'']);
+guided_ok(is_array($cancelEscape),'Text cancellation must be recognized inside qualification.');
+guided_ok(($cancelEscape[0]['flow']??null)===null,'Cancellation must clear the qualification flow.');
+guided_ok(($cancelEscape[1]['kind']??null)==='flow_cancelled','Cancellation must return the common cancelled decision.');
+$buttonCancel=hache_sharky_whatsapp_qualification_escape($escapeState,['text'=>'Cancelar','interactive_id'=>'flow:cancel']);
+guided_ok(is_array($buttonCancel)&&($buttonCancel[0]['flow']??null)===null,'The cancel button must also escape qualification.');
+$humanEscape=hache_sharky_whatsapp_qualification_escape($escapeState,['text'=>'Quiero hablar con una persona','interactive_id'=>'']);
+guided_ok(is_array($humanEscape)&&($humanEscape[0]['flow']??null)===null,'A human request must not get trapped in qualification.');
+guided_ok(($humanEscape[1]['action']['type']??null)==='human_takeover','A human escape must preserve the controlled takeover action.');
+
+// Codex review P2: the 30-minute flow TTL applies before adapter-direct qualification paths.
+$oldFlow=hache_sharky_orchestrator_flow($prospect,'qualify_prospect','swim',[],1000);
+$expired=hache_sharky_orchestrator_expire_flow($oldFlow,1000+HACHE_SHARKY_FLOW_TTL+1);
+guided_ok(($expired['flow']??null)===null,'A qualification older than the flow TTL must expire.');
+guided_ok(($expired['mode']??null)==='conversation','Expired qualification must return to conversation mode.');
+
+// Codex review P2: a volunteered age below the minimum closes commercial guidance immediately.
+guided_ok(hache_sharky_whatsapp_declared_age('Tengo 8 años')===8,'A volunteered age must be parsed deterministically.');
+guided_ok(hache_sharky_whatsapp_declared_age('Tengo 43 años')===43,'Adult volunteered ages must remain parseable.');
+$underage=$escapeState;$underage['commercial_context']['age']=8;
+$underageResult=hache_sharky_whatsapp_underage_rejection($underage,12);
+guided_ok(is_array($underageResult),'A prospect below the minimum age must be rejected before guidance continues.');
+guided_ok(($underageResult[0]['flow']??null)===null,'Underage rejection must clear an active qualification.');
+guided_ok(($underageResult[1]['kind']??null)==='prospect_age_rejected','Underage rejection must use an explicit deterministic decision.');
+$adult=$escapeState;$adult['commercial_context']['age']=43;
+guided_ok(hache_sharky_whatsapp_underage_rejection($adult,12)===null,'An adult volunteered age must not block guidance.');
+
+// Codex review P2: changing venue in an advanced registration cannot leave the old
+// course/schedule attached. Restart from offer with fresh consent and only the new venue.
+$advanced=$prospect;
+$advanced['commercial_context']['sede_clave']='PALAPAS';
+$advanced=hache_sharky_orchestrator_flow($advanced,'register_intensive','name',[
+    'sede_clave'=>'PALAPAS','course_id'=>'course-old','fecha_inicio'=>'2026-09-07','schedule_id'=>'schedule-old',
+],1788383050);
+$advancedNatural=hache_sharky_whatsapp_apply_natural_venue_preference($advanced,'Monteverde me queda mejor');
+guided_ok(($advancedNatural['commercial_context']['sede_clave']??null)==='PALAPAS','Advanced registration must not mutate venue through conversational memory alone.');
+$venueCorrection=hache_sharky_whatsapp_registration_venue_correction($advanced,['text'=>'Monteverde me queda mejor','interactive_id'=>''],1788383060);
+guided_ok(is_array($venueCorrection),'An advanced registration must explicitly intercept a venue correction.');
+guided_ok(($venueCorrection[0]['commercial_context']['sede_clave']??null)==='MONTEVERDE','The corrected venue must become the single commercial venue.');
+guided_ok(($venueCorrection[0]['flow']['step']??null)==='offer','A venue change must restart the controlled registration at consent.');
+guided_ok(($venueCorrection[0]['flow']['data']??null)===['sede_clave'=>'MONTEVERDE'],'Old course, schedule and personal data must be discarded after venue change.');
+guided_ok(($venueCorrection[1]['kind']??null)==='registration_offer','Venue restart must return the explicit registration offer.');
+guided_ok(($venueCorrection[1]['ui']['buttons'][0]['id']??null)==='flow:yes','Venue restart must require fresh explicit consent.');
+$sameVenue=hache_sharky_whatsapp_registration_venue_correction($advanced,['text'=>'Palapas me queda mejor','interactive_id'=>''],1788383060);
+guided_ok(is_array($sameVenue)&&($sameVenue[0]['flow']['step']??null)==='name','Repeating the same venue must not destroy the current registration step.');
+
 $adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 guided_ok(
     str_contains($adapterSource,"qualify:intensive")&&str_contains($adapterSource,"qualify:regular"),
@@ -98,15 +146,29 @@ guided_ok(
     && str_contains($adapterSource,"assistant_presentation_queued"),
     'The deterministic identity prompt must preserve a first presentation while suppressing later re-introductions.'
 );
+$expirePos=strpos($adapterSource,'$state=hache_sharky_orchestrator_expire_flow($state,(int)$context[\'now\']);');
 $staleGuardPos=strpos($adapterSource,'if(!hache_sharky_whatsapp_interactive_is_current($state,$event))');
+$venueCorrectionPos=strpos($adapterSource,'$venueCorrection=hache_sharky_whatsapp_registration_venue_correction');
 $naturalVenuePos=$staleGuardPos===false?false:strpos($adapterSource,'$state=hache_sharky_whatsapp_apply_natural_venue_preference',$staleGuardPos);
+guided_ok(
+    $expirePos!==false&&$staleGuardPos!==false&&$expirePos<$staleGuardPos,
+    'Flow TTL must be applied before validating any adapter-direct interactive reply.'
+);
 guided_ok(
     $staleGuardPos!==false&&$naturalVenuePos!==false&&$staleGuardPos<$naturalVenuePos,
     'Natural venue persistence must happen only after stale interactive replies are rejected.'
 );
 guided_ok(
+    $venueCorrectionPos!==false&&$naturalVenuePos!==false&&$venueCorrectionPos<$naturalVenuePos,
+    'Advanced registration venue correction must run before conversational venue persistence.'
+);
+guided_ok(
     str_contains($adapterSource,"if(trim((string)(\$event['interactive_id']??''))==='')\$state=hache_sharky_whatsapp_apply_natural_venue_preference"),
     'Interactive replies must never mutate natural venue memory before their own flow validates them.'
+);
+guided_ok(
+    substr_count($adapterSource,'hache_sharky_whatsapp_underage_rejection(')>=4,
+    'Underage protection must cover helper definition, active prospect guidance and the new-prospect transition.'
 );
 
 $v2Source=file_get_contents(__DIR__.'/../public/api/sharky-v2.php')?:'';
