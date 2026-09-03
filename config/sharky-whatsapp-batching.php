@@ -10,7 +10,21 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
     $lock=hache_sharky_orchestrator_delivery_lock($contact);
     if(!is_resource($lock))return ['skip'=>true,'code'=>'DELIVERY_LOCK_UNAVAILABLE'];
     try{
-        $result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+        // A human may take the chat while a text is sleeping in the debounce window.
+        // Revalidate only after acquiring the same delivery lock used by takeover/outbox.
+        if(function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
+            $messageId=(string)($event['id']??'');$hash=hache_sharky_orchestrator_contact_hash($contact);
+            if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                hache_sharky_orchestrator_unlock($lock);
+                return ['skip'=>true,'code'=>'DUPLICATE'];
+            }
+            $state=hache_sharky_db_state_load($pdo,$contact);
+            $decision=hache_sharky_orchestrator_decision('silent_human_takeover');
+            hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+            $result=['skip'=>false,'code'=>'HUMAN_TAKEOVER','state'=>$state,'decision'=>$decision,'payload'=>null,'action_result'=>null];
+        }else{
+            $result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+        }
     }catch(Throwable $e){
         hache_sharky_orchestrator_unlock($lock);
         throw $e;
