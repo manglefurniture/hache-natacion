@@ -26,7 +26,8 @@ function hache_sharky_start_authority_parse_date(string $normalized, ?DateTimeIm
     $reference = hache_sharky_start_authority_reference($reference);
 
     if (preg_match('/\bpasado\s+manana\b/u', $normalized) === 1) return $reference->modify('+2 days');
-    if (preg_match('/\bmanana\b/u', $normalized) === 1) return $reference->modify('+1 day');
+    $morningContext = preg_match('/\b(?:por|en|de)\s+la\s+manana\b|\bhorario\s+(?:de\s+)?manana\b/u', $normalized) === 1;
+    if (!$morningContext && preg_match('/\bmanana\b/u', $normalized) === 1) return $reference->modify('+1 day');
     if (preg_match('/\bhoy\b/u', $normalized) === 1) return $reference;
 
     if (preg_match('/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/u', $normalized, $m) === 1) {
