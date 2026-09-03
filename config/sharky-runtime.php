@@ -167,17 +167,17 @@ function hache_sharky_capacity_request(string $text): bool
             || preg_match('/\blas?\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')(?:\s+y\s+(?:cuarto|media))?\b/u',$text)===1;
         if ($hasScheduleQualifier) return false;
     }
-    $capacityContext='(?:intensivos?|cursos?|grupos?|clases?|carriles?)';
+    $capacityContext='(?:intensivos?|cursos?|grupos?|clases?|carril|carriles)';
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
         '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
         '/\b(disponibilidad)\b.{0,35}\b'.$capacityContext.'\b/u',
         '/\b'.$capacityContext.'\b.{0,35}\b(disponibilidad)\b/u',
         '/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',
-        '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
-        '/\b(curso|grupo|clase|carril)\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
-        '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,15}\b(hay|caben|entran|admite|acepta|permite)\b/u',
-        '/\b(cuantos?|cuantas?|numero de)\b.{0,20}\bpor carril\b/u',
+        '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b'.$capacityContext.'\b/u',
+        '/\b'.$capacityContext.'\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
+        '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,15}\b(hay|tiene|tienen|caben|entran|admite|admiten|acepta|aceptan|permite|permiten)\b/u',
+        '/\b(cuantos?|cuantas?|numero de)\b.{0,20}\bpor (?:carril|grupo|curso|clase)\b/u',
         '/\bcapacidad(?:\s+maxima)?\s+(?:del|de la|de los|de las)\s+(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b/u',
         '/\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b.{0,20}\bcapacidad(?:\s+maxima)?\b/u',
         '/\bcapacidad\b.{0,16}\b(tiene|tienen|admite|admiten|permite|permiten|acepta|aceptan)\b.{0,14}\b(el\s+|la\s+|los\s+|las\s+)?(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b/u',
