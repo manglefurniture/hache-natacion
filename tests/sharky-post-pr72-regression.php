@@ -132,7 +132,7 @@ post72_expect(str_contains($store,'function hache_sharky_orchestrator_mark_proce
 
 // P1 Codex follow-up: echo manual no puede despachar si takeover no quedó persistido.
 $echoGuard=strpos($worker,"if(!hache_sharky_takeover_mark(\$contact,'manual'");
-$echoDispatch=strpos($worker,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_lab_send',20)");
+$echoDispatch=strpos($worker,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_lab_send',20,\$contact)");
 post72_expect($echoGuard!==false&&$echoDispatch!==false&&$echoGuard<$echoDispatch,'Manual takeover must persist before pending outbox dispatch/cancellation.');
 
 // P2 Codex: cada envío reclama su fila justo antes de mandar a Meta.
