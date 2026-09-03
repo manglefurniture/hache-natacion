@@ -82,7 +82,7 @@ expect_war(str_contains($batching,'hache_sharky_action_delivery_pending_for_mess
 expect_war(str_contains($worker,'hache_sharky_lab_queue_and_complete'),'Worker must close action delivery only inside the durable queue transaction.');
 $queuePos=strpos($worker,'hache_sharky_outbox_enqueue');$receiptPos=strpos($worker,'hache_sharky_orchestrator_mark_processed',$queuePos===false?0:$queuePos);
 expect_war($queuePos!==false&&$receiptPos!==false&&$queuePos<$receiptPos,'Outbox persistence must happen before receipt completion.');
-expect_war(str_contains($worker,'hache_sharky_inbox.php'),'Worker must load durable inbox helpers directly.');
+expect_war(str_contains($worker,"require_once __DIR__.'/sharky-inbox.php'"),'Worker must load durable inbox helpers directly.');
 
 // P1 privacy: contact identifiers use keyed HMAC rather than enumerable plain SHA-256.
 putenv('SHARKY_CONTACT_HASH_KEY=0123456789abcdef0123456789abcdef');
