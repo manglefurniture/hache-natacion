@@ -146,7 +146,24 @@ function hache_sharky_execute_action(PDO $pdo,string $contact,array $action,stri
     if($type==='')return ['ok'=>false,'code'=>'NO_ACTION','message'=>'No hay una acción válida para ejecutar.'];
 
     $existing=hache_sharky_action_status($pdo,$idempotencyKey);
-    if($existing&&(string)$existing['status']==='COMPLETED')return ['ok'=>true,'duplicate'=>true,'code'=>(string)($existing['result_code']??'ALREADY_COMPLETED'),'message'=>trim((string)($existing['result_message']??''))?:'Esta operación ya había sido procesada.','result'=>is_array($existing['result']??null)?$existing['result']:null];
+    if($existing&&(string)$existing['status']==='COMPLETED'){
+        if(($existing['result_decrypt_failed']??false)===true){
+            // Never degrade a sealed-but-unreadable registration to an empty success:
+            // reconcile the exact Sharky-created registration under the identity lock,
+            // rotate a fresh portal credential, then reseal it before delivery can close.
+            if($type!=='register_intensive'||(string)($existing['action_type']??'')!=='register_intensive'){
+                throw new RuntimeException('Completed Sharky action result is unreadable and cannot be safely reconciled');
+            }
+            $recovered=hache_sharky_registration_recover_locked($pdo,$contact,$action);
+            if($recovered===null)throw new RuntimeException('Completed Sharky registration result is unreadable and reconciliation did not match');
+            $message='Listo. Tu registro fue recuperado de forma segura y quedó pendiente de confirmación/pago.';
+            if(!hache_sharky_action_recovery_reseal_completed($pdo,$idempotencyKey,'RECOVERED',$recovered,$message)){
+                throw new RuntimeException('Unable to reseal recovered Sharky registration result');
+            }
+            return ['ok'=>true,'duplicate'=>true,'code'=>'RECOVERED','message'=>$message,'result'=>$recovered];
+        }
+        return ['ok'=>true,'duplicate'=>true,'code'=>(string)($existing['result_code']??'ALREADY_COMPLETED'),'message'=>trim((string)($existing['result_message']??''))?:'Esta operación ya había sido procesada.','result'=>is_array($existing['result']??null)?$existing['result']:null];
+    }
     if(hache_sharky_action_lease_active($existing))return ['ok'=>false,'retryable'=>true,'code'=>'ACTION_IN_PROGRESS','message'=>'La operación todavía se está procesando.'];
     if($existing&&(string)$existing['status']==='FAILED')return ['ok'=>false,'retryable'=>false,'code'=>'ACTION_ALREADY_FAILED','message'=>'La operación anterior falló y requiere una nueva confirmación.'];
 
