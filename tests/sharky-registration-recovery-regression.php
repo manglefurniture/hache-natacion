@@ -31,4 +31,12 @@ registration_recovery_expect(str_contains($recovery,'a.observaciones=:marker')&&
 registration_recovery_expect(str_contains($recovery,"'code'=>'RECOVERED'")&&str_contains($recovery,"'recovered'=>true"),'Locked reconciliation must return an explicit recovered result.');
 registration_recovery_expect(str_contains($business,'regla_bloquear_identidades_alumnos($pdo)'),'Fresh intensive creation must continue using the same identity serialization lock.');
 
+$businessStart=strpos($business,'function hache_sharky_business_register_intensive');
+registration_recovery_expect($businessStart!==false,'Fresh intensive registration service must be discoverable.');
+$businessRegion=substr($business,$businessStart);
+$siteLockPos=strpos($businessRegion,"SELECT id FROM sedes WHERE id=:s AND activo=1 LIMIT 1 FOR UPDATE");
+$courseLookupPos=strpos($businessRegion,'SELECT id,estado,precio FROM cursos_intensivos WHERE sede_id=:s AND fecha_inicio=:f LIMIT 1 FOR UPDATE');
+$courseInsertPos=strpos($businessRegion,'INSERT INTO cursos_intensivos');
+registration_recovery_expect($siteLockPos!==false&&$courseLookupPos!==false&&$courseInsertPos!==false&&$siteLockPos<$courseLookupPos&&$courseLookupPos<$courseInsertPos,'Sharky must lock the selected site row before checking or creating an intensive course, matching api/intensivos.php serialization.');
+
 fwrite(STDOUT,"SHARKY_REGISTRATION_RECOVERY_OK\n");
