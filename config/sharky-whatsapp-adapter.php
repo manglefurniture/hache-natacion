@@ -274,6 +274,15 @@ function hache_sharky_whatsapp_qualification_escape(array $state,array $event): 
     return null;
 }
 
+function hache_sharky_whatsapp_reroute_qualification_identity_claim(array $state,array $event): array
+{
+    $flow=$state['flow']??null;
+    if(!is_array($flow)||($flow['name']??'')!=='qualify_prospect')return $state;
+    $intent=hache_sharky_orchestrator_contextual_intent($state,(string)($event['text']??''),(string)($event['interactive_id']??''));
+    if($intent!=='student_claim')return $state;
+    return hache_sharky_orchestrator_clear_flow($state);
+}
+
 function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $event,int $now,int $minAge=12): ?array
 {
     $flow=$state['flow']??null;
@@ -775,6 +784,8 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>['ok'=>true,'code'=>'HANDOFF']];
         }
+
+        $state=hache_sharky_whatsapp_reroute_qualification_identity_claim($state,$event);
 
         if(hache_sharky_whatsapp_is_side_question($state,$event)){
             $instruction=hache_sharky_whatsapp_style_instruction(['kind'=>'side_question'],$state).' El usuario está dentro de un proceso controlado: responde solo la duda actual, no pierdas ni cambies ese proceso y no vuelvas a pedir datos ya capturados.';
