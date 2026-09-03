@@ -13,7 +13,7 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
 {
     $contact=(string)($event['from']??'');$id=(string)($event['id']??'');
     if($contact===''||$id==='')return ['skip'=>true,'code'=>'INVALID_EVENT'];
-    if((string)($event['type']??'')==='interactive' || trim((string)($event['interactive_id']??''))!=='')return hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!=='')return hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
 
     $hash=hache_sharky_orchestrator_contact_hash($contact);
     if(!hache_sharky_orchestrator_claim_message($pdo,$id,$hash,(string)($event['type']??'text')))return ['skip'=>true,'code'=>'DUPLICATE'];
@@ -22,20 +22,12 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
 
     $batch=hache_sharky_orchestrator_batch_enqueue_and_wait($contact,$event,(int)($extraContext['batch_window_ms']??HACHE_SHARKY_BATCH_WINDOW_MS));
     if($batch===null)return ['skip'=>true,'code'=>'BATCH_DEFERRED'];
-    $ids=is_array($batch['ids']??null)?$batch['ids']:[$id];
-    $latestReferral=is_array($batch['referral']??null)?$batch['referral']:null;
+    $ids=is_array($batch['ids']??null)?$batch['ids']:[$id];$latestReferral=is_array($batch['referral']??null)?$batch['referral']:null;
     if($latestReferral===null&&is_array($event['referral']??null))$latestReferral=$event['referral'];
-    $synthetic=[
-        'id'=>'batch:'.hash('sha256',implode('|',$ids)),
-        'from'=>$contact,
-        'type'=>'text',
-        'text'=>(string)($batch['text']??''),
-        'interactive_id'=>'',
-        'timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000)),
-    ];
+    $synthetic=['id'=>'batch:'.hash('sha256',implode('|',$ids)),'from'=>$contact,'type'=>'text','text'=>(string)($batch['text']??''),'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];
     if($latestReferral!==null)$synthetic['referral']=$latestReferral;
     $result=hache_sharky_whatsapp_process($pdo,$synthetic,$conversationAnswer,$extraContext);
-    foreach($ids as $messageId)hache_sharky_orchestrator_mark_processed($pdo,(string)$messageId);
-    $result['batched_ids']=$ids;
+    $result['batched_ids']=$ids;$result['synthetic_id']=$synthetic['id'];
+    if(!($result['defer_processed']??false))foreach($ids as $messageId)hache_sharky_orchestrator_mark_processed($pdo,(string)$messageId);
     return $result;
 }
