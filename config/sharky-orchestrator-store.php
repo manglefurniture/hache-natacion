@@ -161,6 +161,13 @@ function hache_sharky_orchestrator_lock(string $contact)
     @chmod($path,0600);if(!flock($fh,LOCK_EX)){fclose($fh);return null;}return $fh;
 }
 
+function hache_sharky_orchestrator_delivery_lock(string $contact)
+{
+    $dir=hache_sharky_orchestrator_runtime_dir('delivery-locks');if($dir==='') return null;
+    $path=$dir.'/'.hache_sharky_orchestrator_contact_hash($contact).'.lock';$fh=@fopen($path,'c');if($fh===false) return null;
+    @chmod($path,0600);if(!flock($fh,LOCK_EX)){fclose($fh);return null;}return $fh;
+}
+
 function hache_sharky_orchestrator_unlock($lock): void
 {
     if(!is_resource($lock)) return;flock($lock,LOCK_UN);fclose($lock);
@@ -173,11 +180,18 @@ function hache_sharky_orchestrator_batch_enqueue_and_wait(string $contact,array 
     $hash=hache_sharky_orchestrator_contact_hash($contact);$queue=$dir.'/'.$hash.'.json';$lockPath=$dir.'/'.$hash.'.lock';$lock=@fopen($lockPath,'c');
     if($lock===false) return hache_sharky_orchestrator_batch([$event]);
     flock($lock,LOCK_EX);$stored=is_file($queue)?json_decode((string)@file_get_contents($queue),true):null;$nowMs=(int)floor(microtime(true)*1000);
-    if(!is_array($stored))$stored=['first_at_ms'=>$nowMs,'flush_at_ms'=>$nowMs+$windowMs,'events'=>[]];
+    if(!is_array($stored))$stored=['first_at_ms'=>$nowMs,'flush_at_ms'=>$nowMs+$windowMs,'events'=>[],'receipt_ids'=>[],'referral'=>null];
+    $eventId=trim((string)($event['id']??''));if($eventId!=='')$stored['receipt_ids'][]=$eventId;
+    $stored['receipt_ids']=array_values(array_unique(array_map('strval',is_array($stored['receipt_ids']??null)?$stored['receipt_ids']:[])));
+    if(!is_array($stored['referral']??null)&&is_array($event['referral']??null))$stored['referral']=$event['referral'];
     $stored['events'][]=$event;$stored['events']=array_slice($stored['events'],-8);$hard=(int)$stored['first_at_ms']+8000;$stored['flush_at_ms']=min($hard,$nowMs+$windowMs);
     @file_put_contents($queue,json_encode($stored,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),LOCK_EX);@chmod($queue,0600);flock($lock,LOCK_UN);fclose($lock);
     usleep($windowMs*1000);
     $lock=@fopen($lockPath,'c');if($lock===false) return null;flock($lock,LOCK_EX);$stored=is_file($queue)?json_decode((string)@file_get_contents($queue),true):null;$nowMs=(int)floor(microtime(true)*1000);
     if(!is_array($stored)||$nowMs<(int)($stored['flush_at_ms']??PHP_INT_MAX)){flock($lock,LOCK_UN);fclose($lock);return null;}
-    @unlink($queue);flock($lock,LOCK_UN);fclose($lock);return hache_sharky_orchestrator_batch(is_array($stored['events']??null)?$stored['events']:[]);
+    @unlink($queue);flock($lock,LOCK_UN);fclose($lock);
+    $batch=hache_sharky_orchestrator_batch(is_array($stored['events']??null)?$stored['events']:[]);
+    $batch['ids']=array_values(array_unique(array_merge(is_array($stored['receipt_ids']??null)?$stored['receipt_ids']:[],is_array($batch['ids']??null)?$batch['ids']:[])));
+    if(!is_array($batch['referral']??null)&&is_array($stored['referral']??null))$batch['referral']=$stored['referral'];
+    return $batch;
 }
