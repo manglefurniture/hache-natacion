@@ -12,7 +12,8 @@ function sharky_lab_json(int $status,array $body): never
 }
 
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')sharky_lab_json(404,['ok'=>false,'error'=>'Lab disabled']);
-if(strlen(hache_sharky_lab_secret('SHARKY_CONTACT_HASH_KEY'))<32)sharky_lab_json(503,['ok'=>false,'error'=>'Sharky security key not configured']);
+if(strlen(hache_sharky_lab_secret('SHARKY_CONTACT_HASH_KEY'))<32)sharky_lab_json(503,['ok'=>false,'error'=>'Sharky contact security key not configured']);
+if(strlen(hache_sharky_lab_secret('SHARKY_STATE_ENCRYPTION_KEY'))<32)sharky_lab_json(503,['ok'=>false,'error'=>'Sharky state security key not configured']);
 
 $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
 if($method==='GET'){
