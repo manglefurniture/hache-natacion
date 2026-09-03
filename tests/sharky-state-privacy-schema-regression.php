@@ -8,10 +8,16 @@ function sharky_privacy_expect(bool $ok,string $message):void
 }
 
 $db=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:'';
+$env=file_get_contents(__DIR__.'/../.env.example')?:'';
+$inboxWorker=file_get_contents(__DIR__.'/../bin/sharky-inbox-dispatch.php')?:'';
 $baseMigration=file_get_contents(__DIR__.'/../database/migrations/20260902_sharky_orchestrator.sql')?:'';
 $hardeningMigration=file_get_contents(__DIR__.'/../database/migrations/20260903_sharky_orchestrator_hardening.sql')?:'';
 
 sharky_privacy_expect(str_contains($db,'SHARKY_STATE_ENCRYPTION_KEY'),'Conversation state must use a dedicated encryption secret.');
+sharky_privacy_expect(!str_contains($db,'hache-sharky-state-cli-regression-key'),'Production state encryption must never fall back to a public CLI key.');
+sharky_privacy_expect(str_contains($db,"throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY is required before enabling Sharky 2.0')"),'State encryption must fail closed when the dedicated key is missing.');
+sharky_privacy_expect(str_contains($env,'SHARKY_STATE_ENCRYPTION_KEY='),'The example environment must declare the dedicated state encryption key.');
+sharky_privacy_expect(str_contains($inboxWorker,"hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY')")&&str_contains($inboxWorker,'SHARKY_STATE_ENCRYPTION_KEY missing'),'The CLI inbox worker must validate the dedicated state key before processing.');
 sharky_privacy_expect(str_contains($db,"aes-256-gcm")&&str_contains($db,"sharky-state-v1"),'Conversation state must use authenticated encryption.');
 sharky_privacy_expect(str_contains($db,'state_ciphertext')&&str_contains($db,'state_iv')&&str_contains($db,'state_tag'),'Encrypted state fields must be used by runtime.');
 sharky_privacy_expect(str_contains($db,'state_json=NULL'),'Runtime must clear the legacy plaintext state column when persisting.');
