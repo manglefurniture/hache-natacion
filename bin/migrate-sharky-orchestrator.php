@@ -32,8 +32,7 @@ try{
         }
         $schema=hache_sharky_activation_schema_report($pdo);
         if(($schema['ok']??false)!==true){
-            fwrite(STDERR,'Schema verification failed: '.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
-            exit(1);
+            throw new RuntimeException('Schema verification failed: '.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
         }
         fwrite(STDOUT,"SHARKY_MIGRATION_OK\n");
     }finally{
