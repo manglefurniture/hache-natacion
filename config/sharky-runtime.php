@@ -164,6 +164,7 @@ function hache_sharky_capacity_request(string $text): bool
     $placeCountForward='/\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b.{0,36}\b'.$capacityContext.'\b/u';
     $placeCountReverse='/\b'.$capacityContext.'\b.{0,36}\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b/u';
     $placeCountRemaining='/\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b.{0,18}\b(?:queda|quedan|disponible|disponibles|libre|libres)\b/u';
+    $parkingContext=preg_match('/\b(estacionamiento|parking|estacionarse|aparcar|carros?|coches?|autos?|vehiculos?)\b/u',$text)===1;
     if (
         preg_match('/\b(cuantos?|cuantas?|numero de|cantidad de)\b.{0,28}\bgente\b/u',$text)===1
         || preg_match('/\bgente\b.{0,28}\b(cuantos?|cuantas?|numero de|cantidad de)\b/u',$text)===1
@@ -181,7 +182,7 @@ function hache_sharky_capacity_request(string $text): bool
         || preg_match($placeContextAvailable,$text)===1
         || preg_match($placeCountForward,$text)===1
         || preg_match($placeCountReverse,$text)===1
-        || preg_match($placeCountRemaining,$text)===1
+        || (!$parkingContext && preg_match($placeCountRemaining,$text)===1)
         || preg_match($implicitCountForward,$text)===1
         || preg_match($implicitCountReverse,$text)===1;
     if (!$hasExplicitCapacity && preg_match('/\b(disponibilidad|disponible|disponibles)\b/u',$text)===1) {
@@ -198,6 +199,7 @@ function hache_sharky_capacity_request(string $text): bool
             || preg_match('/\b(?:de|entre)\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')\s+(?:a|y)\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')\b/u',$text)===1;
         if ($hasScheduleQualifier) return false;
     }
+    if (!$parkingContext && preg_match($placeCountRemaining,$text)===1) return true;
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
         $placeDirect,
@@ -207,7 +209,6 @@ function hache_sharky_capacity_request(string $text): bool
         $placeContextAvailable,
         $placeCountForward,
         $placeCountReverse,
-        $placeCountRemaining,
         '/\b(disponibilidad)\b.{0,35}\b'.$capacityContext.'\b/u',
         '/\b'.$capacityContext.'\b.{0,35}\b(disponibilidad)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b'.$capacityContext.'\b/u',
