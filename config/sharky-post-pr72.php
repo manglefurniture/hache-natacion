@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/sharky-start-authority.php';
+
 /**
  * Ajustes posteriores al PR #72 que pertenecen al laboratorio Sharky 2.0.
  * Mantiene las reglas de lenguaje abiertas separadas de las decisiones comerciales duras.
@@ -66,6 +68,8 @@ function hache_sharky_post72_whatsapp_style_policy(): string
         '- Si el usuario quiere pagar 100% el día de inicio sin reserva anticipada, NO lo autorices: explica que la reserva requiere pago total o al menos 50% por anticipado y deriva la decisión a una persona.',
         '- Si ya existe una reserva válida de al menos 50%, el saldo sí puede liquidarse antes de iniciar o como máximo el mismo día de inicio.',
         '- Nunca prometas cupo ni confirmes un lugar sin pago anticipado.',
+        '',
+        hache_sharky_start_authority_policy(),
     ]);
 }
 
