@@ -68,9 +68,10 @@ CREATE TABLE IF NOT EXISTS sharky_identity_challenges (
   CONSTRAINT fk_sharky_identity_student FOREIGN KEY (verified_student_id) REFERENCES alumnos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Action leases prevent a crashed worker from leaving PENDING forever. Result JSON
--- lets a replay rebuild the same success response without repeating side effects.
--- A completed action is not considered fully handled until its reply is durably queued.
+-- Action leases prevent a crashed worker from leaving PENDING forever. Public/non-secret
+-- recovery data may live in result_json; recoverable credentials are stored only in the
+-- authenticated-encrypted result_* fields. A completed action is not fully handled until
+-- its reply is durably queued.
 CREATE TABLE IF NOT EXISTS sharky_action_audit (
   id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
   idempotency_key CHAR(64) NOT NULL,
@@ -82,6 +83,9 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
   source_message_id VARCHAR(191) NULL,
   result_code VARCHAR(80) NULL,
   result_json JSON NULL,
+  result_ciphertext MEDIUMTEXT NULL,
+  result_iv VARCHAR(32) NULL,
+  result_tag VARCHAR(32) NULL,
   result_message VARCHAR(500) NULL,
   delivery_queued_at DATETIME NULL,
   lease_until DATETIME NULL,
@@ -97,7 +101,8 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Outbound messages are encrypted at rest. The raw WhatsApp number lives only inside
--- the encrypted payload, never in a searchable/plaintext column.
+-- the encrypted payload, never in a searchable/plaintext column. CANCELLED is used when
+-- human takeover supersedes an automatic message before it is sent.
 CREATE TABLE IF NOT EXISTS sharky_outbox (
   id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
   dedupe_key CHAR(64) NOT NULL,
@@ -105,7 +110,7 @@ CREATE TABLE IF NOT EXISTS sharky_outbox (
   payload_ciphertext MEDIUMTEXT NOT NULL,
   payload_iv VARCHAR(32) NOT NULL,
   payload_tag VARCHAR(32) NOT NULL,
-  status ENUM('PENDING','SENT','DEAD') NOT NULL DEFAULT 'PENDING',
+  status ENUM('PENDING','SENT','DEAD','CANCELLED') NOT NULL DEFAULT 'PENDING',
   attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   available_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   lease_until DATETIME NULL,
