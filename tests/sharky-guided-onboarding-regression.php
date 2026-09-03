@@ -109,6 +109,11 @@ guided_ok(($expired['mode']??null)==='conversation','Expired qualification must 
 // Codex review P2: a volunteered age below the minimum closes commercial guidance immediately.
 guided_ok(hache_sharky_whatsapp_declared_age('Tengo 8 años')===8,'A volunteered age must be parsed deterministically.');
 guided_ok(hache_sharky_whatsapp_declared_age('Tengo 43 años')===43,'Adult volunteered ages must remain parseable.');
+guided_ok(hache_sharky_whatsapp_declared_age('Soy nuevo, tengo 8 años')===8,'A comma-separated new-prospect claim must preserve the volunteered age.');
+guided_ok(hache_sharky_whatsapp_declared_age('Soy nuevo y tengo 8 años')===8,'A conjunction new-prospect claim must preserve the volunteered age.');
+guided_ok(hache_sharky_whatsapp_declared_age('Soy nuevo y tengo 1 año')===1,'Singular año must be parsed in a compound message.');
+guided_ok(hache_sharky_whatsapp_declared_age('No tengo 8 años')===null,'A negated age clause must not be stored as the user age.');
+guided_ok(hache_sharky_whatsapp_declared_age('No tengo 8 años, tengo 43 años')===43,'A later affirmative age must win after an earlier negated clause.');
 $underage=$escapeState;$underage['commercial_context']['age']=8;
 $underageResult=hache_sharky_whatsapp_underage_rejection($underage,12);
 guided_ok(is_array($underageResult),'A prospect below the minimum age must be rejected before guidance continues.');
