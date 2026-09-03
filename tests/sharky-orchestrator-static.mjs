@@ -17,7 +17,7 @@ for (const marker of [
   'ctwa_clid',
 ]) assert.ok(core.includes(marker), `core must contain ${marker}`);
 
-assert.ok(core.indexOf('hache_sharky_orchestrator_capture_referral') < core.indexOf("$intent = hache_sharky_orchestrator_intent"), 'referral is captured before intent classification');
+assert.ok(core.indexOf('hache_sharky_orchestrator_capture_referral') < core.indexOf("$intent = hache_sharky_orchestrator_contextual_intent"), 'referral is captured before contextual intent classification');
 assert.doesNotMatch(core, /curl_(?:init|exec)|api\.openai\.com|graph\.facebook\.com|\bINSERT\b|\bUPDATE\b|\bDELETE\b/i, 'deterministic core cannot call remote services or mutate DB');
 
 for (const marker of [
