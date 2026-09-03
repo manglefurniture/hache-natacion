@@ -101,11 +101,14 @@ guided_ok(is_array($humanEscape)&&($humanEscape[0]['flow']??null)===null,'A huma
 guided_ok(($humanEscape[1]['action']['type']??null)==='human_takeover','A human escape must preserve the controlled takeover action.');
 
 // A mistaken prospect classification can be corrected without explicitly cancelling.
-// The adapter clears only qualification, then the existing orchestrator owns student verification.
+// The adapter invalidates only the self-declared prospect identity; the existing orchestrator
+// remains the single authority that can open and complete student verification.
 $wrongIdentity=hache_sharky_orchestrator_flow($prospect,'qualify_prospect','swim',[],1788383041);
 $reroutedIdentity=hache_sharky_whatsapp_reroute_qualification_identity_claim($wrongIdentity,['text'=>'Ya soy alumno','interactive_id'=>'']);
 guided_ok(($reroutedIdentity['flow']??null)===null,'A student identity correction must leave qualification immediately.');
-guided_ok(($reroutedIdentity['identity']['kind']??null)==='prospect','The adapter must not forge student verification while rerouting identity.');
+guided_ok(($reroutedIdentity['identity']['kind']??null)==='unknown','A student correction must invalidate the prior self-declared prospect identity.');
+guided_ok(($reroutedIdentity['identity']['verified']??true)===false,'The identity correction must remain unverified until the official student verification succeeds.');
+guided_ok(($reroutedIdentity['identity']['source']??null)==='identity_correction','The invalidated prospect identity must record the correction source.');
 $verification=hache_sharky_orchestrate(
     $reroutedIdentity,
     ['id'=>'guided.identity.1','from'=>'529900000000','text'=>'Ya soy alumno','interactive_id'=>''],
@@ -113,6 +116,7 @@ $verification=hache_sharky_orchestrate(
 );
 guided_ok(($verification['decision']['kind']??null)==='verification_required','The rerouted student claim must reach the existing verification decision.');
 guided_ok(($verification['state']['flow']['name']??null)==='identify_student','The rerouted student claim must open identify_student, not resume prospect qualification.');
+guided_ok(($verification['state']['identity']['verified']??true)===false,'Student identity must stay unverified until the verification flow succeeds.');
 $notIdentityCorrection=hache_sharky_whatsapp_reroute_qualification_identity_claim($wrongIdentity,['text'=>'Desde cero','interactive_id'=>'']);
 guided_ok(($notIdentityCorrection['flow']['name']??null)==='qualify_prospect','Ordinary qualification replies must not be rerouted as identity corrections.');
 
