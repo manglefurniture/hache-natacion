@@ -21,6 +21,11 @@ function hache_sharky_lab_graph_version(): string
     $version=hache_sharky_lab_secret('WHATSAPP_GRAPH_VERSION');return preg_match('/^v\d+\.\d+$/',$version)===1?$version:'v26.0';
 }
 
+function hache_sharky_lab_today(): string
+{
+    return (new DateTimeImmutable('today',new DateTimeZone('America/Cancun')))->format('Y-m-d');
+}
+
 function hache_sharky_lab_send(array $payload): bool
 {
     $token=hache_sharky_lab_secret('WHATSAPP_ACCESS_TOKEN');$phoneId=hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID');if($token===''||$phoneId==='')return false;
@@ -60,6 +65,11 @@ function hache_sharky_lab_persist_deferred_state(PDO $pdo,?array $deferredState)
     $contact=trim((string)($deferredState['contact']??''));$state=$deferredState['state']??null;$ttl=(int)($deferredState['ttl']??86400);
     if($contact===''||!is_array($state))throw new RuntimeException('Invalid deferred Sharky state');
     hache_sharky_db_state_save_now($pdo,$contact,$state,$ttl);
+}
+
+function hache_sharky_lab_release_delivery_lock($lock): void
+{
+    if(is_resource($lock))hache_sharky_orchestrator_unlock($lock);
 }
 
 /**
@@ -107,30 +117,35 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     }
     if($kind==='echo'){
         $contact=preg_replace('/\D+/','',(string)($event['to']??''))?:'';if($contact==='')return false;
-        if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'echo'))return false;
-        if(!hache_sharky_takeover_mark($contact,'manual','Respuesta manual detectada por WhatsApp coexistence.')){
-            error_log('[sharky-lab] manual takeover persistence failed; automatic outbox remains blocked from dispatch in this worker');
-            return false;
-        }
-        // Solo después de persistir takeover se permite al dispatcher cancelar pendientes.
-        hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
-        if(!hache_sharky_orchestrator_mark_processed($pdo,(string)$event['id']))return false;
-        return true;
+        $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
+        try{
+            if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'echo'))return false;
+            if(!hache_sharky_takeover_mark($contact,'manual','Respuesta manual detectada por WhatsApp coexistence.')){
+                error_log('[sharky-lab] manual takeover persistence failed; automatic outbox remains blocked from dispatch in this worker');
+                return false;
+            }
+            // Solo después de persistir takeover se permite al dispatcher cancelar pendientes.
+            hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
+            return hache_sharky_orchestrator_mark_processed($pdo,(string)$event['id']);
+        }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
     }
 
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';if($contact==='')return false;$eventId=(string)($event['id']??'event');
     if(hache_sharky_takeover_active($contact)){
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'message')))return false;
-        hache_sharky_orchestrator_mark_processed($pdo,$eventId);return true;
+        return hache_sharky_orchestrator_mark_processed($pdo,$eventId);
     }
     $minAge??=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold??=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
     $secretResolver=static fn(string $name):string=>hache_sharky_lab_secret($name);
     if(($event['type']??'')==='audio'){
         $text=hache_sharky_draft_transcribe_audio($event,$business,$secretResolver);
         if($text===''){
-            if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'audio'))return false;
-            $payload=hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.');
-            return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|audio-fallback',$eventId);
+            $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
+            try{
+                if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'audio'))return false;
+                $payload=hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.');
+                return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|audio-fallback',$eventId);
+            }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
         }
         $event['type']='text';$event['text']=$text;
     }
@@ -138,57 +153,75 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     $paymentException=$text!==''&&hache_sharky_post72_payment_exception_request($text);
     $startAuthority=$text!==''?hache_sharky_start_authority_handoff($text):null;
     if($text!==''&&(is_array($startAuthority)||$paymentException||hache_sharky_draft_requires_handoff($text))){
-        if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'text')))return false;
-        if(is_array($startAuthority))$message=(string)$startAuthority['message'];
-        elseif($paymentException)$message='Para asegurar tu lugar, la reserva se realiza por anticipado pagando el total o al menos el 50%. Si deseas pagar todo hasta el día de inicio sin reserva previa, necesito dejarte con una persona del equipo para que confirme esa excepción.';
-        else $message='Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.';
-        $payload=hache_sharky_whatsapp_text_payload($contact,$message);
-        if(!hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|handoff',$eventId))return false;
-        $reason=is_array($startAuthority)?'start_date_exception':($paymentException?'payment_exception':'shared_v2_policy');
-        $summary=is_array($startAuthority)?'Excepción de fecha de inicio fuera de la autoridad de Sharky.':($paymentException?'Excepción comercial: 0% anticipado y pago total al inicio.':'Handoff decidido por la misma regla vigente del webhook v2.');
-        if(!hache_sharky_takeover_mark($contact,$reason,$summary))error_log('[sharky-lab] takeover mark failed after handoff notice reason='.$reason);
-        return true;
+        $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
+        try{
+            if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'text')))return false;
+            if(is_array($startAuthority))$message=(string)$startAuthority['message'];
+            elseif($paymentException)$message='Para asegurar tu lugar, la reserva se realiza por anticipado pagando el total o al menos el 50%. Si deseas pagar todo hasta el día de inicio sin reserva previa, necesito dejarte con una persona del equipo para que confirme esa excepción.';
+            else $message='Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.';
+            $reason=is_array($startAuthority)?'start_date_exception':($paymentException?'payment_exception':'shared_v2_policy');
+            $summary=is_array($startAuthority)?'Excepción de fecha de inicio fuera de la autoridad de Sharky.':($paymentException?'Excepción comercial: 0% anticipado y pago total al inicio.':'Handoff decidido por la misma regla vigente del webhook v2.');
+            if(!hache_sharky_takeover_mark($contact,$reason,$summary)){
+                error_log('[sharky-lab] takeover persistence failed before handoff delivery reason='.$reason);
+                return false;
+            }
+            $payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_text_payload($contact,$message));
+            return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|handoff',$eventId);
+        }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
     }
 
+    $deliveryLock=null;
     hache_sharky_db_state_defer_begin();
     try{
         $result=hache_sharky_whatsapp_enqueue($pdo,$event,'hache_sharky_lab_answer',[
             'verification_base_url'=>'https://hnatacion.com/sharky-verificar.php',
             'min_age'=>$minAge,
+            'today'=>hache_sharky_lab_today(),
             'defer_receipt_completion'=>true,
+            'defer_delivery_unlock'=>true,
         ]);
+        $deliveryLock=$result['_delivery_lock']??null;unset($result['_delivery_lock']);
         $deferredState=hache_sharky_db_state_defer_take();
-    }catch(Throwable $e){hache_sharky_db_state_defer_cancel();throw $e;}
-    if($result['skip']??false)return false;
-    $decision=is_array($result['decision']??null)?$result['decision']:[];$action=is_array($decision['action']??null)?$decision['action']:null;
-    $shouldTakeover=is_array($action)&&($action['type']??'')==='human_takeover';
-    $out=is_array($result['payload']??null)?$result['payload']:null;$actionResult=is_array($result['action_result']??null)?$result['action_result']:null;
-    if(is_array($actionResult)){
-        if((string)($actionResult['code']??'')==='START_DATE_REQUIRES_HUMAN'){
-            $shouldTakeover=true;
-            $out=hache_sharky_whatsapp_text_payload($contact,'Los cursos intensivos comienzan los lunes. Para incorporarte en otra fecha necesito dejarte con una persona del equipo que autorice la excepción.');
-        }
-        $studentId=trim((string)($actionResult['result']['student_id']??''));if($studentId!=='')hache_sharky_draft_link_attribution($pdo,$contact,$studentId,is_array($result['state']??null)?$result['state']:[]);
-        $registrationMessage=hache_sharky_post72_registration_message($actionResult,$business)??hache_sharky_draft_registration_message($actionResult,$business);if($registrationMessage!==null)$out=hache_sharky_whatsapp_text_payload($contact,$registrationMessage);
-    }
-    $decisionKind=(string)($decision['kind']??'');
-    if(in_array($decisionKind,['conversation','conversation_identity_prompt','side_question'],true)){
-        $answer=hache_sharky_draft_payload_text($out);
-        if($answer!==''&&hache_sharky_draft_escalation_update($contact,$answer,$escalationThreshold)){
-            $shouldTakeover=true;
-            $out=hache_sharky_whatsapp_text_payload($contact,'Para no hacerte dar vueltas, te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.');
-        }
-    }
+    }catch(Throwable $e){hache_sharky_db_state_defer_cancel();hache_sharky_lab_release_delivery_lock($deliveryLock);throw $e;}
+    if($result['skip']??false){hache_sharky_lab_release_delivery_lock($deliveryLock);return false;}
 
-    $deliverySource=(string)($result['synthetic_id']??$eventId);$batchedIds=is_array($result['batched_ids']??null)?$result['batched_ids']:[];
-    $deliveryPending=hache_sharky_action_delivery_pending_for_message($pdo,$deliverySource);
-    if($deliveryPending&&!is_array($out))return false;
-    if(is_array($out)){
-        $payloadHash=hash('sha256',json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');
-        if(!hache_sharky_lab_queue_and_complete($pdo,$contact,$out,$deliverySource.'|'.$decisionKind.'|'.$payloadHash,$deliverySource,$batchedIds,$deferredState))return false;
-    }else{
-        if(!hache_sharky_lab_complete_without_outbox($pdo,$deliverySource,$batchedIds,$deferredState))return false;
-    }
-    if($shouldTakeover&&!hache_sharky_takeover_mark($contact,$decisionKind==='conversation'?'unresolved':'requested_human','Sharky 2.0 controlled handoff'))error_log('[sharky-lab] controlled takeover mark failed');
-    return true;
+    try{
+        $decision=is_array($result['decision']??null)?$result['decision']:[];$action=is_array($decision['action']??null)?$decision['action']:null;
+        $shouldTakeover=is_array($action)&&($action['type']??'')==='human_takeover';
+        $out=is_array($result['payload']??null)?$result['payload']:null;$actionResult=is_array($result['action_result']??null)?$result['action_result']:null;
+        if(is_array($actionResult)){
+            if((string)($actionResult['code']??'')==='START_DATE_REQUIRES_HUMAN'){
+                $shouldTakeover=true;
+                $out=hache_sharky_whatsapp_text_payload($contact,'Los cursos intensivos comienzan los lunes. Para incorporarte en otra fecha necesito dejarte con una persona del equipo que autorice la excepción.');
+            }
+            $studentId=trim((string)($actionResult['result']['student_id']??''));if($studentId!=='')hache_sharky_draft_link_attribution($pdo,$contact,$studentId,is_array($result['state']??null)?$result['state']:[]);
+            $registrationMessage=hache_sharky_post72_registration_message($actionResult,$business)??hache_sharky_draft_registration_message($actionResult,$business);if($registrationMessage!==null)$out=hache_sharky_whatsapp_text_payload($contact,$registrationMessage);
+        }
+        $decisionKind=(string)($decision['kind']??'');
+        if(in_array($decisionKind,['conversation','conversation_identity_prompt','side_question'],true)){
+            $answer=hache_sharky_draft_payload_text($out);
+            if($answer!==''&&hache_sharky_draft_escalation_update($contact,$answer,$escalationThreshold)){
+                $shouldTakeover=true;
+                $out=hache_sharky_whatsapp_text_payload($contact,'Para no hacerte dar vueltas, te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.');
+            }
+        }
+
+        if($shouldTakeover){
+            $reason=$decisionKind==='conversation'?'unresolved':((string)($actionResult['code']??'')==='START_DATE_REQUIRES_HUMAN'?'start_date_exception':'requested_human');
+            if(!hache_sharky_takeover_mark($contact,$reason,'Sharky 2.0 controlled handoff')){
+                error_log('[sharky-lab] controlled takeover persistence failed reason='.$reason);
+                return false;
+            }
+            if(is_array($out))$out=hache_sharky_outbox_allow_during_takeover($out);
+        }
+
+        $deliverySource=(string)($result['synthetic_id']??$eventId);$batchedIds=is_array($result['batched_ids']??null)?$result['batched_ids']:[];
+        $deliveryPending=hache_sharky_action_delivery_pending_for_message($pdo,$deliverySource);
+        if($deliveryPending&&!is_array($out))return false;
+        if(is_array($out)){
+            $payloadHash=hash('sha256',json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');
+            return hache_sharky_lab_queue_and_complete($pdo,$contact,$out,$deliverySource.'|'.$decisionKind.'|'.$payloadHash,$deliverySource,$batchedIds,$deferredState);
+        }
+        return hache_sharky_lab_complete_without_outbox($pdo,$deliverySource,$batchedIds,$deferredState);
+    }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
 }
