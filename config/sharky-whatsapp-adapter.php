@@ -71,7 +71,7 @@ function hache_sharky_whatsapp_question_targets_slot(string $text,string $slot):
     if($slot==='identity')return preg_match('/\b(?:ya\s+)?eres\s+(?:alumno|alumna|estudiante)\b|\b(?:alumno|alumna|estudiante)\s+o\s+(?:nuevo|nueva)\b/u',$t)===1;
     if($slot==='program'){
         $intensive='(?:curso\s+intensivo|intensivo)';
-        $regular='(?:clases?\s+regulares|curso\s+regular|regulares)';
+        $regular='(?:clases?\s+regulares|curso\s+regular|regulares?)';
         $alternatives=preg_match('/\b'.$intensive.'\b.{0,60}\b'.$regular.'\b|\b'.$regular.'\b.{0,60}\b'.$intensive.'\b/u',$t)===1;
         $generic=preg_match('/\b(?:que|cual)\s+(?:tipo\s+de\s+)?(?:curso|programa)\b/u',$t)===1;
         $single=preg_match('/\b(?:prefieres|eliges|escoges|te\s+quedas\s+con|vas\s+con|quieres|buscas)\s+(?:(?:tomar|hacer|llevar)\s+)?(?:(?:el|un|las?|unas?)\s+)?(?:'.$intensive.'|'.$regular.')\b/u',$t)===1;
@@ -134,7 +134,7 @@ function hache_sharky_whatsapp_enforce_confirmed_context(string $answer,array $s
 
 function hache_sharky_whatsapp_style_instruction(array $decision,array $state): string
 {
-    $instruction='Responde para WhatsApp en español natural. Sé breve y fácil de escanear en móvil. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar. Si muestran horarios, precios, formas de pago o información estructurada, sepárala por sede o categoría con encabezados cortos y saltos de línea; cuando haya varios horarios, pon cada horario en una viñeta breve y nunca una tira larga de horas en una sola línea. Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad: usa solo datos actuales del backend/contexto. Hache Natación no ofrece nado libre ni acceso a la alberca sin clase.';
+    $instruction='Responde para WhatsApp en español natural. Sé breve y fácil de escanear en móvil. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar. Si muestras horarios, precios, formas de pago o información estructurada, sepárala por sede o categoría con encabezados cortos y saltos de línea; cuando haya varios horarios, pon cada horario en una viñeta breve y nunca una tira larga de horas en una sola línea. Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad: usa solo datos actuales del backend/contexto. Hache Natación no ofrece nado libre ni acceso a la alberca sin clase.';
     $latest=$state['referral']['latest']??null;
     if(is_array($latest)&&!empty($latest['headline']))$instruction.=' El usuario llegó desde un anuncio cuyo contexto es: '.mb_substr((string)$latest['headline'],0,180).'. Úsalo como contexto, pero no asumas que sigue siendo su intención actual.';
     $commercial=$state['commercial_context']??null;
