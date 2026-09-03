@@ -6,6 +6,7 @@ require_once __DIR__.'/sharky-runtime.php';
 require_once __DIR__.'/sharky-whatsapp-batching.php';
 require_once __DIR__.'/sharky-whatsapp-echoes.php';
 require_once __DIR__.'/sharky-draft-parity.php';
+require_once __DIR__.'/sharky-post-pr72.php';
 require_once __DIR__.'/sharky-outbox.php';
 require_once __DIR__.'/sharky-inbox.php';
 
@@ -30,16 +31,11 @@ function hache_sharky_lab_send(array $payload): bool
     return $response!==false&&$error===''&&$status>=200&&$status<300;
 }
 
-function hache_sharky_lab_queue(PDO $pdo,string $contact,array $payload,string $dedupeSeed): bool
-{
-    if(!hache_sharky_outbox_enqueue($pdo,$contact,$payload,$dedupeSeed))return false;
-    hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10);return true;
-}
-
 function hache_sharky_lab_answer(string $text,string $instruction,array $state,array $context): string
 {
     $history=[];$ref=$state['referral']['latest']??null;
     if(is_array($ref)&&!empty($ref['headline']))$history[]=['role'=>'system','content'=>'Origen de campaña: '.mb_substr((string)$ref['headline'],0,180)];
+    $instruction=rtrim($instruction)."\n\n".hache_sharky_post72_whatsapp_style_policy();
     $history[]=['role'=>'system','content'=>$instruction];$payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
     $ch=curl_init('https://hnatacion.com/api/sharky.php');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_POSTFIELDS=>$payload,CURLOPT_RESOLVE=>['hnatacion.com:443:127.0.0.1']]);
     $response=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);if($response===false||$status<200||$status>=300)return '';
@@ -51,11 +47,30 @@ function hache_sharky_lab_claim_early(PDO $pdo,array $event,string $contact,stri
     return hache_sharky_orchestrator_claim_message($pdo,(string)($event['id']??''),hache_sharky_orchestrator_contact_hash($contact),$type);
 }
 
-function hache_sharky_lab_finish_delivery(PDO $pdo,string $sourceMessageId,array $batchedIds=[]): void
+function hache_sharky_lab_receipt_ids(string $sourceMessageId,array $batchedIds=[]): array
 {
-    hache_sharky_action_delivery_queued_by_message($pdo,$sourceMessageId);
-    hache_sharky_orchestrator_mark_processed($pdo,$sourceMessageId);
-    foreach($batchedIds as $messageId)hache_sharky_orchestrator_mark_processed($pdo,(string)$messageId);
+    $ids=[];$sourceMessageId=trim($sourceMessageId);if($sourceMessageId!=='')$ids[$sourceMessageId]=true;
+    foreach($batchedIds as $id){$id=trim((string)$id);if($id!=='')$ids[$id]=true;}
+    return array_keys($ids);
+}
+
+/**
+ * La respuesta pendiente y la finalización del inbox comparten una misma
+ * transacción. Si el outbox no puede persistirse, ningún receipt se completa.
+ */
+function hache_sharky_lab_queue_and_complete(PDO $pdo,string $contact,array $payload,string $dedupeSeed,string $sourceMessageId,array $batchedIds=[]): bool
+{
+    try{
+        if($pdo->inTransaction())throw new RuntimeException('Unexpected open transaction before Sharky delivery boundary');
+        $pdo->beginTransaction();
+        if(!hache_sharky_outbox_enqueue($pdo,$contact,$payload,$dedupeSeed))throw new RuntimeException('Unable to persist Sharky outbound payload');
+        hache_sharky_action_delivery_queued_by_message($pdo,$sourceMessageId);
+        foreach(hache_sharky_lab_receipt_ids($sourceMessageId,$batchedIds) as $messageId)hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+        $pdo->commit();
+    }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();error_log('[sharky-lab] durable delivery boundary failed');return false;}
+    // El envío ocurre después del commit. Si Meta falla, el outbox conserva la respuesta.
+    hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10);
+    return true;
 }
 
 function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?int $minAge=null,?int $escalationThreshold=null): bool
@@ -82,33 +97,41 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $text=hache_sharky_draft_transcribe_audio($event,$business,$secretResolver);
         if($text===''){
             if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'audio'))return false;
-            $queued=hache_sharky_lab_queue($pdo,$contact,hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.'),$eventId.'|audio-fallback');
-            if(!$queued)return false;hache_sharky_orchestrator_mark_processed($pdo,$eventId);return true;
+            $payload=hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.');
+            return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|audio-fallback',$eventId);
         }
         $event['type']='text';$event['text']=$text;
     }
-    $text=trim((string)($event['text']??''));
-    if($text!==''&&hache_sharky_draft_requires_handoff($text)){
+    $text=trim((string)($event['text']??''));$paymentException=$text!==''&&hache_sharky_post72_payment_exception_request($text);
+    if($text!==''&&($paymentException||hache_sharky_draft_requires_handoff($text))){
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'text')))return false;
-        hache_sharky_takeover_mark($contact,'shared_v2_policy','Handoff decidido por la misma regla vigente del webhook v2.');
-        $queued=hache_sharky_lab_queue($pdo,$contact,hache_sharky_whatsapp_text_payload($contact,'Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.'),$eventId.'|handoff');
-        if(!$queued)return false;hache_sharky_orchestrator_mark_processed($pdo,$eventId);return true;
+        $message=$paymentException
+            ? 'Para asegurar tu lugar, la reserva se realiza por anticipado pagando el total o al menos el 50%. Si deseas pagar todo hasta el día de inicio sin reserva previa, necesito dejarte con una persona del equipo para que confirme esa excepción.'
+            : 'Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.';
+        $payload=hache_sharky_whatsapp_text_payload($contact,$message);
+        if(!hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|handoff',$eventId))return false;
+        hache_sharky_takeover_mark($contact,$paymentException?'payment_exception':'shared_v2_policy',$paymentException?'Excepción comercial: 0% anticipado y pago total al inicio.':'Handoff decidido por la misma regla vigente del webhook v2.');
+        return true;
     }
 
-    $result=hache_sharky_whatsapp_enqueue($pdo,$event,'hache_sharky_lab_answer',['verification_base_url'=>'https://hnatacion.com/sharky-verificar.php','min_age'=>$minAge]);
+    $result=hache_sharky_whatsapp_enqueue($pdo,$event,'hache_sharky_lab_answer',[
+        'verification_base_url'=>'https://hnatacion.com/sharky-verificar.php',
+        'min_age'=>$minAge,
+        'defer_receipt_completion'=>true,
+    ]);
     if($result['skip']??false)return false;
     $decision=is_array($result['decision']??null)?$result['decision']:[];$action=is_array($decision['action']??null)?$decision['action']:null;
-    if(is_array($action)&&($action['type']??'')==='human_takeover')hache_sharky_takeover_mark($contact,'requested_human','Sharky 2.0 controlled handoff');
+    $shouldTakeover=is_array($action)&&($action['type']??'')==='human_takeover';
     $out=is_array($result['payload']??null)?$result['payload']:null;$actionResult=is_array($result['action_result']??null)?$result['action_result']:null;
     if(is_array($actionResult)){
         $studentId=trim((string)($actionResult['result']['student_id']??''));if($studentId!=='')hache_sharky_draft_link_attribution($pdo,$contact,$studentId,is_array($result['state']??null)?$result['state']:[]);
-        $registrationMessage=hache_sharky_draft_registration_message($actionResult,$business);if($registrationMessage!==null)$out=hache_sharky_whatsapp_text_payload($contact,$registrationMessage);
+        $registrationMessage=hache_sharky_post72_registration_message($actionResult,$business)??hache_sharky_draft_registration_message($actionResult,$business);if($registrationMessage!==null)$out=hache_sharky_whatsapp_text_payload($contact,$registrationMessage);
     }
     $decisionKind=(string)($decision['kind']??'');
     if(in_array($decisionKind,['conversation','conversation_identity_prompt','side_question'],true)){
         $answer=hache_sharky_draft_payload_text($out);
         if($answer!==''&&hache_sharky_draft_escalation_update($contact,$answer,$escalationThreshold)){
-            hache_sharky_takeover_mark($contact,'unresolved','Sharky 2.0 agotó el umbral configurable de respuestas no resueltas.');
+            $shouldTakeover=true;
             $out=hache_sharky_whatsapp_text_payload($contact,'Para no hacerte dar vueltas, te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.');
         }
     }
@@ -118,9 +141,10 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     if($deliveryPending&&!is_array($out))return false;
     if(is_array($out)){
         $payloadHash=hash('sha256',json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');
-        $queued=hache_sharky_lab_queue($pdo,$contact,$out,$deliverySource.'|'.$decisionKind.'|'.$payloadHash);
-        if(!$queued&&$deliveryPending)return false;
-        if($queued&&$deliveryPending)hache_sharky_lab_finish_delivery($pdo,$deliverySource,$batchedIds);
+        if(!hache_sharky_lab_queue_and_complete($pdo,$contact,$out,$deliverySource.'|'.$decisionKind.'|'.$payloadHash,$deliverySource,$batchedIds))return false;
+    }else{
+        foreach(hache_sharky_lab_receipt_ids($deliverySource,$batchedIds) as $messageId)hache_sharky_orchestrator_mark_processed($pdo,$messageId);
     }
+    if($shouldTakeover)hache_sharky_takeover_mark($contact,$decisionKind==='conversation'?'unresolved':'requested_human','Sharky 2.0 controlled handoff');
     return true;
 }
