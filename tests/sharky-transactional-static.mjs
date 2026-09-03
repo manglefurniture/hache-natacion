@@ -25,7 +25,7 @@ const txPos=actions.indexOf('$pdo->beginTransaction();',actions.indexOf('functio
 const pwdPos=actions.indexOf('$tempPassword = password_temporal_segura();',actions.indexOf('function hache_sharky_business_register_intensive'));
 expect(txPos>=0&&pwdPos>txPos,'Credenciales del registro deben generarse después de entrar a la transacción/revalidación.');
 expect(executor.includes('requires_revalidation')&&executor.includes('IDENTITY_MISMATCH'),'Executor debe exigir revalidación e identidad.');
-expect(executor.includes('ACTION_IN_PROGRESS')&&executor.includes('ALREADY_COMPLETED'),'Executor debe ser idempotente.');
+expect(executor.includes('ACTION_IN_PROGRESS')&&executor.includes('hache_sharky_action_recovery_claim'),'Executor debe ser idempotente y recuperar leases vencidos.');
 expect(adapter.includes('referral'),'Adapter debe conservar referral.');
 expect(adapter.includes("'type'=>'interactive'")&&adapter.includes("'type'=>'list'"),'Adapter debe renderizar botones/listas reales.');
 expect(adapter.includes('hache_sharky_whatsapp_resume_verified_state'),'La verificación debe reanudar el flujo controlado pendiente.');
@@ -39,8 +39,15 @@ expect(login.includes('sharky_verification_token')&&login.includes('/sharky-veri
 expect(router.includes('SHARKY_ORCHESTRATOR_LAB_ENABLED')&&router.includes('whatsapp-webhook-v2.php'),'El router debe conservar v2 como ruta productiva por defecto.');
 expect(/SHARKY_ORCHESTRATOR_LAB_ENABLED[\s\S]{0,80}!==?\s*['"]1['"]/.test(lab),'Webhook laboratorio debe permanecer apagado por defecto.');
 expect(lab.includes('X_HUB_SIGNATURE_256')||lab.includes('HTTP_X_HUB_SIGNATURE_256'),'Webhook laboratorio debe validar firma Meta.');
-expect(/if\s*\(\s*!\s*\$pdo\s+instanceof\s+PDO\s*\)/.test(lab)&&lab.includes('event ignored safely'),'Si la BD no está disponible, el lab debe fallar cerrado sin ejecutar acciones.');
-expect(lab.includes('hache_sharky_takeover_mark')&&lab.includes('manual'),'Una respuesta humana detectada debe silenciar Sharky.');
+// Fail closed actual: BD/migración/inbox durable se validan ANTES del ACK 200.
+const dbGuardPos=lab.indexOf('if(!$pdo instanceof PDO)sharky_lab_json(503');
+const storeGuardPos=lab.indexOf('if(!hache_sharky_orchestrator_store_ready($pdo))sharky_lab_json(503');
+const inboxPos=lab.indexOf('hache_sharky_inbox_store');
+const ackPos=lab.indexOf('http_response_code(200)');
+expect(dbGuardPos>=0&&storeGuardPos>dbGuardPos&&inboxPos>storeGuardPos&&ackPos>inboxPos,'Si la BD/migración/inbox durable falla, el lab debe responder 503 antes del ACK 200 y no ejecutar acciones.');
+expect(lab.includes("'Database unavailable'")&&lab.includes("'Sharky migration incomplete'")&&lab.includes("'Unable to persist inbound event'"),'El fail-closed del lab debe distinguir fallas durables antes del ACK.');
+expect(lab.includes('hache_sharky_lab_process_event')&&lab.indexOf('hache_sharky_lab_process_event')>ackPos,'Las acciones solo pueden ejecutarse después de persistir y ACKear el evento durable.');
+expect(lab.includes('hache_sharky_outbox_dispatch'),'El lab debe reintentar respuestas durables pendientes.');
 expect(!migration.includes('whatsapp VARCHAR'),'Persistencia del orquestador no debe almacenar teléfono crudo.');
 
 console.log('SHARKY_TRANSACTIONAL_STATIC_OK');
