@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS sharky_identity_challenges (
   CONSTRAINT fk_sharky_identity_student FOREIGN KEY (verified_student_id) REFERENCES alumnos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Action leases prevent a crashed worker from leaving PENDING forever. Result JSON
+-- lets a replay rebuild the same success response without repeating side effects.
 CREATE TABLE IF NOT EXISTS sharky_action_audit (
   id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
   idempotency_key CHAR(64) NOT NULL,
@@ -77,12 +79,16 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
   status ENUM('PENDING','COMPLETED','FAILED','CANCELLED') NOT NULL DEFAULT 'PENDING',
   payload_hash CHAR(64) NOT NULL,
   result_code VARCHAR(80) NULL,
+  result_json JSON NULL,
+  result_message VARCHAR(500) NULL,
+  lease_until DATETIME NULL,
+  attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at DATETIME NULL,
   UNIQUE KEY uq_sharky_action_idempotency (idempotency_key),
   INDEX idx_sharky_action_contact (contact_hash, created_at),
   INDEX idx_sharky_action_student (alumno_id, created_at),
-  INDEX idx_sharky_action_status (status, created_at),
+  INDEX idx_sharky_action_status (status, lease_until, created_at),
   CONSTRAINT fk_sharky_action_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
