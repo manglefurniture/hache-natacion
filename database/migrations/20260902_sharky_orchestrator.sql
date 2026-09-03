@@ -110,7 +110,8 @@ ALTER TABLE sharky_action_audit ADD COLUMN IF NOT EXISTS owner_token CHAR(48) NU
 
 -- Outbound messages are encrypted at rest. The raw WhatsApp number lives only inside
 -- the encrypted payload, never in a searchable/plaintext column. CANCELLED is used when
--- human takeover supersedes an automatic message before it is sent.
+-- human takeover supersedes an automatic message before it is sent. owner_token fences
+-- a dispatcher whose lease expires while it waits for the per-contact delivery lock.
 CREATE TABLE IF NOT EXISTS sharky_outbox (
   id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
   dedupe_key CHAR(64) NOT NULL,
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS sharky_outbox (
   attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   available_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   lease_until DATETIME NULL,
+  owner_token CHAR(48) NULL,
   last_error VARCHAR(255) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   sent_at DATETIME NULL,
@@ -129,3 +131,5 @@ CREATE TABLE IF NOT EXISTS sharky_outbox (
   INDEX idx_sharky_outbox_pending (status, available_at, lease_until),
   INDEX idx_sharky_outbox_contact (contact_hash, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE sharky_outbox ADD COLUMN IF NOT EXISTS owner_token CHAR(48) NULL AFTER lease_until;
