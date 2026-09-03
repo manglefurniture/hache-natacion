@@ -56,6 +56,38 @@ guided_ok(
     'A venue button from another step must remain stale while program is pending.'
 );
 
+// A venue confirmed earlier in the conversation must not be requested again once the
+// qualification has enough information to move forward.
+$knownRegular=$prospect;
+$knownRegular['commercial_context']['program']='regular';
+$knownRegular['commercial_context']['sede_clave']='PALAPAS';
+[$knownRegularState,$knownRegularDecision]=hache_sharky_whatsapp_qualification_sede_step($knownRegular,[],1788383020,'Perfecto, seguimos por clases regulares.');
+guided_ok(
+    ($knownRegularState['flow']['step']??null)==='daypart',
+    'A known venue with regular classes must skip the venue question and advance to daypart.'
+);
+guided_ok(
+    !str_contains(hache_sharky_orchestrator_normalize((string)($knownRegularDecision['message']??'')),'que sede'),
+    'A known venue must never be asked again during regular qualification.'
+);
+guided_ok(
+    str_contains(hache_sharky_orchestrator_normalize((string)($knownRegularDecision['message']??'')),'matutino'),
+    'A known regular venue should advance directly to the morning/evening preference.'
+);
+
+$knownIntensive=$prospect;
+$knownIntensive['commercial_context']['program']='intensive';
+$knownIntensive['commercial_context']['sede_clave']='MONTEVERDE';
+[$knownIntensiveState,$knownIntensiveDecision]=hache_sharky_whatsapp_qualification_sede_step($knownIntensive,[],1788383030,'Perfecto, podemos orientarte por el intensivo.');
+guided_ok(
+    ($knownIntensiveState['flow']??null)===null,
+    'A known venue with intensive context should complete guided qualification without another venue step.'
+);
+guided_ok(
+    ($knownIntensiveDecision['kind']??null)==='commercial_ready',
+    'Known intensive program and venue should leave the prospect commercially ready.'
+);
+
 $adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 guided_ok(
     str_contains($adapterSource,"qualify:intensive")&&str_contains($adapterSource,"qualify:regular"),
@@ -65,6 +97,16 @@ guided_ok(
     str_contains($adapterSource,'¡Hola! Soy Sharky 🦈, el asistente IA de Hache Natación.')
     && str_contains($adapterSource,"assistant_presentation_queued"),
     'The deterministic identity prompt must preserve a first presentation while suppressing later re-introductions.'
+);
+$staleGuardPos=strpos($adapterSource,'if(!hache_sharky_whatsapp_interactive_is_current($state,$event))');
+$naturalVenuePos=$staleGuardPos===false?false:strpos($adapterSource,'$state=hache_sharky_whatsapp_apply_natural_venue_preference',$staleGuardPos);
+guided_ok(
+    $staleGuardPos!==false&&$naturalVenuePos!==false&&$staleGuardPos<$naturalVenuePos,
+    'Natural venue persistence must happen only after stale interactive replies are rejected.'
+);
+guided_ok(
+    str_contains($adapterSource,"if(trim((string)(\$event['interactive_id']??''))==='')\$state=hache_sharky_whatsapp_apply_natural_venue_preference"),
+    'Interactive replies must never mutate natural venue memory before their own flow validates them.'
 );
 
 $v2Source=file_get_contents(__DIR__.'/../public/api/sharky-v2.php')?:'';
