@@ -161,7 +161,9 @@ function hache_sharky_whatsapp_declared_age(string $text): ?int
 {
     foreach(hache_sharky_orchestrator_text_segments($text) as $line){
         $t=hache_sharky_orchestrator_normalize($line);
-        if(preg_match('/^(?:tengo\s+)?(\d{1,3})\s*(?:anos)?[.! ]*$/u',$t,$m)!==1)continue;
+        $matched=preg_match('/(?<!no )\btengo\s+(\d{1,3})\s+anos?\b/u',$t,$m)===1;
+        if(!$matched)$matched=preg_match('/^(?:tengo\s+)?(\d{1,3})\s*(?:anos?)?[.! ]*$/u',$t,$m)===1;
+        if(!$matched)continue;
         $age=(int)$m[1];
         if($age>=1&&$age<=120)return $age;
     }
