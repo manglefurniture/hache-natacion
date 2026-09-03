@@ -332,7 +332,7 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
     $step = (string) ($flow['step'] ?? '');
     $data = is_array($flow['data'] ?? null) ? $flow['data'] : [];
     $text = trim((string) ($event['text'] ?? ''));
-    $interactive = strtolower(trim((string) ($event['interactive_id'] ?? ''));
+    $interactive = strtolower(trim((string) ($event['interactive_id'] ?? '')));
 
     if ($intent === 'cancel' || $intent === 'no') {
         $state = hache_sharky_orchestrator_clear_flow($state);
