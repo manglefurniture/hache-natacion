@@ -89,6 +89,15 @@ function hache_sharky_outbox_renew_owner(PDO $pdo,string $id,string $ownerToken)
     }catch(Throwable $e){return false;}
 }
 
+function hache_sharky_outbox_release_owner(PDO $pdo,string $id,string $ownerToken): bool
+{
+    if($id===''||$ownerToken==='')return false;
+    try{
+        $st=$pdo->prepare("UPDATE sharky_outbox SET lease_until=NULL,owner_token=NULL WHERE id=:id AND status='PENDING' AND owner_token=:o");
+        $st->execute([':id'=>$id,':o'=>$ownerToken]);return $st->rowCount()===1;
+    }catch(Throwable $e){return false;}
+}
+
 function hache_sharky_outbox_mark_sent(PDO $pdo,string $id,string $ownerToken): bool
 {
     try{
@@ -118,17 +127,14 @@ function hache_sharky_outbox_mark_failed(PDO $pdo,string $id,string $ownerToken,
 function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,string $lockedContact=''): array
 {
     $stats=['sent'=>0,'failed'=>0,'dead'=>0,'cancelled'=>0];$limit=max(1,min(50,$limit));$lockedContact=preg_replace('/\D+/','',$lockedContact)?:'';
-    // A rollback to the documented explicit flag value must stop even an
-    // in-flight lab request before it can claim/send another outbound row.
-    // Empty/unset is left untouched here so isolated regressions can exercise
-    // the pure dispatcher without manufacturing production activation state.
-    if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='0')return $stats;
+    if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')return $stats;
     $lockedHash=$lockedContact!==''?hache_sharky_orchestrator_contact_hash($lockedContact):'';
     // A row is claimed immediately before send. If this worker already owns a
     // contact lock, it may only claim that contact's rows, preventing A→B/B→A
     // lock inversion. Ownership is renewed after acquiring the delivery lock,
     // so a lease stolen while waiting can never send from the stale worker.
     for($i=0;$i<$limit;$i++){
+        if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
         $claimed=$lockedHash!==''?hache_sharky_outbox_claim($pdo,1,$lockedHash):hache_sharky_outbox_claim($pdo,1);if(!$claimed)break;$row=$claimed[0];
         $owner=trim((string)($row['owner_token']??''));$id=(string)($row['id']??'');
         $payload=hache_sharky_outbox_decrypt($row);
@@ -152,9 +158,19 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
             // Lease may have expired while waiting for the contact lock. Renewing
             // with the fenced token proves this worker still owns the row.
             if(!hache_sharky_outbox_renew_owner($pdo,$id,$owner))continue;
+            if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
+                hache_sharky_outbox_release_owner($pdo,$id,$owner);
+                break;
+            }
             if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
                 if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;
                 continue;
+            }
+            // Rollback is a kill switch, not merely a startup guard. Revalidate
+            // again immediately before the external side effect.
+            if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
+                hache_sharky_outbox_release_owner($pdo,$id,$owner);
+                break;
             }
             $ok=false;try{$ok=$sender($payload)===true;}catch(Throwable $e){$ok=false;}
             if($ok){
