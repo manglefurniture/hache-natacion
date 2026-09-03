@@ -92,10 +92,11 @@ CREATE TABLE IF NOT EXISTS sharky_outbox (
   status ENUM('PENDING','SENT','DEAD') NOT NULL DEFAULT 'PENDING',
   attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   available_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  lease_until DATETIME NULL,
   last_error VARCHAR(255) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   sent_at DATETIME NULL,
   UNIQUE KEY uq_sharky_outbox_dedupe (dedupe_key),
-  INDEX idx_sharky_outbox_pending (status, available_at),
+  INDEX idx_sharky_outbox_pending (status, available_at, lease_until),
   INDEX idx_sharky_outbox_contact (contact_hash, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
