@@ -60,6 +60,82 @@ function hache_sharky_whatsapp_nado_libre_message(): string
     return 'No. Hache Natación no ofrece nado libre ni acceso a la alberca sin clase. Las actividades se realizan dentro de nuestros cursos o clases.';
 }
 
+function hache_sharky_whatsapp_commercial_ready(array $state): bool
+{
+    if(($state['identity']['kind']??'')!=='prospect')return false;
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    if(!in_array(($commercial['program']??null),['intensive','regular'],true))return false;
+    if(!in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))return false;
+    return is_int($commercial['age']??null);
+}
+
+function hache_sharky_whatsapp_commercial_ready_message(array $state,string $prefix='Perfecto.'): string
+{
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $program=($commercial['program']??null)==='regular'?'clases regulares':'curso intensivo';
+    $sede=($commercial['sede_clave']??null)==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
+    $age=is_int($commercial['age']??null)?(int)$commercial['age']:null;
+    $summary=$program.' en '.$sede.($age!==null?' para una persona de '.$age.' años':'');
+    if(($commercial['program']??null)==='intensive')return rtrim($prefix).' Ya tengo: '.$summary.'. Puedes preguntarme por horarios o precios; si quieres iniciar el registro, escribe “quiero inscribirme”.';
+    return rtrim($prefix).' Ya tengo: '.$summary.'. Puedes preguntarme por horarios o precios.';
+}
+
+function hache_sharky_whatsapp_low_information_reengagement(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if($t==='')return true;
+    if(preg_match('/[\p{L}\p{N}]/u',$t)!==1)return true;
+    $greeting=preg_replace('/^[.!?¿¡\s]+|[.!?¿¡\s]+$/u','',$t)??$t;
+    return preg_match('/^(?:hola|holi|buenas|hey|ey|que\s+tal|ola)$/u',$greeting)===1;
+}
+
+function hache_sharky_whatsapp_turn_is_discovery_only(string $text): bool
+{
+    $segments=hache_sharky_orchestrator_text_segments($text);
+    if(!$segments)return false;
+    foreach($segments as $segment){
+        if(hache_sharky_orchestrator_program_choice($segment)!==null)continue;
+        if(hache_sharky_orchestrator_sede_choice($segment)!==null)continue;
+        $t=hache_sharky_orchestrator_normalize($segment);
+        if(preg_match('/^(?:tengo\s+)?\d{1,3}\s*(?:anos)?[.! ]*$/u',$t)===1)continue;
+        return false;
+    }
+    return true;
+}
+
+function hache_sharky_whatsapp_user_asks_assistant_identity(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    return preg_match('/\b(?:quien\s+eres|quien\s+es\s+sharky|como\s+te\s+llamas|eres\s+sharky|que\s+eres)\b/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_enforce_no_reintroduction(string $answer,array $state,string $userText=''): string
+{
+    if(hache_sharky_whatsapp_user_asks_assistant_identity($userText))return $answer;
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $conversationUnderway=(($state['assistant_presentation_queued']??false)===true)
+        || (($state['identity']['kind']??'unknown')!=='unknown')
+        || in_array(($commercial['program']??null),['intensive','regular'],true)
+        || in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)
+        || is_int($commercial['age']??null);
+    if(!$conversationUnderway)return $answer;
+
+    $parts=preg_split('/\n+|(?<=[.!?;])\s+|(?=¿)/u',$answer)?:[];$kept=[];$removed=false;
+    foreach($parts as $part){
+        $part=trim((string)$part);if($part==='')continue;
+        $t=hache_sharky_orchestrator_normalize($part);
+        $introduces=(str_contains($t,'sharky')&&str_contains($t,'hache natacion')&&preg_match('/\b(?:soy|me\s+llamo|asistente(?:\s+ia)?|soy\s+el\s+asistente)\b/u',$t)===1);
+        if($introduces){$removed=true;continue;}
+        $kept[]=$part;
+    }
+    if(!$removed)return $answer;
+    $safe=hache_sharky_whatsapp_clean_answer(implode("\n\n",$kept));
+    if($safe!==''&&!hache_sharky_whatsapp_low_information_reengagement($safe))return $safe;
+    if(hache_sharky_whatsapp_commercial_ready($state))return hache_sharky_whatsapp_commercial_ready_message($state,'Sigo contigo.');
+    $next=hache_sharky_orchestrator_next_required_step($state);$prompt=trim((string)($next['prompt']??''));
+    return $prompt!==''?'Sigo contigo. '.$prompt:'Sigo contigo. ¿En qué te ayudo?';
+}
+
 function hache_sharky_whatsapp_question_targets_slot(string $text,string $slot): bool
 {
     $t=hache_sharky_orchestrator_normalize($text);
@@ -304,6 +380,12 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
 
+        if(trim((string)($event['interactive_id']??''))===''&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)&&hache_sharky_whatsapp_low_information_reengagement((string)($event['text']??''))){
+            $decision=hache_sharky_orchestrator_decision('commercial_reengagement',hache_sharky_whatsapp_commercial_ready_message($state,'Sigo contigo.'));
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+            return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+        }
+
         $preIntent=hache_sharky_orchestrator_contextual_intent($state,(string)($event['text']??''),(string)($event['interactive_id']??''));
         if(!is_array($state['flow']??null)&&$preIntent==='register_intensive'&&(($context['identity']['found']??false)===true||(($state['identity']['kind']??'')==='student'&&($state['identity']['verified']??false)===true))){
             $state=hache_sharky_orchestrator_clear_flow($state);
@@ -316,12 +398,17 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             $instruction=hache_sharky_whatsapp_style_instruction(['kind'=>'side_question'],$state).' El usuario está dentro de un proceso controlado: responde solo la duda actual, no pierdas ni cambies ese proceso y no vuelvas a pedir datos ya capturados.';
             $answer=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer((string)($event['text']??''),$instruction,$state,$context));
             $answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state);
+            $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$state,(string)($event['text']??''));
             $answer=rtrim($answer)."\n\nCuando quieras, seguimos donde lo dejamos.";
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>['kind'=>'side_question','message'=>$answer,'ui'=>[],'action'=>null],'payload'=>hache_sharky_whatsapp_text_payload($contact,$answer),'action_result'=>null];
         }
 
+        $stateBeforeOrchestrate=$state;
         $result=hache_sharky_orchestrate($state,$event,$context);$state=$result['state'];$decision=$result['decision'];
+        if(($decision['kind']??'')==='conversation'&&!hache_sharky_whatsapp_commercial_ready($stateBeforeOrchestrate)&&hache_sharky_whatsapp_commercial_ready($state)&&hache_sharky_whatsapp_turn_is_discovery_only((string)($event['text']??''))){
+            $decision=hache_sharky_orchestrator_decision('commercial_ready',hache_sharky_whatsapp_commercial_ready_message($state));
+        }
         [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
         $verificationUrl=null;
         if(($decision['ui']['type']??'')==='verification_link'){
@@ -334,6 +421,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             $instruction=hache_sharky_whatsapp_style_instruction($decision,$state);
             $conversation=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer((string)($event['text']??''),$instruction,$state,$context));
             $conversation=hache_sharky_whatsapp_enforce_confirmed_context($conversation,$state);
+            $conversation=hache_sharky_whatsapp_enforce_no_reintroduction($conversation,$state,(string)($event['text']??''));
             if(($decision['kind']??'')==='conversation_identity_prompt'&&!hache_sharky_whatsapp_answer_asks_slot($conversation,'identity'))$conversation=rtrim($conversation)."\n\nAntes de seguir, ¿ya eres alumno de Hache Natación?";
         }
 
