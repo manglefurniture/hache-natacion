@@ -167,23 +167,24 @@ function hache_sharky_capacity_request(string $text): bool
             || preg_match('/\blas?\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')(?:\s+y\s+(?:cuarto|media))?\b/u',$text)===1;
         if ($hasScheduleQualifier) return false;
     }
+    $capacityContext='(?:intensivos?|cursos?|grupos?|clases?|carriles?)';
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
         '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
-        '/\b(disponibilidad)\b.{0,35}\b(intensivo|curso|grupo|clase|carril)\b/u',
-        '/\b(intensivo|curso|grupo|clase|carril)\b.{0,35}\b(disponibilidad)\b/u',
+        '/\b(disponibilidad)\b.{0,35}\b'.$capacityContext.'\b/u',
+        '/\b'.$capacityContext.'\b.{0,35}\b(disponibilidad)\b/u',
         '/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b(carril|grupo|clase|curso)\b/u',
         '/\b(curso|grupo|clase|carril)\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,15}\b(hay|caben|entran|admite|acepta|permite)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,20}\bpor carril\b/u',
-        '/\bcapacidad(?:\s+maxima)?\s+(?:del|de la|de los|de las)\s+(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo)\b/u',
-        '/\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo)\b.{0,20}\bcapacidad(?:\s+maxima)?\b/u',
-        '/\bcapacidad\b.{0,16}\b(tiene|admite|permite|acepta)\b.{0,14}\b(el\s+|la\s+)?(grupo|curso|clase|carril|intensivo)\b/u',
+        '/\bcapacidad(?:\s+maxima)?\s+(?:del|de la|de los|de las)\s+(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b/u',
+        '/\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b.{0,20}\bcapacidad(?:\s+maxima)?\b/u',
+        '/\bcapacidad\b.{0,16}\b(tiene|tienen|admite|admiten|permite|permiten|acepta|aceptan)\b.{0,14}\b(el\s+|la\s+|los\s+|las\s+)?(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b/u',
         '/\b(esta|estan)\b.{0,15}\b(lleno|llena|llenos|llenas)\b/u',
         '/\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles)\b.{0,25}\b(se\s+(lleno|llena|llenaron|llenan))\b/u',
         '/\b(se\s+(lleno|llena|llenaron|llenan))\b.{0,25}\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles)\b/u',
-        '/\b(esta|estan|hay)\b.{0,12}\b(disponible|disponibles)\b.{0,20}\b(curso|intensivo|grupo)\b/u',
+        '/\b(esta|estan|hay)\b.{0,12}\b(disponible|disponibles)\b.{0,20}\b'.$capacityContext.'\b/u',
         '/\blista de espera\b/u',
     ] as $pattern) if (preg_match($pattern,$text)===1) return true;
     return false;
@@ -193,12 +194,12 @@ function hache_sharky_regular_enrollment_request(string $text): bool
 {
     $candidate=hache_sharky_normalize_text($text);
     $negativeMarker='(?:no|todavia no|aun no|por ahora no|tampoco|ni)';
-    $negativeIntent='(?:(?:me|yo)\s+)?(?:(?:quiero|quiere|quieren|necesito|necesita|necesitan|quisiera|deseo|desea|desean|pienso|piensa|piensan|planeo|planea|planean|voy a|va a|van a)\s+)?';
-    $negativeAction='(?:inscribirme|registrarme|anotarme|apuntarme|inscribirse|registrarse|anotarse|apuntarse|inscribir|registrar|anotar|apuntar|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla|darme de alta|darse de alta|dar de alta|empezar|comenzar|entrar)';
+    $negativeIntent='(?:(?:me|te|se|nos|yo)\s+)?(?:(?:quiero|quiere|queremos|quieren|necesito|necesita|necesitamos|necesitan|quisiera|deseo|desea|deseamos|desean|pienso|piensa|pensamos|piensan|planeo|planea|planeamos|planean|voy a|va a|vamos a|van a)\s+)?';
+    $negativeAction='(?:inscribirme|registrarme|anotarme|apuntarme|inscribirse|registrarse|anotarse|apuntarse|inscribir|registrar|anotar|apuntar|inscribirlo|inscribirla|registrarlo|registrarla|anotarlo|anotarla|apuntarlo|apuntarla|darme de alta|darte de alta|darse de alta|darnos de alta|dar de alta|empezar|comenzar|entrar)';
     foreach ([
         '/\b'.$negativeMarker.'\s+'.$negativeIntent.$negativeAction.'\b/u',
-        '/\b'.$negativeMarker.'\s+'.$negativeIntent.'(?:(?:hacer|completar|confirmar|tramitar|realizar|iniciar|finalizar)\s+)?(?:(?:mi|la|el|una|un)\s+)?(?:inscripcion|alta|registro)\b/u',
-        '/\bno\s+(?:tengo\s+)?(?:intencion|planes?)\s+de\s+'.$negativeAction.'\b/u',
+        '/\b'.$negativeMarker.'\s+'.$negativeIntent.'(?:(?:hacer|completar|confirmar|tramitar|realizar|iniciar|finalizar)\s+)?(?:(?:mi|tu|su|nuestra|nuestro|la|el|una|un)\s+)?(?:inscripcion|alta|registro)\b/u',
+        '/\bno\s+(?:tengo|tiene|tenemos|tienen)?\s*(?:intencion|planes?)\s+de\s+'.$negativeAction.'\b/u',
     ] as $negativePattern) {
         $candidate=preg_replace($negativePattern,' ',$candidate)??$candidate;
     }
