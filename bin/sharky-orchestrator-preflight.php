@@ -19,7 +19,8 @@ try{
         $line=static function(string $label,bool $ok,string $detail=''):void{
             fwrite(STDOUT,sprintf("[%s] %s%s\n",$ok?'OK':'FAIL',$label,$detail!==''?' — '.$detail:''));
         };
-        $line('Feature flag seguro',($report['feature_flag_ok']??false)===true,'valor='.(string)($report['feature_flag']??'0'));
+        $flag=(string)($report['feature_flag']??'');
+        $line('Feature flag seguro',($report['feature_flag_ok']??false)===true,'valor='.($flag===''?'AUSENTE':$flag));
         foreach(($report['extensions']??[]) as $name=>$ok)$line('PHP extension '.$name,$ok===true);
         foreach(($report['secrets']??[]) as $name=>$check)$line('Secret '.$name,($check['ok']??false)===true,($check['present']??false)?'presente':'ausente');
         $schema=$report['schema']??[];
@@ -27,6 +28,8 @@ try{
         foreach(($schema['missing_tables']??[]) as $item)fwrite(STDOUT,"  - tabla faltante: $item\n");
         foreach(($schema['missing_columns']??[]) as $item)fwrite(STDOUT,"  - columna faltante: $item\n");
         foreach(($schema['missing_indexes']??[]) as $item)fwrite(STDOUT,"  - índice faltante: $item\n");
+        foreach(($schema['missing_constraints']??[]) as $item)fwrite(STDOUT,"  - constraint faltante: $item\n");
+        if(!$allowEnabled)$line('Colas limpias para cutover',($report['clean_cutover_ok']??false)===true);
         if(is_array($report['data']??null)){
             foreach($report['data'] as $name=>$count)fwrite(STDOUT,sprintf("[INFO] %s=%s\n",$name,$count===null?'n/a':(string)$count));
         }
