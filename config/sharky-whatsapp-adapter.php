@@ -146,6 +146,19 @@ function hache_sharky_whatsapp_qualification_start(array $state,int $now): array
 
 function hache_sharky_whatsapp_qualification_sede_step(array $state,array $data,int $now,string $message): array
 {
+    $known=(string)($state['commercial_context']['sede_clave']??'');
+    if(in_array($known,['MONTEVERDE','PALAPAS'],true)){
+        $label=$known==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
+        if(($state['commercial_context']['program']??null)==='regular'){
+            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','daypart',$data,$now);
+            return [$state,hache_sharky_orchestrator_decision('prospect_daypart_prompt',$message.' Ya tengo tu sede: '.$label.'. ¿Prefieres horario matutino o vespertino?',['type'=>'buttons','buttons'=>[
+                hache_sharky_orchestrator_button('daypart:morning','Matutino'),
+                hache_sharky_orchestrator_button('daypart:evening','Vespertino'),
+            ]])];
+        }
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_orchestrator_decision('commercial_ready',$message.' '.hache_sharky_whatsapp_commercial_ready_message($state,'Perfecto.'))];
+    }
     $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',$data,$now);
     return [$state,hache_sharky_orchestrator_decision('prospect_program_recommendation',$message.' ¿Qué sede te queda mejor?',['type'=>'buttons','buttons'=>[
         hache_sharky_orchestrator_button('sede:monteverde','Monteverde'),
@@ -568,7 +581,6 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         $state=hache_sharky_db_state_load($pdo,$contact);
         $context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
         $state=hache_sharky_whatsapp_resume_verified_state($state,$context,(int)$context['now']);
-        $state=hache_sharky_whatsapp_apply_natural_venue_preference($state,(string)($event['text']??''));
         $ref=hache_sharky_orchestrator_referral($event,(int)$context['now']);
         if($ref)hache_sharky_orchestrator_store_referral($pdo,$messageId,$contactHash,$ref,($context['identity']['found']??false)?(string)$context['identity']['student_id']:null);
 
@@ -581,6 +593,8 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
+
+        if(trim((string)($event['interactive_id']??''))==='')$state=hache_sharky_whatsapp_apply_natural_venue_preference($state,(string)($event['text']??''));
 
         if(trim((string)($event['interactive_id']??''))===''&&hache_sharky_whatsapp_nado_libre_request((string)($event['text']??''))){
             $message=hache_sharky_whatsapp_nado_libre_message();
