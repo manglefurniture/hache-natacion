@@ -37,6 +37,27 @@ function hache_sharky_inbox_store(PDO $pdo,array $event): bool
     }catch(Throwable $e){error_log('[sharky-inbox] persist failed');return false;}
 }
 
+function hache_sharky_inbox_mark_handoff_pending(PDO $pdo,string $messageId): bool
+{
+    $messageId=mb_substr(trim($messageId),0,191);if($messageId===''||!hache_sharky_orchestrator_store_ready($pdo))return false;
+    try{
+        $st=$pdo->prepare('UPDATE sharky_message_receipts SET handoff_pending_at=COALESCE(handoff_pending_at,NOW()) WHERE message_id=:m AND processed_at IS NULL');
+        $st->execute([':m'=>$messageId]);
+        if($st->rowCount()===1)return true;
+        $check=$pdo->prepare('SELECT 1 FROM sharky_message_receipts WHERE message_id=:m AND processed_at IS NULL AND handoff_pending_at IS NOT NULL LIMIT 1');
+        $check->execute([':m'=>$messageId]);return(bool)$check->fetchColumn();
+    }catch(Throwable $e){error_log('[sharky-inbox] handoff pending mark failed');return false;}
+}
+
+function hache_sharky_inbox_handoff_pending(PDO $pdo,string $messageId): bool
+{
+    $messageId=mb_substr(trim($messageId),0,191);if($messageId===''||!hache_sharky_orchestrator_store_ready($pdo))return false;
+    try{
+        $st=$pdo->prepare('SELECT 1 FROM sharky_message_receipts WHERE message_id=:m AND processed_at IS NULL AND handoff_pending_at IS NOT NULL LIMIT 1');
+        $st->execute([':m'=>$messageId]);return(bool)$st->fetchColumn();
+    }catch(Throwable $e){return false;}
+}
+
 function hache_sharky_inbox_decrypt(array $row): ?array
 {
     $cipher=base64_decode((string)($row['payload_ciphertext']??''),true);$iv=base64_decode((string)($row['payload_iv']??''),true);$tag=base64_decode((string)($row['payload_tag']??''),true);
