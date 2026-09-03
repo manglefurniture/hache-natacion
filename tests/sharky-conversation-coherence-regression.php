@@ -21,6 +21,17 @@ $contact='529900000099';
 $state=hache_sharky_orchestrator_state(null,$now);
 $state['identity']=array_replace($state['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
 
+// Productive bug reproduction: every turn starts from the state returned by
+// the prior turn, exactly as the durable worker does.
+$main1=hache_sharky_orchestrate(null,['id'=>'coh.main.1','from'=>$contact,'text'=>'Soy nuevo'],['now'=>$now,'today'=>$today,'identity'=>['found'=>false]]);
+$main2=hache_sharky_orchestrate($main1['state'],['id'=>'coh.main.2','from'=>$contact,'text'=>'intensivo'],['now'=>$now+1,'today'=>$today]);
+$main3=hache_sharky_orchestrate($main2['state'],['id'=>'coh.main.3','from'=>$contact,'text'=>'Palapas'],['now'=>$now+2,'today'=>$today]);
+coherence_eq($main3['state']['identity']['kind'],'prospect','main sequence must retain prospect identity');
+coherence_eq($main3['state']['commercial_context']['program'],'intensive','main sequence must retain intensive program');
+coherence_eq($main3['state']['commercial_context']['sede_clave'],'PALAPAS','main sequence must retain Palapas venue');
+$mainNext=hache_sharky_orchestrator_next_required_step($main3['state']);
+coherence_eq($mainNext['slot'],'age','after identity, program and venue the only discovery slot pending is age');
+
 $step1=hache_sharky_orchestrate($state,['id'=>'coh.1','from'=>$contact,'text'=>'El intensivo'],['now'=>$now,'today'=>$today]);
 coherence_eq($step1['state']['commercial_context']['program'],'intensive','bare intensive selection must persist as commercial context');
 coherence_eq($step1['decision']['kind'],'conversation','selecting a program alone must stay conversational');
