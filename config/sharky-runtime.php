@@ -155,6 +155,12 @@ function hache_sharky_capacity_request(string $text): bool
     $implicitCapacityVerb='(?:caben|entran|admite|admiten|acepta|aceptan|permite|permiten)';
     $implicitCountForward='/\b(cuantos?|cuantas?)\s+'.$implicitCapacityVerb.'\b.{0,18}\b(?:en\s+)?(?:(?:el|la|los|las|cada|un|una)\s+)?'.$capacityContext.'\b/u';
     $implicitCountReverse='/\b(?:(?:el|la|los|las|cada|un|una)\s+)?'.$capacityContext.'\b.{0,24}\b(cuantos?|cuantas?)\s+'.$implicitCapacityVerb.'\b/u';
+    $placeNoun='(?:lugar|lugares|espacio|espacios)';
+    $placeDirect='/^¿?(?:hay|queda|quedan)\s+'.$placeNoun.'(?:\s+(?:disponible|disponibles|libre|libres))?\??$/u';
+    $placeContext='/^(?=.*\b'.$capacityContext.'\b)(?=.*\b'.$placeNoun.'\b)(?=.*\b(?:hay|queda|quedan|tiene|tienen|disponible|disponibles|libre|libres)\b).+$/u';
+    $placeCountForward='/\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b.{0,36}\b'.$capacityContext.'\b/u';
+    $placeCountReverse='/\b'.$capacityContext.'\b.{0,36}\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b/u';
+    $placeCountRemaining='/\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b.{0,18}\b(?:queda|quedan|disponible|disponibles|libre|libres)\b/u';
     if (
         preg_match('/\b(cuantos?|cuantas?|numero de|cantidad de)\b.{0,28}\bgente\b/u',$text)===1
         || preg_match('/\bgente\b.{0,28}\b(cuantos?|cuantas?|numero de|cantidad de)\b/u',$text)===1
@@ -165,8 +171,11 @@ function hache_sharky_capacity_request(string $text): bool
         || preg_match('/\b(cuantos?|cuantas?|numero de)\b.{0,28}\b(alumnos|personas|nadadores)\b/u',$text)===1
         || preg_match('/\b(alumnos|personas|nadadores)\b.{0,28}\b(cuantos?|cuantas?|numero de)\b/u',$text)===1
         || preg_match('/\bpor carril\b/u',$text)===1
-        || preg_match('/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(lugar|lugares|espacio|espacios)\b/u',$text)===1
-        || preg_match('/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',$text)===1
+        || preg_match($placeDirect,$text)===1
+        || preg_match($placeContext,$text)===1
+        || preg_match($placeCountForward,$text)===1
+        || preg_match($placeCountReverse,$text)===1
+        || preg_match($placeCountRemaining,$text)===1
         || preg_match($implicitCountForward,$text)===1
         || preg_match($implicitCountReverse,$text)===1;
     if (!$hasExplicitCapacity && preg_match('/\b(disponibilidad|disponible|disponibles)\b/u',$text)===1) {
@@ -185,10 +194,13 @@ function hache_sharky_capacity_request(string $text): bool
     }
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
-        '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
+        $placeDirect,
+        $placeContext,
+        $placeCountForward,
+        $placeCountReverse,
+        $placeCountRemaining,
         '/\b(disponibilidad)\b.{0,35}\b'.$capacityContext.'\b/u',
         '/\b'.$capacityContext.'\b.{0,35}\b(disponibilidad)\b/u',
-        '/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,25}\b'.$capacityContext.'\b/u',
         '/\b'.$capacityContext.'\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,15}\b(hay|tiene|tienen|caben|entran|admite|admiten|acepta|aceptan|permite|permiten)\b/u',
@@ -237,7 +249,6 @@ function hache_sharky_regular_enrollment_request(string $text): bool
     foreach ($patterns as $pattern) if (preg_match($pattern,$candidate)===1) return true;
     return false;
 }
-
 function hache_sharky_human_request(string $text): bool
 {
     if (hache_sharky_capacity_request($text)) return true;
@@ -358,7 +369,6 @@ function hache_sharky_takeover_list(): array
     usort($rows,static fn(array $a,array $b):int=>strcmp((string)($b['updated_at']??''),(string)($a['updated_at']??'')));
     return $rows;
 }
-
 function hache_sharky_takeover_resume_hash(string $hash): bool
 {
     if (!preg_match('/^[a-f0-9]{64}$/',$hash)) return false;
