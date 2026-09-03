@@ -100,6 +100,22 @@ $humanEscape=hache_sharky_whatsapp_qualification_escape($escapeState,['text'=>'Q
 guided_ok(is_array($humanEscape)&&($humanEscape[0]['flow']??null)===null,'A human request must not get trapped in qualification.');
 guided_ok(($humanEscape[1]['action']['type']??null)==='human_takeover','A human escape must preserve the controlled takeover action.');
 
+// A mistaken prospect classification can be corrected without explicitly cancelling.
+// The adapter clears only qualification, then the existing orchestrator owns student verification.
+$wrongIdentity=hache_sharky_orchestrator_flow($prospect,'qualify_prospect','swim',[],1788383041);
+$reroutedIdentity=hache_sharky_whatsapp_reroute_qualification_identity_claim($wrongIdentity,['text'=>'Ya soy alumno','interactive_id'=>'']);
+guided_ok(($reroutedIdentity['flow']??null)===null,'A student identity correction must leave qualification immediately.');
+guided_ok(($reroutedIdentity['identity']['kind']??null)==='prospect','The adapter must not forge student verification while rerouting identity.');
+$verification=hache_sharky_orchestrate(
+    $reroutedIdentity,
+    ['id'=>'guided.identity.1','from'=>'529900000000','text'=>'Ya soy alumno','interactive_id'=>''],
+    ['now'=>1788383042,'today'=>'2026-09-03','identity'=>['found'=>false]]
+);
+guided_ok(($verification['decision']['kind']??null)==='verification_required','The rerouted student claim must reach the existing verification decision.');
+guided_ok(($verification['state']['flow']['name']??null)==='identify_student','The rerouted student claim must open identify_student, not resume prospect qualification.');
+$notIdentityCorrection=hache_sharky_whatsapp_reroute_qualification_identity_claim($wrongIdentity,['text'=>'Desde cero','interactive_id'=>'']);
+guided_ok(($notIdentityCorrection['flow']['name']??null)==='qualify_prospect','Ordinary qualification replies must not be rerouted as identity corrections.');
+
 // The 30-minute flow TTL applies before adapter-direct qualification paths.
 $oldFlow=hache_sharky_orchestrator_flow($prospect,'qualify_prospect','swim',[],1000);
 $expired=hache_sharky_orchestrator_expire_flow($oldFlow,1000+HACHE_SHARKY_FLOW_TTL+1);
@@ -203,6 +219,7 @@ $venueCorrectionPos=strpos($adapterSource,'$venueCorrection=hache_sharky_whatsap
 $naturalVenuePos=$staleGuardPos===false?false:strpos($adapterSource,'$state=hache_sharky_whatsapp_apply_natural_venue_preference',$staleGuardPos);
 $ageCapturePos=strpos($adapterSource,'$state=hache_sharky_whatsapp_capture_declared_age');
 $ageGatePos=strpos($adapterSource,'$ageRejection=hache_sharky_whatsapp_underage_gate');
+$identityReroutePos=strpos($adapterSource,'$state=hache_sharky_whatsapp_reroute_qualification_identity_claim($state,$event);');
 $orchestratePos=strpos($adapterSource,'$stateBeforeOrchestrate=$state;');
 guided_ok(
     $expirePos!==false&&$staleGuardPos!==false&&$expirePos<$staleGuardPos,
@@ -217,8 +234,9 @@ guided_ok(
     'Advanced registration venue correction must run before conversational venue persistence.'
 );
 guided_ok(
-    $ageCapturePos!==false&&$ageGatePos!==false&&$orchestratePos!==false&&$ageCapturePos<$ageGatePos&&$ageGatePos<$orchestratePos,
-    'Identity-independent age capture and the commercial age gate must both run before the orchestrator can start a commercial flow.'
+    $ageCapturePos!==false&&$ageGatePos!==false&&$identityReroutePos!==false&&$orchestratePos!==false
+    &&$ageCapturePos<$ageGatePos&&$ageGatePos<$identityReroutePos&&$identityReroutePos<$orchestratePos,
+    'Age safety checks and qualification identity reroute must all run before the orchestrator starts a new controlled flow.'
 );
 guided_ok(
     str_contains($adapterSource,'function hache_sharky_whatsapp_underage_commercial_event')
