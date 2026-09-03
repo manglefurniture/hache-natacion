@@ -49,9 +49,15 @@ CREATE TABLE IF NOT EXISTS sharky_referrals (
   CONSTRAINT fk_sharky_referral_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Conversation state is encrypted at rest with a dedicated key. state_json remains
+-- nullable only as a one-time compatibility bridge for lab/staging rows created by
+-- an older migration; runtime reseals and clears it on read.
 CREATE TABLE IF NOT EXISTS sharky_conversation_state (
   contact_hash CHAR(64) NOT NULL PRIMARY KEY,
-  state_json JSON NOT NULL,
+  state_json JSON NULL,
+  state_ciphertext MEDIUMTEXT NULL,
+  state_iv VARCHAR(32) NULL,
+  state_tag VARCHAR(32) NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   expires_at DATETIME NOT NULL,
   INDEX idx_sharky_state_expires (expires_at)
