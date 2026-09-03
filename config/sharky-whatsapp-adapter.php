@@ -43,6 +43,23 @@ function hache_sharky_whatsapp_clean_answer(string $answer): string
     return $answer;
 }
 
+function hache_sharky_whatsapp_nado_libre_request(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if($t==='')return false;
+    if(preg_match('/\bnado\s+libre\b|\bnadar\s+libre(?:mente)?\b/u',$t)===1)return true;
+    $request='(?:puedo|podria|se\s+puede|dejan|permiten|hay|tienen|ofrecen|quiero|quisiera)';
+    $activity='(?:nadar|entrenar|practicar|usar\s+(?:la\s+)?alberca)';
+    $without='(?:sin\s+(?:tomar\s+)?clases?|sin\s+(?:un\s+)?entrenador|por\s+mi\s+cuenta|(?:ir|nadar|entrenar)\s+solo|(?:ir|nadar|entrenar)\s+sola)';
+    return preg_match('/\b'.$request.'\b.{0,55}\b'.$activity.'\b.{0,45}\b'.$without.'\b/u',$t)===1
+        || preg_match('/\b'.$request.'\b.{0,55}\b'.$without.'\b.{0,45}\b'.$activity.'\b/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_nado_libre_message(): string
+{
+    return 'No. Hache Natación no ofrece nado libre ni acceso a la alberca sin clase. Las actividades se realizan dentro de nuestros cursos o clases.';
+}
+
 function hache_sharky_whatsapp_question_targets_slot(string $text,string $slot): bool
 {
     $t=hache_sharky_orchestrator_normalize($text);
@@ -52,15 +69,29 @@ function hache_sharky_whatsapp_question_targets_slot(string $text,string $slot):
     if(!$looksLikeQuestion)return false;
 
     if($slot==='identity')return preg_match('/\b(?:ya\s+)?eres\s+(?:alumno|alumna|estudiante)\b|\b(?:alumno|alumna|estudiante)\s+o\s+(?:nuevo|nueva)\b/u',$t)===1;
-    if($slot==='program')return preg_match('/\b(?:intensivo|curso\s+intensivo)\b.{0,60}\b(?:regular|regulares|clases\s+regulares)\b|\b(?:regular|regulares|clases\s+regulares)\b.{0,60}\b(?:intensivo|curso\s+intensivo)\b|\b(?:que|cual)\s+(?:tipo\s+de\s+)?(?:curso|programa|modalidad|clases)\b/u',$t)===1;
-    if($slot==='sede')return preg_match('/\bpalapas(?:\s+protudec)?\b.{0,60}\bmonteverde\b|\bmonteverde\b.{0,60}\bpalapas(?:\s+protudec)?\b|\b(?:en\s+que|cual|que)\s+sede\b|\bdonde\s+(?:quieres|prefieres|tomarias|serian)\b/u',$t)===1;
+    if($slot==='program'){
+        $intensive='(?:curso\s+intensivo|intensivo)';
+        $regular='(?:clases?\s+regulares|curso\s+regular|regulares)';
+        $alternatives=preg_match('/\b'.$intensive.'\b.{0,60}\b'.$regular.'\b|\b'.$regular.'\b.{0,60}\b'.$intensive.'\b/u',$t)===1;
+        $generic=preg_match('/\b(?:que|cual)\s+(?:tipo\s+de\s+)?(?:curso|programa)\b/u',$t)===1;
+        $single=preg_match('/\b(?:prefieres|eliges|escoges|te\s+quedas\s+con|vas\s+con|quieres|buscas)\s+(?:(?:tomar|hacer|llevar)\s+)?(?:(?:el|un|las?|unas?)\s+)?(?:'.$intensive.'|'.$regular.')\b/u',$t)===1;
+        return $alternatives||$generic||$single;
+    }
+    if($slot==='sede'){
+        $venue='(?:palapas(?:\s+protudec)?|monteverde)';
+        $alternatives=preg_match('/\bpalapas(?:\s+protudec)?\b.{0,60}\bmonteverde\b|\bmonteverde\b.{0,60}\bpalapas(?:\s+protudec)?\b/u',$t)===1;
+        $generic=preg_match('/\b(?:en\s+que|cual|que)\s+sede\b|\bdonde\s+(?:quieres|prefieres|tomarias|serian)\b/u',$t)===1;
+        $single=preg_match('/\b(?:prefieres|quieres|eliges|escoges|te\s+queda\s+mejor|vas\s+a|te\s+interesa)\s+(?:(?:la\s+)?sede\s+)?(?:en\s+)?'.$venue.'\b/u',$t)===1
+            || preg_match('/\b(?:prefieres|quieres)\s+(?:tomar|hacer|llevar)\s+(?:las?\s+)?clases\s+en\s+'.$venue.'\b/u',$t)===1;
+        return $alternatives||$generic||$single;
+    }
     if($slot==='age')return preg_match('/\b(?:que\s+edad|cuantos?\s+anos|edad\s+tiene|tienes\s+cuantos?)\b/u',$t)===1;
     return false;
 }
 
 function hache_sharky_whatsapp_answer_asks_slot(string $answer,string $slot): bool
 {
-    foreach(preg_split('/\n+|(?<=[.!?])\s+|(?=¿)/u',$answer)?:[] as $part){
+    foreach(preg_split('/\n+|(?<=[.!?;])\s+|(?=¿)/u',$answer)?:[] as $part){
         if(hache_sharky_whatsapp_question_targets_slot(trim((string)$part),$slot))return true;
     }
     return false;
@@ -82,7 +113,7 @@ function hache_sharky_whatsapp_enforce_confirmed_context(string $answer,array $s
     if(!$confirmed)return $answer;
 
     $kept=[];$removed=false;
-    foreach(preg_split('/\n+|(?<=[.!?])\s+|(?=¿)/u',$answer)?:[] as $part){
+    foreach(preg_split('/\n+|(?<=[.!?;])\s+|(?=¿)/u',$answer)?:[] as $part){
         $part=trim((string)$part);if($part==='')continue;
         $repeats=false;
         foreach($confirmed as $slot){
@@ -103,7 +134,7 @@ function hache_sharky_whatsapp_enforce_confirmed_context(string $answer,array $s
 
 function hache_sharky_whatsapp_style_instruction(array $decision,array $state): string
 {
-    $instruction='Responde para WhatsApp en español natural. Sé breve y fácil de escanear en móvil. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar. Si muestras horarios, precios, formas de pago o información estructurada, sepárala por sede o categoría con encabezados cortos y saltos de línea; cuando haya varios horarios, pon cada horario en una viñeta breve y nunca una tira larga de horas en una sola línea. Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad: usa solo datos actuales del backend/contexto.';
+    $instruction='Responde para WhatsApp en español natural. Sé breve y fácil de escanear en móvil. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar. Si muestran horarios, precios, formas de pago o información estructurada, sepárala por sede o categoría con encabezados cortos y saltos de línea; cuando haya varios horarios, pon cada horario en una viñeta breve y nunca una tira larga de horas en una sola línea. Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad: usa solo datos actuales del backend/contexto. Hache Natación no ofrece nado libre ni acceso a la alberca sin clase.';
     $latest=$state['referral']['latest']??null;
     if(is_array($latest)&&!empty($latest['headline']))$instruction.=' El usuario llegó desde un anuncio cuyo contexto es: '.mb_substr((string)$latest['headline'],0,180).'. Úsalo como contexto, pero no asumas que sigue siendo su intención actual.';
     $commercial=$state['commercial_context']??null;
@@ -261,6 +292,14 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
 
         if(!hache_sharky_whatsapp_interactive_is_current($state,$event)){
             $decision=hache_sharky_orchestrator_decision('stale_interactive','Esa opción pertenece a un paso anterior. No hice ningún cambio; continuemos desde la opción que tienes activa ahora.');
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+            return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+        }
+
+        if(trim((string)($event['interactive_id']??''))===''&&hache_sharky_whatsapp_nado_libre_request((string)($event['text']??''))){
+            $message=hache_sharky_whatsapp_nado_libre_message();
+            if(is_array($state['flow']??null))$message.="\n\nCuando quieras, seguimos donde lo dejamos.";
+            $decision=hache_sharky_orchestrator_decision('nado_libre_unavailable',$message);
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
