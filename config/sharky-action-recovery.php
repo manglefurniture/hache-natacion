@@ -46,21 +46,30 @@ function hache_sharky_action_recovery_status(PDO $pdo,string $idempotencyKey): ?
     }catch(Throwable $e){return null;}
 }
 
-function hache_sharky_action_recovery_claim(PDO $pdo,string $idempotencyKey,string $actionType,string $contactHash,?string $studentId,array $payload): bool
+function hache_sharky_action_owner_token(): string
 {
+    return bin2hex(random_bytes(24));
+}
+
+function hache_sharky_action_recovery_claim(PDO $pdo,string $idempotencyKey,string $actionType,string $contactHash,?string $studentId,array $payload,?string &$ownerToken=null): bool
+{
+    $ownerToken=null;
     if(!hache_sharky_orchestrator_store_ready($pdo))return false;
-    $key=hash('sha256',$idempotencyKey);$payloadHash=hash('sha256',json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');$sourceMessageId=hache_sharky_action_source_message_id($idempotencyKey);
+    $key=hash('sha256',$idempotencyKey);$payloadHash=hash('sha256',json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');$sourceMessageId=hache_sharky_action_source_message_id($idempotencyKey);$candidate=hache_sharky_action_owner_token();
     try{
-        $st=$pdo->prepare("INSERT IGNORE INTO sharky_action_audit(idempotency_key,action_type,contact_hash,alumno_id,status,payload_hash,source_message_id,lease_until,attempt_count) VALUES(:k,:t,:c,:a,'PENDING',:p,:m,DATE_ADD(NOW(),INTERVAL ".HACHE_SHARKY_ACTION_LEASE_SECONDS." SECOND),1)");
-        $st->execute([':k'=>$key,':t'=>mb_substr($actionType,0,60),':c'=>$contactHash,':a'=>$studentId,':p'=>$payloadHash,':m'=>$sourceMessageId!==''?$sourceMessageId:null]);if($st->rowCount()===1)return true;
-        $st=$pdo->prepare("UPDATE sharky_action_audit SET source_message_id=COALESCE(source_message_id,:m),lease_until=DATE_ADD(NOW(),INTERVAL ".HACHE_SHARKY_ACTION_LEASE_SECONDS." SECOND),attempt_count=attempt_count+1 WHERE idempotency_key=:k AND status='PENDING' AND payload_hash=:p AND (lease_until IS NULL OR lease_until<NOW())");
-        $st->execute([':k'=>$key,':p'=>$payloadHash,':m'=>$sourceMessageId!==''?$sourceMessageId:null]);return $st->rowCount()===1;
+        $st=$pdo->prepare("INSERT IGNORE INTO sharky_action_audit(idempotency_key,action_type,contact_hash,alumno_id,status,payload_hash,source_message_id,lease_until,owner_token,attempt_count) VALUES(:k,:t,:c,:a,'PENDING',:p,:m,DATE_ADD(NOW(),INTERVAL ".HACHE_SHARKY_ACTION_LEASE_SECONDS." SECOND),:o,1)");
+        $st->execute([':k'=>$key,':t'=>mb_substr($actionType,0,60),':c'=>$contactHash,':a'=>$studentId,':p'=>$payloadHash,':m'=>$sourceMessageId!==''?$sourceMessageId:null,':o'=>$candidate]);
+        if($st->rowCount()===1){$ownerToken=$candidate;return true;}
+        $st=$pdo->prepare("UPDATE sharky_action_audit SET source_message_id=COALESCE(source_message_id,:m),lease_until=DATE_ADD(NOW(),INTERVAL ".HACHE_SHARKY_ACTION_LEASE_SECONDS." SECOND),owner_token=:o,attempt_count=attempt_count+1 WHERE idempotency_key=:k AND status='PENDING' AND payload_hash=:p AND (lease_until IS NULL OR lease_until<NOW())");
+        $st->execute([':k'=>$key,':p'=>$payloadHash,':m'=>$sourceMessageId!==''?$sourceMessageId:null,':o'=>$candidate]);
+        if($st->rowCount()!==1)return false;
+        $ownerToken=$candidate;return true;
     }catch(Throwable $e){error_log('[sharky-action] claim failed');return false;}
 }
 
-function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,bool $ok,string $resultCode,?array $result=null,string $message=''): bool
+function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,bool $ok,string $resultCode,?array $result=null,string $message='',?string $ownerToken=null): bool
 {
-    if(!hache_sharky_orchestrator_store_ready($pdo))return false;
+    if(!hache_sharky_orchestrator_store_ready($pdo)||!is_string($ownerToken)||$ownerToken==='')return false;
     $public=$result;$sealed=null;
     if(is_array($public)&&array_key_exists('temporary_password',$public)){
         $sealed=hache_sharky_action_result_encrypt($public);
@@ -68,8 +77,8 @@ function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,boo
     }
     $json=$public===null?null:json_encode($public,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)$json=null;
     try{
-        $st=$pdo->prepare("UPDATE sharky_action_audit SET status=:s,result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=NOW(),lease_until=NULL WHERE idempotency_key=:k AND status='PENDING'");
-        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>hash('sha256',$idempotencyKey)]);
+        $st=$pdo->prepare("UPDATE sharky_action_audit SET status=:s,result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=NOW(),lease_until=NULL,owner_token=NULL WHERE idempotency_key=:k AND status='PENDING' AND owner_token=:o");
+        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>hash('sha256',$idempotencyKey),':o'=>$ownerToken]);
         return $st->rowCount()===1;
     }catch(Throwable $e){error_log('[sharky-action] finish failed');return false;}
 }
