@@ -44,7 +44,7 @@ function hache_sharky_post72_payment_exception_request(string $text): bool
     ];
     foreach ($skipAdvance as $pattern) if (preg_match($pattern, $t) === 1) return true;
 
-    $startDay = '(?:el\s+)?(?:mismo\s+)?dia\s+(?:que\s+)?(?:empieza|inicia|comienza)|primer\s+dia|cuando\s+(?:empiece|inicie|comience|llegue)|lunes\s+cuando\s+llegue|ese\s+dia';
+    $startDay = '(?:el\s+)?(?:mismo\s+)?dia\s+(?:que\s+)?(?:empieza|inicia|comienza)|primer\s+dia|cuando\s+(?:empiece|inicie|comience|llegue)|al\s+(?:iniciar|comenzar|empezar)|lunes\s+cuando\s+llegue|ese\s+dia';
     $fullPayment = '(?:pagar|pago|pagaria|pagare|liquidar|liquido)';
     $fullAmount = '(?:todo|el\s+total|total|completo|completa|100\s*%|cien\s+por\s+ciento)';
     if (preg_match('/\b'.$fullPayment.'\b.{0,22}\b'.$fullAmount.'\b.{0,45}(?:'.$startDay.')/u', $t) === 1) return true;
