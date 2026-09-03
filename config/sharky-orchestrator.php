@@ -123,8 +123,11 @@ function hache_sharky_orchestrator_program_rejection(string $line): ?string
     $intensive='(?:curso\s+intensivo|intensivo)';
     $regular='(?:clases?\s+regulares|curso\s+regular|regulares)';
     $negatedChoice='(?:ya\s+)?(?:no|nunca|tampoco)\s+(?:quiero|prefiero|elijo|escojo|me\s+interesa|me\s+quedo\s+con)';
-    $rejectIntensive=preg_match('/\b'.$negatedChoice.'\s+(?:(?:el|un)\s+)?'.$intensive.'\b/u',$t)===1;
-    $rejectRegular=preg_match('/\b'.$negatedChoice.'\s+(?:(?:las?|unas?)\s+)?'.$regular.'\b/u',$t)===1;
+    $bareNegation='(?:(?:ya|mejor)\s+)?no';
+    $rejectIntensive=preg_match('/\b'.$negatedChoice.'\s+(?:(?:el|un)\s+)?'.$intensive.'\b/u',$t)===1
+        || preg_match('/^'.$bareNegation.'\s+(?:(?:el|un)\s+)?'.$intensive.'[.! ]*$/u',$t)===1;
+    $rejectRegular=preg_match('/\b'.$negatedChoice.'\s+(?:(?:las?|unas?)\s+)?'.$regular.'\b/u',$t)===1
+        || preg_match('/^'.$bareNegation.'\s+(?:(?:las?|unas?)\s+)?'.$regular.'[.! ]*$/u',$t)===1;
     if($rejectIntensive&&!$rejectRegular)return 'intensive';
     if($rejectRegular&&!$rejectIntensive)return 'regular';
     return null;
@@ -162,8 +165,11 @@ function hache_sharky_orchestrator_sede_rejection(string $line): ?string
     $t=hache_sharky_orchestrator_normalize($line);
     if($t==='')return null;
     $negatedChoice='(?:ya\s+)?(?:no|nunca|tampoco)\s+(?:quiero|prefiero|elijo|escojo|me\s+interesa|me\s+quedo\s+con)';
-    $rejectPalapas=preg_match('/\b'.$negatedChoice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?palapas(?:\s+protudec)?\b/u',$t)===1;
-    $rejectMonteverde=preg_match('/\b'.$negatedChoice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?monteverde\b/u',$t)===1;
+    $bareNegation='(?:(?:ya|mejor)\s+)?no';
+    $rejectPalapas=preg_match('/\b'.$negatedChoice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?palapas(?:\s+protudec)?\b/u',$t)===1
+        || preg_match('/^'.$bareNegation.'\s+(?:en\s+|la\s+de\s+|sede\s+)?palapas(?:\s+protudec)?[.! ]*$/u',$t)===1;
+    $rejectMonteverde=preg_match('/\b'.$negatedChoice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?monteverde\b/u',$t)===1
+        || preg_match('/^'.$bareNegation.'\s+(?:en\s+|la\s+de\s+|sede\s+)?monteverde[.! ]*$/u',$t)===1;
     if($rejectPalapas&&!$rejectMonteverde)return 'PALAPAS';
     if($rejectMonteverde&&!$rejectPalapas)return 'MONTEVERDE';
     return null;
@@ -278,11 +284,13 @@ function hache_sharky_orchestrator_intent(string $text, string $interactiveId = 
 
     $t = hache_sharky_orchestrator_normalize($text);
     if ($t === '') return 'empty';
-    if (hache_sharky_orchestrator_registration_request_negated($t)) return 'no';
-    if (preg_match('/\b(cancelar|cancela|dejalo|dejala|olvidalo|ya no|mejor no|salir)\b/u', $t)) return 'cancel';
+    $registrationPolarity=hache_sharky_orchestrator_registration_polarity($t);
+    if ($registrationPolarity===false) return 'no';
+    if (preg_match('/\b(cancelar|cancela|dejalo|dejala|olvidalo|salir)\b/u', $t)) return 'cancel';
+    if ($registrationPolarity===null && preg_match('/\b(ya no|mejor no)\b/u', $t)) return 'cancel';
     if (preg_match('/\b(hablar|asesor|persona|humano|operador|atencion humana)\b/u', $t)) return 'human';
     if (preg_match('/\b(no voy|no podre ir|no puedo ir|faltare|voy a faltar|reportar (una )?ausencia|avisar (una )?ausencia)\b/u', $t)) return 'absence';
-    if (hache_sharky_orchestrator_registration_request_positive($t)&&preg_match('/\b(intensivo|curso)\b/u',$t)) return 'register_intensive';
+    if ($registrationPolarity===true&&preg_match('/\b(intensivo|curso)\b/u',$t)) return 'register_intensive';
     if (preg_match('/\b(ya soy|soy)\s+(alumno|alumna|estudiante)\b/u', $t)) return 'student_claim';
     if (preg_match('/\b(soy nuevo|soy nueva|no soy alumno|no soy alumna|quiero informacion|solo informacion)\b/u', $t)) return 'new_claim';
     if (preg_match('/^(si|sí|sip|sipi|claro|va|vale|ok|okay|dale|de acuerdo|correcto|confirmo|confirmar)[!. ]*$/u', trim($text))) return 'yes';
