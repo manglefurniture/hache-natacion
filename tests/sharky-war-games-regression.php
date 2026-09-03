@@ -74,6 +74,7 @@ expect_war(str_contains($outbox,'hache_sharky_outbox_claim($pdo,1)'),'Each outbo
 $actionRecovery=file_get_contents(__DIR__.'/../config/sharky-action-recovery.php')?:'';
 $batching=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
 $worker=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
+$executor=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:'';
 foreach(['source_message_id','delivery_queued_at','result_json','lease_until'] as $field)expect_war(str_contains($migration,$field),'Action audit must include '.$field.'.');
 expect_war(str_contains($actionRecovery,'hache_sharky_action_delivery_pending_for_message'),'Completed actions must expose pending-delivery state.');
 expect_war(str_contains($actionRecovery,'hache_sharky_action_delivery_queued_by_message'),'Durable reply queueing must be recorded on the action.');
@@ -83,6 +84,35 @@ expect_war(str_contains($worker,'hache_sharky_lab_queue_and_complete'),'Worker m
 $queuePos=strpos($worker,'hache_sharky_outbox_enqueue');$receiptPos=strpos($worker,'hache_sharky_orchestrator_mark_processed',$queuePos===false?0:$queuePos);
 expect_war($queuePos!==false&&$receiptPos!==false&&$queuePos<$receiptPos,'Outbox persistence must happen before receipt completion.');
 expect_war(str_contains($worker,"require_once __DIR__.'/sharky-inbox.php'"),'Worker must load durable inbox helpers directly.');
+
+// Final concurrency pass: keep one contact serialized through state + outbox + receipts.
+expect_war(str_contains($store,'function hache_sharky_orchestrator_delivery_lock'),'A delivery lock per contact is required.');
+expect_war(str_contains($batching,"'defer_delivery_unlock'"),'Batching must be able to transfer the delivery lock to the worker.');
+expect_war(str_contains($worker,"'defer_delivery_unlock'=>true"),'Worker must hold the delivery lock through the durable boundary.');
+expect_war(str_contains($worker,"$result['_delivery_lock']??null")&&str_contains($worker,'hache_sharky_lab_release_delivery_lock($deliveryLock)'),'Worker must release the transferred lock after its durable boundary.');
+
+// Final batching pass: text can be capped, but every claimed receipt ID must complete with the batch.
+expect_war(str_contains($store,"'receipt_ids'=>[]"),'Batch storage must track all claimed receipt IDs separately from capped text events.');
+expect_war(str_contains($store,"$stored['receipt_ids'][]=$eventId"),'Every claimed event ID must be retained.');
+expect_war(str_contains($store,"$stored['events']=array_slice($stored['events'],-8)")&&str_contains($store,"array_merge(is_array($stored['receipt_ids']"),'Capping visible batch text must not discard receipt completion IDs.');
+
+// Final takeover pass: persist human control before any pending automatic dispatch.
+$preflightTakeover=strpos($worker,'hache_sharky_takeover_mark($contact,$reason,$summary)');
+$preflightQueue=strpos($worker,'hache_sharky_lab_queue_and_complete($pdo,$contact,$payload',$preflightTakeover===false?0:$preflightTakeover);
+expect_war($preflightTakeover!==false&&$preflightQueue!==false&&$preflightTakeover<$preflightQueue,'Preflight handoff must persist takeover before queue/dispatch.');
+expect_war(str_contains($worker,'hache_sharky_outbox_allow_during_takeover'),'Only the handoff notice may bypass takeover cancellation.');
+expect_war(str_contains($outbox,"unset($payload['_sharky_allow_takeover'])"),'Internal takeover bypass flag must never be sent to Meta.');
+
+// Final timezone pass: conversational dates use the same Cancun operational day as business rules.
+expect_war(str_contains($adapter,"new DateTimeZone('America/Cancun')"),'Adapter must calculate today explicitly in Cancun.');
+expect_war(str_contains($worker,'hache_sharky_lab_today()'),'Worker must inject Cancun operational today.');
+expect_war(str_contains($adapter,'hache_sharky_start_authority_intensive_date_allowed'),'Displayed intensive options must respect Sharky Monday-only authority.');
+
+// Final audit pass: business commit is not deliverable until audit is terminal.
+expect_war(str_contains($actionRecovery,'function hache_sharky_action_recovery_finish')&&str_contains($actionRecovery,'): bool'),'Action audit finish must be observable.');
+expect_war(str_contains($actionRecovery,"status='PENDING' OR (status='COMPLETED' AND delivery_queued_at IS NULL)"),'PENDING audit rows must block receipt completion.');
+expect_war(str_contains($executor,'ACTION_AUDIT_PENDING'),'Executor must fail closed when audit finalization is not durable.');
+expect_war(str_contains($executor,'if(!hache_sharky_action_recovery_finish'),'Executor must verify audit finalization before reporting success.');
 
 // P1 privacy: contact identifiers use keyed HMAC rather than enumerable plain SHA-256.
 putenv('SHARKY_CONTACT_HASH_KEY=0123456789abcdef0123456789abcdef');
