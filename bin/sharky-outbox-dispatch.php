@@ -22,6 +22,9 @@ function hache_sharky_outbox_meta_send(array $payload): bool
 }
 
 try{
+    if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
+        fwrite(STDOUT,"{\"disabled\":true,\"worker\":\"outbox\"}\n");exit(0);
+    }
     if(strlen(hache_sharky_orchestrator_secret('SHARKY_CONTACT_HASH_KEY'))<32)throw new RuntimeException('SHARKY_CONTACT_HASH_KEY missing');
     $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
     if(!hache_sharky_orchestrator_store_ready($pdo))throw new RuntimeException('Sharky 2.0 migration incomplete');
