@@ -25,7 +25,7 @@ $outboxService=file_get_contents($root.'/ops/systemd/hache-sharky-outbox.service
 sharky_activation_expect(str_contains($migrator,'if($flag!==\'0\')throw new RuntimeException(\'Refusing migration unless SHARKY_ORCHESTRATOR_LAB_ENABLED=0 explicitly.\')'),'Migration runner must require an explicit disabled flag, not merely reject flag=1.');
 sharky_activation_expect(str_contains($migrator,"GET_LOCK('hache_sharky_orchestrator_migration',10)"),'Migration runner must serialize execution with a DB advisory lock.');
 sharky_activation_expect(str_contains($migrator,'20260902_sharky_orchestrator.sql')&&str_contains($migrator,'20260903_sharky_orchestrator_hardening.sql'),'Migration runner must apply base then hardening migrations.');
-sharky_activation_expect(str_contains($migrator,'hache_sharky_activation_ensure_constraints($pdo)'),'Migration runner must converge missing Sharky foreign keys after additive SQL hardening.');
+sharky_activation_expect(str_contains($migrator,'hache_sharky_migration_ensure_constraints($pdo)'),'CLI migration runner must converge missing Sharky foreign keys after additive SQL hardening.');
 sharky_activation_expect(str_contains($migrator,"throw new RuntimeException('Schema verification failed:"),'Migration runner must fail through the outer cleanup path when final schema verification fails.');
 
 sharky_activation_expect(str_contains($preflight,'SHARKY_PREFLIGHT_OK')&&str_contains($preflight,'--allow-enabled'),'Preflight must expose safe before/after activation modes.');
@@ -35,9 +35,10 @@ sharky_activation_expect(str_contains($activation,'pending_outbox_total')&&str_c
 sharky_activation_expect(str_contains($activation,'pending_inbox_without_ciphertext')&&str_contains($activation,'invalid_encrypted_state'),'Preflight must reject malformed encrypted inbox/state rows before activation.');
 sharky_activation_expect(str_contains($activation,'$cleanCutoverOk=$allowEnabled||('),'Preflight must enforce an empty actionable backlog before cutover while allowing live diagnostics after activation.');
 foreach(['fk_sharky_referral_alumno','fk_sharky_identity_student','fk_sharky_action_alumno'] as $constraint){
-    sharky_activation_expect(str_contains($activation,$constraint),'Schema preflight/migrator must verify foreign key '.$constraint.'.');
+    sharky_activation_expect(str_contains($activation,$constraint)&&str_contains($migrator,$constraint),'Schema checks and CLI migrator must both account for foreign key '.$constraint.'.');
 }
-sharky_activation_expect(str_contains($activation,'function hache_sharky_activation_constraint_present')&&str_contains($activation,'function hache_sharky_activation_ensure_constraints'),'Foreign-key convergence must validate semantics and be idempotent.');
+sharky_activation_expect(str_contains($activation,'function hache_sharky_activation_constraint_present')&&!str_contains($activation,'ALTER TABLE'),'Runtime activation checks must validate FK semantics without carrying DDL.');
+sharky_activation_expect(str_contains($migrator,'function hache_sharky_migration_ensure_constraints')&&str_contains($migrator,'ALTER TABLE sharky_referrals ADD CONSTRAINT'),'Foreign-key convergence DDL must live only in the CLI migrator.');
 sharky_activation_expect(str_contains($preflight,'missing_constraints')&&str_contains($preflight,'Colas limpias para cutover'),'CLI preflight must surface missing constraints and clean-cutover status.');
 
 sharky_activation_expect(str_contains($status,'$flag=in_array($rawFlag,[\'0\',\'1\'],true)?$rawFlag:($rawFlag===\'\'?\'MISSING\':\'INVALID\');'),'Status must normalize invalid/missing flag values without printing arbitrary content.');
