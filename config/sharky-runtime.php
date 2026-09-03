@@ -157,7 +157,10 @@ function hache_sharky_capacity_request(string $text): bool
     $implicitCountReverse='/\b(?:(?:el|la|los|las|cada|un|una)\s+)?'.$capacityContext.'\b.{0,24}\b(cuantos?|cuantas?)\s+'.$implicitCapacityVerb.'\b/u';
     $placeNoun='(?:lugar|lugares|espacio|espacios)';
     $placeDirect='/^¿?(?:hay|queda|quedan)\s+'.$placeNoun.'(?:\s+(?:disponible|disponibles|libre|libres))?\??$/u';
-    $placeContext='/^(?=.*\b'.$capacityContext.'\b)(?=.*\b'.$placeNoun.'\b)(?=.*\b(?:hay|queda|quedan|tiene|tienen|disponible|disponibles|libre|libres)\b).+$/u';
+    $placeVerbToContext='/\b(?:hay|queda|quedan|tiene|tienen)\b.{0,18}\b'.$placeNoun.'\b.{0,28}\b'.$capacityContext.'\b/u';
+    $placeContextToVerb='/\b'.$capacityContext.'\b.{0,28}\b(?:hay|queda|quedan|tiene|tienen)\b.{0,18}\b'.$placeNoun.'\b/u';
+    $placeAvailableContext='/\b'.$placeNoun.'\b.{0,12}\b(?:disponible|disponibles|libre|libres)\b.{0,28}\b'.$capacityContext.'\b/u';
+    $placeContextAvailable='/\b'.$capacityContext.'\b.{0,28}\b'.$placeNoun.'\b.{0,12}\b(?:disponible|disponibles|libre|libres)\b/u';
     $placeCountForward='/\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b.{0,36}\b'.$capacityContext.'\b/u';
     $placeCountReverse='/\b'.$capacityContext.'\b.{0,36}\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b/u';
     $placeCountRemaining='/\b(cuantos?|cuantas?|numero de|cantidad de)\s+'.$placeNoun.'\b.{0,18}\b(?:queda|quedan|disponible|disponibles|libre|libres)\b/u';
@@ -172,7 +175,10 @@ function hache_sharky_capacity_request(string $text): bool
         || preg_match('/\b(alumnos|personas|nadadores)\b.{0,28}\b(cuantos?|cuantas?|numero de)\b/u',$text)===1
         || preg_match('/\bpor carril\b/u',$text)===1
         || preg_match($placeDirect,$text)===1
-        || preg_match($placeContext,$text)===1
+        || preg_match($placeVerbToContext,$text)===1
+        || preg_match($placeContextToVerb,$text)===1
+        || preg_match($placeAvailableContext,$text)===1
+        || preg_match($placeContextAvailable,$text)===1
         || preg_match($placeCountForward,$text)===1
         || preg_match($placeCountReverse,$text)===1
         || preg_match($placeCountRemaining,$text)===1
@@ -195,7 +201,10 @@ function hache_sharky_capacity_request(string $text): bool
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
         $placeDirect,
-        $placeContext,
+        $placeVerbToContext,
+        $placeContextToVerb,
+        $placeAvailableContext,
+        $placeContextAvailable,
         $placeCountForward,
         $placeCountReverse,
         $placeCountRemaining,
