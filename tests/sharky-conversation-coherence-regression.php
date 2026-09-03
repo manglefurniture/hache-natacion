@@ -30,13 +30,22 @@ coherence_eq($step2['decision']['kind'],'registration_offer','registration reque
 coherence_eq($step2['state']['flow']['step'],'offer','registration still requires explicit consent');
 coherence_eq($step2['state']['flow']['data']['sede_clave'],'PALAPAS','Palapas must be remembered in the controlled registration flow');
 
-$options=[[
-    'id'=>'course-pal-1',
-    'sede_clave'=>'PALAPAS',
-    'fecha_inicio'=>'2026-09-07',
-    'label'=>'7 al 25 de septiembre',
-    'schedules'=>[['id'=>'pal-20','label'=>'20:00–21:00']],
-]];
+$options=[
+    [
+        'id'=>'course-pal-1',
+        'sede_clave'=>'PALAPAS',
+        'fecha_inicio'=>'2026-09-07',
+        'label'=>'7 al 25 de septiembre',
+        'schedules'=>[['id'=>'pal-20','label'=>'20:00–21:00']],
+    ],
+    [
+        'id'=>'course-mv-1',
+        'sede_clave'=>'MONTEVERDE',
+        'fecha_inicio'=>'2026-09-07',
+        'label'=>'7 al 25 de septiembre',
+        'schedules'=>[['id'=>'mv-20','label'=>'20:00–21:00']],
+    ],
+];
 $step3=hache_sharky_orchestrate($step2['state'],['id'=>'coh.3','from'=>$contact,'text'=>'sí'],['now'=>$now+2,'today'=>$today,'intensive_options'=>$options]);
 coherence_eq($step3['decision']['kind'],'registration_course','known Palapas selection must skip asking the venue again');
 coherence_eq($step3['state']['flow']['step'],'course','flow must advance directly to course options');
@@ -52,9 +61,41 @@ $regularRegistration=hache_sharky_orchestrate($regular['state'],['id'=>'coh.regu
 coherence_eq($regularRegistration['state']['commercial_context']['program'],'regular','regular selection must remain authoritative');
 coherence_eq($regularRegistration['decision']['kind'],'conversation','generic registration wording after regular selection must not be misrouted to intensive registration');
 
+// Review finding 1: comparisons/questions are not confirmed choices, explicit changes are.
+$ambiguous=hache_sharky_orchestrate($state,['id'=>'coh.ambiguous','from'=>$contact,'text'=>'¿Intensivo o clases regulares?\n¿Palapas o Monteverde?'],['now'=>$now+6,'today'=>$today]);
+coherence_eq($ambiguous['state']['commercial_context']['program'],null,'program comparison must not become confirmed context');
+coherence_eq($ambiguous['state']['commercial_context']['sede_clave'],null,'venue comparison must not become confirmed context');
+$singleQuestion=hache_sharky_orchestrate($state,['id'=>'coh.question','from'=>$contact,'text'=>'¿Qué horarios tiene Palapas?'],['now'=>$now+7,'today'=>$today]);
+coherence_eq($singleQuestion['state']['commercial_context']['sede_clave'],null,'informational venue question must not become a confirmed venue');
+$changedProgram=hache_sharky_orchestrate($step1['state'],['id'=>'coh.change.program','from'=>$contact,'text'=>'Ya no intensivo, prefiero regulares'],['now'=>$now+8,'today'=>$today]);
+coherence_eq($changedProgram['state']['commercial_context']['program'],'regular','explicit program change must replace prior intensive context');
+
+// Review finding 2: batched turns still classify an intensive registration request for adapter handoff.
+$studentState=hache_sharky_orchestrator_state(null,$now);
+$studentState['identity']=array_replace($studentState['identity'],['kind'=>'student','verified'=>true,'source'=>'whatsapp_number','student_id'=>'stu-99']);
+$batchedText="El intensivo\nQuiero inscribirme en Palapas";
+coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,$batchedText),'register_intensive','batched program plus registration must be visible to existing-student prerouting');
+
+// Review finding 3: a venue change while the offer is open replaces the copied flow venue.
+$offerPal=hache_sharky_orchestrate($step1['state'],['id'=>'coh.offer.pal','from'=>$contact,'text'=>'Quiero inscribirme en Palapas'],['now'=>$now+9,'today'=>$today]);
+$changeVenue=hache_sharky_orchestrate($offerPal['state'],['id'=>'coh.change.venue','from'=>$contact,'text'=>'Mejor Monteverde'],['now'=>$now+10,'today'=>$today,'intensive_options'=>$options]);
+coherence_eq($changeVenue['state']['commercial_context']['sede_clave'],'MONTEVERDE','explicit venue change must replace durable venue context');
+coherence_eq($changeVenue['state']['flow']['data']['sede_clave'],'MONTEVERDE','open registration offer must reconcile copied venue with current context');
+coherence_eq($changeVenue['decision']['kind'],'registration_offer','changing venue must not itself consent to registration');
+$confirmChangedVenue=hache_sharky_orchestrate($changeVenue['state'],['id'=>'coh.change.venue.yes','from'=>$contact,'text'=>'sí'],['now'=>$now+11,'today'=>$today,'intensive_options'=>$options]);
+coherence_eq($confirmChangedVenue['decision']['kind'],'registration_course','consent after venue change must advance to course options');
+coherence_eq($confirmChangedVenue['decision']['ui']['options'][0]['id']??null,'course:course-mv-1','course list must use the newly selected Monteverde venue');
+
+// Review finding 4: negated registration language never opens a flow or handoff intent.
+$negated=hache_sharky_orchestrate($step1['state'],['id'=>'coh.negated','from'=>$contact,'text'=>'No quiero inscribirme'],['now'=>$now+12,'today'=>$today]);
+coherence_eq($negated['decision']['kind'],'conversation','negated registration request must remain conversational');
+coherence_eq($negated['state']['flow'],null,'negated registration request must not open a controlled registration flow');
+coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,'No quiero inscribirme'),'no','negated registration must not trigger existing-student registration handoff');
+
 $adapter=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 coherence_ok(str_contains($adapter,'Contexto comercial ya confirmado por el usuario'),'model instruction must receive confirmed commercial context');
 coherence_ok(str_contains($adapter,'No vuelvas a preguntar estos datos'),'model must be explicitly forbidden from asking confirmed commercial fields again');
 coherence_ok(str_contains($adapter,'hache_sharky_orchestrator_contextual_intent'),'WhatsApp pre-routing must use contextual intent too');
+coherence_ok(str_contains($adapter,'existing_student_intensive_handoff'),'existing-student registration handoff guard must remain in the adapter');
 
 fwrite(STDOUT,"SHARKY_CONVERSATION_COHERENCE_OK\n");
