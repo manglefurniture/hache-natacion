@@ -280,6 +280,9 @@ function hache_sharky_whatsapp_reroute_qualification_identity_claim(array $state
     if(!is_array($flow)||($flow['name']??'')!=='qualify_prospect')return $state;
     $intent=hache_sharky_orchestrator_contextual_intent($state,(string)($event['text']??''),(string)($event['interactive_id']??''));
     if($intent!=='student_claim')return $state;
+    $state['identity']=array_replace(is_array($state['identity']??null)?$state['identity']:[],[
+        'kind'=>'unknown','verified'=>false,'source'=>'identity_correction','student_id'=>null,'name'=>null,'sede_clave'=>null,'status'=>null,
+    ]);
     return hache_sharky_orchestrator_clear_flow($state);
 }
 
