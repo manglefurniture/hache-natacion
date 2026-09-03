@@ -36,11 +36,25 @@ expect_adapter($fullyGuarded==='Perfecto, ya tengo esos datos.','Con discovery c
 $identityOnce='Claro. Antes de seguir, ¿ya eres alumno de Hache Natación?';
 expect_adapter(hache_sharky_whatsapp_answer_asks_slot($identityOnce,'identity'),'Debe detectar cuando el modelo ya incluyó la pregunta de identidad para no duplicarla.');
 
-// Post-discovery: al completar identidad/programa/sede/edad ya existe un siguiente paso útil y estable.
+// Post-discovery: al completar identidad/programa/sede/edad se abre el offer controlado existente.
 expect_adapter(hache_sharky_whatsapp_commercial_ready($confirmedAge),'Prospecto con programa, sede y edad confirmados debe considerarse listo.');
 $readyMessage=hache_sharky_whatsapp_commercial_ready_message($confirmedAge);
 expect_adapter(str_contains($readyMessage,'curso intensivo')&&str_contains($readyMessage,'Palapas Protudec')&&str_contains($readyMessage,'43 años'),'El cierre de discovery debe resumir el contexto confirmado.');
-expect_adapter(str_contains($readyMessage,'horarios')&&str_contains($readyMessage,'quiero inscribirme'),'El cierre del intensivo debe dar una instrucción inequívoca para continuar sin aceptar un sí ambiguo.');
+expect_adapter(str_contains($readyMessage,'horarios')&&str_contains($readyMessage,'inscripción'),'El mensaje contextual debe explicar opciones sin exigir una frase literal.');
+[$offerState,$offerDecision]=hache_sharky_whatsapp_registration_offer_from_context($confirmedAge,1788382810);
+expect_adapter(($offerState['flow']['name']??'')==='register_intensive'&&($offerState['flow']['step']??'')==='offer','Discovery completo de intensivo debe abrir el offer controlado.');
+expect_adapter(($offerState['flow']['data']['sede_clave']??'')==='PALAPAS','El offer controlado debe reutilizar la sede confirmada.');
+expect_adapter(($offerDecision['kind']??'')==='registration_offer','La transición post-discovery debe usar la decisión de registro existente.');
+expect_adapter(($offerDecision['ui']['type']??'')==='buttons','El consentimiento debe pedirse con botones interactivos.');
+expect_adapter(($offerDecision['ui']['buttons'][0]['id']??'')==='flow:yes','El primer botón debe reutilizar flow:yes.');
+expect_adapter(hache_sharky_whatsapp_registration_offer_active($offerState),'El helper debe reconocer el offer de intensivo activo.');
+expect_adapter(hache_sharky_whatsapp_offer_affirmation('Si quiero'),'“Si quiero” debe reconocerse como afirmación natural solo para un offer activo.');
+expect_adapter(hache_sharky_whatsapp_offer_affirmation('Sí, quiero'),'“Sí, quiero” con coma debe reconocerse.');
+expect_adapter(hache_sharky_whatsapp_offer_affirmation('Claro que sí'),'“Claro que sí” debe reconocerse.');
+expect_adapter(!hache_sharky_whatsapp_offer_affirmation('Si quiero saber el precio'),'Una frase sustantiva no debe convertirse en consentimiento.');
+$offerPayload=hache_sharky_whatsapp_render('529981112233',$offerDecision);
+expect_adapter(($offerPayload['type']??'')==='interactive','El offer post-discovery debe renderizarse como WhatsApp interactive.');
+expect_adapter(count($offerPayload['interactive']['action']['buttons']??[])===3,'El offer debe mantener Sí, No y Cancelar.');
 expect_adapter(hache_sharky_whatsapp_low_information_reengagement('??'),'Solo signos debe tratarse como reenganche, no como nueva conversación libre.');
 expect_adapter(hache_sharky_whatsapp_low_information_reengagement('Hola'),'Un saludo con contexto completo debe reenganchar la conversación vigente.');
 expect_adapter(!hache_sharky_whatsapp_low_information_reengagement('¿Cuánto cuesta?'),'Una pregunta sustantiva debe seguir llegando al modelo.');
@@ -77,8 +91,8 @@ expect_adapter(!hache_sharky_whatsapp_nado_libre_request('¿Puedo tomar clases r
 expect_adapter(str_contains(hache_sharky_whatsapp_nado_libre_message(),'no ofrece nado libre'),'La respuesta determinista debe negar explícitamente el nado libre.');
 $adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 expect_adapter(str_contains($adapterSource,"'nado_libre_unavailable'"),'El adapter debe interceptar nado libre antes de delegar al LLM.');
-expect_adapter(str_contains($adapterSource,"'commercial_reengagement'"),'El adapter debe interceptar saludos/signos después de discovery completo.');
-expect_adapter(str_contains($adapterSource,"'commercial_ready'"),'Completar el último slot debe producir un cierre determinista antes de llamar al LLM.');
+expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_registration_offer_from_context'),'El adapter debe reutilizar el offer controlado al completar discovery.');
+expect_adapter(str_contains($adapterSource,"$event['interactive_id']='flow:yes'"),'Una afirmación natural dentro del offer debe mapearse al consentimiento interactivo existente.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_turn_is_discovery_only'),'El cierre determinista debe aceptar solo un turno compuesto por respuestas de discovery, no preguntas laterales.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_enforce_no_reintroduction'),'Toda conversación libre debe pasar por el guard contra re-presentaciones tardías.');
 
