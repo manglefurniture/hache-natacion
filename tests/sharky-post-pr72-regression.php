@@ -22,6 +22,8 @@ foreach([
 // 0% anticipado + pagar todo al inicio / apartar sin pago requiere decisión humana.
 foreach([
     '¿Puedo pagar todo el mismo día que empieza?',
+    'Quiero pagar todo al iniciar.',
+    '¿Puedo pagar el 100% al comenzar?',
     'No quiero dar anticipo, pago completo el lunes cuando llegue.',
     '¿Me apartas el lugar y pago cuando empiece?',
     'Quiero entrar al curso y pagar ese día.',
