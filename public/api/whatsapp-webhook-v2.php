@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-runtime.php';
+require_once __DIR__.'/../../config/sharky-start-authority.php';
 
 function whatsapp_v2_secret(string $name): string
 {
@@ -287,10 +288,7 @@ function whatsapp_v2_transcribe(string $mediaId, array $business): string
     $file = new CURLFile($tmp, $mime, 'nota-voz');
     $ch = curl_init('https://api.openai.com/v1/audio/transcriptions');
     curl_setopt_array($ch, [
-        CURLOPT_POST=>true,
-        CURLOPT_RETURNTRANSFER=>true,
-        CURLOPT_CONNECTTIMEOUT=>8,
-        CURLOPT_TIMEOUT=>40,
+        CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>8,CURLOPT_TIMEOUT=>40,
         CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$key],
         CURLOPT_POSTFIELDS=>['model'=>$model, 'file'=>$file, 'language'=>'es', 'response_format'=>'json'],
     ]);
@@ -399,16 +397,20 @@ foreach ($jobs as $job) {
 
     $state = whatsapp_v2_history_read($job['from']);
     $turns = $state['turns'];
+    $startAuthority = hache_sharky_start_authority_handoff($text);
 
-    if (hache_sharky_human_request($text)) {
-        $handoff = 'Claro. Te dejo con el equipo de Hache Natación por aquí. Una persona continuará contigo en este mismo chat.';
+    if (is_array($startAuthority) || hache_sharky_human_request($text)) {
+        $handoff = is_array($startAuthority)
+            ? (string)$startAuthority['message']
+            : 'Claro. Te dejo con el equipo de Hache Natación por aquí. Una persona continuará contigo en este mismo chat.';
         $sent = whatsapp_v2_send_text($job['from'], $handoff);
         if ($sent) {
             $turns[] = ['role'=>'user', 'content'=>$text];
             $turns[] = ['role'=>'assistant', 'content'=>$handoff];
             whatsapp_v2_history_write($job['from'], $turns, 0);
         }
-        whatsapp_v2_activate_handoff($job['from'], 'requested_human', $turns, $sent ? '' : $text);
+        $reason = is_array($startAuthority) ? 'start_date_exception' : 'requested_human';
+        whatsapp_v2_activate_handoff($job['from'], $reason, $turns, $sent ? '' : $text);
         continue;
     }
 
