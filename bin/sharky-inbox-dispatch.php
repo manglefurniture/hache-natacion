@@ -21,8 +21,10 @@ try{
     $minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);
     $threshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
     $processor=static fn(array $event):bool=>hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$threshold);
-    $stats=hache_sharky_inbox_dispatch($pdo,$processor,50,$enabled);
-    if($enabled())hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',50);
+    // Recovery is intentionally bounded: realtime webhook processing does the
+    // normal path; this worker catches abandoned rows without monopolizing a timer.
+    $stats=hache_sharky_inbox_dispatch($pdo,$processor,10,$enabled);
+    if($enabled())hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10);
     fwrite(STDOUT,json_encode($stats,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
     exit($stats['dead']>0?1:0);
 }catch(Throwable $e){fwrite(STDERR,'Sharky inbox: '.$e->getMessage().PHP_EOL);exit(1);}
