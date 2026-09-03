@@ -71,20 +71,49 @@ function hache_sharky_orchestrator_normalize(string $text): string
     return strtr($text, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
 }
 
+function hache_sharky_orchestrator_text_segments(string $text): array
+{
+    $text=trim($text);
+    if($text==='')return [];
+    $parts=preg_split('/(?:\r?\n+|(?<=[.!?;])\s+|(?=¿))/u',$text)?:[];
+    return array_values(array_filter(
+        array_map(static fn($part):string=>trim((string)$part),$parts),
+        static fn(string $part):bool=>$part!==''
+    ));
+}
+
+function hache_sharky_orchestrator_registration_clause_polarity(string $clause): ?bool
+{
+    $t=hache_sharky_orchestrator_normalize($clause);
+    if($t==='')return null;
+    $verbs='(?:inscribirme|registrarme|anotarme|apuntarme|entrar|inscribir|registrar|anotar|apuntar)';
+    $negated='(?:ya\s+)?(?:no|nunca|tampoco)';
+    if(preg_match('/\b'.$negated.'\s+(?:(?:me\s+)?(?:quiero|deseo|quisiera|gustaria|interesa)\s+)?'.$verbs.'\b/u',$t)===1
+        || preg_match('/\b'.$negated.'\s+(?:me\s+)?(?:voy\s+a|pienso)\s+'.$verbs.'\b/u',$t)===1)return false;
+    if(preg_match('/\b(?:quiero|deseo|quisiera|necesito|me gustaria)\s+(?:inscribirme|registrarme|anotarme|apuntarme|entrar)\b/u',$t)===1
+        || preg_match('/\bme\s+(?:quiero|deseo|quisiera)\s+(?:inscribir|registrar|anotar|apuntar)\b/u',$t)===1
+        || preg_match('/^(?:por favor\s+)?(?:inscribirme|registrarme|anotarme|apuntarme)\b/u',$t)===1)return true;
+    return null;
+}
+
+function hache_sharky_orchestrator_registration_polarity(string $text): ?bool
+{
+    $polarity=null;
+    foreach(hache_sharky_orchestrator_text_segments($text) as $segment){
+        $candidate=hache_sharky_orchestrator_registration_clause_polarity($segment);
+        if($candidate!==null)$polarity=$candidate;
+    }
+    return $polarity;
+}
+
 function hache_sharky_orchestrator_registration_request_negated(string $text): bool
 {
-    $t=hache_sharky_orchestrator_normalize($text);
-    return preg_match('/\b(?:no|nunca|tampoco)\s+(?:(?:me\s+)?(?:quiero|deseo|quisiera|gustaria|interesa)\s+)?(?:inscribirme|registrarme|anotarme|apuntarme|entrar|inscribir|registrar|anotar|apuntar)\b/u',$t)===1
-        || preg_match('/\bno\s+(?:me\s+)?(?:voy\s+a|pienso)\s+(?:inscribir|registrar|anotar|apuntar|entrar)\b/u',$t)===1;
+    return hache_sharky_orchestrator_registration_polarity($text)===false;
 }
 
 function hache_sharky_orchestrator_registration_request_positive(string $text): bool
 {
-    $t=hache_sharky_orchestrator_normalize($text);
-    if($t===''||hache_sharky_orchestrator_registration_request_negated($t))return false;
-    return preg_match('/\b(?:quiero|deseo|quisiera|necesito|me gustaria)\s+(?:inscribirme|registrarme|anotarme|apuntarme|entrar)\b/u',$t)===1
-        || preg_match('/\bme\s+(?:quiero|deseo|quisiera)\s+(?:inscribir|registrar|anotar|apuntar)\b/u',$t)===1
-        || preg_match('/^(?:por favor\s+)?(?:inscribirme|registrarme|anotarme|apuntarme)\b/u',$t)===1;
+    return hache_sharky_orchestrator_registration_polarity($text)===true;
 }
 
 function hache_sharky_orchestrator_program_choice(string $line): ?string
@@ -101,6 +130,9 @@ function hache_sharky_orchestrator_program_choice(string $line): ?string
         preg_match('/\b'.$intensive.'\b\s+o\s+\b'.$regular.'\b/u',$t)===1
         || preg_match('/\b'.$regular.'\b\s+o\s+\b'.$intensive.'\b/u',$t)===1
     ))return null;
+
+    $negatedChoice='(?:ya\s+)?(?:no|nunca|tampoco)\s+(?:quiero|prefiero|elijo|escojo|me\s+interesa|me\s+quedo\s+con)';
+    if(preg_match('/\b'.$negatedChoice.'\s+(?:(?:el|un|las?|unas?)\s+)?(?:'.$intensive.'|'.$regular.')\b/u',$t)===1)return null;
 
     $choice='(?:quiero|prefiero|elijo|escojo|me interesa|me quedo con|mejor)';
     $intensiveExplicit=preg_match('/\b'.$choice.'\s+(?:(?:el|un)\s+)?'.$intensive.'\b/u',$t)===1
@@ -126,6 +158,9 @@ function hache_sharky_orchestrator_sede_choice(string $line): ?string
         || preg_match('/\bmonteverde\b\s+o\s+\bpalapas(?:\s+protudec)?\b/u',$t)===1
     ))return null;
 
+    $negatedChoice='(?:ya\s+)?(?:no|nunca|tampoco)\s+(?:quiero|prefiero|elijo|escojo|me\s+interesa|me\s+quedo\s+con)';
+    if(preg_match('/\b'.$negatedChoice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?(?:palapas(?:\s+protudec)?|monteverde)\b/u',$t)===1)return null;
+
     $choice='(?:quiero|prefiero|elijo|escojo|me interesa|me quedo con|mejor)';
     $palapasExplicit=preg_match('/\b'.$choice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?palapas(?:\s+protudec)?\b/u',$t)===1
         || preg_match('/^(?:en\s+|la\s+de\s+|sede\s+)?palapas(?:\s+protudec)?[.! ]*$/u',$t)===1
@@ -144,10 +179,7 @@ function hache_sharky_orchestrator_capture_commercial_context(array $state, stri
     $context=is_array($state['commercial_context']??null)
         ? array_replace(['program'=>null,'sede_clave'=>null,'age'=>null],$state['commercial_context'])
         : ['program'=>null,'sede_clave'=>null,'age'=>null];
-    $lines=preg_split('/\r?\n+/u',trim($text))?:[];
-    foreach($lines as $line){
-        $line=trim((string)$line);
-        if($line==='')continue;
+    foreach(hache_sharky_orchestrator_text_segments($text) as $line){
         $program=hache_sharky_orchestrator_program_choice($line);
         if($program!==null)$context['program']=$program;
         $sede=hache_sharky_orchestrator_sede_choice($line);
