@@ -25,6 +25,8 @@ En `/var/www/hache-natacion/.env` deben existir, sin reutilizar la misma cadena:
 
 Para generar cada secreto Sharky en el servidor puede usarse `openssl rand -hex 32`. Guardar el valor únicamente en `.env`; no pegarlo en GitHub.
 
+**Las dos claves Sharky son material durable.** Después de que existan inbox/outbox/estado/acciones cifrados o hashes persistidos, no deben rotarse ni reemplazarse de forma improvisada. Una rotación futura requiere un procedimiento explícito de migración/reseal/reconciliación; cambiar una clave sin ese procedimiento puede volver irrecuperables datos pendientes.
+
 Los workers se ejecutan como `www-data`, por lo que **ese mismo usuario debe poder leer `.env`** sin volverlo público. Antes de continuar:
 
 ```bash
@@ -44,13 +46,14 @@ php bin/migrate-sharky-orchestrator.php
 
 El runner:
 
-- se niega a correr si el feature flag está en `1`;
+- se niega a correr salvo que `SHARKY_ORCHESTRATOR_LAB_ENABLED=0` esté configurado de forma explícita;
 - toma un `GET_LOCK` de MariaDB para impedir dos migradores simultáneos;
 - aplica primero `20260902_sharky_orchestrator.sql` y después `20260903_sharky_orchestrator_hardening.sql`;
+- completa/verifica las claves foráneas de Sharky para instalaciones parciales compatibles;
 - ejecuta sentencias de forma explícita y reporta el archivo/sentencia que falla;
 - verifica tablas, columnas, índices y claves foráneas esperadas al terminar.
 
-Las migraciones son aditivas/idempotentes para este rollout. No se ejecutan desde el workflow de deploy. Si una sentencia falla, no activar: corregir la causa y volver a ejecutar el runner, que está diseñado para tolerar una ejecución parcial de los cambios aditivos.
+Las migraciones son aditivas/idempotentes para este rollout. No se ejecutan desde el workflow de deploy. Si una sentencia falla, no activar: corregir la causa y volver a ejecutar el runner, que está diseñado para tolerar una ejecución parcial de los cambios aditivos. Si detecta una clave foránea incompatible ya existente, se detiene para revisión manual en lugar de reemplazarla a ciegas.
 
 ## 3. Preflight obligatorio
 
@@ -72,8 +75,8 @@ El preflight previo al primer cutover exige `SHARKY_ORCHESTRATOR_LAB_ENABLED=0` 
 - secretos y credenciales de WhatsApp presentes;
 - claves Sharky distintas;
 - tablas, columnas, índices y claves foráneas esperadas;
-- ausencia de estado conversacional legado en texto claro;
-- ausencia de outbox `PENDING` sin payload cifrado;
+- ausencia de estado conversacional legado en texto claro o filas cifradas incompletas;
+- ausencia de inbox/outbox pendiente con payload cifrado incompleto;
 - ausencia de filas `DEAD` en el outbox;
 - **corte limpio**: sin inbox pendiente, outbox pendiente, acciones `PENDING` ni acciones `COMPLETED` todavía sin entrega.
 
@@ -109,7 +112,7 @@ systemctl status hache-sharky-inbox.timer hache-sharky-outbox.timer --no-pager
 systemctl list-timers 'hache-sharky-*' --no-pager
 ```
 
-Los workers corren como `www-data`, desde `/var/www/hache-natacion`, y usan el mismo `.env` que el runtime. No deben existir copias de secretos dentro de las unidades systemd.
+Los workers corren como `www-data`, desde `/var/www/hache-natacion`, y usan el mismo `.env` que el runtime. No deben existir copias de secretos dentro de las unidades systemd. Cada ejecución está limitada a un lote pequeño de recovery y a un tiempo máximo de unidad para evitar workers superpuestos o bloqueados indefinidamente.
 
 ## 5. Smoke de workers con Sharky 2.0 todavía apagado
 
