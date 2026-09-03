@@ -36,6 +36,31 @@ expect_adapter($fullyGuarded==='Perfecto, ya tengo esos datos.','Con discovery c
 $identityOnce='Claro. Antes de seguir, ¿ya eres alumno de Hache Natación?';
 expect_adapter(hache_sharky_whatsapp_answer_asks_slot($identityOnce,'identity'),'Debe detectar cuando el modelo ya incluyó la pregunta de identidad para no duplicarla.');
 
+// Review hardening: detectar repreguntas de una sola opción sin comerse preguntas de otros dominios.
+expect_adapter(hache_sharky_whatsapp_question_targets_slot('¿Prefieres el curso intensivo?','program'),'Una repregunta de programa de una sola opción debe detectarse.');
+expect_adapter(hache_sharky_whatsapp_question_targets_slot('¿Prefieres tomar clases en Palapas?','sede'),'Una repregunta de sede de una sola opción debe detectarse.');
+expect_adapter(!hache_sharky_whatsapp_question_targets_slot('¿Cuál modalidad de pago prefieres?','program'),'Modalidad de pago no debe confundirse con modalidad de curso.');
+expect_adapter(!hache_sharky_whatsapp_question_targets_slot('¿Qué clases de tarjeta aceptan?','program'),'Una duda sobre tarjetas no debe clasificarse como discovery de programa.');
+$singleGuard=hache_sharky_whatsapp_enforce_confirmed_context('¿Prefieres el curso intensivo?',$confirmedAge);
+expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($singleGuard,'program'),'El payload final debe bloquear repreguntas de programa de una sola opción.');
+$venueGuard=hache_sharky_whatsapp_enforce_confirmed_context('¿Prefieres tomar clases en Palapas?',$confirmedAge);
+expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($venueGuard,'sede'),'El payload final debe bloquear repreguntas de sede de una sola opción.');
+$paymentQuestion='Aceptamos transferencia y tarjeta. ¿Cuál modalidad de pago prefieres?';
+expect_adapter(hache_sharky_whatsapp_enforce_confirmed_context($paymentQuestion,$confirmedAge)===$paymentQuestion,'Una pregunta legítima de pago debe sobrevivir intacta al enforcement.');
+$mixed=hache_sharky_whatsapp_enforce_confirmed_context('El intensivo cuesta $1,200; prefieres intensivo o clases regulares?',$confirmed);
+expect_adapter(str_contains($mixed,'cuesta $1,200'),'Una repregunta tras punto y coma no debe borrar la información útil previa.');
+expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($mixed,'program'),'La repregunta tras punto y coma debe eliminarse.');
+expect_adapter(hache_sharky_whatsapp_answer_asks_slot($mixed,'age'),'Después de eliminar la repregunta debe continuar con el slot realmente pendiente.');
+
+// Regla comercial explícita: Hache Natación no ofrece nado libre ni uso de alberca sin clase.
+expect_adapter(hache_sharky_whatsapp_nado_libre_request('¿Tienen nado libre?'),'Debe reconocer la frase nado libre.');
+expect_adapter(hache_sharky_whatsapp_nado_libre_request('¿Puedo nadar sin clases?'),'Debe reconocer solicitud de nadar sin clases.');
+expect_adapter(hache_sharky_whatsapp_nado_libre_request('¿Se puede usar la alberca por mi cuenta?'),'Debe reconocer solicitud de usar la alberca por cuenta propia.');
+expect_adapter(!hache_sharky_whatsapp_nado_libre_request('¿Puedo tomar clases regulares?'),'Una pregunta normal sobre clases no debe disparar la regla de nado libre.');
+expect_adapter(str_contains(hache_sharky_whatsapp_nado_libre_message(),'no ofrece nado libre'),'La respuesta determinista debe negar explícitamente el nado libre.');
+$adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
+expect_adapter(str_contains($adapterSource,"'nado_libre_unavailable'"),'El adapter debe interceptar nado libre antes de delegar al LLM.');
+
 $decision=hache_sharky_orchestrator_decision('x','Elige',['type'=>'buttons','buttons'=>[
     hache_sharky_orchestrator_button('a','Uno'),hache_sharky_orchestrator_button('b','Dos'),hache_sharky_orchestrator_button('c','Tres'),hache_sharky_orchestrator_button('d','Cuatro')
 ]]);
