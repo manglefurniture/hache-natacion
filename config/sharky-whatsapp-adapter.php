@@ -76,8 +76,35 @@ function hache_sharky_whatsapp_commercial_ready_message(array $state,string $pre
     $sede=($commercial['sede_clave']??null)==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
     $age=is_int($commercial['age']??null)?(int)$commercial['age']:null;
     $summary=$program.' en '.$sede.($age!==null?' para una persona de '.$age.' años':'');
-    if(($commercial['program']??null)==='intensive')return rtrim($prefix).' Ya tengo: '.$summary.'. Puedes preguntarme por horarios o precios; si quieres iniciar el registro, escribe “quiero inscribirme”.';
+    if(($commercial['program']??null)==='intensive')return rtrim($prefix).' Ya tengo: '.$summary.'. Puedo mostrarte horarios o ayudarte a iniciar la inscripción.';
     return rtrim($prefix).' Ya tengo: '.$summary.'. Puedes preguntarme por horarios o precios.';
+}
+
+function hache_sharky_whatsapp_registration_offer_from_context(array $state,int $now,string $prefix='Perfecto.'): array
+{
+    if(!hache_sharky_whatsapp_commercial_ready($state)||($state['commercial_context']['program']??null)!=='intensive'){
+        return [$state,hache_sharky_orchestrator_decision('conversation',hache_sharky_whatsapp_commercial_ready_message($state,$prefix))];
+    }
+    $commercial=$state['commercial_context'];
+    $sede=(string)$commercial['sede_clave'];
+    $sedeLabel=$sede==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
+    $age=(int)$commercial['age'];
+    $data=['sede_clave'=>$sede];
+    $state=hache_sharky_orchestrator_flow($state,'register_intensive','offer',$data,$now);
+    $message=rtrim($prefix).' Ya tengo: curso intensivo en '.$sedeLabel.' para una persona de '.$age.' años. ¿Quieres que te ayude a registrarte al curso intensivo?';
+    return [$state,hache_sharky_orchestrator_yes_no('registration_offer',$message)];
+}
+
+function hache_sharky_whatsapp_registration_offer_active(array $state): bool
+{
+    $flow=$state['flow']??null;
+    return is_array($flow)&&($flow['name']??'')==='register_intensive'&&($flow['step']??'')==='offer';
+}
+
+function hache_sharky_whatsapp_offer_affirmation(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    return preg_match('/^(?:si(?:,)?\s+quiero|claro\s+que\s+si|si(?:,)?\s+por\s+favor)[!. ]*$/u',$t)===1;
 }
 
 function hache_sharky_whatsapp_low_information_reengagement(string $text): bool
@@ -366,6 +393,10 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         $ref=hache_sharky_orchestrator_referral($event,(int)$context['now']);
         if($ref)hache_sharky_orchestrator_store_referral($pdo,$messageId,$contactHash,$ref,($context['identity']['found']??false)?(string)$context['identity']['student_id']:null);
 
+        if(trim((string)($event['interactive_id']??''))===''&&hache_sharky_whatsapp_registration_offer_active($state)&&hache_sharky_whatsapp_offer_affirmation((string)($event['text']??''))){
+            $event['interactive_id']='flow:yes';
+        }
+
         if(!hache_sharky_whatsapp_interactive_is_current($state,$event)){
             $decision=hache_sharky_orchestrator_decision('stale_interactive','Esa opción pertenece a un paso anterior. No hice ningún cambio; continuemos desde la opción que tienes activa ahora.');
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
@@ -381,7 +412,14 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         }
 
         if(trim((string)($event['interactive_id']??''))===''&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)&&hache_sharky_whatsapp_low_information_reengagement((string)($event['text']??''))){
-            $decision=hache_sharky_orchestrator_decision('commercial_reengagement',hache_sharky_whatsapp_commercial_ready_message($state,'Sigo contigo.'));
+            if(($state['commercial_context']['program']??null)==='intensive')[$state,$decision]=hache_sharky_whatsapp_registration_offer_from_context($state,(int)$context['now'],'Sigo contigo.');
+            else $decision=hache_sharky_orchestrator_decision('commercial_reengagement',hache_sharky_whatsapp_commercial_ready_message($state,'Sigo contigo.'));
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+            return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+        }
+
+        if(trim((string)($event['interactive_id']??''))===''&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)&&($state['commercial_context']['program']??null)==='intensive'&&hache_sharky_whatsapp_offer_affirmation((string)($event['text']??''))){
+            [$state,$decision]=hache_sharky_whatsapp_registration_offer_from_context($state,(int)$context['now'],'Perfecto.');
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
@@ -407,7 +445,8 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         $stateBeforeOrchestrate=$state;
         $result=hache_sharky_orchestrate($state,$event,$context);$state=$result['state'];$decision=$result['decision'];
         if(($decision['kind']??'')==='conversation'&&!hache_sharky_whatsapp_commercial_ready($stateBeforeOrchestrate)&&hache_sharky_whatsapp_commercial_ready($state)&&hache_sharky_whatsapp_turn_is_discovery_only((string)($event['text']??''))){
-            $decision=hache_sharky_orchestrator_decision('commercial_ready',hache_sharky_whatsapp_commercial_ready_message($state));
+            if(($state['commercial_context']['program']??null)==='intensive')[$state,$decision]=hache_sharky_whatsapp_registration_offer_from_context($state,(int)$context['now']);
+            else $decision=hache_sharky_orchestrator_decision('commercial_ready',hache_sharky_whatsapp_commercial_ready_message($state));
         }
         [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
         $verificationUrl=null;
