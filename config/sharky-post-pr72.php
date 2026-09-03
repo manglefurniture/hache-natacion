@@ -47,8 +47,9 @@ function hache_sharky_post72_payment_exception_request(string $text): bool
     $startDay = '(?:el\s+)?(?:mismo\s+)?dia\s+(?:que\s+)?(?:empieza|inicia|comienza)|primer\s+dia|cuando\s+(?:empiece|inicie|comience|llegue)|al\s+(?:iniciar|comenzar|empezar)|lunes\s+cuando\s+llegue|ese\s+dia';
     $fullPayment = '(?:pagar|pago|pagaria|pagare|liquidar|liquido)';
     $fullAmount = '(?:todo|el\s+total|total|completo|completa|100\s*%|cien\s+por\s+ciento)';
-    if (preg_match('/\b'.$fullPayment.'\b.{0,22}\b'.$fullAmount.'\b.{0,45}(?:'.$startDay.')/u', $t) === 1) return true;
-    if (preg_match('/(?:'.$startDay.').{0,45}\b'.$fullPayment.'\b.{0,22}\b'.$fullAmount.'\b/u', $t) === 1) return true;
+    $amountEnd = '(?:\b|(?=\s|$))';
+    if (preg_match('/\b'.$fullPayment.'\b.{0,22}\b'.$fullAmount.$amountEnd.'.{0,45}(?:'.$startDay.')/u', $t) === 1) return true;
+    if (preg_match('/(?:'.$startDay.').{0,45}\b'.$fullPayment.'\b.{0,22}\b'.$fullAmount.$amountEnd.'/u', $t) === 1) return true;
 
     // Frase común sin "todo": "quiero entrar al curso y pagar ese día".
     if (preg_match('/\b(entrar|asistir|ir)\b.{0,28}\b(curso|clase|intensivo)\b.{0,32}\b(pagar|pago)\b.{0,18}\b(ese\s+dia|cuando\s+llegue|primer\s+dia)\b/u', $t) === 1) return true;
