@@ -76,8 +76,8 @@ function hache_sharky_whatsapp_commercial_ready_message(array $state,string $pre
     $sede=($commercial['sede_clave']??null)==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
     $age=is_int($commercial['age']??null)?(int)$commercial['age']:null;
     $summary=$program.' en '.$sede.($age!==null?' para una persona de '.$age.' años':'');
-    if(($commercial['program']??null)==='intensive')return rtrim($prefix).' Ya tengo: '.$summary.'. ¿Quieres que te muestre horarios disponibles o prefieres que te ayude a inscribirte?';
-    return rtrim($prefix).' Ya tengo: '.$summary.'. ¿Quieres que te muestre horarios o precios?';
+    if(($commercial['program']??null)==='intensive')return rtrim($prefix).' Ya tengo: '.$summary.'. Puedes preguntarme por horarios o precios; si quieres iniciar el registro, escribe “quiero inscribirme”.';
+    return rtrim($prefix).' Ya tengo: '.$summary.'. Puedes preguntarme por horarios o precios.';
 }
 
 function hache_sharky_whatsapp_low_information_reengagement(string $text): bool
@@ -89,9 +89,18 @@ function hache_sharky_whatsapp_low_information_reengagement(string $text): bool
     return preg_match('/^(?:hola|holi|buenas|hey|ey|que\s+tal|ola)$/u',$greeting)===1;
 }
 
-function hache_sharky_whatsapp_turn_has_question(string $text): bool
+function hache_sharky_whatsapp_turn_is_discovery_only(string $text): bool
 {
-    return str_contains($text,'?')||str_contains($text,'¿');
+    $segments=hache_sharky_orchestrator_text_segments($text);
+    if(!$segments)return false;
+    foreach($segments as $segment){
+        if(hache_sharky_orchestrator_program_choice($segment)!==null)continue;
+        if(hache_sharky_orchestrator_sede_choice($segment)!==null)continue;
+        $t=hache_sharky_orchestrator_normalize($segment);
+        if(preg_match('/^(?:tengo\s+)?\d{1,3}\s*(?:anos)?[.! ]*$/u',$t)===1)continue;
+        return false;
+    }
+    return true;
 }
 
 function hache_sharky_whatsapp_user_asks_assistant_identity(string $text): bool
@@ -397,7 +406,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
 
         $stateBeforeOrchestrate=$state;
         $result=hache_sharky_orchestrate($state,$event,$context);$state=$result['state'];$decision=$result['decision'];
-        if(($decision['kind']??'')==='conversation'&&!hache_sharky_whatsapp_commercial_ready($stateBeforeOrchestrate)&&hache_sharky_whatsapp_commercial_ready($state)&&!hache_sharky_whatsapp_turn_has_question((string)($event['text']??''))){
+        if(($decision['kind']??'')==='conversation'&&!hache_sharky_whatsapp_commercial_ready($stateBeforeOrchestrate)&&hache_sharky_whatsapp_commercial_ready($state)&&hache_sharky_whatsapp_turn_is_discovery_only((string)($event['text']??''))){
             $decision=hache_sharky_orchestrator_decision('commercial_ready',hache_sharky_whatsapp_commercial_ready_message($state));
         }
         [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
