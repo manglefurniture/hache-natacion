@@ -14,11 +14,16 @@ CREATE TABLE IF NOT EXISTS sharky_message_receipts (
   lease_until DATETIME NULL,
   attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   last_error VARCHAR(255) NULL,
+  handoff_pending_at DATETIME NULL,
   processed_at DATETIME NULL,
   INDEX idx_sharky_receipts_contact (contact_hash, received_at),
   INDEX idx_sharky_receipts_processed (processed_at),
-  INDEX idx_sharky_receipts_lease (processed_at, lease_until)
+  INDEX idx_sharky_receipts_lease (processed_at, lease_until),
+  INDEX idx_sharky_receipts_handoff (processed_at, handoff_pending_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Keep lab/staging installs forward-compatible when this migration was already run.
+ALTER TABLE sharky_message_receipts ADD COLUMN IF NOT EXISTS handoff_pending_at DATETIME NULL AFTER last_error;
 
 CREATE TABLE IF NOT EXISTS sharky_referrals (
   id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
@@ -71,7 +76,7 @@ CREATE TABLE IF NOT EXISTS sharky_identity_challenges (
 -- Action leases prevent a crashed worker from leaving PENDING forever. Public/non-secret
 -- recovery data may live in result_json; recoverable credentials are stored only in the
 -- authenticated-encrypted result_* fields. A completed action is not fully handled until
--- its reply is durably queued.
+-- its reply is durably queued. owner_token fences a worker after its lease has been stolen.
 CREATE TABLE IF NOT EXISTS sharky_action_audit (
   id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
   idempotency_key CHAR(64) NOT NULL,
@@ -89,6 +94,7 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
   result_message VARCHAR(500) NULL,
   delivery_queued_at DATETIME NULL,
   lease_until DATETIME NULL,
+  owner_token CHAR(48) NULL,
   attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at DATETIME NULL,
@@ -99,6 +105,8 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
   INDEX idx_sharky_action_delivery (source_message_id, status, delivery_queued_at),
   CONSTRAINT fk_sharky_action_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE sharky_action_audit ADD COLUMN IF NOT EXISTS owner_token CHAR(48) NULL AFTER lease_until;
 
 -- Outbound messages are encrypted at rest. The raw WhatsApp number lives only inside
 -- the encrypted payload, never in a searchable/plaintext column. CANCELLED is used when
