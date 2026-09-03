@@ -9,6 +9,7 @@ if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
 function hache_sharky_outbox_meta_send(array $payload): bool
 {
+    if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')return false;
     $token=hache_sharky_orchestrator_secret('WHATSAPP_ACCESS_TOKEN');
     $phoneId=hache_sharky_orchestrator_secret('WHATSAPP_PHONE_NUMBER_ID');
     $version=hache_sharky_orchestrator_secret('WHATSAPP_GRAPH_VERSION');
@@ -28,7 +29,7 @@ try{
     if(strlen(hache_sharky_orchestrator_secret('SHARKY_CONTACT_HASH_KEY'))<32)throw new RuntimeException('SHARKY_CONTACT_HASH_KEY missing');
     $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
     if(!hache_sharky_orchestrator_store_ready($pdo))throw new RuntimeException('Sharky 2.0 migration incomplete');
-    $stats=hache_sharky_outbox_dispatch($pdo,'hache_sharky_outbox_meta_send',50);
+    $stats=hache_sharky_outbox_dispatch($pdo,'hache_sharky_outbox_meta_send',10);
     fwrite(STDOUT,json_encode($stats,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
     exit($stats['dead']>0?1:0);
 }catch(Throwable $e){fwrite(STDERR,'Sharky outbox: '.$e->getMessage().PHP_EOL);exit(1);}
