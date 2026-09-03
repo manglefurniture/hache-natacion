@@ -71,25 +71,87 @@ function hache_sharky_orchestrator_normalize(string $text): string
     return strtr($text, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
 }
 
+function hache_sharky_orchestrator_registration_request_negated(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    return preg_match('/\b(?:no|nunca|tampoco)\s+(?:(?:me\s+)?(?:quiero|deseo|quisiera|gustaria|interesa)\s+)?(?:inscribirme|registrarme|anotarme|apuntarme|entrar|inscribir|registrar|anotar|apuntar)\b/u',$t)===1
+        || preg_match('/\bno\s+(?:me\s+)?(?:voy\s+a|pienso)\s+(?:inscribir|registrar|anotar|apuntar|entrar)\b/u',$t)===1;
+}
+
+function hache_sharky_orchestrator_registration_request_positive(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if($t===''||hache_sharky_orchestrator_registration_request_negated($t))return false;
+    return preg_match('/\b(?:quiero|deseo|quisiera|necesito|me gustaria)\s+(?:inscribirme|registrarme|anotarme|apuntarme|entrar)\b/u',$t)===1
+        || preg_match('/\bme\s+(?:quiero|deseo|quisiera)\s+(?:inscribir|registrar|anotar|apuntar)\b/u',$t)===1
+        || preg_match('/^(?:por favor\s+)?(?:inscribirme|registrarme|anotarme|apuntarme)\b/u',$t)===1;
+}
+
+function hache_sharky_orchestrator_program_choice(string $line): ?string
+{
+    $t=hache_sharky_orchestrator_normalize($line);
+    if($t==='')return null;
+    $intensive='(?:curso\s+intensivo|intensivo)';
+    $regular='(?:clases?\s+regulares|curso\s+regular|regulares)';
+    $hasIntensive=preg_match('/\b'.$intensive.'\b/u',$t)===1;
+    $hasRegular=preg_match('/\b'.$regular.'\b/u',$t)===1;
+    if(!$hasIntensive&&!$hasRegular)return null;
+
+    $choice='(?:quiero|prefiero|elijo|escojo|me interesa|me quedo con|mejor)';
+    $intensiveExplicit=preg_match('/\b'.$choice.'\s+(?:(?:el|un)\s+)?'.$intensive.'\b/u',$t)===1
+        || preg_match('/^(?:(?:el|un)\s+)?'.$intensive.'[.! ]*$/u',$t)===1;
+    $regularExplicit=preg_match('/\b'.$choice.'\s+(?:(?:las?|unas?)\s+)?'.$regular.'\b/u',$t)===1
+        || preg_match('/^(?:(?:las?|unas?)\s+)?'.$regular.'[.! ]*$/u',$t)===1;
+
+    if($intensiveExplicit&&!$regularExplicit)return 'intensive';
+    if($regularExplicit&&!$intensiveExplicit)return 'regular';
+    if($hasIntensive&&$hasRegular)return null;
+    if(str_contains($line,'?')||str_contains($line,'¿'))return null;
+    return null;
+}
+
+function hache_sharky_orchestrator_sede_choice(string $line): ?string
+{
+    $t=hache_sharky_orchestrator_normalize($line);
+    if($t==='')return null;
+    $hasPalapas=str_contains($t,'palapas');
+    $hasMonteverde=str_contains($t,'monteverde');
+    if(!$hasPalapas&&!$hasMonteverde)return null;
+
+    $choice='(?:quiero|prefiero|elijo|escojo|me interesa|me quedo con|mejor)';
+    $palapasExplicit=preg_match('/\b'.$choice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?palapas(?:\s+protudec)?\b/u',$t)===1
+        || preg_match('/^palapas(?:\s+protudec)?[.! ]*$/u',$t)===1
+        || (hache_sharky_orchestrator_registration_request_positive($t)&&preg_match('/\b(?:en|para)\s+palapas(?:\s+protudec)?\b/u',$t)===1);
+    $monteverdeExplicit=preg_match('/\b'.$choice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?monteverde\b/u',$t)===1
+        || preg_match('/^monteverde[.! ]*$/u',$t)===1
+        || (hache_sharky_orchestrator_registration_request_positive($t)&&preg_match('/\b(?:en|para)\s+monteverde\b/u',$t)===1);
+
+    if($palapasExplicit&&!$monteverdeExplicit)return 'PALAPAS';
+    if($monteverdeExplicit&&!$palapasExplicit)return 'MONTEVERDE';
+    if($hasPalapas&&$hasMonteverde)return null;
+    if(str_contains($line,'?')||str_contains($line,'¿'))return null;
+    return null;
+}
+
 function hache_sharky_orchestrator_capture_commercial_context(array $state, string $text): array
 {
     $context=is_array($state['commercial_context']??null)
         ? array_replace(['program'=>null,'sede_clave'=>null,'age'=>null],$state['commercial_context'])
         : ['program'=>null,'sede_clave'=>null,'age'=>null];
-    $t=hache_sharky_orchestrator_normalize($text);
-    if($t===''){$state['commercial_context']=$context;return $state;}
-
-    if(preg_match('/\b(intensivo|curso intensivo)\b/u',$t))$context['program']='intensive';
-    elseif(preg_match('/\b(clase regular|clases regulares|curso regular|regulares)\b/u',$t))$context['program']='regular';
-
-    if(str_contains($t,'palapas'))$context['sede_clave']='PALAPAS';
-    elseif(str_contains($t,'monteverde'))$context['sede_clave']='MONTEVERDE';
-
-    if(preg_match('/^(?:tengo\s+)?(\d{1,3})\s*(?:anos)?[.! ]*$/u',$t,$m)){
-        $age=(int)$m[1];
-        if($age>=1&&$age<=120)$context['age']=$age;
+    $lines=preg_split('/\r?\n+/u',trim($text))?:[];
+    foreach($lines as $line){
+        $line=trim((string)$line);
+        if($line==='')continue;
+        $program=hache_sharky_orchestrator_program_choice($line);
+        if($program!==null)$context['program']=$program;
+        $sede=hache_sharky_orchestrator_sede_choice($line);
+        if($sede!==null)$context['sede_clave']=$sede;
+        $t=hache_sharky_orchestrator_normalize($line);
+        if(preg_match('/^(?:tengo\s+)?(\d{1,3})\s*(?:anos)?[.! ]*$/u',$t,$m)){
+            $age=(int)$m[1];
+            if($age>=1&&$age<=120)$context['age']=$age;
+        }
     }
-
     $state['commercial_context']=$context;
     return $state;
 }
@@ -152,11 +214,11 @@ function hache_sharky_orchestrator_intent(string $text, string $interactiveId = 
 
     $t = hache_sharky_orchestrator_normalize($text);
     if ($t === '') return 'empty';
+    if (hache_sharky_orchestrator_registration_request_negated($t)) return 'no';
     if (preg_match('/\b(cancelar|cancela|dejalo|dejala|olvidalo|ya no|mejor no|salir)\b/u', $t)) return 'cancel';
     if (preg_match('/\b(hablar|asesor|persona|humano|operador|atencion humana)\b/u', $t)) return 'human';
     if (preg_match('/\b(no voy|no podre ir|no puedo ir|faltare|voy a faltar|reportar (una )?ausencia|avisar (una )?ausencia)\b/u', $t)) return 'absence';
-    if (preg_match('/\b(inscribirme|registrarme|anotarme|apuntarme|quiero entrar)\b.{0,35}\b(intensivo|curso)\b/u', $t)
-        || preg_match('/\b(intensivo|curso)\b.{0,35}\b(inscribirme|registrarme|anotarme|apuntarme)\b/u', $t)) return 'register_intensive';
+    if (hache_sharky_orchestrator_registration_request_positive($t)&&preg_match('/\b(intensivo|curso)\b/u',$t)) return 'register_intensive';
     if (preg_match('/\b(ya soy|soy)\s+(alumno|alumna|estudiante)\b/u', $t)) return 'student_claim';
     if (preg_match('/\b(soy nuevo|soy nueva|no soy alumno|no soy alumna|quiero informacion|solo informacion)\b/u', $t)) return 'new_claim';
     if (preg_match('/^(si|sí|sip|sipi|claro|va|vale|ok|okay|dale|de acuerdo|correcto|confirmo|confirmar)[!. ]*$/u', trim($text))) return 'yes';
@@ -168,9 +230,9 @@ function hache_sharky_orchestrator_contextual_intent(array $state,string $text,s
 {
     $intent=hache_sharky_orchestrator_intent($text,$interactiveId);
     if($intent!=='conversation')return $intent;
-    $t=hache_sharky_orchestrator_normalize($text);
-    $program=(string)($state['commercial_context']['program']??'');
-    if($program==='intensive'&&preg_match('/\b(inscribirme|registrarme|anotarme|apuntarme|quiero entrar)\b/u',$t))return 'register_intensive';
+    $probe=hache_sharky_orchestrator_capture_commercial_context($state,$text);
+    $program=(string)($probe['commercial_context']['program']??'');
+    if($program==='intensive'&&hache_sharky_orchestrator_registration_request_positive($text))return 'register_intensive';
     return $intent;
 }
 
@@ -270,7 +332,7 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
     $step = (string) ($flow['step'] ?? '');
     $data = is_array($flow['data'] ?? null) ? $flow['data'] : [];
     $text = trim((string) ($event['text'] ?? ''));
-    $interactive = strtolower(trim((string) ($event['interactive_id'] ?? '')));
+    $interactive = strtolower(trim((string) ($event['interactive_id'] ?? ''));
 
     if ($intent === 'cancel' || $intent === 'no') {
         $state = hache_sharky_orchestrator_clear_flow($state);
@@ -338,7 +400,17 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
 
     if ($name === 'register_intensive') {
         if ($step === 'offer') {
-            if ($intent !== 'yes') return [$state, hache_sharky_orchestrator_yes_no('registration_offer','¿Quieres que te ayude a registrarte al curso intensivo?')];
+            $currentProgram=(string)($state['commercial_context']['program']??'');
+            if($currentProgram==='regular'){
+                $state=hache_sharky_orchestrator_clear_flow($state);
+                return [$state,hache_sharky_orchestrator_decision('flow_cancelled','Entendido, cambiamos a clases regulares. Seguimos por ahí sin iniciar una inscripción al intensivo.')];
+            }
+            $currentSede=(string)($state['commercial_context']['sede_clave']??'');
+            if(in_array($currentSede,['MONTEVERDE','PALAPAS'],true))$data['sede_clave']=$currentSede;
+            if ($intent !== 'yes') {
+                $state=hache_sharky_orchestrator_flow($state,'register_intensive','offer',$data,$now);
+                return [$state, hache_sharky_orchestrator_yes_no('registration_offer','¿Quieres que te ayude a registrarte al curso intensivo?')];
+            }
             if(in_array((string)($data['sede_clave']??''),['MONTEVERDE','PALAPAS'],true))return hache_sharky_orchestrator_registration_course_step($state,$data,$context,$now);
             $state = hache_sharky_orchestrator_flow($state,'register_intensive','sede',$data,$now);
             $buttons = [
