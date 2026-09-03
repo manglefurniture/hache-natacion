@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-require_once __DIR__.'/../config/pdo.php';
 require_once __DIR__.'/../config/sharky-activation.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
