@@ -11,9 +11,11 @@ try{
     $pdo=require __DIR__.'/../config/pdo.php';
     $schema=hache_sharky_activation_schema_report($pdo);
     $data=($schema['ok']??false)?hache_sharky_activation_data_report($pdo):[];
+    $rawFlag=hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED');
+    $flag=in_array($rawFlag,['0','1'],true)?$rawFlag:($rawFlag===''?'MISSING':'INVALID');
     $report=[
-        'ok'=>($schema['ok']??false)===true,
-        'feature_flag'=>hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1'?'1':'0',
+        'ok'=>($schema['ok']??false)===true&&in_array($rawFlag,['0','1'],true),
+        'feature_flag'=>$flag,
         'schema'=>$schema,
         'queues'=>$data,
     ];
