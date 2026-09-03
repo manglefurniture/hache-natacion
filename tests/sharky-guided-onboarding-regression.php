@@ -114,6 +114,7 @@ guided_ok(hache_sharky_whatsapp_declared_age('Soy nuevo y tengo 8 años')===8,'A
 guided_ok(hache_sharky_whatsapp_declared_age('Soy nuevo y tengo 1 año')===1,'Singular año must be parsed in a compound message.');
 guided_ok(hache_sharky_whatsapp_declared_age('No tengo 8 años')===null,'A negated age clause must not be stored as the user age.');
 guided_ok(hache_sharky_whatsapp_declared_age('No tengo 8 años, tengo 43 años')===43,'A later affirmative age must win after an earlier negated clause.');
+
 $underage=$escapeState;$underage['commercial_context']['age']=8;
 $underageResult=hache_sharky_whatsapp_underage_rejection($underage,12);
 guided_ok(is_array($underageResult),'A prospect below the minimum age must be rejected before guidance continues.');
@@ -121,6 +122,37 @@ guided_ok(($underageResult[0]['flow']??null)===null,'Underage rejection must cle
 guided_ok(($underageResult[1]['kind']??null)==='prospect_age_rejected','Underage rejection must use an explicit deterministic decision.');
 $adult=$escapeState;$adult['commercial_context']['age']=43;
 guided_ok(hache_sharky_whatsapp_underage_rejection($adult,12)===null,'An adult volunteered age must not block guidance.');
+
+// Review follow-up: capture volunteered age BEFORE identity resolution, not only once
+// identity already equals prospect. This models the first natural turn end-to-end across
+// the adapter helpers: unknown -> age capture -> prospect -> commercial age gate.
+$unknownAge=hache_sharky_orchestrator_state(null,1788383045);
+guided_ok(($unknownAge['identity']['kind']??null)==='unknown','The integration fixture must begin with unknown identity.');
+$unknownAge=hache_sharky_whatsapp_capture_declared_age($unknownAge,'Soy nuevo, tengo 8 años');
+guided_ok(($unknownAge['identity']['kind']??null)==='unknown','Age capture must not invent or resolve identity.');
+guided_ok(($unknownAge['commercial_context']['age']??null)===8,'Compound age must be persisted while identity is still unknown.');
+$unknownAge['identity']=array_replace($unknownAge['identity'],[
+    'kind'=>'prospect','verified'=>true,'source'=>'self_declared',
+]);
+$firstTurnGate=hache_sharky_whatsapp_underage_gate($unknownAge,['text'=>'Soy nuevo, tengo 8 años','interactive_id'=>''],12);
+guided_ok(is_array($firstTurnGate),'After identity resolves to prospect, the age captured earlier must close commercial guidance.');
+guided_ok(($firstTurnGate[1]['kind']??null)==='prospect_age_rejected','The first compound underage turn must resolve to the deterministic age rejection.');
+guided_ok(($firstTurnGate[0]['flow']??null)===null,'The first compound underage turn must not enter qualification.');
+
+// Review follow-up: minimum-age rejection is a COMMERCIAL gate only. It must never
+// trap a person who asks for a human or wants to cancel the active guided process.
+$underageProspect=$prospect;
+$underageProspect['commercial_context']['age']=8;
+$ordinaryUnderageGate=hache_sharky_whatsapp_underage_gate($underageProspect,['text'=>'Quiero información del intensivo','interactive_id'=>''],12);
+guided_ok(is_array($ordinaryUnderageGate)&&($ordinaryUnderageGate[1]['kind']??null)==='prospect_age_rejected','Ordinary commercial guidance must remain blocked below minimum age.');
+guided_ok(hache_sharky_whatsapp_underage_gate($underageProspect,['text'=>'Quiero hablar con una persona','interactive_id'=>''],12)===null,'Text human handoff must bypass the commercial age gate.');
+guided_ok(hache_sharky_whatsapp_underage_gate($underageProspect,['text'=>'Hablar con equipo','interactive_id'=>'action:human'],12)===null,'Interactive human handoff must bypass the commercial age gate.');
+guided_ok(hache_sharky_whatsapp_underage_gate($underageProspect,['text'=>'cancelar','interactive_id'=>''],12)===null,'Cancellation must bypass the commercial age gate.');
+$underageFlow=hache_sharky_orchestrator_flow($underageProspect,'qualify_prospect','swim',[],1788383046);
+$underageHumanGate=hache_sharky_whatsapp_underage_gate($underageFlow,['text'=>'Quiero hablar con una persona','interactive_id'=>''],12);
+guided_ok($underageHumanGate===null,'An underage active qualification must let the human request reach the controlled escape.');
+$underageHumanEscape=hache_sharky_whatsapp_qualification_escape($underageFlow,['text'=>'Quiero hablar con una persona','interactive_id'=>'']);
+guided_ok(is_array($underageHumanEscape)&&($underageHumanEscape[1]['action']['type']??null)==='human_takeover','After bypassing the age gate, active qualification must still produce the controlled human takeover.');
 
 // Codex review P2: changing venue in an advanced registration cannot leave the old
 // course/schedule attached. Restart from offer with fresh consent and only the new venue.
@@ -155,6 +187,9 @@ $expirePos=strpos($adapterSource,'$state=hache_sharky_orchestrator_expire_flow($
 $staleGuardPos=strpos($adapterSource,'if(!hache_sharky_whatsapp_interactive_is_current($state,$event))');
 $venueCorrectionPos=strpos($adapterSource,'$venueCorrection=hache_sharky_whatsapp_registration_venue_correction');
 $naturalVenuePos=$staleGuardPos===false?false:strpos($adapterSource,'$state=hache_sharky_whatsapp_apply_natural_venue_preference',$staleGuardPos);
+$ageCapturePos=strpos($adapterSource,'$state=hache_sharky_whatsapp_capture_declared_age');
+$ageGatePos=strpos($adapterSource,'$ageRejection=hache_sharky_whatsapp_underage_gate');
+$orchestratePos=strpos($adapterSource,'$stateBeforeOrchestrate=$state;');
 guided_ok(
     $expirePos!==false&&$staleGuardPos!==false&&$expirePos<$staleGuardPos,
     'Flow TTL must be applied before validating any adapter-direct interactive reply.'
@@ -168,8 +203,12 @@ guided_ok(
     'Advanced registration venue correction must run before conversational venue persistence.'
 );
 guided_ok(
-    str_contains($adapterSource,"if(trim((string)(\$event['interactive_id']??''))==='')\$state=hache_sharky_whatsapp_apply_natural_venue_preference"),
-    'Interactive replies must never mutate natural venue memory before their own flow validates them.'
+    $ageCapturePos!==false&&$ageGatePos!==false&&$orchestratePos!==false&&$ageCapturePos<$ageGatePos&&$ageGatePos<$orchestratePos,
+    'Identity-independent age capture and the age gate must both run before the orchestrator can start qualification.'
+);
+guided_ok(
+    str_contains($adapterSource,"if(in_array(\$intent,['human','cancel'],true))return null;"),
+    'The commercial age gate must explicitly allow human handoff and cancellation intents.'
 );
 guided_ok(
     substr_count($adapterSource,'hache_sharky_whatsapp_underage_rejection(')>=4,
