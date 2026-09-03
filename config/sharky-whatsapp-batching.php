@@ -4,6 +4,25 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-whatsapp-adapter.php';
 
+function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
+{
+    $contact=(string)($event['from']??'');
+    $lock=hache_sharky_orchestrator_delivery_lock($contact);
+    if(!is_resource($lock))return ['skip'=>true,'code'=>'DELIVERY_LOCK_UNAVAILABLE'];
+    try{
+        $result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+    }catch(Throwable $e){
+        hache_sharky_orchestrator_unlock($lock);
+        throw $e;
+    }
+    if(($extraContext['defer_delivery_unlock']??false)===true){
+        $result['_delivery_lock']=$lock;
+    }else{
+        hache_sharky_orchestrator_unlock($lock);
+    }
+    return $result;
+}
+
 /**
  * Claims the original Meta message before waiting. Only the worker that reaches
  * the flush boundary processes the aggregated text. Interactive replies bypass
@@ -13,7 +32,7 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
 {
     $contact=(string)($event['from']??'');$id=(string)($event['id']??'');
     if($contact===''||$id==='')return ['skip'=>true,'code'=>'INVALID_EVENT'];
-    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!=='')return hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
 
     $hash=hache_sharky_orchestrator_contact_hash($contact);
     if(!hache_sharky_orchestrator_claim_message($pdo,$id,$hash,(string)($event['type']??'text')))return ['skip'=>true,'code'=>'DUPLICATE'];
@@ -26,7 +45,7 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
     if($latestReferral===null&&is_array($event['referral']??null))$latestReferral=$event['referral'];
     $synthetic=['id'=>'batch:'.hash('sha256',implode('|',$ids)),'from'=>$contact,'type'=>'text','text'=>(string)($batch['text']??''),'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];
     if($latestReferral!==null)$synthetic['referral']=$latestReferral;
-    $result=hache_sharky_whatsapp_process($pdo,$synthetic,$conversationAnswer,$extraContext);
+    $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$synthetic,$conversationAnswer,$extraContext);
     $deliveryPending=function_exists('hache_sharky_action_delivery_pending_for_message')&&hache_sharky_action_delivery_pending_for_message($pdo,$synthetic['id']);
     $deferCompletion=($extraContext['defer_receipt_completion']??false)===true||$deliveryPending;
     $result['batched_ids']=$ids;$result['synthetic_id']=$synthetic['id'];$result['defer_processed']=$deferCompletion;
