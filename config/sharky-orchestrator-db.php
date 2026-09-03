@@ -14,14 +14,24 @@ function hache_sharky_db_state_ready(PDO $pdo): bool
 
 function hache_sharky_db_state_load(PDO $pdo,string $contact): array
 {
-    if(!hache_sharky_db_state_ready($pdo))return hache_sharky_orchestrator_state_load($contact);$hash=hache_sharky_orchestrator_contact_hash($contact);
-    try{$st=$pdo->prepare('SELECT state_json,expires_at FROM sharky_conversation_state WHERE contact_hash=:c LIMIT 1');$st->execute([':c'=>$hash]);$row=$st->fetch(PDO::FETCH_ASSOC);if(!$row)return hache_sharky_orchestrator_state();if(strtotime((string)$row['expires_at'])<time()){$pdo->prepare('DELETE FROM sharky_conversation_state WHERE contact_hash=:c')->execute([':c'=>$hash]);return hache_sharky_orchestrator_state();}$decoded=json_decode((string)$row['state_json'],true);return hache_sharky_orchestrator_state(is_array($decoded)?$decoded:null);}catch(Throwable $e){error_log('[sharky-orchestrator] db state load failed');return hache_sharky_orchestrator_state_load($contact);}
+    if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
+    $hash=hache_sharky_orchestrator_contact_hash($contact);
+    try{
+        $st=$pdo->prepare('SELECT state_json,expires_at FROM sharky_conversation_state WHERE contact_hash=:c LIMIT 1');$st->execute([':c'=>$hash]);$row=$st->fetch(PDO::FETCH_ASSOC);
+        if(!$row)return hache_sharky_orchestrator_state();
+        if(strtotime((string)$row['expires_at'])<time()){$pdo->prepare('DELETE FROM sharky_conversation_state WHERE contact_hash=:c')->execute([':c'=>$hash]);return hache_sharky_orchestrator_state();}
+        $decoded=json_decode((string)$row['state_json'],true);return hache_sharky_orchestrator_state(is_array($decoded)?$decoded:null);
+    }catch(Throwable $e){error_log('[sharky-orchestrator] db state load failed');throw new RuntimeException('Unable to load durable Sharky state',0,$e);}
 }
 
 function hache_sharky_db_state_save(PDO $pdo,string $contact,array $state,int $ttl=86400): bool
 {
-    $ttl=max(HACHE_SHARKY_FLOW_TTL,min(172800,$ttl));if(!hache_sharky_db_state_ready($pdo))return hache_sharky_orchestrator_state_save($contact,$state);$hash=hache_sharky_orchestrator_contact_hash($contact);$json=json_encode($state,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)return false;$expires=(new DateTimeImmutable())->modify('+'.$ttl.' seconds')->format('Y-m-d H:i:s');
-    try{$st=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,expires_at) VALUES(:c,:s,:e) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),expires_at=VALUES(expires_at),updated_at=NOW()');$st->execute([':c'=>$hash,':s'=>$json,':e'=>$expires]);return true;}catch(Throwable $e){error_log('[sharky-orchestrator] db state save failed');return hache_sharky_orchestrator_state_save($contact,$state);}
+    $ttl=max(HACHE_SHARKY_FLOW_TTL,min(172800,$ttl));
+    if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
+    $hash=hache_sharky_orchestrator_contact_hash($contact);$json=json_encode($state,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)throw new RuntimeException('Unable to encode durable Sharky state');
+    $expires=(new DateTimeImmutable())->modify('+'.$ttl.' seconds')->format('Y-m-d H:i:s');
+    try{$st=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,expires_at) VALUES(:c,:s,:e) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),expires_at=VALUES(expires_at),updated_at=NOW()');$st->execute([':c'=>$hash,':s'=>$json,':e'=>$expires]);return true;}
+    catch(Throwable $e){error_log('[sharky-orchestrator] db state save failed');throw new RuntimeException('Unable to save durable Sharky state',0,$e);}
 }
 
 function hache_sharky_action_status(PDO $pdo,string $idempotencyKey): ?array
@@ -32,9 +42,26 @@ function hache_sharky_action_status(PDO $pdo,string $idempotencyKey): ?array
 function hache_sharky_recover_intensive(PDO $pdo,array $fresh,array $action): ?array
 {
     if(($fresh['found']??false)!==true)return null;
-    $st=$pdo->prepare("SELECT a.id student_id,ci.id course_id,ci.precio,s.clave sede_clave,s.nombre sede_nombre,ci.fecha_inicio,h.hora_inicio,h.hora_fin FROM alumnos a JOIN sedes s ON s.id=a.sede_id JOIN curso_intensivo_alumnos cia ON cia.alumno_id=a.id JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id JOIN horarios h ON h.id=cia.horario_id WHERE a.id=:a AND a.nombre=:n AND s.clave=:s AND ci.fecha_inicio=:f AND cia.horario_id=:h LIMIT 1");
+    $st=$pdo->prepare("SELECT a.id student_id,ci.id course_id,ci.precio,s.clave sede_clave,s.nombre sede_nombre,ci.fecha_inicio,h.hora_inicio,h.hora_fin,u.id portal_user_id,u.usuario username FROM alumnos a JOIN sedes s ON s.id=a.sede_id JOIN curso_intensivo_alumnos cia ON cia.alumno_id=a.id JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id JOIN horarios h ON h.id=cia.horario_id JOIN usuarios u ON u.alumno_id=a.id AND u.rol='ALUMNO' AND u.activo=1 WHERE a.id=:a AND a.nombre=:n AND s.clave=:s AND ci.fecha_inicio=:f AND cia.horario_id=:h LIMIT 1");
     $st->execute([':a'=>(string)$fresh['student_id'],':n'=>(string)($action['name']??''),':s'=>strtoupper((string)($action['sede_clave']??'')),':f'=>(string)($action['fecha_inicio']??''),':h'=>(string)($action['schedule_id']??'')]);$row=$st->fetch(PDO::FETCH_ASSOC);if(!$row)return null;
-    return ['ok'=>true,'code'=>'CREATED','recovered'=>true,'student_id'=>(string)$row['student_id'],'course_id'=>(string)$row['course_id'],'sede_clave'=>(string)$row['sede_clave'],'sede_nombre'=>(string)$row['sede_nombre'],'fecha_inicio'=>(string)$row['fecha_inicio'],'schedule_label'=>substr((string)$row['hora_inicio'],0,5).'–'.substr((string)$row['hora_fin'],0,5),'price'=>(float)$row['precio']];
+
+    // Si el worker cayó después del commit pero antes de guardar/deliver el resultado,
+    // la contraseña temporal original nunca llegó al alumno. Rotamos una nueva y
+    // devolvemos esa credencial en el resultado recuperado.
+    $temporaryPassword=password_temporal_segura();$passwordHash=password_hash($temporaryPassword,PASSWORD_DEFAULT);
+    $st=$pdo->prepare('UPDATE usuarios SET password_hash=:p,debe_cambiar_password=1 WHERE id=:u AND alumno_id=:a');
+    $st->execute([':p'=>$passwordHash,':u'=>(string)$row['portal_user_id'],':a'=>(string)$row['student_id']]);
+    if($st->rowCount()!==1)throw new RuntimeException('Unable to rotate recovered portal credential');
+
+    return [
+        'ok'=>true,'code'=>'CREATED','recovered'=>true,
+        'student_id'=>(string)$row['student_id'],'course_id'=>(string)$row['course_id'],
+        'username'=>(string)$row['username'],'temporary_password'=>$temporaryPassword,
+        'sede_clave'=>(string)$row['sede_clave'],'sede_nombre'=>(string)$row['sede_nombre'],
+        'fecha_inicio'=>(string)$row['fecha_inicio'],
+        'schedule_label'=>substr((string)$row['hora_inicio'],0,5).'–'.substr((string)$row['hora_fin'],0,5),
+        'price'=>(float)$row['precio'],
+    ];
 }
 
 function hache_sharky_execute_action(PDO $pdo,string $contact,array $action,string $idempotencyKey,array $context=[]): array
