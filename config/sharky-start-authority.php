@@ -26,8 +26,11 @@ function hache_sharky_start_authority_parse_date(string $normalized, ?DateTimeIm
     $reference = hache_sharky_start_authority_reference($reference);
 
     if (preg_match('/\bpasado\s+manana\b/u', $normalized) === 1) return $reference->modify('+2 days');
-    $morningContext = preg_match('/\b(?:por|en|de)\s+la\s+manana\b|\bhorario\s+(?:de\s+)?manana\b/u', $normalized) === 1;
-    if (!$morningContext && preg_match('/\bmanana\b/u', $normalized) === 1) return $reference->modify('+1 day');
+
+    // Elimina usos horarios de "mañana" antes de interpretar el adverbio temporal.
+    // Así "por la mañana" no significa tomorrow, pero "mañana por la mañana" sí.
+    $dateText=preg_replace('/\b(?:por|en|de)\s+la\s+manana\b|\bhorario\s+(?:de\s+)?manana\b/u',' ',$normalized)??$normalized;
+    if (preg_match('/\bmanana\b/u', $dateText) === 1) return $reference->modify('+1 day');
     if (preg_match('/\bhoy\b/u', $normalized) === 1) return $reference;
 
     if (preg_match('/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/u', $normalized, $m) === 1) {
@@ -64,6 +67,7 @@ function hache_sharky_start_authority_handoff(string $text, ?DateTimeImmutable $
     $t=hache_sharky_start_authority_normalize($text);
     if ($t==='' || !hache_sharky_start_authority_start_intent($t)) return null;
     $reference=hache_sharky_start_authority_reference($reference);
+    $referenceDay=$reference->setTime(0,0);
     $explicitDate=hache_sharky_start_authority_parse_date($t,$reference);
 
     $isIntensive=preg_match('/\b(intensivo|intensivos|curso intensivo|cursos intensivos)\b/u',$t)===1;
@@ -71,7 +75,7 @@ function hache_sharky_start_authority_handoff(string $text, ?DateTimeImmutable $
         $nonMonday=preg_match('/\b(martes|miercoles|jueves|viernes|sabado|sabados|domingo|domingos)\b/u',$t)===1;
         $latePhrase=preg_match('/\b(despues del lunes|a mitad de semana|mitad de semana)\b/u',$t)===1;
         $invalidExplicit=$explicitDate instanceof DateTimeImmutable
-            && ((int)$explicitDate->format('N')!==1 || $explicitDate<$reference->setTime(0,0));
+            && ((int)$explicitDate->format('N')!==1 || $explicitDate<$referenceDay);
         if ($nonMonday || $latePhrase || $invalidExplicit) {
             return [
                 'program'=>'intensive',
@@ -89,6 +93,14 @@ function hache_sharky_start_authority_handoff(string $text, ?DateTimeImmutable $
     $isMonteverde=preg_match('/\bmonteverde\b/u',$t)===1;
     $beginning=preg_match('/\b(inicio|inicios|principio|principios|comienzo|comienzos)\s+(?:del?\s+)?mes\b/u',$t)===1;
     if ($beginning) return null;
+
+    if ($explicitDate instanceof DateTimeImmutable && $explicitDate<$referenceDay) {
+        return [
+            'program'=>'regular',
+            'reason'=>'start_date_exception',
+            'message'=>'Para una fecha de inicio regular distinta de las ventanas normales necesito dejarte con una persona del equipo que confirme la excepción.',
+        ];
+    }
 
     $midMonth=preg_match('/\b(alrededor|cerca|sobre)\s+(?:del?\s+)?15\b/u',$t)===1
         || preg_match('/\b(quincena|mitad de mes)\b/u',$t)===1;
@@ -124,6 +136,16 @@ function hache_sharky_start_authority_handoff(string $text, ?DateTimeImmutable $
             'program'=>'regular',
             'reason'=>'start_date_exception',
             'message'=>'Las clases regulares comienzan a inicios de mes; en Palapas también puede haber inicio alrededor del día 15. Para otra fecha exacta debe confirmarlo una persona del equipo.',
+        ];
+    }
+
+    // Pedir un día de semana concreto para regular, sin ubicarlo en una de las
+    // ventanas autorizadas, es una variación que Sharky no puede conceder.
+    if (preg_match('/\b(lunes|martes|miercoles|jueves|viernes|sabado|sabados|domingo|domingos)\b/u',$t)===1) {
+        return [
+            'program'=>'regular',
+            'reason'=>'start_date_exception',
+            'message'=>'Para elegir una fecha concreta de inicio de clases regulares fuera de las ventanas normales necesito dejarte con una persona del equipo.',
         ];
     }
 
