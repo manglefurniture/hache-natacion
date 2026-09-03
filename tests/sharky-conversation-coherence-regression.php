@@ -97,6 +97,36 @@ coherence_eq($negated['decision']['kind'],'conversation','negated registration r
 coherence_eq($negated['state']['flow'],null,'negated registration request must not open a controlled registration flow');
 coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,'No quiero inscribirme'),'no','negated registration must not trigger existing-student registration handoff');
 
+// Final review P2 1: a negated program preference cannot become or remain confirmed context.
+$negatedProgram=hache_sharky_orchestrate($state,['id'=>'coh.p2.neg.program','from'=>$contact,'text'=>'No quiero intensivo'],['now'=>$now+15,'today'=>$today]);
+coherence_eq($negatedProgram['state']['commercial_context']['program'],null,'negated program preference must not persist intensive context');
+$rejectedExisting=hache_sharky_orchestrate($step1['state'],['id'=>'coh.p2.reject.existing','from'=>$contact,'text'=>'No quiero intensivo'],['now'=>$now+16,'today'=>$today]);
+coherence_eq($rejectedExisting['state']['commercial_context']['program'],null,'explicit rejection must invalidate an already remembered intensive choice');
+$afterRejected=hache_sharky_orchestrate($rejectedExisting['state'],['id'=>'coh.p2.reject.follow','from'=>$contact,'text'=>'Quiero inscribirme'],['now'=>$now+17,'today'=>$today]);
+coherence_eq($afterRejected['decision']['kind'],'conversation','generic registration after rejecting intensive must not reuse stale intensive context');
+coherence_eq($afterRejected['state']['flow'],null,'generic registration after rejecting intensive must not open the intensive flow');
+$rejectedVenue=hache_sharky_orchestrate($shortVenue['state'],['id'=>'coh.p2.reject.venue','from'=>$contact,'text'=>'No quiero Palapas'],['now'=>$now+18,'today'=>$today]);
+coherence_eq($rejectedVenue['state']['commercial_context']['sede_clave'],null,'explicit venue rejection must invalidate the remembered venue');
+
+// Final review P2 2: an affirmative choice before a question in the same message survives.
+$choiceThenQuestion=hache_sharky_orchestrate($state,['id'=>'coh.p2.choice.question','from'=>$contact,'text'=>'Prefiero el intensivo. ¿Qué horarios tienen?'],['now'=>$now+19,'today'=>$today]);
+coherence_eq($choiceThenQuestion['state']['commercial_context']['program'],'intensive','affirmative program choice before a question must remain confirmed');
+coherence_eq($choiceThenQuestion['decision']['kind'],'conversation','choice plus informational question must stay conversational');
+$choiceThenInvertedQuestion=hache_sharky_orchestrate($state,['id'=>'coh.p2.choice.question.nospace','from'=>$contact,'text'=>'Prefiero el intensivo ¿Qué horarios tienen?'],['now'=>$now+20,'today'=>$today]);
+coherence_eq($choiceThenInvertedQuestion['state']['commercial_context']['program'],'intensive','inverted question mark must split a trailing question from the preceding choice');
+
+// Final review P2 3: the most recent registration polarity wins inside a batch.
+$correctiveBurst="No quiero inscribirme a regulares\nQuiero inscribirme al intensivo";
+coherence_eq(hache_sharky_orchestrator_registration_polarity($correctiveBurst),true,'latest affirmative correction must override an earlier negated registration clause');
+coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,$correctiveBurst),'register_intensive','corrected positive burst must preserve existing-student handoff intent');
+$prospectCorrection=hache_sharky_orchestrate($state,['id'=>'coh.p2.corrective.burst','from'=>$contact,'text'=>$correctiveBurst],['now'=>$now+21,'today'=>$today]);
+coherence_eq($prospectCorrection['decision']['kind'],'registration_offer','corrected positive burst must offer registration to a prospect');
+$reverseBurst="Quiero inscribirme al intensivo\nNo quiero inscribirme";
+coherence_eq(hache_sharky_orchestrator_registration_polarity($reverseBurst),false,'latest negation must override an earlier positive registration clause');
+coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,$reverseBurst),'no','latest negation must suppress existing-student registration handoff');
+$commaCorrection=hache_sharky_orchestrate($step1['state'],['id'=>'coh.p2.comma.program','from'=>$contact,'text'=>'No quiero intensivo, prefiero regulares'],['now'=>$now+22,'today'=>$today]);
+coherence_eq($commaCorrection['state']['commercial_context']['program'],'regular','comma-separated correction must let the later explicit program choice win');
+
 $adapter=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 coherence_ok(str_contains($adapter,'Contexto comercial ya confirmado por el usuario'),'model instruction must receive confirmed commercial context');
 coherence_ok(str_contains($adapter,'No vuelvas a preguntar estos datos'),'model must be explicitly forbidden from asking confirmed commercial fields again');
