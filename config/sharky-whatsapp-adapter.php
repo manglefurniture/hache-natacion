@@ -107,9 +107,35 @@ function hache_sharky_whatsapp_detect_venue_preference(string $text,string $inte
 function hache_sharky_whatsapp_apply_natural_venue_preference(array $state,string $text): array
 {
     if(($state['identity']['kind']??'unknown')!=='prospect')return $state;
+    $flow=$state['flow']??null;
+    if(is_array($flow)){
+        $flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
+        if($flowName==='register_intensive'&&!in_array($flowStep,['offer','sede'],true))return $state;
+        if($flowName!=='register_intensive'&&$flowName!=='qualify_prospect')return $state;
+    }
     $sede=hache_sharky_whatsapp_detect_venue_preference($text);
     if($sede!==null)$state['commercial_context']['sede_clave']=$sede;
     return $state;
+}
+
+function hache_sharky_whatsapp_registration_venue_correction(array $state,array $event,int $now): ?array
+{
+    $flow=$state['flow']??null;
+    if(!is_array($flow)||($flow['name']??'')!=='register_intensive')return null;
+    $step=(string)($flow['step']??'');
+    if(!in_array($step,['course','schedule','name','birthdate','confirm'],true))return null;
+    if(trim((string)($event['interactive_id']??''))!=='')return null;
+    $sede=hache_sharky_whatsapp_detect_venue_preference((string)($event['text']??''));
+    if($sede===null)return null;
+    $current=(string)($flow['data']['sede_clave']??'');
+    $label=$sede==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
+    if($current===$sede){
+        return [$state,hache_sharky_orchestrator_decision('registration_venue_unchanged','Sí, seguimos con '.$label.'. Continúa con el dato que te pedí en este paso.')];
+    }
+    $state['commercial_context']['sede_clave']=$sede;
+    $state=hache_sharky_orchestrator_flow($state,'register_intensive','offer',['sede_clave'=>$sede],$now);
+    $message='Entendido, cambiamos la sede a '.$label.'. Como eso cambia cursos y horarios, reinicié esta inscripción. ¿Quieres que continuemos con el intensivo en '.$label.'?';
+    return [$state,hache_sharky_orchestrator_yes_no('registration_offer',$message)];
 }
 
 function hache_sharky_whatsapp_regular_schedule_message(PDO $pdo,array $state,string $daypart): string
@@ -129,6 +155,25 @@ function hache_sharky_whatsapp_regular_schedule_message(PDO $pdo,array $state,st
     $period=$daypart==='morning'?'matutinos':'vespertinos';
     if(!$hours)return 'Ahora mismo no encuentro horarios regulares '.$period.' activos en '.$label.'. Si quieres, puedo mostrarte el otro turno o dejarte con el equipo para revisarlo.';
     return 'Horarios regulares '.$period.' activos en '.$label.':'."\n\n".implode("\n",array_map(static fn(string $h):string=>'• '.$h,$hours));
+}
+
+function hache_sharky_whatsapp_declared_age(string $text): ?int
+{
+    foreach(hache_sharky_orchestrator_text_segments($text) as $line){
+        $t=hache_sharky_orchestrator_normalize($line);
+        if(preg_match('/^(?:tengo\s+)?(\d{1,3})\s*(?:anos)?[.! ]*$/u',$t,$m)!==1)continue;
+        $age=(int)$m[1];
+        if($age>=1&&$age<=120)return $age;
+    }
+    return null;
+}
+
+function hache_sharky_whatsapp_underage_rejection(array $state,int $minAge): ?array
+{
+    $minAge=max(1,$minAge);$age=$state['commercial_context']['age']??null;
+    if(!is_int($age)||$age>=$minAge)return null;
+    $state=hache_sharky_orchestrator_clear_flow($state);
+    return [$state,hache_sharky_orchestrator_decision('prospect_age_rejected','Hache Natación atiende a partir de '.$minAge.' años; no puedo continuar con esta orientación para una persona de '.$age.' años.')];
 }
 
 function hache_sharky_whatsapp_qualification_start(array $state,int $now): array
@@ -166,11 +211,35 @@ function hache_sharky_whatsapp_qualification_sede_step(array $state,array $data,
     ]])];
 }
 
-function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $event,int $now): ?array
+function hache_sharky_whatsapp_qualification_escape(array $state,array $event): ?array
 {
     $flow=$state['flow']??null;
     if(!is_array($flow)||($flow['name']??'')!=='qualify_prospect')return null;
-    $step=(string)($flow['step']??'');$data=is_array($flow['data']??null)?$flow['data']:[];$id=strtolower(trim((string)($event['interactive_id']??'')));$text=trim((string)($event['text']??''));$t=hache_sharky_orchestrator_normalize($text);
+    $intent=hache_sharky_orchestrator_contextual_intent($state,(string)($event['text']??''),(string)($event['interactive_id']??''));
+    if($intent==='cancel'){
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_orchestrator_decision('flow_cancelled','Listo, cancelé este proceso. Podemos seguir conversando normalmente.')];
+    }
+    if($intent==='human'){
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_orchestrator_decision('human_takeover','Voy a dejar la conversación al equipo para que continúe contigo.',[],['type'=>'human_takeover'])];
+    }
+    return null;
+}
+
+function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $event,int $now,int $minAge=12): ?array
+{
+    $flow=$state['flow']??null;
+    if(!is_array($flow)||($flow['name']??'')!=='qualify_prospect')return null;
+    $escape=hache_sharky_whatsapp_qualification_escape($state,$event);
+    if(is_array($escape))return $escape;
+    $declaredAge=hache_sharky_whatsapp_declared_age((string)($event['text']??''));
+    if($declaredAge!==null){
+        $state['commercial_context']['age']=$declaredAge;
+        $rejection=hache_sharky_whatsapp_underage_rejection($state,$minAge);
+        if(is_array($rejection))return $rejection;
+    }
+    $flow=$state['flow'];$step=(string)($flow['step']??'');$data=is_array($flow['data']??null)?$flow['data']:[];$id=strtolower(trim((string)($event['interactive_id']??'')));$text=trim((string)($event['text']??''));$t=hache_sharky_orchestrator_normalize($text);
 
     if($step==='swim'){
         $beginner=$id==='qualify:beginner'||preg_match('/^(?:no|no\s+se\s+nadar|no\s+nado|desde\s+cero|estoy\s+empezando|nunca\s+he\s+nadado)[.! ]*$/u',$t)===1;
@@ -581,6 +650,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         $state=hache_sharky_db_state_load($pdo,$contact);
         $context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
         $state=hache_sharky_whatsapp_resume_verified_state($state,$context,(int)$context['now']);
+        $state=hache_sharky_orchestrator_expire_flow($state,(int)$context['now']);
         $ref=hache_sharky_orchestrator_referral($event,(int)$context['now']);
         if($ref)hache_sharky_orchestrator_store_referral($pdo,$messageId,$contactHash,$ref,($context['identity']['found']??false)?(string)$context['identity']['student_id']:null);
 
@@ -594,7 +664,25 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
 
+        $venueCorrection=hache_sharky_whatsapp_registration_venue_correction($state,$event,(int)$context['now']);
+        if(is_array($venueCorrection)){
+            [$state,$decision]=$venueCorrection;
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+            return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+        }
+
         if(trim((string)($event['interactive_id']??''))==='')$state=hache_sharky_whatsapp_apply_natural_venue_preference($state,(string)($event['text']??''));
+
+        if(($state['identity']['kind']??'')==='prospect'){
+            $declaredAge=hache_sharky_whatsapp_declared_age((string)($event['text']??''));
+            if($declaredAge!==null)$state['commercial_context']['age']=$declaredAge;
+            $ageRejection=hache_sharky_whatsapp_underage_rejection($state,(int)($context['min_age']??12));
+            if(is_array($ageRejection)){
+                [$state,$decision]=$ageRejection;
+                hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+            }
+        }
 
         if(trim((string)($event['interactive_id']??''))===''&&hache_sharky_whatsapp_nado_libre_request((string)($event['text']??''))){
             $message=hache_sharky_whatsapp_nado_libre_message();
@@ -652,7 +740,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             return ['skip'=>false,'state'=>$state,'decision'=>['kind'=>'side_question','message'=>$answer,'ui'=>[],'action'=>null],'payload'=>hache_sharky_whatsapp_text_payload($contact,$answer),'action_result'=>null];
         }
 
-        $qualification=hache_sharky_whatsapp_qualification_input($pdo,$state,$event,(int)$context['now']);
+        $qualification=hache_sharky_whatsapp_qualification_input($pdo,$state,$event,(int)$context['now'],(int)($context['min_age']??12));
         if(is_array($qualification)){
             [$state,$decision]=$qualification;
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
@@ -662,7 +750,9 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         $stateBeforeOrchestrate=$state;
         $result=hache_sharky_orchestrate($state,$event,$context);$state=$result['state'];$decision=$result['decision'];
         if(($stateBeforeOrchestrate['identity']['kind']??'unknown')==='unknown'&&($state['identity']['kind']??'')==='prospect'&&($decision['kind']??'')==='conversation'){
-            [$state,$decision]=hache_sharky_whatsapp_qualification_start($state,(int)$context['now']);
+            $ageRejection=hache_sharky_whatsapp_underage_rejection($state,(int)($context['min_age']??12));
+            if(is_array($ageRejection))[$state,$decision]=$ageRejection;
+            else [$state,$decision]=hache_sharky_whatsapp_qualification_start($state,(int)$context['now']);
         }elseif(($decision['kind']??'')==='conversation'&&!hache_sharky_whatsapp_commercial_ready($stateBeforeOrchestrate)&&hache_sharky_whatsapp_commercial_ready($state)&&hache_sharky_whatsapp_turn_is_discovery_only((string)($event['text']??''))){
             if(($state['commercial_context']['program']??null)==='intensive')[$state,$decision]=hache_sharky_whatsapp_registration_offer_from_context($state,(int)$context['now']);
             else $decision=hache_sharky_orchestrator_decision('commercial_ready',hache_sharky_whatsapp_commercial_ready_message($state));
