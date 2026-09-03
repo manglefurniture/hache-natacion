@@ -85,8 +85,14 @@ function hache_sharky_action_delivery_pending_for_message(PDO $pdo,string $messa
     try{$st=$pdo->prepare("SELECT 1 FROM sharky_action_audit WHERE source_message_id=:m AND status='COMPLETED' AND delivery_queued_at IS NULL LIMIT 1");$st->execute([':m'=>$messageId]);return(bool)$st->fetchColumn();}catch(Throwable $e){return false;}
 }
 
-function hache_sharky_action_delivery_queued_by_message(PDO $pdo,string $messageId): void
+function hache_sharky_action_delivery_queued_by_message(PDO $pdo,string $messageId): bool
 {
-    $messageId=mb_substr(trim($messageId),0,191);if($messageId===''||!hache_sharky_orchestrator_store_ready($pdo))return;
-    try{$st=$pdo->prepare("UPDATE sharky_action_audit SET delivery_queued_at=COALESCE(delivery_queued_at,NOW()) WHERE source_message_id=:m AND status='COMPLETED'");$st->execute([':m'=>$messageId]);}catch(Throwable $e){error_log('[sharky-action] delivery queue mark failed');}
+    $messageId=mb_substr(trim($messageId),0,191);
+    if($messageId==='')return true;
+    if(!hache_sharky_orchestrator_store_ready($pdo))return false;
+    try{
+        $st=$pdo->prepare("UPDATE sharky_action_audit SET delivery_queued_at=COALESCE(delivery_queued_at,NOW()) WHERE source_message_id=:m AND status='COMPLETED'");
+        $st->execute([':m'=>$messageId]);
+        return true;
+    }catch(Throwable $e){error_log('[sharky-action] delivery queue mark failed');return false;}
 }
