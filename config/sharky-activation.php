@@ -40,9 +40,18 @@ function hache_sharky_activation_required_indexes(): array
     ];
 }
 
+function hache_sharky_activation_required_constraints(): array
+{
+    return [
+        'sharky_referrals'=>['fk_sharky_referral_alumno'],
+        'sharky_identity_challenges'=>['fk_sharky_identity_student'],
+        'sharky_action_audit'=>['fk_sharky_action_alumno'],
+    ];
+}
+
 function hache_sharky_activation_schema_report(PDO $pdo): array
 {
-    $missingTables=[];$missingColumns=[];$missingIndexes=[];
+    $missingTables=[];$missingColumns=[];$missingIndexes=[];$missingConstraints=[];
     foreach(hache_sharky_activation_required_tables() as $table){
         $st=$pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=:t');
         $st->execute([':t'=>$table]);
@@ -61,12 +70,22 @@ function hache_sharky_activation_schema_report(PDO $pdo): array
         foreach(hache_sharky_activation_required_indexes()[$table]??[] as $index){
             if(!isset($indexes[$index]))$missingIndexes[]=$table.'.'.$index;
         }
+
+        if(isset(hache_sharky_activation_required_constraints()[$table])){
+            $st=$pdo->prepare("SELECT constraint_name FROM information_schema.table_constraints WHERE table_schema=DATABASE() AND table_name=:t AND constraint_type='FOREIGN KEY'");
+            $st->execute([':t'=>$table]);
+            $constraints=array_fill_keys(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)),true);
+            foreach(hache_sharky_activation_required_constraints()[$table] as $constraint){
+                if(!isset($constraints[$constraint]))$missingConstraints[]=$table.'.'.$constraint;
+            }
+        }
     }
     return [
-        'ok'=>$missingTables===[]&&$missingColumns===[]&&$missingIndexes===[],
+        'ok'=>$missingTables===[]&&$missingColumns===[]&&$missingIndexes===[]&&$missingConstraints===[],
         'missing_tables'=>$missingTables,
         'missing_columns'=>$missingColumns,
         'missing_indexes'=>$missingIndexes,
+        'missing_constraints'=>$missingConstraints,
     ];
 }
 
@@ -85,9 +104,11 @@ function hache_sharky_activation_secret_report(): array
         $value=hache_sharky_orchestrator_secret($name);
         $checks[$name]=['ok'=>strlen($value)>=$minimum,'minimum_length'=>$minimum,'present'=>$value!==''];
     }
+    $a=hache_sharky_orchestrator_secret('SHARKY_CONTACT_HASH_KEY');
+    $b=hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY');
     $checks['SHARKY_SECRETS_DISTINCT']=[
-        'ok'=>($a=hache_sharky_orchestrator_secret('SHARKY_CONTACT_HASH_KEY'))!==''&&($b=hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY'))!==''&&!hash_equals($a,$b),
-        'present'=>true,
+        'ok'=>$a!==''&&$b!==''&&!hash_equals($a,$b),
+        'present'=>$a!==''&&$b!=='',
     ];
     return $checks;
 }
@@ -104,8 +125,11 @@ function hache_sharky_activation_data_report(PDO $pdo): array
     $queries=[
         'legacy_plaintext_state'=>"SELECT COUNT(*) FROM sharky_conversation_state WHERE state_json IS NOT NULL",
         'pending_outbox_without_ciphertext'=>"SELECT COUNT(*) FROM sharky_outbox WHERE status='PENDING' AND (payload_ciphertext IS NULL OR payload_iv IS NULL OR payload_tag IS NULL)",
+        'pending_outbox_total'=>"SELECT COUNT(*) FROM sharky_outbox WHERE status='PENDING'",
         'completed_actions_without_delivery'=>"SELECT COUNT(*) FROM sharky_action_audit WHERE status='COMPLETED' AND delivery_queued_at IS NULL",
+        'pending_actions_total'=>"SELECT COUNT(*) FROM sharky_action_audit WHERE status='PENDING'",
         'pending_actions_expired'=>"SELECT COUNT(*) FROM sharky_action_audit WHERE status='PENDING' AND (lease_until IS NULL OR lease_until<NOW())",
+        'pending_inbox_total'=>"SELECT COUNT(*) FROM sharky_message_receipts WHERE processed_at IS NULL AND payload_ciphertext IS NOT NULL",
         'pending_inbox_expired'=>"SELECT COUNT(*) FROM sharky_message_receipts WHERE processed_at IS NULL AND payload_ciphertext IS NOT NULL AND (lease_until IS NULL OR lease_until<NOW())",
         'dead_outbox'=>"SELECT COUNT(*) FROM sharky_outbox WHERE status='DEAD'",
     ];
@@ -123,19 +147,26 @@ function hache_sharky_activation_preflight(PDO $pdo,bool $allowEnabled=false): a
     $secrets=hache_sharky_activation_secret_report();
     $extensions=hache_sharky_activation_extension_report();
     $flag=hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED');
-    $flagOk=$allowEnabled?in_array($flag,['0','1'],true):$flag!=='1';
+    $flagOk=$allowEnabled?in_array($flag,['0','1'],true):$flag==='0';
     $secretOk=true;foreach($secrets as $check)if(($check['ok']??false)!==true){$secretOk=false;break;}
     $extensionsOk=!in_array(false,$extensions,true);
     $data=$schema['ok']?hache_sharky_activation_data_report($pdo):[];
-    $dataOk=$schema['ok']
+    $securityDataOk=$schema['ok']
         &&(($data['legacy_plaintext_state']??1)===0)
         &&(($data['pending_outbox_without_ciphertext']??1)===0)
         &&(($data['dead_outbox']??1)===0);
+    $cleanCutoverOk=$allowEnabled||(
+        (($data['pending_outbox_total']??1)===0)
+        &&(($data['pending_inbox_total']??1)===0)
+        &&(($data['pending_actions_total']??1)===0)
+        &&(($data['completed_actions_without_delivery']??1)===0)
+    );
 
     return [
-        'ok'=>$schema['ok']&&$secretOk&&$extensionsOk&&$flagOk&&$dataOk,
-        'feature_flag'=>$flag===''?'0':$flag,
+        'ok'=>$schema['ok']&&$secretOk&&$extensionsOk&&$flagOk&&$securityDataOk&&$cleanCutoverOk,
+        'feature_flag'=>$flag,
         'feature_flag_ok'=>$flagOk,
+        'clean_cutover_ok'=>$cleanCutoverOk,
         'schema'=>$schema,
         'secrets'=>$secrets,
         'extensions'=>$extensions,
