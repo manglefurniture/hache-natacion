@@ -36,12 +36,20 @@ function hache_sharky_lab_send(array $payload): bool
     return $response!==false&&$error===''&&$status>=200&&$status<300;
 }
 
+function hache_sharky_lab_has_prior_turn(array $state): bool
+{
+    $seen=is_array($state['seen_message_ids']??null)?$state['seen_message_ids']:[];
+    return count($seen)>1||is_array($state['flow']??null);
+}
+
 function hache_sharky_lab_answer(string $text,string $instruction,array $state,array $context): string
 {
     $history=[];$ref=$state['referral']['latest']??null;
     if(is_array($ref)&&!empty($ref['headline']))$history[]=['role'=>'system','content'=>'Origen de campaña: '.mb_substr((string)$ref['headline'],0,180)];
     $instruction=rtrim($instruction)."\n\n".hache_sharky_post72_whatsapp_style_policy();
-    $history[]=['role'=>'system','content'=>$instruction];$payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
+    $history[]=['role'=>'system','content'=>$instruction];
+    if(hache_sharky_lab_has_prior_turn($state))$history[]=['role'=>'assistant','content'=>'Ya me presenté como Sharky; la conversación ya está en curso.'];
+    $payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
     $ch=curl_init('https://hnatacion.com/api/sharky.php');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_POSTFIELDS=>$payload,CURLOPT_RESOLVE=>['hnatacion.com:443:127.0.0.1']]);
     $response=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);if($response===false||$status<200||$status>=300)return '';
     $data=json_decode((string)$response,true);return is_array($data)&&($data['ok']??false)===true?trim((string)($data['answer']??'')):'';
