@@ -65,9 +65,14 @@ coherence_eq($regularRegistration['decision']['kind'],'conversation','generic re
 $ambiguous=hache_sharky_orchestrate($state,['id'=>'coh.ambiguous','from'=>$contact,'text'=>'¿Intensivo o clases regulares?\n¿Palapas o Monteverde?'],['now'=>$now+6,'today'=>$today]);
 coherence_eq($ambiguous['state']['commercial_context']['program'],null,'program comparison must not become confirmed context');
 coherence_eq($ambiguous['state']['commercial_context']['sede_clave'],null,'venue comparison must not become confirmed context');
-$singleQuestion=hache_sharky_orchestrate($state,['id'=>'coh.question','from'=>$contact,'text'=>'¿Qué horarios tiene Palapas?'],['now'=>$now+7,'today'=>$today]);
+$verbAmbiguous=hache_sharky_orchestrate($state,['id'=>'coh.ambiguous.verb','from'=>$contact,'text'=>'Prefiero intensivo o clases regulares\nPrefiero Palapas o Monteverde'],['now'=>$now+7,'today'=>$today]);
+coherence_eq($verbAmbiguous['state']['commercial_context']['program'],null,'preference wording must not turn an either-or program comparison into a confirmed choice');
+coherence_eq($verbAmbiguous['state']['commercial_context']['sede_clave'],null,'preference wording must not turn an either-or venue comparison into a confirmed choice');
+$singleQuestion=hache_sharky_orchestrate($state,['id'=>'coh.question','from'=>$contact,'text'=>'¿Qué horarios tiene Palapas?'],['now'=>$now+8,'today'=>$today]);
 coherence_eq($singleQuestion['state']['commercial_context']['sede_clave'],null,'informational venue question must not become a confirmed venue');
-$changedProgram=hache_sharky_orchestrate($step1['state'],['id'=>'coh.change.program','from'=>$contact,'text'=>'Ya no intensivo, prefiero regulares'],['now'=>$now+8,'today'=>$today]);
+$shortVenue=hache_sharky_orchestrate($state,['id'=>'coh.short.venue','from'=>$contact,'text'=>'En Palapas'],['now'=>$now+9,'today'=>$today]);
+coherence_eq($shortVenue['state']['commercial_context']['sede_clave'],'PALAPAS','short venue answer with preposition must count as an explicit selection');
+$changedProgram=hache_sharky_orchestrate($step1['state'],['id'=>'coh.change.program','from'=>$contact,'text'=>'Ya no intensivo, prefiero regulares'],['now'=>$now+10,'today'=>$today]);
 coherence_eq($changedProgram['state']['commercial_context']['program'],'regular','explicit program change must replace prior intensive context');
 
 // Review finding 2: batched turns still classify an intensive registration request for adapter handoff.
@@ -77,17 +82,17 @@ $batchedText="El intensivo\nQuiero inscribirme en Palapas";
 coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,$batchedText),'register_intensive','batched program plus registration must be visible to existing-student prerouting');
 
 // Review finding 3: a venue change while the offer is open replaces the copied flow venue.
-$offerPal=hache_sharky_orchestrate($step1['state'],['id'=>'coh.offer.pal','from'=>$contact,'text'=>'Quiero inscribirme en Palapas'],['now'=>$now+9,'today'=>$today]);
-$changeVenue=hache_sharky_orchestrate($offerPal['state'],['id'=>'coh.change.venue','from'=>$contact,'text'=>'Mejor Monteverde'],['now'=>$now+10,'today'=>$today,'intensive_options'=>$options]);
+$offerPal=hache_sharky_orchestrate($step1['state'],['id'=>'coh.offer.pal','from'=>$contact,'text'=>'Quiero inscribirme en Palapas'],['now'=>$now+11,'today'=>$today]);
+$changeVenue=hache_sharky_orchestrate($offerPal['state'],['id'=>'coh.change.venue','from'=>$contact,'text'=>'Mejor Monteverde'],['now'=>$now+12,'today'=>$today,'intensive_options'=>$options]);
 coherence_eq($changeVenue['state']['commercial_context']['sede_clave'],'MONTEVERDE','explicit venue change must replace durable venue context');
 coherence_eq($changeVenue['state']['flow']['data']['sede_clave'],'MONTEVERDE','open registration offer must reconcile copied venue with current context');
 coherence_eq($changeVenue['decision']['kind'],'registration_offer','changing venue must not itself consent to registration');
-$confirmChangedVenue=hache_sharky_orchestrate($changeVenue['state'],['id'=>'coh.change.venue.yes','from'=>$contact,'text'=>'sí'],['now'=>$now+11,'today'=>$today,'intensive_options'=>$options]);
+$confirmChangedVenue=hache_sharky_orchestrate($changeVenue['state'],['id'=>'coh.change.venue.yes','from'=>$contact,'text'=>'sí'],['now'=>$now+13,'today'=>$today,'intensive_options'=>$options]);
 coherence_eq($confirmChangedVenue['decision']['kind'],'registration_course','consent after venue change must advance to course options');
 coherence_eq($confirmChangedVenue['decision']['ui']['options'][0]['id']??null,'course:course-mv-1','course list must use the newly selected Monteverde venue');
 
 // Review finding 4: negated registration language never opens a flow or handoff intent.
-$negated=hache_sharky_orchestrate($step1['state'],['id'=>'coh.negated','from'=>$contact,'text'=>'No quiero inscribirme'],['now'=>$now+12,'today'=>$today]);
+$negated=hache_sharky_orchestrate($step1['state'],['id'=>'coh.negated','from'=>$contact,'text'=>'No quiero inscribirme'],['now'=>$now+14,'today'=>$today]);
 coherence_eq($negated['decision']['kind'],'conversation','negated registration request must remain conversational');
 coherence_eq($negated['state']['flow'],null,'negated registration request must not open a controlled registration flow');
 coherence_eq(hache_sharky_orchestrator_contextual_intent($studentState,'No quiero inscribirme'),'no','negated registration must not trigger existing-student registration handoff');
