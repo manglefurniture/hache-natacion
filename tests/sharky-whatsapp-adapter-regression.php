@@ -92,7 +92,7 @@ expect_adapter(str_contains(hache_sharky_whatsapp_nado_libre_message(),'no ofrec
 $adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 expect_adapter(str_contains($adapterSource,"'nado_libre_unavailable'"),'El adapter debe interceptar nado libre antes de delegar al LLM.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_registration_offer_from_context'),'El adapter debe reutilizar el offer controlado al completar discovery.');
-expect_adapter(str_contains($adapterSource,"$event['interactive_id']='flow:yes'"),'Una afirmación natural dentro del offer debe mapearse al consentimiento interactivo existente.');
+expect_adapter(str_contains($adapterSource,"\$event['interactive_id']='flow:yes'"),'Una afirmación natural dentro del offer debe mapearse al consentimiento interactivo existente.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_turn_is_discovery_only'),'El cierre determinista debe aceptar solo un turno compuesto por respuestas de discovery, no preguntas laterales.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_enforce_no_reintroduction'),'Toda conversación libre debe pasar por el guard contra re-presentaciones tardías.');
 
