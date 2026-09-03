@@ -10,6 +10,7 @@ if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
 try{
     if(strlen(hache_sharky_orchestrator_secret('SHARKY_CONTACT_HASH_KEY'))<32)throw new RuntimeException('SHARKY_CONTACT_HASH_KEY missing');
+    if(strlen(hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY'))<32)throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY missing');
     $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
     if(!hache_sharky_orchestrator_store_ready($pdo))throw new RuntimeException('Sharky 2.0 migration incomplete');
     $business=hache_sharky_business_values($pdo);
