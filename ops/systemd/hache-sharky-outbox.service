@@ -1,0 +1,17 @@
+[Unit]
+Description=Hache Natacion Sharky outbox delivery worker
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/hache-natacion
+ExecStart=/usr/bin/php /var/www/hache-natacion/bin/sharky-outbox-dispatch.php
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
