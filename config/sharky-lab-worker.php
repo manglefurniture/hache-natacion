@@ -55,8 +55,16 @@ function hache_sharky_lab_claim_early(PDO $pdo,array $event,string $contact,stri
 function hache_sharky_lab_receipt_ids(string $sourceMessageId,array $batchedIds=[]): array
 {
     $ids=[];$sourceMessageId=trim($sourceMessageId);if($sourceMessageId!=='')$ids[$sourceMessageId]=true;
-    foreach($batchedIds as $id){$id=trim((string)$id);if($id!=='')$ids[$id]=true;}
+    foreach($batchedIds as $id){$id=trim((string)$id;if($id!=='')$ids[$id]=true;}
     return array_keys($ids);
+}
+
+function hache_sharky_lab_mark_handoff_pending(PDO $pdo,string $sourceMessageId,array $batchedIds=[]): bool
+{
+    foreach(hache_sharky_lab_receipt_ids($sourceMessageId,$batchedIds) as $messageId){
+        if(!hache_sharky_inbox_mark_handoff_pending($pdo,$messageId))return false;
+    }
+    return true;
 }
 
 function hache_sharky_lab_persist_deferred_state(PDO $pdo,?array $deferredState): void
@@ -90,8 +98,8 @@ function hache_sharky_lab_queue_and_complete(PDO $pdo,string $contact,array $pay
         }
         $pdo->commit();
     }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();error_log('[sharky-lab] durable delivery boundary failed');return false;}
-    // El envío ocurre después del commit. Si Meta falla, el outbox conserva la respuesta.
-    hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10);
+    // El caller mantiene el delivery lock de este contacto durante el dispatch.
+    hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10,$contact);
     return true;
 }
 
@@ -124,14 +132,15 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
                 error_log('[sharky-lab] manual takeover persistence failed; automatic outbox remains blocked from dispatch in this worker');
                 return false;
             }
-            // Solo después de persistir takeover se permite al dispatcher cancelar pendientes.
-            hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
+            // Solo después de persistir takeover se permite cancelar pendientes.
+            hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20,$contact);
             return hache_sharky_orchestrator_mark_processed($pdo,(string)$event['id']);
         }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
     }
 
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';if($contact==='')return false;$eventId=(string)($event['id']??'event');
-    if(hache_sharky_takeover_active($contact)){
+    $handoffPending=hache_sharky_inbox_handoff_pending($pdo,$eventId);
+    if(hache_sharky_takeover_active($contact)&&!$handoffPending){
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'message')))return false;
         return hache_sharky_orchestrator_mark_processed($pdo,$eventId);
     }
@@ -156,6 +165,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
         try{
             if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'text')))return false;
+            if(!hache_sharky_lab_mark_handoff_pending($pdo,$eventId))return false;
             if(is_array($startAuthority))$message=(string)$startAuthority['message'];
             elseif($paymentException)$message='Para asegurar tu lugar, la reserva se realiza por anticipado pagando el total o al menos el 50%. Si deseas pagar todo hasta el día de inicio sin reserva previa, necesito dejarte con una persona del equipo para que confirme esa excepción.';
             else $message='Te dejo con el equipo de Hache Natación. Una persona continuará contigo por este mismo chat.';
@@ -206,7 +216,9 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
             }
         }
 
+        $deliverySource=(string)($result['synthetic_id']??$eventId);$batchedIds=is_array($result['batched_ids']??null)?$result['batched_ids']:[];
         if($shouldTakeover){
+            if(!hache_sharky_lab_mark_handoff_pending($pdo,$deliverySource,$batchedIds))return false;
             $reason=$decisionKind==='conversation'?'unresolved':((string)($actionResult['code']??'')==='START_DATE_REQUIRES_HUMAN'?'start_date_exception':'requested_human');
             if(!hache_sharky_takeover_mark($contact,$reason,'Sharky 2.0 controlled handoff')){
                 error_log('[sharky-lab] controlled takeover persistence failed reason='.$reason);
@@ -215,7 +227,6 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
             if(is_array($out))$out=hache_sharky_outbox_allow_during_takeover($out);
         }
 
-        $deliverySource=(string)($result['synthetic_id']??$eventId);$batchedIds=is_array($result['batched_ids']??null)?$result['batched_ids']:[];
         $deliveryPending=hache_sharky_action_delivery_pending_for_message($pdo,$deliverySource);
         if($deliveryPending&&!is_array($out))return false;
         if(is_array($out)){
