@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS sharky_identity_challenges (
 
 -- Action leases prevent a crashed worker from leaving PENDING forever. Result JSON
 -- lets a replay rebuild the same success response without repeating side effects.
+-- A completed action is not considered fully handled until its reply is durably queued.
 CREATE TABLE IF NOT EXISTS sharky_action_audit (
   id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
   idempotency_key CHAR(64) NOT NULL,
@@ -78,9 +79,11 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
   alumno_id CHAR(36) NULL,
   status ENUM('PENDING','COMPLETED','FAILED','CANCELLED') NOT NULL DEFAULT 'PENDING',
   payload_hash CHAR(64) NOT NULL,
+  source_message_id VARCHAR(191) NULL,
   result_code VARCHAR(80) NULL,
   result_json JSON NULL,
   result_message VARCHAR(500) NULL,
+  delivery_queued_at DATETIME NULL,
   lease_until DATETIME NULL,
   attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -89,6 +92,7 @@ CREATE TABLE IF NOT EXISTS sharky_action_audit (
   INDEX idx_sharky_action_contact (contact_hash, created_at),
   INDEX idx_sharky_action_student (alumno_id, created_at),
   INDEX idx_sharky_action_status (status, lease_until, created_at),
+  INDEX idx_sharky_action_delivery (source_message_id, status, delivery_queued_at),
   CONSTRAINT fk_sharky_action_alumno FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
