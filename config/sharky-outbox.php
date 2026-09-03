@@ -84,8 +84,19 @@ function hache_sharky_outbox_renew_owner(PDO $pdo,string $id,string $ownerToken)
 {
     if($id===''||$ownerToken==='')return false;
     try{
+        $params=[':id'=>$id,':o'=>$ownerToken];
         $st=$pdo->prepare('UPDATE sharky_outbox SET lease_until=DATE_ADD(NOW(),INTERVAL '.HACHE_SHARKY_OUTBOX_LEASE_SECONDS.' SECOND) WHERE id=:id AND status=\'PENDING\' AND owner_token=:o');
-        $st->execute([':id'=>$id,':o'=>$ownerToken]);return $st->rowCount()===1;
+        $st->execute($params);
+        if($st->rowCount()===1)return true;
+
+        // MariaDB/PDO reports changed rows by default. A claim followed by a
+        // renewal in the same second can write the identical lease timestamp
+        // and therefore report rowCount()=0 even though this owner still holds
+        // a valid fenced lease. Verify ownership explicitly instead of silently
+        // skipping delivery and leaving the row leased until expiry.
+        $check=$pdo->prepare("SELECT 1 FROM sharky_outbox WHERE id=:id AND status='PENDING' AND owner_token=:o AND lease_until>=NOW() LIMIT 1");
+        $check->execute($params);
+        return (bool)$check->fetchColumn();
     }catch(Throwable $e){return false;}
 }
 
