@@ -58,6 +58,7 @@ foreach([
     '¿Las clases regulares empiezan a principios de mes?',
     'En Palapas, ¿puedo iniciar regular alrededor del 15?',
     'Quiero información de los horarios del intensivo por la mañana.',
+    'Quiero empezar el intensivo por la mañana.',
 ] as $phrase){
     post72_expect(hache_sharky_start_authority_handoff($phrase,$ref)===null,'Normal start-date question must stay with Sharky: '.$phrase);
 }
@@ -96,11 +97,21 @@ $db=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:'';
 $batching=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
 $store=file_get_contents(__DIR__.'/../config/sharky-orchestrator-store.php')?:'';
 $recovery=file_get_contents(__DIR__.'/../config/sharky-action-recovery.php')?:'';
+$v2Webhook=file_get_contents(__DIR__.'/../public/api/whatsapp-webhook-v2.php')?:'';
+$sharkyV2=file_get_contents(__DIR__.'/../public/api/sharky-v2.php')?:'';
 
 // Presentación: el adaptador no hardcodea los horarios/precios del ejemplo y exige datos actuales.
 post72_expect(str_contains($adapter,'cada horario'),'WhatsApp adapter must request one schedule per bullet.');
 post72_expect(str_contains($adapter,'No inventes horarios, precios ni disponibilidad'),'WhatsApp adapter must keep backend as source of truth.');
 post72_expect(!str_contains($adapter,'6:00–7:00'),'Example schedule must not be hardcoded in adapter.');
+
+// La política nueva también protege el webhook v2 que seguirá activo con el flag apagado.
+post72_expect(str_contains($v2Webhook,'hache_sharky_start_authority_handoff($text)'),'Current v2 webhook must hand off unauthorized start-date variations.');
+post72_expect(str_contains($v2Webhook,"'start_date_exception'"),'Current v2 webhook must persist a distinct start-date takeover reason.');
+post72_expect(str_contains($sharkyV2,'Los cursos intensivos COMIENZAN LOS LUNES'),'Current Sharky prompt must state Monday-only intensive starts.');
+post72_expect(!str_contains($sharkyV2,'Puede incorporarse al curso si entra lunes o martes'),'Current Sharky prompt must not advertise Tuesday as an authorized start.');
+post72_expect(str_contains($sharkyV2,'Monteverde: el inicio normal de clases regulares es a inicios de mes'),'Current Sharky prompt must state Monteverde regular start window.');
+post72_expect(str_contains($sharkyV2,'Palapas Protudec: el inicio normal de clases regulares es a inicios de mes o alrededor del día 15'),'Current Sharky prompt must state Palapas regular start windows.');
 
 // P1 Codex: outbox se persiste antes de completar receipts dentro de una transacción.
 $queuePos=strpos($worker,'hache_sharky_outbox_enqueue');
