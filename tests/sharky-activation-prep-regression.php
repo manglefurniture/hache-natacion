@@ -25,7 +25,7 @@ sharky_activation_expect(str_contains($migrator,'20260902_sharky_orchestrator.sq
 sharky_activation_expect(str_contains($migrator,"throw new RuntimeException('Schema verification failed:"),'Migration runner must fail through the outer cleanup path when final schema verification fails.');
 
 sharky_activation_expect(str_contains($preflight,'SHARKY_PREFLIGHT_OK')&&str_contains($preflight,'--allow-enabled'),'Preflight must expose safe before/after activation modes.');
-sharky_activation_expect(str_contains($activation,"$flagOk=$allowEnabled?in_array($flag,['0','1'],true):$flag==='0';"),'Pre-activation preflight must require an explicit flag=0 instead of treating an unset flag as safe configuration.');
+sharky_activation_expect(str_contains($activation,'$flagOk=$allowEnabled?in_array($flag,[\'0\',\'1\'],true):$flag===\'0\';'),'Pre-activation preflight must require an explicit flag=0 instead of treating an unset flag as safe configuration.');
 sharky_activation_expect(str_contains($activation,'pending_outbox_total')&&str_contains($activation,'pending_inbox_total')&&str_contains($activation,'pending_actions_total')&&str_contains($activation,'completed_actions_without_delivery'),'Preflight must account for stale actionable backlog before first activation.');
 sharky_activation_expect(str_contains($activation,'$cleanCutoverOk=$allowEnabled||('),'Preflight must enforce an empty actionable backlog before cutover while allowing live diagnostics after activation.');
 foreach(['fk_sharky_referral_alumno','fk_sharky_identity_student','fk_sharky_action_alumno'] as $constraint){
