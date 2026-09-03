@@ -89,6 +89,11 @@ function hache_sharky_whatsapp_low_information_reengagement(string $text): bool
     return preg_match('/^(?:hola|holi|buenas|hey|ey|que\s+tal|ola)$/u',$greeting)===1;
 }
 
+function hache_sharky_whatsapp_turn_has_question(string $text): bool
+{
+    return str_contains($text,'?')||str_contains($text,'¿');
+}
+
 function hache_sharky_whatsapp_user_asks_assistant_identity(string $text): bool
 {
     $t=hache_sharky_orchestrator_normalize($text);
@@ -392,7 +397,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
 
         $stateBeforeOrchestrate=$state;
         $result=hache_sharky_orchestrate($state,$event,$context);$state=$result['state'];$decision=$result['decision'];
-        if(($decision['kind']??'')==='conversation'&&!hache_sharky_whatsapp_commercial_ready($stateBeforeOrchestrate)&&hache_sharky_whatsapp_commercial_ready($state)){
+        if(($decision['kind']??'')==='conversation'&&!hache_sharky_whatsapp_commercial_ready($stateBeforeOrchestrate)&&hache_sharky_whatsapp_commercial_ready($state)&&!hache_sharky_whatsapp_turn_has_question((string)($event['text']??''))){
             $decision=hache_sharky_orchestrator_decision('commercial_ready',hache_sharky_whatsapp_commercial_ready_message($state));
         }
         [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
