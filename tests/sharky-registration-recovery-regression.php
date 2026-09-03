@@ -25,6 +25,9 @@ $matchPos=strpos($recovery,'WHERE a.whatsapp=:w',$lockPos===false?0:$lockPos);
 $rotatePos=strpos($recovery,'UPDATE usuarios SET password_hash=:p',$matchPos===false?0:$matchPos);
 $commitPos=strpos($recovery,'$pdo->commit();',$rotatePos===false?0:$rotatePos);
 registration_recovery_expect($lockPos!==false&&$matchPos!==false&&$rotatePos!==false&&$commitPos!==false&&$lockPos<$matchPos&&$matchPos<$rotatePos&&$rotatePos<$commitPos,'Identity match, credential rotation and recovery commit must stay under one serialized transaction.');
+registration_recovery_expect(str_contains($recovery,'a.fecha_nacimiento=:birth'),'Recovery must match the birthdate collected by the original Sharky action.');
+registration_recovery_expect(str_contains($recovery,"':birth'=>\$birthdate"),'Recovery query must bind the action birthdate.');
+registration_recovery_expect(str_contains($recovery,'a.observaciones=:marker')&&str_contains($recovery,'Registro conversacional Sharky INTENSIVO. Pendiente de revisión/confirmación.'),'Recovery must require Sharky\'s own creation marker so public/admin registrations cannot be adopted.');
 registration_recovery_expect(str_contains($recovery,"'code'=>'RECOVERED'")&&str_contains($recovery,"'recovered'=>true"),'Locked reconciliation must return an explicit recovered result.');
 registration_recovery_expect(str_contains($business,'regla_bloquear_identidades_alumnos($pdo)'),'Fresh intensive creation must continue using the same identity serialization lock.');
 
