@@ -46,9 +46,12 @@ foreach([
     '¿Puedo empezar el intensivo el martes?',
     'Quiero incorporarme al curso intensivo el miércoles.',
     '¿Puedo empezar el intensivo hoy?',
+    'Quiero empezar el intensivo mañana por la mañana.',
     'Quiero empezar clases regulares el día 20.',
     '¿Puedo comenzar regular a mitad de mes en Monteverde?',
     '¿Puedo iniciar clases regulares a final de mes en Palapas?',
+    'Quiero empezar clases regulares el jueves.',
+    'Quiero iniciar regular en Monteverde el 1 de agosto de 2026.',
 ] as $phrase){
     post72_expect(is_array(hache_sharky_start_authority_handoff($phrase,$ref)),'Start-date exception must hand off: '.$phrase);
 }
