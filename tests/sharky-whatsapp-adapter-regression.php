@@ -44,6 +44,8 @@ expect_adapter(str_contains($readyMessage,'horarios disponibles')&&str_contains(
 expect_adapter(hache_sharky_whatsapp_low_information_reengagement('??'),'Solo signos debe tratarse como reenganche, no como nueva conversación libre.');
 expect_adapter(hache_sharky_whatsapp_low_information_reengagement('Hola'),'Un saludo con contexto completo debe reenganchar la conversación vigente.');
 expect_adapter(!hache_sharky_whatsapp_low_information_reengagement('¿Cuánto cuesta?'),'Una pregunta sustantiva debe seguir llegando al modelo.');
+expect_adapter(!hache_sharky_whatsapp_turn_has_question('43'),'Una respuesta corta del último slot puede usar el cierre determinista.');
+expect_adapter(hache_sharky_whatsapp_turn_has_question('43. ¿Cuánto cuesta?'),'Completar el último slot junto con una pregunta debe conservar la pregunta para el modelo.');
 $reintro=hache_sharky_whatsapp_enforce_no_reintroduction('¡Hola! Soy Sharky, asistente IA de Hache Natación en Cancún.',$confirmedAge,'Hola');
 expect_adapter(!str_contains(hache_sharky_orchestrator_normalize($reintro),'soy sharky'),'Una conversación ya encaminada no puede volver a presentarse como primer contacto.');
 expect_adapter(str_contains($reintro,'Sigo contigo'),'Si la re-presentación era todo el mensaje debe reemplazarse por reenganche contextual.');
@@ -76,6 +78,7 @@ $adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php
 expect_adapter(str_contains($adapterSource,"'nado_libre_unavailable'"),'El adapter debe interceptar nado libre antes de delegar al LLM.');
 expect_adapter(str_contains($adapterSource,"'commercial_reengagement'"),'El adapter debe interceptar saludos/signos después de discovery completo.');
 expect_adapter(str_contains($adapterSource,"'commercial_ready'"),'Completar el último slot debe producir un cierre determinista antes de llamar al LLM.');
+expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_turn_has_question'),'El cierre determinista debe respetar una pregunta incluida en el mismo turno que completa el último slot.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_enforce_no_reintroduction'),'Toda conversación libre debe pasar por el guard contra re-presentaciones tardías.');
 
 $decision=hache_sharky_orchestrator_decision('x','Elige',['type'=>'buttons','buttons'=>[
