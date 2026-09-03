@@ -267,7 +267,7 @@ if ($channel === 'whatsapp') {
     foreach (array_slice($history, -12) as $turn) {
         if (!is_array($turn) || ($turn['role'] ?? '') !== 'system') continue;
         $content=trim((string)($turn['content'] ?? ''));
-        if ($content !== '') $internalInstructions[]=mb_substr($content,0,2200);
+        if ($content !== '') $internalInstructions[]=mb_substr($content,0,6000);
     }
     if ($internalInstructions) {
         $instructions .= "\n\nINSTRUCCIONES INTERNAS DEL ORQUESTADOR WHATSAPP\n";
