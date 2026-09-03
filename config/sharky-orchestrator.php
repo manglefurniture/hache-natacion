@@ -96,6 +96,11 @@ function hache_sharky_orchestrator_program_choice(string $line): ?string
     $hasIntensive=preg_match('/\b'.$intensive.'\b/u',$t)===1;
     $hasRegular=preg_match('/\b'.$regular.'\b/u',$t)===1;
     if(!$hasIntensive&&!$hasRegular)return null;
+    if(str_contains($line,'?')||str_contains($line,'¿'))return null;
+    if($hasIntensive&&$hasRegular&&(
+        preg_match('/\b'.$intensive.'\b\s+o\s+\b'.$regular.'\b/u',$t)===1
+        || preg_match('/\b'.$regular.'\b\s+o\s+\b'.$intensive.'\b/u',$t)===1
+    ))return null;
 
     $choice='(?:quiero|prefiero|elijo|escojo|me interesa|me quedo con|mejor)';
     $intensiveExplicit=preg_match('/\b'.$choice.'\s+(?:(?:el|un)\s+)?'.$intensive.'\b/u',$t)===1
@@ -105,8 +110,6 @@ function hache_sharky_orchestrator_program_choice(string $line): ?string
 
     if($intensiveExplicit&&!$regularExplicit)return 'intensive';
     if($regularExplicit&&!$intensiveExplicit)return 'regular';
-    if($hasIntensive&&$hasRegular)return null;
-    if(str_contains($line,'?')||str_contains($line,'¿'))return null;
     return null;
 }
 
@@ -117,19 +120,22 @@ function hache_sharky_orchestrator_sede_choice(string $line): ?string
     $hasPalapas=str_contains($t,'palapas');
     $hasMonteverde=str_contains($t,'monteverde');
     if(!$hasPalapas&&!$hasMonteverde)return null;
+    if(str_contains($line,'?')||str_contains($line,'¿'))return null;
+    if($hasPalapas&&$hasMonteverde&&(
+        preg_match('/\bpalapas(?:\s+protudec)?\b\s+o\s+\bmonteverde\b/u',$t)===1
+        || preg_match('/\bmonteverde\b\s+o\s+\bpalapas(?:\s+protudec)?\b/u',$t)===1
+    ))return null;
 
     $choice='(?:quiero|prefiero|elijo|escojo|me interesa|me quedo con|mejor)';
     $palapasExplicit=preg_match('/\b'.$choice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?palapas(?:\s+protudec)?\b/u',$t)===1
-        || preg_match('/^palapas(?:\s+protudec)?[.! ]*$/u',$t)===1
+        || preg_match('/^(?:en\s+|la\s+de\s+|sede\s+)?palapas(?:\s+protudec)?[.! ]*$/u',$t)===1
         || (hache_sharky_orchestrator_registration_request_positive($t)&&preg_match('/\b(?:en|para)\s+palapas(?:\s+protudec)?\b/u',$t)===1);
     $monteverdeExplicit=preg_match('/\b'.$choice.'\s+(?:(?:la\s+)?sede\s+|en\s+)?monteverde\b/u',$t)===1
-        || preg_match('/^monteverde[.! ]*$/u',$t)===1
+        || preg_match('/^(?:en\s+|la\s+de\s+|sede\s+)?monteverde[.! ]*$/u',$t)===1
         || (hache_sharky_orchestrator_registration_request_positive($t)&&preg_match('/\b(?:en|para)\s+monteverde\b/u',$t)===1);
 
     if($palapasExplicit&&!$monteverdeExplicit)return 'PALAPAS';
     if($monteverdeExplicit&&!$palapasExplicit)return 'MONTEVERDE';
-    if($hasPalapas&&$hasMonteverde)return null;
-    if(str_contains($line,'?')||str_contains($line,'¿'))return null;
     return null;
 }
 
