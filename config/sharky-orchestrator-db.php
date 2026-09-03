@@ -24,7 +24,27 @@ function hache_sharky_db_state_load(PDO $pdo,string $contact): array
     }catch(Throwable $e){error_log('[sharky-orchestrator] db state load failed');throw new RuntimeException('Unable to load durable Sharky state',0,$e);}
 }
 
-function hache_sharky_db_state_save(PDO $pdo,string $contact,array $state,int $ttl=86400): bool
+function hache_sharky_db_state_defer_begin(): void
+{
+    $GLOBALS['hache_sharky_db_state_deferred']=true;
+    $GLOBALS['hache_sharky_db_state_pending']=null;
+}
+
+function hache_sharky_db_state_defer_take(): ?array
+{
+    $pending=$GLOBALS['hache_sharky_db_state_pending']??null;
+    $GLOBALS['hache_sharky_db_state_deferred']=false;
+    $GLOBALS['hache_sharky_db_state_pending']=null;
+    return is_array($pending)?$pending:null;
+}
+
+function hache_sharky_db_state_defer_cancel(): void
+{
+    $GLOBALS['hache_sharky_db_state_deferred']=false;
+    $GLOBALS['hache_sharky_db_state_pending']=null;
+}
+
+function hache_sharky_db_state_save_now(PDO $pdo,string $contact,array $state,int $ttl=86400): bool
 {
     $ttl=max(HACHE_SHARKY_FLOW_TTL,min(172800,$ttl));
     if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
@@ -32,6 +52,15 @@ function hache_sharky_db_state_save(PDO $pdo,string $contact,array $state,int $t
     $expires=(new DateTimeImmutable())->modify('+'.$ttl.' seconds')->format('Y-m-d H:i:s');
     try{$st=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,expires_at) VALUES(:c,:s,:e) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),expires_at=VALUES(expires_at),updated_at=NOW()');$st->execute([':c'=>$hash,':s'=>$json,':e'=>$expires]);return true;}
     catch(Throwable $e){error_log('[sharky-orchestrator] db state save failed');throw new RuntimeException('Unable to save durable Sharky state',0,$e);}
+}
+
+function hache_sharky_db_state_save(PDO $pdo,string $contact,array $state,int $ttl=86400): bool
+{
+    if(($GLOBALS['hache_sharky_db_state_deferred']??false)===true){
+        $GLOBALS['hache_sharky_db_state_pending']=['contact'=>$contact,'state'=>$state,'ttl'=>$ttl];
+        return true;
+    }
+    return hache_sharky_db_state_save_now($pdo,$contact,$state,$ttl);
 }
 
 function hache_sharky_action_status(PDO $pdo,string $idempotencyKey): ?array
