@@ -124,13 +124,15 @@ function hache_sharky_activation_data_report(PDO $pdo): array
 {
     $queries=[
         'legacy_plaintext_state'=>"SELECT COUNT(*) FROM sharky_conversation_state WHERE state_json IS NOT NULL",
+        'invalid_encrypted_state'=>"SELECT COUNT(*) FROM sharky_conversation_state WHERE state_json IS NULL AND (state_ciphertext IS NULL OR state_iv IS NULL OR state_tag IS NULL)",
         'pending_outbox_without_ciphertext'=>"SELECT COUNT(*) FROM sharky_outbox WHERE status='PENDING' AND (payload_ciphertext IS NULL OR payload_iv IS NULL OR payload_tag IS NULL)",
         'pending_outbox_total'=>"SELECT COUNT(*) FROM sharky_outbox WHERE status='PENDING'",
         'completed_actions_without_delivery'=>"SELECT COUNT(*) FROM sharky_action_audit WHERE status='COMPLETED' AND delivery_queued_at IS NULL",
         'pending_actions_total'=>"SELECT COUNT(*) FROM sharky_action_audit WHERE status='PENDING'",
         'pending_actions_expired'=>"SELECT COUNT(*) FROM sharky_action_audit WHERE status='PENDING' AND (lease_until IS NULL OR lease_until<NOW())",
-        'pending_inbox_total'=>"SELECT COUNT(*) FROM sharky_message_receipts WHERE processed_at IS NULL AND payload_ciphertext IS NOT NULL",
-        'pending_inbox_expired'=>"SELECT COUNT(*) FROM sharky_message_receipts WHERE processed_at IS NULL AND payload_ciphertext IS NOT NULL AND (lease_until IS NULL OR lease_until<NOW())",
+        'pending_inbox_without_ciphertext'=>"SELECT COUNT(*) FROM sharky_message_receipts WHERE processed_at IS NULL AND (payload_ciphertext IS NULL OR payload_iv IS NULL OR payload_tag IS NULL)",
+        'pending_inbox_total'=>"SELECT COUNT(*) FROM sharky_message_receipts WHERE processed_at IS NULL",
+        'pending_inbox_expired'=>"SELECT COUNT(*) FROM sharky_message_receipts WHERE processed_at IS NULL AND (lease_until IS NULL OR lease_until<NOW())",
         'dead_outbox'=>"SELECT COUNT(*) FROM sharky_outbox WHERE status='DEAD'",
     ];
     $out=[];
@@ -148,11 +150,14 @@ function hache_sharky_activation_preflight(PDO $pdo,bool $allowEnabled=false): a
     $extensions=hache_sharky_activation_extension_report();
     $flag=hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED');
     $flagOk=$allowEnabled?in_array($flag,['0','1'],true):$flag==='0';
+    $flagDisplay=in_array($flag,['0','1'],true)?$flag:($flag===''?'MISSING':'INVALID');
     $secretOk=true;foreach($secrets as $check)if(($check['ok']??false)!==true){$secretOk=false;break;}
     $extensionsOk=!in_array(false,$extensions,true);
     $data=$schema['ok']?hache_sharky_activation_data_report($pdo):[];
     $securityDataOk=$schema['ok']
         &&(($data['legacy_plaintext_state']??1)===0)
+        &&(($data['invalid_encrypted_state']??1)===0)
+        &&(($data['pending_inbox_without_ciphertext']??1)===0)
         &&(($data['pending_outbox_without_ciphertext']??1)===0)
         &&(($data['dead_outbox']??1)===0);
     $cleanCutoverOk=$allowEnabled||(
@@ -164,7 +169,7 @@ function hache_sharky_activation_preflight(PDO $pdo,bool $allowEnabled=false): a
 
     return [
         'ok'=>$schema['ok']&&$secretOk&&$extensionsOk&&$flagOk&&$securityDataOk&&$cleanCutoverOk,
-        'feature_flag'=>$flag,
+        'feature_flag'=>$flagDisplay,
         'feature_flag_ok'=>$flagOk,
         'clean_cutover_ok'=>$cleanCutoverOk,
         'schema'=>$schema,
