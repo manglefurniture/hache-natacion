@@ -12,10 +12,7 @@ require_once __DIR__.'/sharky-registration-recovery.php';
 function hache_sharky_db_state_key(): string
 {
     $secret=hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY');
-    if(strlen($secret)<32){
-        if(PHP_SAPI==='cli')$secret='hache-sharky-state-cli-regression-key-2026';
-        else throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY is required before enabling Sharky 2.0');
-    }
+    if(strlen($secret)<32)throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY is required before enabling Sharky 2.0');
     return hash_hmac('sha256','hache-sharky-state-v1',$secret,true);
 }
 
