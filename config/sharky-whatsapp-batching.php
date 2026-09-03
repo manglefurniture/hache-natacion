@@ -27,7 +27,8 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
     $synthetic=['id'=>'batch:'.hash('sha256',implode('|',$ids)),'from'=>$contact,'type'=>'text','text'=>(string)($batch['text']??''),'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];
     if($latestReferral!==null)$synthetic['referral']=$latestReferral;
     $result=hache_sharky_whatsapp_process($pdo,$synthetic,$conversationAnswer,$extraContext);
-    $result['batched_ids']=$ids;$result['synthetic_id']=$synthetic['id'];
-    if(!($result['defer_processed']??false))foreach($ids as $messageId)hache_sharky_orchestrator_mark_processed($pdo,(string)$messageId);
+    $deliveryPending=function_exists('hache_sharky_action_delivery_pending_for_message')&&hache_sharky_action_delivery_pending_for_message($pdo,$synthetic['id']);
+    $result['batched_ids']=$ids;$result['synthetic_id']=$synthetic['id'];$result['defer_processed']=$deliveryPending;
+    if(!$deliveryPending)foreach($ids as $messageId)hache_sharky_orchestrator_mark_processed($pdo,(string)$messageId);
     return $result;
 }
