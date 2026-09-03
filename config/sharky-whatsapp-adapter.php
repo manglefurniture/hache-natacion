@@ -48,6 +48,16 @@ function hache_sharky_whatsapp_style_instruction(array $decision,array $state): 
     $instruction='Responde para WhatsApp en español natural. Sé breve y fácil de escanear en móvil. No repitas tu presentación ni información ya dada. Responde primero a la pregunta actual y termina con una sola pregunta útil si hace falta avanzar. Si muestras horarios, precios, formas de pago o información estructurada, sepárala por sede o categoría con encabezados cortos y saltos de línea; cuando haya varios horarios, pon cada horario en una viñeta breve y nunca una tira larga de horas en una sola línea. Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad: usa solo datos actuales del backend/contexto.';
     $latest=$state['referral']['latest']??null;
     if(is_array($latest)&&!empty($latest['headline']))$instruction.=' El usuario llegó desde un anuncio cuyo contexto es: '.mb_substr((string)$latest['headline'],0,180).'. Úsalo como contexto, pero no asumas que sigue siendo su intención actual.';
+    $commercial=$state['commercial_context']??null;
+    if(is_array($commercial)){
+        $known=[];
+        if(($commercial['program']??null)==='intensive')$known[]='programa: curso intensivo';
+        elseif(($commercial['program']??null)==='regular')$known[]='programa: clases regulares';
+        if(($commercial['sede_clave']??null)==='PALAPAS')$known[]='sede: Palapas Protudec';
+        elseif(($commercial['sede_clave']??null)==='MONTEVERDE')$known[]='sede: Monteverde';
+        if(is_int($commercial['age']??null))$known[]='edad: '.$commercial['age'].' años';
+        if($known)$instruction.=' Contexto comercial ya confirmado por el usuario: '.implode(', ',$known).'. Trátalo como memoria vigente. No vuelvas a preguntar estos datos salvo que el usuario los cambie explícitamente.';
+    }
     if(($decision['kind']??'')==='conversation_identity_prompt')$instruction.=' Después de responder brevemente, pregunta si ya es alumno de Hache Natación.';
     return $instruction;
 }
@@ -163,7 +173,7 @@ function hache_sharky_whatsapp_is_side_question(array $state,array $event): bool
     if(!in_array($step,['offer','sede','course','schedule','confirm'],true))return false;
     if(trim((string)($event['interactive_id']??''))!=='')return false;
     $text=trim((string)($event['text']??''));if($text==='')return false;
-    $intent=hache_sharky_orchestrator_intent($text,'');
+    $intent=hache_sharky_orchestrator_contextual_intent($state,$text,'');
     if(in_array($intent,['yes','no','cancel','human','absence','register_intensive'],true))return false;
     $t=hache_sharky_orchestrator_normalize($text);
     return str_contains($text,'?')||preg_match('/^(cuanto|como|donde|cuando|que |aceptan|puedo|tienen|hay |cual)/u',$t)===1;
@@ -197,7 +207,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
 
-        $preIntent=hache_sharky_orchestrator_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
+        $preIntent=hache_sharky_orchestrator_contextual_intent($state,(string)($event['text']??''),(string)($event['interactive_id']??''));
         if(!is_array($state['flow']??null)&&$preIntent==='register_intensive'&&(($context['identity']['found']??false)===true||(($state['identity']['kind']??'')==='student'&&($state['identity']['verified']??false)===true))){
             $state=hache_sharky_orchestrator_clear_flow($state);
             $decision=hache_sharky_orchestrator_decision('existing_student_intensive_handoff','Veo que este número ya está vinculado a un alumno. Para evitar duplicar tu expediente, el equipo continuará contigo la inscripción al intensivo por este mismo chat.',[],['type'=>'human_takeover']);
