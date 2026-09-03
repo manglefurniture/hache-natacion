@@ -79,23 +79,36 @@ function hache_sharky_outbox_mark_failed(PDO $pdo,string $id,int $attempts,strin
 }
 
 /** @return array{sent:int,failed:int,dead:int,cancelled:int} */
-function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10): array
+function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,string $lockedContact=''): array
 {
-    $stats=['sent'=>0,'failed'=>0,'dead'=>0,'cancelled'=>0];$limit=max(1,min(50,$limit));
-    // Reclama una fila justo antes de enviarla. Así el lease de una confirmación
-    // nunca empieza a correr mientras espera detrás de otras llamadas lentas a Meta.
+    $stats=['sent'=>0,'failed'=>0,'dead'=>0,'cancelled'=>0];$limit=max(1,min(50,$limit));$lockedContact=preg_replace('/\D+/','',$lockedContact)?:'';
+    // Reclama una fila justo antes de enviarla. El mismo delivery lock usado por
+    // takeover cubre ahora revalidación + sender, cerrando el TOCTOU entre ambos.
     for($i=0;$i<$limit;$i++){
         $claimed=hache_sharky_outbox_claim($pdo,1);if(!$claimed)break;$row=$claimed[0];
         $payload=hache_sharky_outbox_decrypt($row);
         if($payload===null){hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],7,'DECRYPT_FAILED');$stats['dead']++;continue;}
         $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
         $contact=preg_replace('/\D+/','',(string)($payload['to']??''))?:'';
-        if(!$allowTakeover&&$contact!==''&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
-            hache_sharky_outbox_mark_cancelled($pdo,(string)$row['id']);$stats['cancelled']++;continue;
+        if($contact===''){hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],7,'INVALID_CONTACT');$stats['dead']++;continue;}
+
+        $deliveryLock=null;$callerOwnsLock=$lockedContact!==''&&hash_equals($lockedContact,$contact);
+        if(!$callerOwnsLock){
+            $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);
+            if(!is_resource($deliveryLock)){
+                hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],(int)$row['attempt_count'],'DELIVERY_LOCK_UNAVAILABLE');$stats['failed']++;continue;
+            }
         }
-        $ok=false;try{$ok=$sender($payload)===true;}catch(Throwable $e){$ok=false;}
-        if($ok){hache_sharky_outbox_mark_sent($pdo,(string)$row['id']);$stats['sent']++;}
-        else{hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],(int)$row['attempt_count']);$stats['failed']++;}
+        try{
+            if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
+                hache_sharky_outbox_mark_cancelled($pdo,(string)$row['id']);$stats['cancelled']++;continue;
+            }
+            $ok=false;try{$ok=$sender($payload)===true;}catch(Throwable $e){$ok=false;}
+            if($ok){hache_sharky_outbox_mark_sent($pdo,(string)$row['id']);$stats['sent']++;}
+            else{hache_sharky_outbox_mark_failed($pdo,(string)$row['id'],(int)$row['attempt_count']);$stats['failed']++;}
+        }finally{
+            if(is_resource($deliveryLock))hache_sharky_orchestrator_unlock($deliveryLock);
+        }
     }
     return $stats;
 }
