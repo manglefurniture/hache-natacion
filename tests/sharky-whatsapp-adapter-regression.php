@@ -29,20 +29,25 @@ $guarded=hache_sharky_whatsapp_enforce_confirmed_context('El intensivo cuesta $1
 expect_adapter(str_contains($guarded,'cuesta $1,200'),'El enforcement debe conservar la respuesta útil del modelo.');
 expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($guarded,'program'),'El payload final no puede volver a preguntar un programa confirmado.');
 expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($guarded,'sede'),'El payload final no puede volver a preguntar una sede confirmada.');
-expect_adapter(hache_sharky_whatsapp_answer_asks_slot($guarded,'age'),'Tras bloquear preguntas repetidas debe continuar con el único slot realmente pendiente.');
+expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($guarded,'age'),'WhatsApp no debe insertar la edad como pregunta rutinaria de discovery.');
+expect_adapter(hache_sharky_whatsapp_commercial_ready($confirmed),'Programa y sede confirmados deben bastar para cerrar orientación comercial sin exigir edad.');
+$offerWithoutAge=hache_sharky_whatsapp_registration_offer_from_context($confirmed,1788382805);
+expect_adapter(($offerWithoutAge[0]['flow']['step']??'')==='offer','El intensivo debe poder abrir el offer sin edad capturada.');
+expect_adapter(!str_contains($offerWithoutAge[1]['message']??'','años'),'El offer no debe inventar ni exigir edad cuando no fue proporcionada.');
+
 $confirmedAge=$confirmed;$confirmedAge['commercial_context']['age']=43;
 $fullyGuarded=hache_sharky_whatsapp_enforce_confirmed_context('¿Intensivo o regular? ¿Palapas o Monteverde?',$confirmedAge);
 expect_adapter($fullyGuarded==='Perfecto, ya tengo esos datos.','Con discovery completo no debe inventar otro slot ni reenviar preguntas contradictorias.');
 $identityOnce='Claro. Antes de seguir, ¿ya eres alumno de Hache Natación?';
 expect_adapter(hache_sharky_whatsapp_answer_asks_slot($identityOnce,'identity'),'Debe detectar cuando el modelo ya incluyó la pregunta de identidad para no duplicarla.');
 
-// Post-discovery: al completar identidad/programa/sede/edad se abre el offer controlado existente.
-expect_adapter(hache_sharky_whatsapp_commercial_ready($confirmedAge),'Prospecto con programa, sede y edad confirmados debe considerarse listo.');
+// Post-discovery: se reutiliza el offer controlado existente y la edad solo se incluye si fue aportada.
+expect_adapter(hache_sharky_whatsapp_commercial_ready($confirmedAge),'Prospecto con programa y sede confirmados debe considerarse listo.');
 $readyMessage=hache_sharky_whatsapp_commercial_ready_message($confirmedAge);
-expect_adapter(str_contains($readyMessage,'curso intensivo')&&str_contains($readyMessage,'Palapas Protudec')&&str_contains($readyMessage,'43 años'),'El cierre de discovery debe resumir el contexto confirmado.');
+expect_adapter(str_contains($readyMessage,'curso intensivo')&&str_contains($readyMessage,'Palapas Protudec')&&str_contains($readyMessage,'43 años'),'El resumen puede conservar una edad que el usuario sí proporcionó.');
 expect_adapter(str_contains($readyMessage,'horarios')&&str_contains($readyMessage,'inscripción'),'El mensaje contextual debe explicar opciones sin exigir una frase literal.');
 [$offerState,$offerDecision]=hache_sharky_whatsapp_registration_offer_from_context($confirmedAge,1788382810);
-expect_adapter(($offerState['flow']['name']??'')==='register_intensive'&&($offerState['flow']['step']??'')==='offer','Discovery completo de intensivo debe abrir el offer controlado.');
+expect_adapter(($offerState['flow']['name']??'')==='register_intensive'&&($offerState['flow']['step']??'')==='offer','Discovery de intensivo debe abrir el offer controlado.');
 expect_adapter(($offerState['flow']['data']['sede_clave']??'')==='PALAPAS','El offer controlado debe reutilizar la sede confirmada.');
 expect_adapter(($offerDecision['kind']??'')==='registration_offer','La transición post-discovery debe usar la decisión de registro existente.');
 expect_adapter(($offerDecision['ui']['type']??'')==='buttons','El consentimiento debe pedirse con botones interactivos.');
@@ -58,9 +63,9 @@ expect_adapter(count($offerPayload['interactive']['action']['buttons']??[])===3,
 expect_adapter(hache_sharky_whatsapp_low_information_reengagement('??'),'Solo signos debe tratarse como reenganche, no como nueva conversación libre.');
 expect_adapter(hache_sharky_whatsapp_low_information_reengagement('Hola'),'Un saludo con contexto completo debe reenganchar la conversación vigente.');
 expect_adapter(!hache_sharky_whatsapp_low_information_reengagement('¿Cuánto cuesta?'),'Una pregunta sustantiva debe seguir llegando al modelo.');
-expect_adapter(hache_sharky_whatsapp_turn_is_discovery_only('43'),'Una respuesta corta del último slot puede usar el cierre determinista.');
-expect_adapter(!hache_sharky_whatsapp_turn_is_discovery_only('43. ¿Cuánto cuesta?'),'Completar el último slot junto con una pregunta debe conservar la pregunta para el modelo.');
-expect_adapter(!hache_sharky_whatsapp_turn_is_discovery_only('43 cuanto cuesta'),'Una pregunta sin signos tampoco puede ser absorbida por el cierre determinista.');
+expect_adapter(hache_sharky_whatsapp_turn_is_discovery_only('43'),'Una respuesta corta de discovery sigue siendo reconocible aunque edad ya no sea obligatoria.');
+expect_adapter(!hache_sharky_whatsapp_turn_is_discovery_only('43. ¿Cuánto cuesta?'),'Completar un dato junto con una pregunta debe conservar la pregunta para el modelo.');
+expect_adapter(!hache_sharky_whatsapp_turn_is_discovery_only('43 cuanto cuesta'),'Una pregunta sin signos tampoco puede ser absorbida por un cierre determinista.');
 $reintro=hache_sharky_whatsapp_enforce_no_reintroduction('¡Hola! Soy Sharky, asistente IA de Hache Natación en Cancún.',$confirmedAge,'Hola');
 expect_adapter(!str_contains(hache_sharky_orchestrator_normalize($reintro),'soy sharky'),'Una conversación ya encaminada no puede volver a presentarse como primer contacto.');
 expect_adapter(str_contains($reintro,'Sigo contigo'),'Si la re-presentación era todo el mensaje debe reemplazarse por reenganche contextual.');
@@ -81,7 +86,7 @@ expect_adapter(hache_sharky_whatsapp_enforce_confirmed_context($paymentQuestion,
 $mixed=hache_sharky_whatsapp_enforce_confirmed_context('El intensivo cuesta $1,200; prefieres intensivo o clases regulares?',$confirmed);
 expect_adapter(str_contains($mixed,'cuesta $1,200'),'Una repregunta tras punto y coma no debe borrar la información útil previa.');
 expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($mixed,'program'),'La repregunta tras punto y coma debe eliminarse.');
-expect_adapter(hache_sharky_whatsapp_answer_asks_slot($mixed,'age'),'Después de eliminar la repregunta debe continuar con el slot realmente pendiente.');
+expect_adapter(!hache_sharky_whatsapp_answer_asks_slot($mixed,'age'),'Después de eliminar la repregunta no debe introducirse edad como nuevo interrogatorio.');
 
 // Regla comercial explícita: Hache Natación no ofrece nado libre ni uso de alberca sin clase.
 expect_adapter(hache_sharky_whatsapp_nado_libre_request('¿Tienen nado libre?'),'Debe reconocer la frase nado libre.');
@@ -89,12 +94,47 @@ expect_adapter(hache_sharky_whatsapp_nado_libre_request('¿Puedo nadar sin clase
 expect_adapter(hache_sharky_whatsapp_nado_libre_request('¿Se puede usar la alberca por mi cuenta?'),'Debe reconocer solicitud de usar la alberca por cuenta propia.');
 expect_adapter(!hache_sharky_whatsapp_nado_libre_request('¿Puedo tomar clases regulares?'),'Una pregunta normal sobre clases no debe disparar la regla de nado libre.');
 expect_adapter(str_contains(hache_sharky_whatsapp_nado_libre_message(),'no ofrece nado libre'),'La respuesta determinista debe negar explícitamente el nado libre.');
+
+// Capturas productivas 2026-09-03: lluvia, sede natural y preferencia matutina/vespertina.
+expect_adapter(hache_sharky_whatsapp_weather_cancellation_request('En caso de lluvia las clases se quedan o se cancelan?'),'Una pregunta de lluvia y cancelación debe interceptarse determinísticamente.');
+expect_adapter(hache_sharky_whatsapp_weather_cancellation_request('¿Hay clase si hay tormenta eléctrica?'),'Tormenta eléctrica debe entrar en la política meteorológica.');
+expect_adapter(!hache_sharky_whatsapp_weather_cancellation_request('¿Hay clases regulares?'),'Una pregunta normal de clases no debe disparar la política de clima.');
+$weather=hache_sharky_whatsapp_weather_cancellation_message();
+expect_adapter(str_contains($weather,'lluvia normal no cancela')&&str_contains($weather,'tormenta eléctrica'),'La política debe decir que solo tormenta eléctrica cancela.');
+expect_adapter(hache_sharky_whatsapp_detect_venue_preference('Las Palapas me queda mejor')==='PALAPAS','Una preferencia natural con sede antes del verbo debe recordar Palapas.');
+expect_adapter(hache_sharky_whatsapp_detect_venue_preference('Monteverde me conviene más')==='MONTEVERDE','Una preferencia natural debe recordar Monteverde.');
+expect_adapter(hache_sharky_whatsapp_daypart('Matutino')==='morning','Matutino debe interpretarse como turno de mañana.');
+expect_adapter(hache_sharky_whatsapp_daypart('Vespertino')==='evening','Vespertino debe interpretarse como turno posterior al mediodía.');
+expect_adapter(hache_sharky_whatsapp_daypart('¿Cuánto cuesta?')===null,'Una pregunta de precio no debe confundirse con preferencia de turno.');
+
+// El prospecto nuevo se guía por experiencia antes de sede.
+$prospect=hache_sharky_orchestrator_state(null,1788382820);
+$prospect['identity']=array_replace($prospect['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
+[$qualifyState,$qualifyDecision]=hache_sharky_whatsapp_qualification_start($prospect,1788382820);
+expect_adapter(($qualifyState['flow']['name']??'')==='qualify_prospect'&&($qualifyState['flow']['step']??'')==='swim','Nuevo prospecto debe entrar a calificación por experiencia acuática.');
+expect_adapter(str_contains(hache_sharky_orchestrator_normalize((string)($qualifyDecision['message']??'')),'sabes nadar'),'La primera pregunta comercial del nuevo debe ser si ya sabe nadar.');
+expect_adapter(!str_contains(hache_sharky_orchestrator_normalize((string)($qualifyDecision['message']??'')),'monteverde'),'La primera pregunta comercial no debe empezar por sede.');
+expect_adapter(($qualifyDecision['ui']['buttons'][0]['id']??'')==='qualify:swims'&&($qualifyDecision['ui']['buttons'][1]['id']??'')==='qualify:beginner','La calificación debe ofrecer respuestas claras sobre experiencia.');
+
 $adapterSource=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 expect_adapter(str_contains($adapterSource,"'nado_libre_unavailable'"),'El adapter debe interceptar nado libre antes de delegar al LLM.');
+expect_adapter(str_contains($adapterSource,"'weather_cancellation_policy'"),'El adapter debe interceptar lluvia/tormenta antes de delegar al LLM.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_registration_offer_from_context'),'El adapter debe reutilizar el offer controlado al completar discovery.');
 expect_adapter(str_contains($adapterSource,"\$event['interactive_id']='flow:yes'"),'Una afirmación natural dentro del offer debe mapearse al consentimiento interactivo existente.');
-expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_turn_is_discovery_only'),'El cierre determinista debe aceptar solo un turno compuesto por respuestas de discovery, no preguntas laterales.');
+expect_adapter(str_contains($adapterSource,"'qualify_prospect'"),'La experiencia del prospecto debe quedar en un flujo controlado y persistible.');
+expect_adapter(str_contains($adapterSource,"h.regular=1"),'La respuesta Matutino/Vespertino debe usar horarios regulares activos del backend.');
+expect_adapter(str_contains($adapterSource,'Antes de seguir, necesito saber una sola cosa: ¿ya eres alumno de Hache Natación?'),'La identificación inicial debe ser una pregunta única y determinista.');
+expect_adapter(!str_contains($adapterSource,"in_array((string)(\$decision['kind']??''),['conversation','conversation_identity_prompt'],true)"),'El identity prompt no debe volver a pasar por el LLM para añadir preguntas comerciales.');
 expect_adapter(str_contains($adapterSource,'hache_sharky_whatsapp_enforce_no_reintroduction'),'Toda conversación libre debe pasar por el guard contra re-presentaciones tardías.');
+
+// La fuente de verdad del modelo debe coincidir con las nuevas reglas y aceptar system solo en WhatsApp loopback.
+$v2Source=file_get_contents(__DIR__.'/../public/api/sharky-v2.php')?:'';
+expect_adapter(!str_contains($v2Source,'mensuales; hasta 2 reposiciones según reglas vigentes'),'La fuente de verdad no puede seguir afirmando las 2 reposiciones falsas.');
+expect_adapter(str_contains($v2Source,'NO afirmes que el plan de 3 clases por semana incluye “hasta 2 reposiciones”'),'La fuente de verdad debe bloquear expresamente la regla falsa observada.');
+expect_adapter(str_contains($v2Source,'Solo se cancelan cuando hay tormenta eléctrica')||str_contains($v2Source,'se cancelan únicamente cuando hay tormenta eléctrica'),'La fuente de verdad debe contener la regla de tormenta eléctrica.');
+expect_adapter(str_contains($v2Source,'ORIENTACIÓN DEL PROSPECTO NUEVO'),'La fuente de verdad debe guiar al nuevo por experiencia antes de sede.');
+expect_adapter(str_contains($v2Source,'INSTRUCCIONES INTERNAS DEL ORQUESTADOR WHATSAPP'),'El endpoint debe incorporar las instrucciones system confiables del worker.');
+expect_adapter(str_contains($v2Source,"if (\$channel === 'whatsapp')")&&str_contains($v2Source,"(\$turn['role'] ?? '') !== 'system'"),'Los turnos system deben aceptarse solo tras resolver canal WhatsApp loopback.');
 
 $decision=hache_sharky_orchestrator_decision('x','Elige',['type'=>'buttons','buttons'=>[
     hache_sharky_orchestrator_button('a','Uno'),hache_sharky_orchestrator_button('b','Dos'),hache_sharky_orchestrator_button('c','Tres'),hache_sharky_orchestrator_button('d','Cuatro')
@@ -108,9 +148,9 @@ $render=hache_sharky_whatsapp_render('529981112233',hache_sharky_orchestrator_de
 expect_adapter(count($render['interactive']['action']['sections'][0]['rows']??[])===10,'La lista debe limitarse a diez opciones.');
 
 $birth=hache_sharky_business_validate_birthdate('2000-01-01',12,'2026-09-02');
-expect_adapter(($birth['age']??0)===26,'Debe calcular la edad de forma determinista.');
+expect_adapter(($birth['age']??0)===26,'El validador de nacimiento sigue vigente para el flujo transaccional hasta la misión separada que lo retire.');
 $rejected=false;try{hache_sharky_business_validate_birthdate('2020-01-01',12,'2026-09-02');}catch(HacheSharkyBusinessException $e){$rejected=$e->codeName==='MIN_AGE';}
-expect_adapter($rejected,'Debe rechazar menores antes de emitir una acción.');
+expect_adapter($rejected,'La protección transaccional de edad no se modifica en este PR.');
 
 $state=hache_sharky_orchestrator_flow(hache_sharky_orchestrator_state(null,1788382800),'identify_student','verify',['return_to'=>'absence'],1788382800);
 $resumed=hache_sharky_whatsapp_resume_verified_state($state,['verification'=>['verified'=>true,'student_id'=>'stu-1','name'=>'Ariel','sede_clave'=>'MONTEVERDE','status'=>'ACTIVO']],1788382810);
@@ -120,6 +160,8 @@ expect_adapter(($resumed['flow']['name']??'')==='absence'&&($resumed['flow']['st
 $controlled=hache_sharky_orchestrator_flow(hache_sharky_orchestrator_state(null,1788382800),'register_intensive','confirm',['name'=>'Juan'],1788382800);
 expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'¿Aceptan tarjeta?','interactive_id'=>''])===true,'Una duda durante confirmación debe tratarse como pregunta lateral.');
 expect_adapter(hache_sharky_whatsapp_is_side_question($controlled,['text'=>'confirmo','interactive_id'=>''])===false,'Confirmar no debe confundirse con pregunta lateral.');
+$qualControlled=hache_sharky_orchestrator_flow($prospect,'qualify_prospect','sede',[],1788382830);
+expect_adapter(hache_sharky_whatsapp_is_side_question($qualControlled,['text'=>'¿Dónde está Monteverde?','interactive_id'=>''])===true,'Una duda lateral durante la calificación debe responderse sin perder el camino guiado.');
 
 $freshPresentationState=hache_sharky_orchestrator_state(null,1788382800);
 expect_adapter(($freshPresentationState['assistant_presentation_queued']??true)===false,'Una conversación nueva no debe asumir que Sharky ya se presentó.');
