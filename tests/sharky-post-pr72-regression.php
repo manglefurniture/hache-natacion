@@ -99,6 +99,7 @@ $adapter=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:''
 $worker=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
 $outbox=file_get_contents(__DIR__.'/../config/sharky-outbox.php')?:'';
 $db=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:'';
+$registrationRecovery=file_get_contents(__DIR__.'/../config/sharky-registration-recovery.php')?:'';
 $batching=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
 $store=file_get_contents(__DIR__.'/../config/sharky-orchestrator-store.php')?:'';
 $recovery=file_get_contents(__DIR__.'/../config/sharky-action-recovery.php')?:'';
@@ -146,8 +147,9 @@ post72_expect(!str_contains($db,'return hache_sharky_orchestrator_state_save($co
 post72_expect(!str_contains($db,'return hache_sharky_orchestrator_state_load($contact)'),'DB state load must not silently fall back to local state.');
 
 // P2 Codex: un recovery de alta rota una credencial nueva que sí puede entregarse.
-post72_expect(str_contains($db,"debe_cambiar_password=1"),'Recovered portal credential must force password change.');
-post72_expect(str_contains($db,"'temporary_password'=>\$temporaryPassword"),'Recovered registration must return a deliverable temporary password.');
+post72_expect(str_contains($registrationRecovery,"debe_cambiar_password=1"),'Recovered portal credential must force password change.');
+post72_expect(str_contains($registrationRecovery,"'temporary_password'=>\$temporaryPassword"),'Recovered registration must return a deliverable temporary password.');
+post72_expect(str_contains($registrationRecovery,'regla_bloquear_identidades_alumnos($pdo)'),'Recovered registration must reconcile under the same identity serialization used by fresh creation.');
 
 // Autoridad dura: el executor jamás automatiza un inicio intensivo fuera de lunes/futuro.
 post72_expect(str_contains($db,'hache_sharky_start_authority_intensive_date_allowed'),'Executor must revalidate intensive start authority before business write.');
