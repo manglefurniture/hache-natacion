@@ -78,10 +78,14 @@ function hache_sharky_inbox_mark_dead(PDO $pdo,string $messageId,string $error):
 }
 
 /** @return array{processed:int,deferred:int,dead:int} */
-function hache_sharky_inbox_dispatch(PDO $pdo,callable $processor,int $limit=20): array
+function hache_sharky_inbox_dispatch(PDO $pdo,callable $processor,int $limit=20,?callable $shouldContinue=null): array
 {
     $stats=['processed'=>0,'deferred'=>0,'dead'=>0];
     foreach(hache_sharky_inbox_pending($pdo,$limit) as $row){
+        if($shouldContinue!==null){
+            $continue=false;try{$continue=$shouldContinue()===true;}catch(Throwable $e){$continue=false;}
+            if(!$continue)break;
+        }
         $event=hache_sharky_inbox_decrypt($row);$id=(string)($row['message_id']??'');
         if($event===null){hache_sharky_inbox_mark_dead($pdo,$id,'DECRYPT_FAILED');$stats['dead']++;continue;}
         $done=false;try{$done=$processor($event)===true;}catch(Throwable $e){error_log('[sharky-inbox] worker exception');$done=false;}

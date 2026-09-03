@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Hache Natacion Sharky inbox recovery every minute
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=hache-sharky-inbox.service
+
+[Install]
+WantedBy=timers.target

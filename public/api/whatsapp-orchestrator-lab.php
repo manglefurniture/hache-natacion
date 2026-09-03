@@ -12,7 +12,8 @@ function sharky_lab_json(int $status,array $body): never
 }
 
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')sharky_lab_json(404,['ok'=>false,'error'=>'Lab disabled']);
-if(strlen(hache_sharky_lab_secret('SHARKY_CONTACT_HASH_KEY'))<32)sharky_lab_json(503,['ok'=>false,'error'=>'Sharky security key not configured']);
+if(strlen(hache_sharky_lab_secret('SHARKY_CONTACT_HASH_KEY'))<32)sharky_lab_json(503,['ok'=>false,'error'=>'Sharky contact security key not configured']);
+if(strlen(hache_sharky_lab_secret('SHARKY_STATE_ENCRYPTION_KEY'))<32)sharky_lab_json(503,['ok'=>false,'error'=>'Sharky state security key not configured']);
 
 $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
 if($method==='GET'){
@@ -49,6 +50,9 @@ usort($processing,static function(array $a,array $b):int{
     if($ak!==$bk)return $ak<=>$bk;
     return (int)($a['timestamp_ms']??0)<=>(int)($b['timestamp_ms']??0);
 });
-foreach($processing as $event)hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
-hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
+foreach($processing as $event){
+    if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
+    hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
+}
+if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
 exit;
