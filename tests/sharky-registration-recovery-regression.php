@@ -18,7 +18,7 @@ registration_recovery_expect($registerStart!==false&&$registerEnd!==false,'Regis
 $registerRegion=substr($orchestrator,$registerStart,$registerEnd-$registerStart);
 registration_recovery_expect(!str_contains($registerRegion,'hache_sharky_business_identity_by_whatsapp'),'Registration must not rely on an unlocked identity precheck before the business transaction.');
 registration_recovery_expect(str_contains($registerRegion,"codeName!=='PHONE_ALREADY_REGISTERED'")&&str_contains($registerRegion,'hache_sharky_registration_recover_locked'),'A duplicate observed after a stolen lease must enter locked reconciliation instead of becoming a false FAILED audit.');
-registration_recovery_expect(str_contains($registerRegion,"$recovered?'RECOVERED':$code"),'Recovered registration must finish the current audit owner as a successful recovery.');
+registration_recovery_expect(str_contains($registerRegion,"\$recovered?'RECOVERED':\$code"),'Recovered registration must finish the current audit owner as a successful recovery.');
 
 $lockPos=strpos($recovery,'regla_bloquear_identidades_alumnos($pdo)');
 $matchPos=strpos($recovery,'WHERE a.whatsapp=:w',$lockPos===false?0:$lockPos);
