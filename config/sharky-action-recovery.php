@@ -12,13 +12,37 @@ function hache_sharky_action_source_message_id(string $idempotencyKey): string
     return mb_substr(trim((string)($parts[0]??'')),0,191);
 }
 
+function hache_sharky_action_result_key(): string
+{
+    return hash_hmac('sha256','hache-sharky-action-result-v1',hache_sharky_orchestrator_contact_key(),true);
+}
+
+function hache_sharky_action_result_encrypt(array $result): array
+{
+    $json=json_encode($result,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)throw new RuntimeException('Invalid action result');
+    $iv=random_bytes(12);$tag='';$cipher=openssl_encrypt($json,'aes-256-gcm',hache_sharky_action_result_key(),OPENSSL_RAW_DATA,$iv,$tag,'sharky-action-result-v1');
+    if(!is_string($cipher)||strlen($tag)!==16)throw new RuntimeException('Unable to encrypt action result');
+    return ['ciphertext'=>base64_encode($cipher),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag)];
+}
+
+function hache_sharky_action_result_decrypt(array $row): ?array
+{
+    $cipher=base64_decode((string)($row['result_ciphertext']??''),true);$iv=base64_decode((string)($row['result_iv']??''),true);$tag=base64_decode((string)($row['result_tag']??''),true);
+    if(!is_string($cipher)||!is_string($iv)||!is_string($tag)||strlen($iv)!==12||strlen($tag)!==16)return null;
+    $json=openssl_decrypt($cipher,'aes-256-gcm',hache_sharky_action_result_key(),OPENSSL_RAW_DATA,$iv,$tag,'sharky-action-result-v1');if(!is_string($json))return null;
+    $decoded=json_decode($json,true);return is_array($decoded)?$decoded:null;
+}
+
 function hache_sharky_action_recovery_status(PDO $pdo,string $idempotencyKey): ?array
 {
     if(!hache_sharky_orchestrator_store_ready($pdo))return null;
     try{
-        $st=$pdo->prepare('SELECT status,result_code,action_type,source_message_id,delivery_queued_at,lease_until,attempt_count,result_json,result_message,completed_at FROM sharky_action_audit WHERE idempotency_key=:k LIMIT 1');
+        $st=$pdo->prepare('SELECT status,result_code,action_type,source_message_id,delivery_queued_at,lease_until,attempt_count,result_json,result_ciphertext,result_iv,result_tag,result_message,completed_at FROM sharky_action_audit WHERE idempotency_key=:k LIMIT 1');
         $st->execute([':k'=>hash('sha256',$idempotencyKey)]);$row=$st->fetch(PDO::FETCH_ASSOC);if(!$row)return null;
-        $decoded=json_decode((string)($row['result_json']??''),true);$row['result']=is_array($decoded)?$decoded:null;return $row;
+        $sealed=trim((string)($row['result_ciphertext']??''));
+        if($sealed!=='')$row['result']=hache_sharky_action_result_decrypt($row);
+        else{$decoded=json_decode((string)($row['result_json']??''),true);$row['result']=is_array($decoded)?$decoded:null;}
+        return $row;
     }catch(Throwable $e){return null;}
 }
 
@@ -37,10 +61,15 @@ function hache_sharky_action_recovery_claim(PDO $pdo,string $idempotencyKey,stri
 function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,bool $ok,string $resultCode,?array $result=null,string $message=''): void
 {
     if(!hache_sharky_orchestrator_store_ready($pdo))return;
-    $json=$result===null?null:json_encode($result,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)$json=null;
+    $public=$result;$sealed=null;
+    if(is_array($public)&&array_key_exists('temporary_password',$public)){
+        $sealed=hache_sharky_action_result_encrypt($public);
+        unset($public['temporary_password']);
+    }
+    $json=$public===null?null:json_encode($public,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)$json=null;
     try{
-        $st=$pdo->prepare("UPDATE sharky_action_audit SET status=:s,result_code=:r,result_json=:j,result_message=:m,completed_at=NOW(),lease_until=NULL WHERE idempotency_key=:k AND status='PENDING'");
-        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>hash('sha256',$idempotencyKey)]);
+        $st=$pdo->prepare("UPDATE sharky_action_audit SET status=:s,result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=NOW(),lease_until=NULL WHERE idempotency_key=:k AND status='PENDING'");
+        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>hash('sha256',$idempotencyKey)]);
     }catch(Throwable $e){error_log('[sharky-action] finish failed');}
 }
 
