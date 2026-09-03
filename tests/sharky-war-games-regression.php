@@ -103,6 +103,34 @@ expect_war($preflightTakeover!==false&&$preflightQueue!==false&&$preflightTakeov
 expect_war(str_contains($worker,'hache_sharky_outbox_allow_during_takeover'),'Only the handoff notice may bypass takeover cancellation.');
 expect_war(str_contains($outbox,'unset($payload[\'_sharky_allow_takeover\'])'),'Internal takeover bypass flag must never be sent to Meta.');
 
+// Second hardening pass: a persisted takeover cannot swallow its own failed handoff notice.
+expect_war(str_contains($migration,'handoff_pending_at DATETIME NULL'),'Inbox must persist a recoverable handoff-pending marker.');
+expect_war(str_contains($inbox,'function hache_sharky_inbox_mark_handoff_pending'),'Inbox needs a durable handoff-pending writer.');
+expect_war(str_contains($inbox,'function hache_sharky_inbox_handoff_pending'),'Replay must be able to identify a pending handoff notice.');
+$pendingPos=strpos($worker,'hache_sharky_lab_mark_handoff_pending($pdo,$eventId)');
+$takeoverPos=strpos($worker,'hache_sharky_takeover_mark($contact,$reason,$summary)');
+expect_war($pendingPos!==false&&$takeoverPos!==false&&$pendingPos<$takeoverPos,'Preflight handoff must become recoverable before takeover is persisted.');
+expect_war(str_contains($worker,'hache_sharky_takeover_active($contact)&&!$handoffPending'),'A pending handoff replay must bypass ordinary takeover swallowing.');
+
+// Second hardening pass: manual echoes beat opportunistic outbound recovery in the entrypoint.
+$processingPos=strpos($webhook,'$processing=array_merge($echoes,$events)');
+$finalDispatchPos=strrpos($webhook,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20)");
+expect_war($processingPos!==false&&$finalDispatchPos!==false&&$processingPos<$finalDispatchPos,'Webhook must process echoes before its opportunistic outbox dispatch.');
+
+// Second hardening pass: takeover revalidation and Meta send share the delivery lock.
+expect_war(str_contains($outbox,'string $lockedContact=\'\''),'Outbox dispatcher must accept proof of an already-held contact lock.');
+expect_war(str_contains($outbox,'hache_sharky_orchestrator_delivery_lock($contact)'),'CLI/outside dispatchers must acquire the per-contact delivery lock.');
+expect_war(str_contains($outbox,'$callerOwnsLock=$lockedContact!==\'\'&&hash_equals($lockedContact,$contact)'),'Worker-owned locks must avoid self-deadlock while preserving serialization.');
+expect_war(str_contains($worker,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10,$contact)"),'Worker dispatch must declare the delivery lock it already owns.');
+expect_war(str_contains($batching,'hache_sharky_takeover_active($contact)'),'A text leaving the debounce window must revalidate takeover under the delivery lock.');
+
+// Second hardening pass: expired action owners cannot finalize a lease stolen by another worker.
+expect_war(str_contains($migration,'owner_token CHAR(48) NULL'),'Action audit needs an ownership fence token.');
+expect_war(str_contains($actionRecovery,'owner_token=:o'),'Action reclaim must install a fresh ownership token.');
+expect_war(str_contains($actionRecovery,"AND owner_token=:o"),'Action finalization must require the current owner token.');
+expect_war(str_contains($actionRecovery,'owner_token=NULL'),'Terminal action rows must release ownership.');
+expect_war(str_contains($executor,'$ownerToken=null')&&str_contains($executor,'$ownerToken))return hache_sharky_action_audit_pending_result()'),'Executor must carry the claim token into finalization.');
+
 // Final timezone pass: conversational dates use the same Cancun operational day as business rules.
 expect_war(str_contains($adapter,"new DateTimeZone('America/Cancun')"),'Adapter must calculate today explicitly in Cancun.');
 expect_war(str_contains($worker,'hache_sharky_lab_today()'),'Worker must inject Cancun operational today.');
