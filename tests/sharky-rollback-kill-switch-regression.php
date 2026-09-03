@@ -21,10 +21,10 @@ $decryptPos=strpos($inbox,'hache_sharky_inbox_decrypt($row)',$guardPos===false?0
 rollback_expect($guardPos!==false&&$breakPos!==false&&$decryptPos!==false&&$guardPos<$breakPos&&$breakPos<$decryptPos,'Inbox rollback guard must run before decrypting/processing each event.');
 rollback_expect(str_contains($worker,'$enabled=static fn():bool=>hache_sharky_orchestrator_secret(\'SHARKY_ORCHESTRATOR_LAB_ENABLED\')===\'1\';'),'CLI inbox worker must centralize the live feature-flag predicate.');
 rollback_expect(str_contains($worker,'hache_sharky_inbox_dispatch($pdo,$processor,10,$enabled)'),'CLI inbox worker must pass the live flag predicate into every-event dispatch with a bounded recovery batch.');
-rollback_expect(str_contains($worker,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10)"),'CLI inbox worker must keep its follow-up outbox batch bounded.');
+rollback_expect(str_contains($worker,'hache_sharky_outbox_dispatch($pdo,\'hache_sharky_lab_send\',10)'),'CLI inbox worker must keep its follow-up outbox batch bounded.');
 rollback_expect(str_contains($worker,'if($enabled())hache_sharky_outbox_dispatch'),'CLI inbox worker must not start final outbox dispatch after rollback.');
 rollback_expect(str_contains($outboxWorker,"if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')return false;"),'Direct CLI Meta sender must independently fail closed after rollback.');
-rollback_expect(str_contains($outboxWorker,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_outbox_meta_send',10)"),'Standalone outbox worker must use a bounded batch.');
+rollback_expect(str_contains($outboxWorker,'hache_sharky_outbox_dispatch($pdo,\'hache_sharky_outbox_meta_send\',10)'),'Standalone outbox worker must use a bounded batch.');
 
 rollback_expect(str_contains($outbox,"if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')return \$stats;"),'Outbox dispatcher must fail closed unless the lab flag is exactly 1.');
 rollback_expect(substr_count($outbox,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'")>=4,'Outbox must revalidate the kill switch throughout the dispatch loop.');
