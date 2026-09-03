@@ -15,19 +15,6 @@ function sharky_admin_out(array $body, int $status = 200): never
     exit;
 }
 
-function sharky_admin_valid_value(string $key, string $value): bool
-{
-    if (mb_strlen($value) > 100) return false;
-    if ($key === 'sharky_whatsapp') return preg_match('/^\d{7,15}$/', preg_replace('/\D+/', '', $value) ?: '') === 1;
-    if ($key === 'sharky_audio_habilitado') return in_array($value, ['0', '1'], true);
-    if ($key === 'sharky_edad_minima') return ctype_digit($value) && (int) $value >= 1 && (int) $value <= 99;
-    if ($key === 'sharky_recargo_tarjeta_pct') return is_numeric($value) && (float) $value >= 0 && (float) $value <= 100;
-    if ($key === 'sharky_audio_max_mb') return ctype_digit($value) && (int) $value >= 1 && (int) $value <= 20;
-    if ($key === 'sharky_escalado_intentos') return ctype_digit($value) && (int) $value >= 1 && (int) $value <= 5;
-    if ($key === 'sharky_cupo_maximo_intensivo') return ctype_digit($value) && (int) $value >= 0 && (int) $value <= 500;
-    return is_numeric($value) && (float) $value >= 0 && (float) $value <= 1000000;
-}
-
 $pdo = hache_sharky_pdo();
 if (!$pdo) sharky_admin_out(['ok'=>false, 'error'=>'No se pudo conectar con la configuración'], 503);
 
@@ -69,7 +56,7 @@ if ($action === 'CONFIG') {
     $key = trim((string) ($input['clave'] ?? ''));
     $value = trim((string) ($input['valor'] ?? ''));
     $defaults = hache_sharky_config_defaults();
-    if (!isset($defaults[$key]) || !sharky_admin_valid_value($key, $value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
+    if (!isset($defaults[$key]) || !hache_sharky_config_value_valid($key, $value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
     if ($key === 'sharky_whatsapp') $value = preg_replace('/\D+/', '', $value) ?: '';
     $stmt = $pdo->prepare(
         'INSERT INTO configuracion(clave,valor,descripcion,updated_by,updated_at) VALUES(:clave,:valor,:descripcion,:usuario,NOW()) '

@@ -11,10 +11,11 @@ const gestion = read('api/alumno-gestion.php');
 const ficha = read('public/ficha-alumno.php');
 
 assert.match(helper, /intensivo_lunes_semana_actual/);
-assert.match(helper, /modify\('\+6 days'\)/);
+assert.match(helper, /modify\('\+1 day'\)/);
+assert.match(helper, /solo admite incorporación lunes o martes/);
 assert.match(helper, /intensivo_inscripcion_abierta/);
 assert.match(registro, /intensivo_lunes_registro\(10\)/);
-assert.match(registro, /El curso de la semana actual permanece disponible hasta el domingo/);
+assert.match(registro, /solo puede incorporarse hasta el martes/);
 
 assert.match(altaUi, /curso_intensivo_id/);
 assert.match(altaUi, /horario_intensivo_id/);

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const registro = fs.readFileSync(new URL('../public/registro.php', import.meta.url), 'utf8');
 const transferencia = fs.readFileSync(new URL('../config/transferencia-publica.php', import.meta.url), 'utf8');
+const runtime = fs.readFileSync(new URL('../config/sharky-runtime.php', import.meta.url), 'utf8');
 const telefono = fs.readFileSync(new URL('../public/assets/telefono-internacional.js', import.meta.url), 'utf8');
 
 function expect(condition, message) {
@@ -25,8 +26,16 @@ expect(
   'El importe mostrado debe salir del precio real del curso intensivo existente sin romper la serialización previa.'
 );
 expect(
-  registro.includes("':precio'=>$intensivoPrecio") && registro.includes('Total a pagar: $<?=e(number_format((float)$intensivoPrecio'),
-  'Los cursos nuevos y la pantalla final deben compartir la misma variable de precio.'
+  registro.includes("':precio'=>$intensivoPrecio") && registro.includes("number_format((float)$intensivoPrecio,2,'.',',')") && registro.includes("rtrim(rtrim(number_format((float)$intensivoPrecio,2,'.',','),'0'),'.')"),
+  'Los cursos nuevos y la pantalla final deben compartir la misma variable de precio sin redondear importes existentes con centavos.'
+);
+expect(
+  registro.includes("$intensivoReservaMinima=($ok&&$tipo==='INTENSIVO'&&$intensivoPrecio!==null)?((float)$intensivoPrecio/2):null") &&
+    registro.includes('Total del curso: $<?=e(rtrim(rtrim(number_format((float)$intensivoPrecio') &&
+    registro.includes('Reserva mínima (50%): $<?=e(rtrim(rtrim(number_format((float)$intensivoReservaMinima') &&
+    registro.includes('Transfiere el total o, como mínimo, el 50% para reservar') &&
+    registro.includes('El saldo restante debe quedar pagado antes del curso o, como máximo, el mismo día que inicia.'),
+  'El checkout intensivo debe mostrar total, reserva mínima del 50% y la regla de liquidación del saldo.'
 );
 expect(
   registro.includes('id="copiar-clabe"') && registro.includes('navigator.clipboard.writeText(value)') && registro.includes("document.execCommand('copy')"),
@@ -50,12 +59,19 @@ expect(
   'Los campos del registro deben quedar asociados programáticamente con sus etiquetas visibles.'
 );
 expect(
-  /'clabe'\s*=>\s*'\d{18}'/.test(transferencia),
-  'La CLABE pública debe tener exactamente 18 dígitos.'
+  transferencia.includes('hache_sharky_business_values') &&
+    transferencia.includes("['sharky_pago_institucion']") &&
+    transferencia.includes("['sharky_pago_beneficiario']") &&
+    transferencia.includes("['sharky_pago_clabe']"),
+  'El registro público y Sharky deben compartir una única fuente configurable de datos de transferencia.'
 );
 expect(
-  transferencia.includes("'institucion' => 'Mercado Pago W'") && transferencia.includes("'beneficiario' => 'Heidy Garcia Liranza'"),
-  'Los datos públicos de transferencia deben mantener la institución y beneficiario configurados.'
+  /'sharky_pago_clabe'\s*=>\s*\[\s*'valor'\s*=>\s*'\d{18}'/.test(runtime),
+  'La CLABE por defecto debe conservar exactamente 18 dígitos.'
+);
+expect(
+  runtime.includes("'sharky_pago_institucion'=>['valor'=>'Mercado Pago W'") && runtime.includes("'sharky_pago_beneficiario'=>['valor'=>'Heidy Garcia Liranza'"),
+  'La fuente de verdad debe conservar la institución y beneficiario actuales como valores por defecto.'
 );
 
 console.log('INTENSIVO_TRANSFERENCIA_REGRESSION_OK');
