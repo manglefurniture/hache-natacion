@@ -151,23 +151,38 @@ function hache_sharky_normalize_text(string $text): string
 function hache_sharky_capacity_request(string $text): bool
 {
     $text=hache_sharky_normalize_text($text);
+    $capacityContext='(?:intensivos?|cursos?|grupos?|clases?|carril|carriles)';
+    $implicitCapacityVerb='(?:caben|entran|admite|admiten|acepta|aceptan|permite|permiten)';
+    $implicitCountForward='/\b(cuantos?|cuantas?)\s+'.$implicitCapacityVerb.'\b.{0,18}\b(?:en\s+)?(?:(?:el|la|los|las|cada|un|una)\s+)?'.$capacityContext.'\b/u';
+    $implicitCountReverse='/\b(?:(?:el|la|los|las|cada|un|una)\s+)?'.$capacityContext.'\b.{0,24}\b(cuantos?|cuantas?)\s+'.$implicitCapacityVerb.'\b/u';
     if (
         preg_match('/\b(cuantos?|cuantas?|numero de|cantidad de)\b.{0,28}\bgente\b/u',$text)===1
         || preg_match('/\bgente\b.{0,28}\b(cuantos?|cuantas?|numero de|cantidad de)\b/u',$text)===1
         || preg_match('/\baforo\b/u',$text)===1
     ) return true;
-    $hasExplicitCapacity = preg_match('/\b(cupo|cupos|vacante|vacantes|lugar|lugares|espacio|espacios|lleno|llena|llenos|llenas)\b/u',$text)===1
+    $hasExplicitCapacity = preg_match('/\b(cupo|cupos|vacante|vacantes|lleno|llena|llenos|llenas)\b/u',$text)===1
         || str_contains($text,'lista de espera')
         || preg_match('/\b(cuantos?|cuantas?|numero de)\b.{0,28}\b(alumnos|personas|nadadores)\b/u',$text)===1
         || preg_match('/\b(alumnos|personas|nadadores)\b.{0,28}\b(cuantos?|cuantas?|numero de)\b/u',$text)===1
-        || preg_match('/\bpor carril\b/u',$text)===1;
+        || preg_match('/\bpor carril\b/u',$text)===1
+        || preg_match('/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(lugar|lugares|espacio|espacios)\b/u',$text)===1
+        || preg_match('/\b(lugar|lugares|espacio|espacios)\s+(disponible|disponibles|libre|libres)\b/u',$text)===1
+        || preg_match($implicitCountForward,$text)===1
+        || preg_match($implicitCountReverse,$text)===1;
     if (!$hasExplicitCapacity && preg_match('/\b(disponibilidad|disponible|disponibles)\b/u',$text)===1) {
         $spokenHour='(?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieciseis|diecisiete|dieciocho|diecinueve|veinte|veintiuna|veintidos|veintitres)';
-        $hasScheduleQualifier = preg_match('/\b(horario|horarios|hora|horas|fecha|fechas|dia|dias|turno|turnos|manana|tarde|noche)\b/u',$text)===1
-            || preg_match('/\blas?\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')(?:\s+y\s+(?:cuarto|media))?\b/u',$text)===1;
+        $weekday='(?:lunes|martes|miercoles|jueves|viernes|sabados?|domingos?)';
+        $month='(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)';
+        $hasScheduleQualifier = preg_match('/\b(horario|horarios|hora|horas|fecha|fechas|dia|dias|turno|turnos|manana|tarde|noche|hoy|semana|semanas)\b/u',$text)===1
+            || preg_match('/\b'.$weekday.'\b/u',$text)===1
+            || preg_match('/\b(?:en|para|durante)\s+'.$month.'\b/u',$text)===1
+            || preg_match('/\b\d{1,2}\s+de\s+'.$month.'(?:\s+de\s+\d{4})?\b/u',$text)===1
+            || preg_match('/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/u',$text)===1
+            || preg_match('/\blas?\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')(?:\s+y\s+(?:cuarto|media))?\b/u',$text)===1
+            || preg_match('/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/u',$text)===1
+            || preg_match('/\b(?:de|entre)\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')\s+(?:a|y)\s+(?:\d{1,2}(?::\d{2})?|'.$spokenHour.')\b/u',$text)===1;
         if ($hasScheduleQualifier) return false;
     }
-    $capacityContext='(?:intensivos?|cursos?|grupos?|clases?|carril|carriles)';
     foreach ([
         '/\b(cupo|cupos|vacante|vacantes)\b/u',
         '/\b(hay|queda|quedan|tiene|tienen)\b.{0,18}\b(lugar|lugares|espacio|espacios|vacante|vacantes)\b/u',
@@ -178,6 +193,8 @@ function hache_sharky_capacity_request(string $text): bool
         '/\b'.$capacityContext.'\b.{0,40}\b(cuantos?|cuantas?|numero de)\b.{0,20}\b(alumnos|personas|nadadores)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,25}\b(alumnos|personas|nadadores)\b.{0,15}\b(hay|tiene|tienen|caben|entran|admite|admiten|acepta|aceptan|permite|permiten)\b/u',
         '/\b(cuantos?|cuantas?|numero de)\b.{0,20}\bpor (?:carril|grupo|curso|clase)\b/u',
+        $implicitCountForward,
+        $implicitCountReverse,
         '/\bcapacidad(?:\s+maxima)?\s+(?:del|de la|de los|de las)\s+(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b/u',
         '/\b(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b.{0,20}\bcapacidad(?:\s+maxima)?\b/u',
         '/\bcapacidad\b.{0,16}\b(tiene|tienen|admite|admiten|permite|permiten|acepta|aceptan)\b.{0,14}\b(el\s+|la\s+|los\s+|las\s+)?(grupo|grupos|curso|cursos|clase|clases|carril|carriles|intensivo|intensivos)\b/u',
