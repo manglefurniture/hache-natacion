@@ -15,8 +15,12 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
         // A receipt already marked handoff_pending is the recovery exception: it must
         // replay the handoff decision instead of being swallowed by active takeover.
         $handoffPending=($extraContext['handoff_pending']??false)===true;
+        $messageId=(string)($event['id']??'');
+        if(!$handoffPending&&function_exists('hache_sharky_inbox_handoff_pending')){
+            $handoffPending=hache_sharky_inbox_handoff_pending($pdo,$messageId);
+        }
         if(function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)&&!$handoffPending){
-            $messageId=(string)($event['id']??'');$hash=hache_sharky_orchestrator_contact_hash($contact);
+            $hash=hache_sharky_orchestrator_contact_hash($contact);
             if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
                 hache_sharky_orchestrator_unlock($lock);
                 return ['skip'=>true,'code'=>'DUPLICATE'];
