@@ -100,6 +100,7 @@ function hache_sharky_business_intensive_options(PDO $pdo, int $weeks = 10): arr
                 'sede_nombre'=>(string)$site['nombre'],
                 'fecha_inicio'=>$date,
                 'label'=>'Inicio '.date('d/m/Y', strtotime($date)),
+                'precio'=>$course&&is_numeric($course['precio']??null)?(float)$course['precio']:null,
                 'schedules'=>$schedules,
             ];
         }

@@ -59,6 +59,8 @@ function hache_sharky_lab_mark_presentation_queued(?array $deferredState,array $
 function hache_sharky_lab_answer(string $text,string $instruction,array $state,array $context): string
 {
     $history=[];$ref=$state['referral']['latest']??null;
+    $previous=trim((string)($context['previous_user_text']??''));
+    if($previous!=='')$history[]=['role'=>'user','content'=>mb_substr($previous,0,700)];
     if(is_array($ref)&&!empty($ref['headline']))$history[]=['role'=>'system','content'=>'Origen de campaña: '.mb_substr((string)$ref['headline'],0,180)];
     $instruction=rtrim($instruction)."\n\n".hache_sharky_post72_whatsapp_style_policy();
     $history[]=['role'=>'system','content'=>$instruction];
@@ -66,7 +68,10 @@ function hache_sharky_lab_answer(string $text,string $instruction,array $state,a
     $payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
     $ch=curl_init('https://hnatacion.com/api/sharky.php');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_POSTFIELDS=>$payload,CURLOPT_RESOLVE=>['hnatacion.com:443:127.0.0.1']]);
     $response=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);if($response===false||$status<200||$status>=300)return '';
-    $data=json_decode((string)$response,true);return is_array($data)&&($data['ok']??false)===true?trim((string)($data['answer']??'')):'';
+    $data=json_decode((string)$response,true);
+    if(!is_array($data)||($data['ok']??false)!==true)return '';
+    if(is_array($data['usage']??null)&&trim((string)($context['contact']??''))!=='')hache_sharky_usage_record((string)$context['contact'],$data['usage']);
+    return trim((string)($data['answer']??''));
 }
 
 function hache_sharky_lab_claim_early(PDO $pdo,array $event,string $contact,string $type): bool

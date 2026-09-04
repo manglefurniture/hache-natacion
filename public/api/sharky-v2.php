@@ -320,6 +320,23 @@ if ($status < 200 || $status >= 300 || !is_array($result)) {
     sharky_v2_out(['ok' => false, 'error' => 'Sharky no pudo responder ahora mismo. Intenta de nuevo.'], 502);
 }
 
+$responseStatus = trim((string)($result['status'] ?? 'completed'));
+$incompleteReason = trim((string)($result['incomplete_details']['reason'] ?? ''));
+$rawUsage = is_array($result['usage'] ?? null) ? $result['usage'] : [];
+$usage = [
+    'input_tokens'=>max(0,(int)($rawUsage['input_tokens']??0)),
+    'output_tokens'=>max(0,(int)($rawUsage['output_tokens']??0)),
+    'total_tokens'=>max(0,(int)($rawUsage['total_tokens']??0)),
+];
+if($usage['total_tokens']===0)$usage['total_tokens']=$usage['input_tokens']+$usage['output_tokens'];
+if($usage['input_tokens']>0)hache_sharky_metric_increment('openai_input_tokens',$usage['input_tokens']);
+if($usage['output_tokens']>0)hache_sharky_metric_increment('openai_output_tokens',$usage['output_tokens']);
+if($usage['total_tokens']>0)hache_sharky_metric_increment('openai_total_tokens',$usage['total_tokens']);
+if($responseStatus==='incomplete'){
+    hache_sharky_metric_increment('openai_incomplete');
+    error_log('[sharky-v2] incomplete response reason='.($incompleteReason!==''?$incompleteReason:'unknown'));
+}
+
 $answer = '';
 foreach (($result['output'] ?? []) as $item) {
     if (!is_array($item)) continue;
@@ -334,4 +351,7 @@ if ($answer === '') {
 }
 
 hache_sharky_metric_increment($channel === 'whatsapp' ? 'answers_whatsapp' : 'answers_web');
-sharky_v2_out(['ok' => true, 'answer' => $answer, 'channel' => $channel]);
+$out=['ok'=>true,'answer'=>$answer,'channel'=>$channel,'response_status'=>$responseStatus];
+if($incompleteReason!=='')$out['incomplete_reason']=$incompleteReason;
+if($channel==='whatsapp')$out['usage']=$usage;
+sharky_v2_out($out);

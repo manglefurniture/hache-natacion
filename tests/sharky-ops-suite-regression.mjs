@@ -5,6 +5,7 @@ const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'ut
 const sharkyWrapper = read('api/sharky.php');
 const whatsappWrapper = read('api/whatsapp-webhook.php');
 const sharky = read('public/api/sharky-v2.php');
+const sharkyDispatcher = read('public/api/sharky-whatsapp-dispatch.php');
 const webhook = read('public/api/whatsapp-webhook-v2.php');
 const runtime = read('config/sharky-runtime.php');
 const validation = read('config/sharky-validation.php');
@@ -16,7 +17,10 @@ const publicRegistration = read('public/registro.php');
 const adminPage = read('public/sharky-admin.php');
 const configPage = read('public/configuracion.php');
 
-assert.match(sharkyWrapper, /sharky-v2\.php/);
+assert.match(sharkyWrapper, /sharky-whatsapp-dispatch\.php/);
+assert.match(sharkyDispatcher, /sharky-v2\.php/);
+assert.match(sharkyDispatcher, /sharky-internal-whatsapp/);
+assert.match(sharkyDispatcher, /hache_sharky_reply_looks_incomplete/);
 assert.match(whatsappWrapper, /whatsapp-webhook-v2\.php/);
 assert.match(database, /\$publicApi\s*=\s*\[[\s\S]*'\/api\/sharky\.php'[\s\S]*'\/api\/whatsapp-webhook\.php'/);
 assert.match(database, /\$skipAudit\s*=\s*\[[\s\S]*'\/api\/sharky\.php'[\s\S]*'\/api\/whatsapp-webhook\.php'/);

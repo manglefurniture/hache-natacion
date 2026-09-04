@@ -544,6 +544,7 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
             if (!$course || strtoupper((string)($course['sede_clave']??'')) !== ($data['sede_clave']??'')) return [$state, hache_sharky_orchestrator_decision('registration_course_invalid','Esa opción ya no está disponible. Actualizaré las fechas antes de continuar.', [], ['type'=>'refresh_intensive_options'])];
             $data['course_id']=$courseId;
             $data['fecha_inicio']=$course['fecha_inicio']??null;
+            $data['course_price']=is_numeric($course['precio']??null)?(float)$course['precio']:null;
             $schedules = is_array($course['schedules']??null)?$course['schedules']:[];
             $state = hache_sharky_orchestrator_flow($state,'register_intensive','schedule',$data,$now);
             return [$state, hache_sharky_orchestrator_decision('registration_schedule','Elige el horario que prefieres.', ['type'=>'list','list_id'=>'schedules','options'=>array_map(static fn($s): array => [
