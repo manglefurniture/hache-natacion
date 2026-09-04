@@ -93,7 +93,10 @@ function hache_sharky_business_intensive_options(PDO $pdo, int $weeks = 10): arr
             $st->execute([':s'=>$site['id'], ':f'=>$date]);
             $course = $st->fetch(PDO::FETCH_ASSOC) ?: null;
             if ($course && in_array((string)$course['estado'], ['FINALIZADO','CANCELADO'], true)) continue;
-            $id = $course ? (string)$course['id'] : 'date:'.(string)$site['clave'].':'.$date;
+            // Interactive ids are normalized to lowercase by the orchestrator.
+            // Keep virtual (not-yet-created) course ids lowercase too, so a valid
+            // future date survives the round trip through WhatsApp unchanged.
+            $id = $course ? (string)$course['id'] : 'date:'.strtolower((string)$site['clave']).':'.$date;
             $out[] = [
                 'id'=>$id,
                 'sede_clave'=>(string)$site['clave'],
