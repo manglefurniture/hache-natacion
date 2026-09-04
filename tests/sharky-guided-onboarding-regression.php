@@ -84,7 +84,7 @@ guided_ok(
     'A known venue with intensive context should complete guided qualification without another venue step.'
 );
 guided_ok(
-    ($knownIntensiveDecision['kind']??null)==='commercial_ready',
+    ($knownIntensiveDecision['kind']??null)==='commercial_next_action',
     'Known intensive program and venue should leave the prospect commercially ready.'
 );
 
