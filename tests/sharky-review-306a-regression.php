@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/../config/sharky-whatsapp-batching.php';
+
 function sharky_review_306a_expect(bool $ok,string $message):void
 {
     if(!$ok){fwrite(STDERR,"SHARKY REVIEW 306A FAIL: $message\n");exit(1);}
@@ -16,6 +18,25 @@ $entry=file_get_contents(__DIR__.'/../api/whatsapp-webhook.php')?:'';
 // debounce/delivery-lock acquisition, otherwise replay silently consumes it.
 sharky_review_306a_expect(str_contains($batching,'hache_sharky_inbox_handoff_pending($pdo,$messageId)'),'Inner delivery guard must consult durable handoff_pending state.');
 sharky_review_306a_expect(str_contains($batching,'hache_sharky_takeover_active($contact)&&!$handoffPending'),'Active takeover may silence only receipts that are not recovering a pending handoff.');
+
+// Temporary product rule: selecting or saying "already a student" hands the chat
+// to a person instead of opening the identity-verification link.
+$studentState=hache_sharky_orchestrator_state(null,1788490000);
+sharky_review_306a_expect(
+    hache_sharky_whatsapp_student_claim_requires_handoff($studentState,['text'=>'Ya soy alumno','interactive_id'=>'']),
+    'Text student claim must trigger direct human handoff.'
+);
+sharky_review_306a_expect(
+    hache_sharky_whatsapp_student_claim_requires_handoff($studentState,['text'=>'Ya soy alumno','interactive_id'=>'identity:student']),
+    'Student button must trigger direct human handoff.'
+);
+sharky_review_306a_expect(
+    !hache_sharky_whatsapp_student_claim_requires_handoff($studentState,['text'=>'Soy nuevo','interactive_id'=>'identity:new']),
+    'New prospects must remain in Sharky instead of being handed off.'
+);
+sharky_review_306a_expect(str_contains($batching,"'student_human_takeover'"),'Student handoff must use an explicit decision kind.');
+sharky_review_306a_expect(str_contains($batching,"['type'=>'human_takeover']"),'Student handoff must activate the existing controlled takeover machinery.');
+sharky_review_306a_expect(!str_contains($batching,'verification_required'),'The batching interception must not create a verification link for student claims.');
 
 // Encrypted action results are credentials-bearing recovery material. A GCM/key
 // mismatch must be explicit and must drive locked registration reconciliation.
