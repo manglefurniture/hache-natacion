@@ -1,0 +1,143 @@
+name: Temporary wire Sharky follow-up
+on:
+  push:
+    branches:
+      - feat/sharky-idle-followup-20260903
+permissions:
+  contents: write
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sharky-idle-followup-20260903
+      - name: Apply exact follow-up wiring
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('config/sharky-outbox.php')
+          s=p.read_text()
+          req="require_once __DIR__.'/sharky-orchestrator-store.php';"
+          repl=req+"\nrequire_once __DIR__.'/sharky-orchestrator-db.php';\nrequire_once __DIR__.'/sharky-followup.php';"
+          if s.count(req)!=1:
+              raise SystemExit('outbox require anchor mismatch')
+          s=s.replace(req,repl,1)
+
+          pattern=r"function hache_sharky_outbox_enqueue\(PDO \$pdo,string \$contact,array \$payload,string \$dedupeSeed\): bool\n\{.*?\n\}\n\n(?=function hache_sharky_outbox_exists)"
+          replacement=r'''function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload,string $dedupeSeed,?int $availableAt=null): bool
+{
+    if(!hache_sharky_orchestrator_store_ready($pdo))return false;
+    $availableAt??=time();
+    try{
+        $sealed=hache_sharky_outbox_encrypt($payload);$dedupe=hash('sha256','outbox|'.$dedupeSeed);
+        $st=$pdo->prepare("INSERT IGNORE INTO sharky_outbox(dedupe_key,contact_hash,payload_ciphertext,payload_iv,payload_tag,status,available_at) VALUES(:d,:c,:p,:iv,:tag,'PENDING',FROM_UNIXTIME(:a))");
+        $st->execute([':d'=>$dedupe,':c'=>hache_sharky_orchestrator_contact_hash($contact),':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':a'=>$availableAt]);
+        return $st->rowCount()===1||hache_sharky_outbox_exists($pdo,$dedupeSeed);
+    }catch(Throwable $e){error_log('[sharky-outbox] enqueue failed');return false;}
+}
+
+function hache_sharky_outbox_enqueue(PDO $pdo,string $contact,array $payload,string $dedupeSeed): bool
+{
+    $ok=hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,$dedupeSeed,time());
+    if($ok&&!is_array($payload['_sharky_followup']??null))hache_sharky_followup_on_normal_outbound($pdo,$contact,$payload,$dedupeSeed);
+    return $ok;
+}
+
+'''
+          s,n=re.subn(pattern,replacement,s,count=1,flags=re.S)
+          if n!=1:
+              raise SystemExit('outbox enqueue block mismatch')
+
+          anchor="""function hache_sharky_outbox_mark_sent(PDO $pdo,string $id,string $ownerToken): bool
+{"""
+          addition="""function hache_sharky_outbox_reschedule_owner(PDO $pdo,string $id,string $ownerToken,int $availableAt,string $reason='DEFERRED'): bool
+{
+    if($id===''||$ownerToken===''||$availableAt<=0)return false;
+    try{
+        $st=$pdo->prepare(\"UPDATE sharky_outbox SET available_at=FROM_UNIXTIME(:a),lease_until=NULL,owner_token=NULL,last_error=:e WHERE id=:id AND status='PENDING' AND owner_token=:o\");
+        $st->execute([':a'=>$availableAt,':e'=>mb_substr($reason,0,255),':id'=>$id,':o'=>$ownerToken]);return $st->rowCount()===1;
+    }catch(Throwable $e){return false;}
+}
+
+"""+anchor
+          if s.count(anchor)!=1:
+              raise SystemExit('mark sent anchor mismatch')
+          s=s.replace(anchor,addition,1)
+
+          old="""        $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
+        $contact=preg_replace('/\\D+/','',(string)($payload['to']??''))?:'';"""
+          new="""        $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
+        $followupMeta=is_array($payload['_sharky_followup']??null)?$payload['_sharky_followup']:null;unset($payload['_sharky_followup']);
+        $contact=preg_replace('/\\D+/','',(string)($payload['to']??''))?:'';"""
+          if s.count(old)!=1:
+              raise SystemExit('payload metadata anchor mismatch')
+          s=s.replace(old,new,1)
+
+          old="""            if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
+                if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;
+                continue;
+            }
+            // Rollback is a kill switch, not merely a startup guard."""
+          new="""            if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
+                if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;
+                continue;
+            }
+            if(is_array($followupMeta)){
+                $gate=hache_sharky_followup_validate_before_send($pdo,$contact,$followupMeta,time());
+                if(($gate['ok']??false)!==true){
+                    $reason=(string)($gate['reason']??'FOLLOWUP_CANCELLED');
+                    $reschedule=(int)($gate['reschedule_at']??0);
+                    if($reschedule>0){
+                        if(hache_sharky_outbox_reschedule_owner($pdo,$id,$owner,$reschedule,$reason))continue;
+                        if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'FOLLOWUP_RESCHEDULE_FAILED'))$stats['failed']++;
+                        continue;
+                    }
+                    hache_sharky_followup_note_cancelled($pdo,$contact,$followupMeta,$reason,time());
+                    if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,$reason))$stats['cancelled']++;
+                    continue;
+                }
+            }
+            // Rollback is a kill switch, not merely a startup guard."""
+          if s.count(old)!=1:
+              raise SystemExit('takeover gate anchor mismatch')
+          s=s.replace(old,new,1)
+
+          old="""            if($ok){
+                if(hache_sharky_outbox_mark_sent($pdo,$id,$owner))$stats['sent']++;
+                else error_log('[sharky-outbox] sender succeeded but sent marker failed');
+            }else{"""
+          new="""            if($ok){
+                if(hache_sharky_outbox_mark_sent($pdo,$id,$owner)){
+                    $stats['sent']++;
+                    if(is_array($followupMeta))hache_sharky_followup_after_sent($pdo,$contact,$followupMeta,time());
+                }else error_log('[sharky-outbox] sender succeeded but sent marker failed');
+            }else{"""
+          if s.count(old)!=1:
+              raise SystemExit('sender success anchor mismatch')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          package=Path('package.json')
+          q=package.read_text()
+          old='php tests/sharky-commercial-next-action-regression.php && php tests/sharky-draft-parity-regression.php'
+          new='php tests/sharky-commercial-next-action-regression.php && php tests/sharky-followup-regression.php && php tests/sharky-draft-parity-regression.php'
+          if q.count(old)!=1:
+              raise SystemExit('package test anchor mismatch')
+          q=q.replace(old,new,1)
+          old='php -l config/sharky-outbox.php && php -l config/sharky-lab-worker.php'
+          new='php -l config/sharky-outbox.php && php -l config/sharky-followup.php && php -l config/sharky-lab-worker.php'
+          if q.count(old)!=1:
+              raise SystemExit('package lint anchor mismatch')
+          q=q.replace(old,new,1)
+          package.write_text(q)
+          PY
+          rm .github/workflows/tmp-wire-sharky-followup.yml
+          git config user.name "Hache Interactive Automation"
+          git config user.email "manglefurniture@gmail.com"
+          git add config/sharky-outbox.php config/sharky-followup.php tests/sharky-followup-regression.php package.json .github/workflows/tmp-wire-sharky-followup.yml
+          git commit -m "feat: wire idle follow-ups into durable outbox"
+          git push origin HEAD:feat/sharky-idle-followup-20260903
