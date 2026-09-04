@@ -48,7 +48,11 @@ function hache_sharky_followup_user_opted_out(string $text): bool
     $t=hache_sharky_orchestrator_normalize($text);
     if($t==='')return false;
     if(preg_match('/^(?:gracias|muchas gracias|listo gracias|gracias eso es todo|eso es todo|con eso gracias)[.! ]*$/u',$t)===1)return true;
-    return preg_match('/\b(no\s+gracias|no\s+me\s+interesa|ya\s+no\s+me\s+interesa|dejalo|dejala|yo\s+te\s+aviso|luego\s+te\s+escribo|despues\s+te\s+escribo|solo\s+estaba\s+preguntando|solo\s+queria\s+informacion)\b/u',$t)===1;
+    if(preg_match('/\b(?:no\s+gracias|no\s+me\s+interesa|ya\s+no\s+me\s+interesa|dejalo|dejala|yo\s+te\s+aviso|luego\s+te\s+escribo|despues\s+te\s+escribo|solo\s+estaba\s+preguntando|solo\s+queria\s+informacion)\b/u',$t)===1)return true;
+    if(preg_match('/(?:^|\b)(?:por\s+favor[,.]?\s*)?(?:no|nunca)\s+me\s+(?:escribas|contactes|mandes|envies)(?:\s+mas(?:\s+mensajes)?)?(?:\s*(?:por\s+favor|gracias))?[.! ]*$/u',$t)===1)return true;
+    if(preg_match('/\b(?:deja|dejen)\s+de\s+(?:escribirme|contactarme|mandarme|enviarme)(?:\s+mensajes)?\b/u',$t)===1)return true;
+    if(preg_match('/\bno\s+quiero\s+(?:recibir(?:\s+mas)?\s+mensajes|que\s+me\s+(?:escriban|contacten|manden|envien)(?:\s+mas)?(?:\s+mensajes)?)\b/u',$t)===1)return true;
+    return preg_match('/\b(?:borra|borren|elimina|eliminen|quita|quiten)\s+(?:mi\s+numero|este\s+numero|mis\s+datos)\b/u',$t)===1;
 }
 
 function hache_sharky_followup_commercial_ready(array $state): bool
@@ -137,6 +141,11 @@ function hache_sharky_followup_prepare_normal_outbound(PDO $pdo,string $contact,
     $now??=time();
     try{
         $state=hache_sharky_db_state_load($pdo,$contact);$followup=hache_sharky_followup_state($state);
+        if(hache_sharky_followup_user_opted_out((string)($state['last_user_text']??''))){
+            $followup['status']='completed_optout';$followup['next_stage']=null;$followup['completed_at']=$now;$followup['token']=null;
+            hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
+            return $payload;
+        }
         if((int)$followup['sent_count']>=1&&!str_starts_with((string)$followup['status'],'completed')){
             $followup['status']='completed_after_reply';$followup['next_stage']=null;$followup['completed_at']=$now;$followup['token']=null;
             hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
