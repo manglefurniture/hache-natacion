@@ -24,7 +24,18 @@ jobs:
         with:
           node-version: '22'
       - name: Apply controlled context-drift patch
-        run: python3 tools/sharky-context-drift-apply.py
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tools/sharky-context-drift-apply.py')
+          s=p.read_text(encoding='utf-8')
+          bad="$words=preg_split('/\\s+/u,$plain,-1,PREG_SPLIT_NO_EMPTY)?:[];"
+          good="$words=preg_split('/\\s+/u',$plain,-1,PREG_SPLIT_NO_EMPTY)?:[];"
+          if bad not in s:
+              raise SystemExit('patch harness syntax anchor missing')
+          p.write_text(s.replace(bad,good,1),encoding='utf-8')
+          PY
+          python3 tools/sharky-context-drift-apply.py
       - name: PHP syntax on touched files
         run: |
           php -l config/sharky-whatsapp-adapter.php
