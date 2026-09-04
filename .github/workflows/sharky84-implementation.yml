@@ -1,0 +1,57 @@
+name: Sharky 84 Self Implementation
+
+on:
+  push:
+    branches:
+      - fix/sharky-deterministic-replies-20260903
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/sharky-deterministic-replies-20260903
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply controlled implementation patch
+        run: python3 tools/sharky84_apply.py
+      - name: PHP syntax on touched runtime files
+        run: |
+          php -l config/sharky-whatsapp-adapter.php
+          php -l config/sharky-deterministic-replies.php
+          php -l config/sharky-runtime.php
+          php -l config/sharky-lab-worker.php
+          php -l config/sharky-business-actions.php
+          php -l config/sharky-orchestrator.php
+          php -l public/api/sharky-v2.php
+          php -l public/api/sharky-whatsapp-dispatch.php
+      - name: Focused Sharky regressions
+        run: |
+          php tests/sharky-deterministic-replies-regression.php
+          php tests/sharky-whatsapp-adapter-regression.php
+          php tests/sharky-guided-onboarding-regression.php
+          php tests/sharky-commercial-next-action-regression.php
+          php tests/sharky-post-pr72-regression.php
+      - name: Full quality suite
+        run: npm test
+      - name: Commit tested implementation
+        run: |
+          git config user.name 'Hache Interactive'
+          git config user.email 'manglefurniture@gmail.com'
+          git add config public/api tests
+          if git diff --cached --quiet; then
+            echo 'No runtime changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix: preserve Sharky commercial context and deterministic replies'
+          git push origin HEAD:fix/sharky-deterministic-replies-20260903
