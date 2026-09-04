@@ -37,6 +37,11 @@ $state['commercial_context']['sede_clave']='PALAPAS';
 $state['last_user_text']='Quiero información';
 followup_ok(hache_sharky_followup_commercial_ready($state),'A commercially ready prospect must be eligible.');
 
+$arm=hache_sharky_followup_arm_meta($state,'529980000000','message-1');
+followup_ok(is_array($arm)&&strlen((string)($arm['token']??''))===40,'A delivered-reply arm must carry a deterministic opaque token.');
+followup_ok(($arm['user_turn_at']??0)===$state['updated_at'],'The arm must be bound to the exact user-turn version.');
+followup_ok(($arm['program']??'')==='intensive'&&($arm['sede_clave']??'')==='PALAPAS','The arm must snapshot program and venue for stale-context rejection.');
+
 $p1=hache_sharky_followup_payload('529980000000',$state,1,'token-1',(int)$state['updated_at']);
 followup_ok(($p1['type']??'')==='interactive','First follow-up must be an interactive WhatsApp message.');
 followup_ok(array_column(array_map(static fn(array $b):array=>$b['reply'],$p1['interactive']['action']['buttons']??[]),'id')===['action:register_intensive','action:commercial_schedules','action:commercial_price'],'Intensive first follow-up must offer registration, schedules and price.');
@@ -56,6 +61,8 @@ $student=$state;$student['identity']['kind']='student';
 followup_ok(!hache_sharky_followup_commercial_ready($student),'Existing students must not receive prospect sales reminders.');
 $optout=$state;$optout['last_user_text']='No gracias, yo te aviso';
 followup_ok(!hache_sharky_followup_commercial_ready($optout),'Explicit opt-out must suppress reminders.');
+$closed=$state;$closed['last_user_text']='Muchas gracias';
+followup_ok(!hache_sharky_followup_commercial_ready($closed),'A courteous conversation close must not trigger a sales reminder.');
 
 // The reminder lifecycle lives inside the already-encrypted commercial context. It must
 // survive normal state hydration and later commercial-context capture without resetting.
@@ -75,12 +82,16 @@ $recent=['status'=>'completed_two_sent','completed_at'=>$ts('2026-09-03 19:30:00
 followup_ok(hache_sharky_followup_completed_recently($recent,$ts('2026-09-04 19:29:59')),'A completed sequence must not re-arm inside the same 24-hour session.');
 followup_ok(!hache_sharky_followup_completed_recently($recent,$ts('2026-09-04 19:30:01')),'A completed sequence may become eligible only after the 24-hour session has elapsed.');
 
-$source=file_get_contents(__DIR__.'/../config/sharky-outbox.php')?:'';
+$outboxSource=file_get_contents(__DIR__.'/../config/sharky-outbox.php')?:'';
 $followSource=file_get_contents(__DIR__.'/../config/sharky-followup.php')?:'';
-followup_ok(str_contains($source,'hache_sharky_followup_on_normal_outbound'),'Normal outbound delivery must arm/reset the idle timer.');
-followup_ok(str_contains($source,'hache_sharky_followup_validate_before_send'),'A due reminder must revalidate state immediately before external send.');
-followup_ok(str_contains($source,'hache_sharky_outbox_reschedule_owner'),'Quiet-hour enforcement must be able to defer an already-due outbox row.');
-followup_ok(str_contains($source,'hache_sharky_followup_after_sent'),'Only a successfully sent first reminder may schedule the second reminder.');
+followup_ok(str_contains($outboxSource,'hache_sharky_followup_prepare_normal_outbound'),'A normal outbound must prepare follow-up metadata before durable enqueue.');
+followup_ok(str_contains($outboxSource,"unset(\$payload['_sharky_followup_arm'])"),'Internal follow-up arm metadata must never be sent to Meta.');
+followup_ok(str_contains($outboxSource,"elseif(is_array(\$followupArm))hache_sharky_followup_after_normal_sent"),'The 15-minute timer must start only after the normal reply is externally sent and marked SENT.');
+followup_ok(str_contains($outboxSource,'hache_sharky_followup_validate_before_send'),'A due reminder must revalidate state immediately before external send.');
+followup_ok(str_contains($outboxSource,'hache_sharky_outbox_reschedule_owner'),'Quiet-hour enforcement must be able to defer an already-due outbox row.');
+followup_ok(str_contains($outboxSource,'hache_sharky_followup_after_sent'),'Only a successfully sent first reminder may schedule the second reminder.');
+followup_ok(str_contains($followSource,'processed_at IS NULL')&&str_contains($followSource,'received_at>FROM_UNIXTIME(:u)'),'A persisted newer inbound message must cancel a due reminder even before that inbound turn is processed.');
+followup_ok(substr_count($followSource,"'idle-followup|'.\$token.'|1'")===1,'The first reminder must have exactly one scheduling site, after normal delivery succeeds.');
 followup_ok(substr_count($followSource,"'idle-followup|'.\$token.'|2'")===1,'The second reminder must have exactly one scheduling site, after the first send succeeds.');
 
 echo "SHARKY_FOLLOWUP_OK\n";
