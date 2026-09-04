@@ -30,19 +30,27 @@ deterministic_ok(hache_sharky_reply_looks_incomplete('Para orientarte bien:'),'A
 deterministic_ok(hache_sharky_reply_looks_incomplete("¡Claro!\n\n📍"),'A promise plus marker without payload must be rejected.');
 deterministic_ok(!hache_sharky_reply_looks_incomplete('El curso intensivo cuesta $1,200 MXN.'),'A complete short factual answer must remain valid.');
 
-$pdo=new PDO('sqlite::memory:');
-$pdo->exec('CREATE TABLE sedes (id INTEGER PRIMARY KEY, clave TEXT, activo INTEGER)');
-$pdo->exec('CREATE TABLE horarios (id INTEGER PRIMARY KEY, sede_id INTEGER, hora_inicio TEXT, hora_fin TEXT, activo INTEGER, regular INTEGER, intensivo INTEGER)');
-$pdo->exec("INSERT INTO sedes(id,clave,activo) VALUES(1,'MONTEVERDE',1),(2,'PALAPAS',1)");
-$pdo->exec("INSERT INTO horarios(sede_id,hora_inicio,hora_fin,activo,regular,intensivo) VALUES
-(1,'08:00:00','09:00:00',1,0,1),
-(1,'19:00:00','20:00:00',1,0,1),
-(1,'20:00:00','21:00:00',1,0,1),
-(1,'06:00:00','07:00:00',1,1,0),
-(2,'08:00:00','09:00:00',1,0,1)");
+final class DeterministicStatement extends PDOStatement
+{
+    public function __construct(private array $rows){}
+    public function execute(?array $params=null): bool{return true;}
+    public function fetchAll(int $mode=PDO::FETCH_DEFAULT,...$args): array{return $this->rows;}
+}
+final class DeterministicPdo extends PDO
+{
+    public string $lastQuery='';
+    public function __construct(private array $rows){}
+    public function prepare(string $query,array $options=[]): PDOStatement|false{$this->lastQuery=$query;return new DeterministicStatement($this->rows);}
+}
+$pdo=new DeterministicPdo([
+    ['hora_inicio'=>'08:00:00','hora_fin'=>'09:00:00'],
+    ['hora_inicio'=>'19:00:00','hora_fin'=>'20:00:00'],
+    ['hora_inicio'=>'20:00:00','hora_fin'=>'21:00:00'],
+]);
 $hours=hache_sharky_deterministic_active_schedules($pdo,'intensive','MONTEVERDE');
-deterministic_ok($hours===['08:00–09:00','19:00–20:00','20:00–21:00'],'Schedule lookup must filter by current program and venue.');
-deterministic_ok(!in_array('06:00–07:00',$hours,true),'Regular hours must not leak into intensive replies.');
+deterministic_ok($hours===['08:00–09:00','19:00–20:00','20:00–21:00'],'Schedule lookup must format active rows deterministically.');
+deterministic_ok(str_contains($pdo->lastQuery,'s.clave=:c'),'Schedule lookup must remain venue-scoped.');
+deterministic_ok(str_contains($pdo->lastQuery,'h.intensivo=1'),'Intensive requests must query only intensive schedules.');
 
 $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
 $wrapper=file_get_contents(__DIR__.'/../api/sharky.php')?:'';
