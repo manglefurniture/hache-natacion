@@ -54,6 +54,15 @@ function hache_sharky_deterministic_location_request(string $text): bool
     return preg_match('/\b(ubicacion|direccion|maps|mapa|donde\s+queda|donde\s+esta|como\s+llego|como\s+llegar|mandame\s+la\s+ubicacion|enviame\s+la\s+ubicacion)\b/u',$t)===1;
 }
 
+function hache_sharky_deterministic_location_followup_request(string $text,array $state): bool
+{
+    if(hache_sharky_deterministic_detect_explicit_sede($text)===null)return false;
+    $t=hache_sharky_deterministic_normalize($text);
+    if(preg_match('/^[¿?¡!\s]*(?:y\s+)?(?:la\s+)?(?:de\s+)?(?:monteverde|palapas(?:\s+protudec)?)[?!.¿¡ ]*$/u',$t)!==1)return false;
+    $previous=trim((string)($state['previous_user_text']??''));
+    return $previous!==''&&hache_sharky_deterministic_location_request($previous);
+}
+
 function hache_sharky_deterministic_route_followup(string $text): bool
 {
     $t=hache_sharky_deterministic_normalize($text);
@@ -101,8 +110,11 @@ function hache_sharky_deterministic_price_message(array $state): ?string
     $commercial=hache_sharky_deterministic_commercial($state);if($commercial===null)return null;
     $pdo=hache_sharky_pdo();$business=hache_sharky_business_values($pdo instanceof PDO?$pdo:null);
     if($commercial['program']==='intensive'){
-        $price=hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000);
-        return '💰 Curso intensivo'."\n\n".'• Precio general: $'.number_format($price,0,'.',',').' MXN'."\n".'• Duración: 3 semanas, lunes a viernes'."\n".'• No cobra inscripción.';
+        $selected=$state['selected_course_price']??null;
+        $price=is_numeric($selected)?(float)$selected:(float)hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000);
+        $priceText=rtrim(rtrim(number_format($price,2,'.',','),'0'),'.');
+        $label=is_numeric($selected)?'Precio del curso seleccionado':'Precio general';
+        return '💰 Curso intensivo'."\n\n".'• '.$label.': $'.$priceText.' MXN'."\n".'• Duración: 3 semanas, lunes a viernes'."\n".'• No cobra inscripción.';
     }
     $p3=hache_sharky_config_int($business,'sharky_precio_regular_3',1000,0,100000);
     $p5=hache_sharky_config_int($business,'sharky_precio_regular_5',1200,0,100000);
@@ -139,7 +151,7 @@ function hache_sharky_deterministic_schedule_selection_message(string $text,arra
 
 function hache_sharky_deterministic_reply(string $text,array $state,array $context=[]): ?string
 {
-    if(hache_sharky_deterministic_location_request($text))return hache_sharky_deterministic_location_message($text,$state);
+    if(hache_sharky_deterministic_location_request($text)||hache_sharky_deterministic_location_followup_request($text,$state))return hache_sharky_deterministic_location_message($text,$state);
     if(hache_sharky_deterministic_schedule_request($text))return hache_sharky_deterministic_schedule_message($state);
     if(hache_sharky_deterministic_price_request($text))return hache_sharky_deterministic_price_message($state);
     $scheduleSelection=hache_sharky_deterministic_schedule_selection_message($text,$state);if($scheduleSelection!==null)return $scheduleSelection;

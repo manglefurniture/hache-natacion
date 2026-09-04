@@ -369,6 +369,78 @@ function hache_sharky_whatsapp_commercial_ready(array $state): bool
     return in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true);
 }
 
+function hache_sharky_whatsapp_reconcile_qualification_context(array $state): array
+{
+    $flow=$state['flow']??null;
+    if(is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&hache_sharky_whatsapp_commercial_ready($state))return hache_sharky_orchestrator_clear_flow($state);
+    return $state;
+}
+
+function hache_sharky_whatsapp_recover_safe_qualification_interactive(array $state,array $event,int $now): array
+{
+    if(is_array($state['flow']??null))return $state;
+    if(($state['identity']['kind']??'unknown')!=='prospect')return $state;
+    $id=strtolower(trim((string)($event['interactive_id']??'')));
+    if($id==='')return $state;
+    $updated=(int)($state['updated_at']??0);
+    if($updated>0&&$updated<$now-21600)return $state;
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $program=$commercial['program']??null;$sede=$commercial['sede_clave']??null;$step=null;
+    if(in_array($id,['qualify:swims','qualify:beginner'],true)&&$program===null&&$sede===null)$step='swim';
+    elseif(in_array($id,['qualify:formal','qualify:self'],true)&&$program===null)$step='background';
+    elseif(in_array($id,['qualify:intensive','qualify:regular'],true)&&$program===null)$step='program';
+    elseif(str_starts_with($id,'sede:')&&in_array($program,['intensive','regular'],true)&&$sede===null)$step='sede';
+    elseif(str_starts_with($id,'daypart:')&&$program==='regular'&&in_array($sede,['MONTEVERDE','PALAPAS'],true))$step='daypart';
+    return $step===null?$state:hache_sharky_orchestrator_flow($state,'qualify_prospect',$step,[],$now);
+}
+
+function hache_sharky_whatsapp_payment_choice(string $text): ?int
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if(preg_match('/^(?:quiero\s+pagar\s+(?:el\s+)?|prefiero\s+(?:el\s+)?|elijo\s+(?:el\s+)?|voy\s+con\s+(?:el\s+)?|pago\s+(?:el\s+)?|el\s+)?(50|100)\s*(?:%|por\s+ciento)?[.! ]*$/u',$t,$m)!==1)return null;
+    return (int)$m[1];
+}
+
+function hache_sharky_whatsapp_payment_confirmation(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    return preg_match('/^(?:si|ok|oki|okay|claro|confirmo|confirmado|dale|va|correcto|de\s+acuerdo)[!. ]*$/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_payment_flow_active(array $state): bool
+{
+    $flow=$state['flow']??null;
+    return is_array($flow)&&($flow['name']??'')==='commercial_payment'&&($flow['step']??'')==='confirm';
+}
+
+function hache_sharky_whatsapp_payment_confirmation_start(array $state,int $percentage,int $now): array
+{
+    $percentage=in_array($percentage,[50,100],true)?$percentage:100;
+    $state=hache_sharky_orchestrator_flow($state,'commercial_payment','confirm',['percentage'=>$percentage],$now);
+    $message='¿Confirmas que quieres pagar el '.$percentage.'% por anticipado para reservar tu lugar?';
+    return [$state,hache_sharky_orchestrator_yes_no('commercial_payment_confirm',$message)];
+}
+
+function hache_sharky_whatsapp_payment_flow_input(array $state,array $event,int $now): ?array
+{
+    if(!hache_sharky_whatsapp_payment_flow_active($state))return null;
+    $flow=$state['flow'];$data=is_array($flow['data']??null)?$flow['data']:[];$percentage=(int)($data['percentage']??0);
+    $id=strtolower(trim((string)($event['interactive_id']??'')));
+    if($id==='flow:no'||$id==='flow:cancel'){
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state,'Entendido.')];
+    }
+    if($id!=='flow:yes')return [$state,hache_sharky_orchestrator_yes_no('commercial_payment_confirm','¿Confirmas la opción de pago seleccionada?')];
+    if(!in_array($percentage,[50,100],true)){
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state,'No pude recuperar esa opción de pago.')];
+    }
+    $state['commercial_context']['payment_choice_pct']=$percentage;
+    $state=hache_sharky_orchestrator_clear_flow($state);
+    $prefix=$percentage===100?'Perfecto, elegiste pagar el 100% por anticipado.':'Perfecto, elegiste reservar con el 50% por anticipado.';
+    return hache_sharky_whatsapp_registration_offer_from_context($state,$now,$prefix);
+}
+
 function hache_sharky_whatsapp_commercial_ready_message(array $state,string $prefix='Perfecto.'): string
 {
     $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
@@ -562,6 +634,11 @@ function hache_sharky_whatsapp_style_instruction(array $decision,array $state): 
         if(is_int($commercial['age']??null))$known[]='edad: '.$commercial['age'].' años';
         if($known)$instruction.=' Contexto comercial ya confirmado por el usuario: '.implode(', ',$known).'. Trátalo como memoria vigente. No vuelvas a preguntar estos datos salvo que el usuario los cambie explícitamente.';
     }
+    $flow=$state['flow']??null;$flowData=is_array($flow)&&is_array($flow['data']??null)?$flow['data']:[];
+    if(($flow['name']??'')==='register_intensive'&&is_numeric($flowData['course_price']??null)){
+        $coursePrice=rtrim(rtrim(number_format((float)$flowData['course_price'],2,'.',''),'0'),'.');
+        $instruction.=' Precio del curso intensivo seleccionado en backend: $'.$coursePrice.' MXN. Este precio prevalece sobre el precio general.';
+    }
     return $instruction;
 }
 
@@ -645,6 +722,10 @@ function hache_sharky_whatsapp_interactive_is_current(array $state,array $event)
         if($step==='daypart')return str_starts_with($id,'daypart:');
         return false;
     }
+    if($name==='commercial_payment'){
+        if($step==='confirm')return in_array($id,['flow:yes','flow:no','flow:cancel'],true);
+        return false;
+    }
     if($name==='absence'){
         if($step==='offer')return $id==='flow:yes';
         if($step==='date')return $id==='date:tomorrow';
@@ -711,10 +792,18 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
     try{
         $state=hache_sharky_db_state_load($pdo,$contact);
         $context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
+        $context['contact']=$contact;
+        $context['previous_user_text']=trim((string)($state['last_user_text']??''));
         $state=hache_sharky_whatsapp_resume_verified_state($state,$context,(int)$context['now']);
         $state=hache_sharky_orchestrator_expire_flow($state,(int)$context['now']);
+        $state=hache_sharky_whatsapp_reconcile_qualification_context($state);
+        $state=hache_sharky_whatsapp_recover_safe_qualification_interactive($state,$event,(int)$context['now']);
         $ref=hache_sharky_orchestrator_referral($event,(int)$context['now']);
         if($ref)hache_sharky_orchestrator_store_referral($pdo,$messageId,$contactHash,$ref,($context['identity']['found']??false)?(string)$context['identity']['student_id']:null);
+
+        if(trim((string)($event['interactive_id']??''))===''&&hache_sharky_whatsapp_payment_flow_active($state)&&hache_sharky_whatsapp_payment_confirmation((string)($event['text']??''))){
+            $event['interactive_id']='flow:yes';
+        }
 
         if(trim((string)($event['interactive_id']??''))===''&&hache_sharky_whatsapp_registration_offer_active($state)&&hache_sharky_whatsapp_offer_affirmation((string)($event['text']??''))){
             $event['interactive_id']='flow:yes';
@@ -722,6 +811,13 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
 
         if(!hache_sharky_whatsapp_interactive_is_current($state,$event)){
             $decision=hache_sharky_orchestrator_decision('stale_interactive','Esa opción pertenece a un paso anterior. No hice ningún cambio; continuemos desde la opción que tienes activa ahora.');
+            hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+            return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+        }
+
+        $paymentFlow=hache_sharky_whatsapp_payment_flow_input($state,$event,(int)$context['now']);
+        if(is_array($paymentFlow)){
+            [$state,$decision]=$paymentFlow;
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
@@ -759,6 +855,15 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             $decision=hache_sharky_orchestrator_decision('weather_cancellation_policy',$message);
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+        }
+
+        if(trim((string)($event['interactive_id']??''))===''&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)&&($state['commercial_context']['program']??null)==='intensive'){
+            $paymentChoice=hache_sharky_whatsapp_payment_choice((string)($event['text']??''));
+            if($paymentChoice!==null){
+                [$state,$decision]=hache_sharky_whatsapp_payment_confirmation_start($state,$paymentChoice,(int)$context['now']);
+                hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+            }
         }
 
         if(!is_array($state['flow']??null)&&($state['commercial_context']['program']??null)==='regular'&&in_array(($state['commercial_context']['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){

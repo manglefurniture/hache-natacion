@@ -180,4 +180,38 @@ $markPos=strpos($labSource,'$deferredState=hache_sharky_lab_mark_presentation_qu
 $queuePos=$markPos===false?false:strpos($labSource,'return hache_sharky_lab_queue_and_complete($pdo,$contact,$out',$markPos);
 expect_adapter($markPos!==false&&$queuePos!==false&&$markPos<$queuePos,'La marca debe decidirse desde el payload final y persistirse en la misma frontera que lo encola.');
 
+
+// Captura productiva 20:45–20:46: un cierre comercial nunca puede caer de nuevo a swim discovery.
+$closing=hache_sharky_orchestrator_state(null,1788486300);
+$closing['identity']=array_replace($closing['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
+$closing['commercial_context']=array_replace($closing['commercial_context'],['program'=>'intensive','sede_clave'=>'MONTEVERDE']);
+$closing=hache_sharky_orchestrator_flow($closing,'qualify_prospect','swim',[],1788486300);
+$closing=hache_sharky_whatsapp_reconcile_qualification_context($closing);
+expect_adapter(!is_array($closing['flow']??null),'Complete commercial context must invalidate an obsolete qualification flow before a short reply is processed.');
+expect_adapter(hache_sharky_whatsapp_payment_choice('El 100')===100,'Payment choice 100% must become a durable confirmation flow.');
+expect_adapter(hache_sharky_whatsapp_payment_choice('50%')===50,'Payment choice 50% must be recognized.');
+[$payState,$payDecision]=hache_sharky_whatsapp_payment_confirmation_start($closing,100,1788486301);
+expect_adapter(($payState['flow']['name']??'')==='commercial_payment'&&($payState['flow']['step']??'')==='confirm','Payment choice must persist as a controlled confirmation flow.');
+expect_adapter(hache_sharky_whatsapp_payment_confirmation('Ok'),'Short Ok must confirm only the active durable payment question.');
+expect_adapter(hache_sharky_whatsapp_interactive_is_current($payState,['interactive_id'=>'flow:yes']),'Payment confirmation button must be current only while commercial_payment is active.');
+$payResult=hache_sharky_whatsapp_payment_flow_input($payState,['interactive_id'=>'flow:yes','text'=>'Ok'],1788486302);
+expect_adapter(is_array($payResult),'Payment confirmation must produce a controlled next step.');
+expect_adapter(($payResult[0]['commercial_context']['payment_choice_pct']??null)===100,'Confirmed payment percentage must survive in durable commercial context.');
+expect_adapter(($payResult[0]['flow']['name']??'')==='register_intensive'&&($payResult[0]['flow']['step']??'')==='offer','Ok after 100% must advance to registration offer, never restart swim discovery.');
+
+// Visible non-mutating qualification buttons may recover after the 30-minute flow TTL, but only for a bounded window.
+$expired=hache_sharky_orchestrator_state(null,1788480000);
+$expired['identity']=array_replace($expired['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
+$expired['updated_at']=1788480000;
+$recovered=hache_sharky_whatsapp_recover_safe_qualification_interactive($expired,['interactive_id'=>'qualify:swims','text'=>'Ya sé nadar'],1788485160);
+expect_adapter(($recovered['flow']['name']??'')==='qualify_prospect'&&($recovered['flow']['step']??'')==='swim','A still-visible Ya sé nadar button must recover safely after TTL expiration.');
+$tooOld=hache_sharky_whatsapp_recover_safe_qualification_interactive($expired,['interactive_id'=>'qualify:swims','text'=>'Ya sé nadar'],1788502001);
+expect_adapter(!is_array($tooOld['flow']??null),'Ancient qualification buttons must not be revived indefinitely.');
+$mutating=hache_sharky_whatsapp_recover_safe_qualification_interactive($expired,['interactive_id'=>'flow:confirm','text'=>'Confirmar'],1788485160);
+expect_adapter(!is_array($mutating['flow']??null),'Mutation/confirmation buttons must never be reconstructed after their flow expires.');
+
+$runtimeSource=file_get_contents(__DIR__.'/../config/sharky-runtime.php')?:'';
+expect_adapter(str_contains($runtimeSource,'function hache_sharky_usage_record')&&str_contains($runtimeSource,'function hache_sharky_usage_for_contact'),'Real OpenAI token usage must be persistable per hashed conversation.');
+expect_adapter(str_contains($v2Source,"'input_tokens'=>")&&str_contains($v2Source,"'response_status'=>$responseStatus"),'Responses API status and real token counters must be surfaced to the internal WhatsApp caller.');
+
 echo "SHARKY_WHATSAPP_ADAPTER_REGRESSION_OK\n";

@@ -437,3 +437,27 @@ function hache_sharky_metrics(int $days=7): array
     }
     return $rows;
 }
+
+function hache_sharky_usage_record(string $contact,array $usage): void
+{
+    $contact=preg_replace('/\D+/','',$contact)?:'';if($contact==='')return;
+    $input=max(0,(int)($usage['input_tokens']??0));$output=max(0,(int)($usage['output_tokens']??0));$total=max(0,(int)($usage['total_tokens']??0));
+    if($total===0)$total=$input+$output;if($input===0&&$output===0&&$total===0)return;
+    $dir=hache_sharky_writable_dir('usage');if($dir==='')return;
+    $hash=hache_sharky_contact_hash($contact);$path=$dir.'/'.hache_sharky_local_date().'-'.$hash.'.json';
+    $handle=@fopen($path,'c+');if(!$handle||!flock($handle,LOCK_EX)){if(is_resource($handle))fclose($handle);return;}
+    rewind($handle);$raw=stream_get_contents($handle);$data=json_decode(is_string($raw)?$raw:'',true);if(!is_array($data))$data=[];
+    $data['calls']=max(0,(int)($data['calls']??0)+1);$data['input_tokens']=max(0,(int)($data['input_tokens']??0)+$input);$data['output_tokens']=max(0,(int)($data['output_tokens']??0)+$output);$data['total_tokens']=max(0,(int)($data['total_tokens']??0)+$total);$data['updated_at']=gmdate('c');
+    $encoded=json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($encoded!==false){ftruncate($handle,0);rewind($handle);fwrite($handle,$encoded);}flock($handle,LOCK_UN);fclose($handle);
+}
+
+function hache_sharky_usage_for_contact(string $contact,int $days=7): array
+{
+    $contact=preg_replace('/\D+/','',$contact)?:'';$days=max(1,min(31,$days));$sum=['calls'=>0,'input_tokens'=>0,'output_tokens'=>0,'total_tokens'=>0];if($contact==='')return $sum;
+    $hash=hache_sharky_contact_hash($contact);
+    for($i=0;$i<$days;$i++){
+        $date=hache_sharky_local_date(-$i);
+        foreach(hache_sharky_state_dirs('usage') as $dir){$path=$dir.'/'.$date.'-'.$hash.'.json';if(!is_file($path))continue;$data=json_decode((string)@file_get_contents($path),true);if(!is_array($data))continue;foreach(array_keys($sum) as $key)$sum[$key]+=(int)($data[$key]??0);break;}
+    }
+    return $sum;
+}

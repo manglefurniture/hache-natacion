@@ -19,13 +19,17 @@ function hache_sharky_dispatcher_state_from_history(array $data): array
         'identity'=>['kind'=>'prospect'],
         'commercial_context'=>['program'=>null,'sede_clave'=>null,'age'=>null],
         'assistant_presentation_queued'=>false,
+        'previous_user_text'=>'',
+        'selected_course_price'=>null,
     ];
     foreach(array_slice(is_array($data['history']??null)?$data['history']:[],-12) as $turn){
         if(!is_array($turn))continue;
         $role=(string)($turn['role']??'');
         $content=trim((string)($turn['content']??''));
         if($role==='assistant'&&$content!=='')$state['assistant_presentation_queued']=true;
+        if($role==='user'&&$content!==''){$state['previous_user_text']=$content;continue;}
         if($role!=='system'||$content==='')continue;
+        if(preg_match('/Precio del curso intensivo seleccionado en backend:\s*\$([0-9]+(?:\.[0-9]+)?)/u',$content,$pm)===1)$state['selected_course_price']=(float)$pm[1];
         $t=hache_sharky_deterministic_normalize($content);
         if(str_contains($t,'programa: curso intensivo'))$state['commercial_context']['program']='intensive';
         elseif(str_contains($t,'programa: clases regulares'))$state['commercial_context']['program']='regular';
@@ -68,7 +72,7 @@ function hache_sharky_dispatcher_out(array $body,int $status=200): never
 $raw=(string)file_get_contents('php://input');
 $data=json_decode($raw,true);
 if(!is_array($data)||!hache_sharky_dispatcher_is_loopback_whatsapp($data)){
-    require __DIR__.'/sharky-v2.php';
+    require __DIR__.DIRECTORY_SEPARATOR.'sharky-v2.php';
 }
 
 $state=hache_sharky_dispatcher_state_from_history($data);
@@ -90,7 +94,8 @@ ob_start(static function(string $buffer) use ($underway): string {
     $body=json_decode($buffer,true);
     if(!is_array($body)||($body['ok']??false)!==true||!isset($body['answer']))return $buffer;
     $answer=hache_sharky_dispatcher_clean_model_answer((string)$body['answer'],$underway);
-    if(hache_sharky_reply_looks_incomplete($answer)){
+    $responseIncomplete=(string)($body['response_status']??'completed')==='incomplete';
+    if($responseIncomplete||hache_sharky_reply_looks_incomplete($answer)){
         $answer='No quiero dejarte una respuesta a medias. Dime de nuevo qué dato necesitas y te respondo completo.';
         hache_sharky_metric_increment('guarded_incomplete_answers');
     }
@@ -99,4 +104,4 @@ ob_start(static function(string $buffer) use ($underway): string {
     return json_encode($body,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:$buffer;
 });
 
-require __DIR__.'/sharky-v2.php';
+require __DIR__.DIRECTORY_SEPARATOR.'sharky-v2.php';

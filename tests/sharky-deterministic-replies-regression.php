@@ -59,4 +59,16 @@ deterministic_ok(str_contains($dispatcher,"source'=>'deterministic'"),'Dispatche
 deterministic_ok(str_contains($dispatcher,'hache_sharky_reply_looks_incomplete'),'Dispatcher must guard incomplete model answers.');
 deterministic_ok(str_contains($dispatcher,'hache_sharky_dispatcher_clean_model_answer'),'Dispatcher must clean repeated greetings and empty bullets.');
 
+
+$followupState=$state;
+$followupState['previous_user_text']='Me envías la ubicación';
+deterministic_ok(hache_sharky_deterministic_location_followup_request('¿Y la de Monteverde?',$followupState),'Elliptical Monteverde location follow-up must inherit the previous location topic.');
+deterministic_ok(!hache_sharky_deterministic_location_followup_request('¿Y la de Monteverde?',array_merge($followupState,['previous_user_text'=>'¿Qué horarios hay?'])),'Venue-only follow-up must not become location without a location topic.');
+$selectedPriceState=$state;$selectedPriceState['selected_course_price']=1350.0;
+$selectedPrice=hache_sharky_deterministic_price_message($selectedPriceState)??'';
+deterministic_ok(str_contains($selectedPrice,'$1,350')&&str_contains($selectedPrice,'curso seleccionado'),'Selected backend intensive price must override the general price.');
+$dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
+deterministic_ok(str_contains($dispatcher,"response_status']??'completed')==='incomplete'"),'Dispatcher must reject Responses API incomplete output before WhatsApp delivery.');
+deterministic_ok(!str_contains($dispatcher,"__DIR__.'/sharky-v2.php'"),'Dispatcher must avoid the false local-route literal caught by the global static regression.');
+
 echo "SHARKY_DETERMINISTIC_REPLIES_OK\n";
