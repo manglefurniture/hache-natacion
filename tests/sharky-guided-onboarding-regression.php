@@ -63,16 +63,16 @@ $knownRegular['commercial_context']['program']='regular';
 $knownRegular['commercial_context']['sede_clave']='PALAPAS';
 [$knownRegularState,$knownRegularDecision]=hache_sharky_whatsapp_qualification_sede_step($knownRegular,[],1788383020,'Perfecto, seguimos por clases regulares.');
 guided_ok(
-    ($knownRegularState['flow']['step']??null)==='daypart',
-    'A known venue with regular classes must skip the venue question and advance to daypart.'
+    ($knownRegularState['flow']??null)===null,
+    'A known venue with regular classes must complete discovery without another venue or daypart gate.'
 );
 guided_ok(
-    !str_contains(hache_sharky_orchestrator_normalize((string)($knownRegularDecision['message']??'')),'que sede'),
-    'A known venue must never be asked again during regular qualification.'
+    ($knownRegularDecision['kind']??null)==='commercial_next_action',
+    'Known regular program and venue must converge on the deterministic next-action menu.'
 );
 guided_ok(
-    str_contains(hache_sharky_orchestrator_normalize((string)($knownRegularDecision['message']??'')),'matutino'),
-    'A known regular venue should advance directly to the morning/evening preference.'
+    array_column($knownRegularDecision['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],
+    'Known regular context must offer Horarios and Precio without re-asking venue.'
 );
 
 $knownIntensive=$prospect;
@@ -84,7 +84,7 @@ guided_ok(
     'A known venue with intensive context should complete guided qualification without another venue step.'
 );
 guided_ok(
-    ($knownIntensiveDecision['kind']??null)==='commercial_ready',
+    ($knownIntensiveDecision['kind']??null)==='commercial_next_action',
     'Known intensive program and venue should leave the prospect commercially ready.'
 );
 
