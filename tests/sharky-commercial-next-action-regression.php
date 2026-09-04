@@ -26,6 +26,15 @@ $payload=hache_sharky_whatsapp_render('529980000000',$menu);
 commercial_next_ok(($payload['type']??null)==='interactive','Next-action decision must render as WhatsApp interactive buttons.');
 commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===3,'Intensive menu must render exactly three buttons.');
 
+// Schedule/price buttons deliberately remain contextual questions: their visible titles
+// reach the normal conversation path with program + venue memory. Registration keeps the
+// existing controlled intent and consent flow.
+commercial_next_ok(hache_sharky_whatsapp_interactive_is_current($state,['interactive_id'=>'action:commercial_schedules']),'Schedule action must be valid while there is no controlled flow.');
+commercial_next_ok(hache_sharky_whatsapp_interactive_is_current($state,['interactive_id'=>'action:commercial_price']),'Price action must be valid while there is no controlled flow.');
+commercial_next_ok(hache_sharky_orchestrator_intent('Horarios','action:commercial_schedules')==='conversation','Schedule action must reach contextual conversation using the confirmed commercial state.');
+commercial_next_ok(hache_sharky_orchestrator_intent('Precio','action:commercial_price')==='conversation','Price action must reach contextual conversation using the confirmed commercial state.');
+commercial_next_ok(hache_sharky_orchestrator_intent('Inscribirme','action:register_intensive')==='register_intensive','Registration action must keep the existing controlled registration intent.');
+
 foreach(['Oki','Continuar','Información','Ok','Dale','Perfecto'] as $continuation){
     commercial_next_ok(
         hache_sharky_whatsapp_low_information_reengagement($continuation),
