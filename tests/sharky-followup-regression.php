@@ -65,6 +65,20 @@ followup_ok(!hache_sharky_followup_commercial_ready($optout),'Explicit opt-out m
 $closed=$state;$closed['last_user_text']='Muchas gracias';
 followup_ok(!hache_sharky_followup_commercial_ready($closed),'A courteous conversation close must not trigger a sales reminder.');
 
+// Direct do-not-contact language is a hard opt-out for the active 24-hour follow-up session.
+foreach([
+    'No me escribas más',
+    'Dejen de enviarme mensajes',
+    'No quiero recibir más mensajes',
+    'Borra mi número',
+    'Por favor no me contactes',
+] as $directOptout){
+    followup_ok(hache_sharky_followup_user_opted_out($directOptout),'Direct stop/contact-removal language must be recognized: '.$directOptout);
+    $direct=$state;$direct['last_user_text']=$directOptout;
+    followup_ok(!hache_sharky_followup_commercial_ready($direct),'Direct opt-out must suppress commercial follow-ups: '.$directOptout);
+}
+followup_ok(!hache_sharky_followup_user_opted_out('No me escribas más tarde, mejor mañana'),'A timing preference must not be mistaken for a permanent do-not-contact request.');
+
 // The reminder lifecycle lives inside the already-encrypted commercial context. It must
 // survive normal state hydration and later commercial-context capture without resetting.
 $durableFollowup=[
@@ -82,6 +96,8 @@ followup_ok((hache_sharky_followup_state($captured)['next_stage']??null)===2,'Co
 $recent=['status'=>'completed_two_sent','completed_at'=>$ts('2026-09-03 19:30:00')];
 followup_ok(hache_sharky_followup_completed_recently($recent,$ts('2026-09-04 19:29:59')),'A completed sequence must not re-arm inside the same 24-hour session.');
 followup_ok(!hache_sharky_followup_completed_recently($recent,$ts('2026-09-04 19:30:01')),'A completed sequence may become eligible only after the 24-hour session has elapsed.');
+$optoutRecent=['status'=>'completed_optout','completed_at'=>$ts('2026-09-03 19:30:00')];
+followup_ok(hache_sharky_followup_completed_recently($optoutRecent,$ts('2026-09-04 19:29:59')),'A direct opt-out must remain durable for the active 24-hour follow-up session.');
 
 $outboxSource=file_get_contents(__DIR__.'/../config/sharky-outbox.php')?:'';
 $followSource=file_get_contents(__DIR__.'/../config/sharky-followup.php')?:'';
@@ -92,6 +108,7 @@ followup_ok(str_contains($outboxSource,'hache_sharky_followup_validate_before_se
 followup_ok(str_contains($outboxSource,'hache_sharky_outbox_reschedule_owner'),'Quiet-hour enforcement must be able to defer an already-due outbox row.');
 followup_ok(str_contains($outboxSource,'hache_sharky_followup_after_sent'),'Only a successfully sent first reminder may schedule the second reminder.');
 followup_ok(str_contains($followSource,'processed_at IS NULL')&&str_contains($followSource,'received_at>FROM_UNIXTIME(:u)'),'A persisted newer inbound message must cancel a due reminder even before that inbound turn is processed.');
+followup_ok(str_contains($followSource,"'completed_optout'")&&str_contains($followSource,'hache_sharky_followup_user_opted_out((string)($state[\'last_user_text\']??\'\'))'),'A direct do-not-contact turn must be persisted as completed before any new reminder can arm.');
 followup_ok(substr_count($followSource,"'idle-followup|'.\$token.'|1'")===1,'The first reminder must have exactly one scheduling site, after normal delivery succeeds.');
 followup_ok(substr_count($followSource,"'idle-followup|'.\$token.'|2'")===1,'The second reminder must have exactly one scheduling site, after the first send succeeds.');
 
