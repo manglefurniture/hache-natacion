@@ -70,13 +70,15 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
             // Keep identity verification intact for future reactivation, but do not
             // enter it from WhatsApp while this direct-handoff policy is active.
             $state=hache_sharky_db_state_load($pdo,$contact);
-            if(hache_sharky_whatsapp_deferred_close_eligible($state,$event)){
+            $now=(int)($extraContext['now']??time());
+            $deferredState=hache_sharky_orchestrator_expire_flow($state,$now);
+            if(hache_sharky_whatsapp_deferred_close_eligible($deferredState,$event)){
+                $state=$deferredState;
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
                 if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
                     hache_sharky_orchestrator_unlock($lock);
                     return ['skip'=>true,'code'=>'DUPLICATE'];
                 }
-                $now=(int)($extraContext['now']??time());
                 $state['updated_at']=$now;
                 $state['last_user_text']=trim((string)($event['text']??''));
                 $ref=hache_sharky_orchestrator_referral($event,$now);

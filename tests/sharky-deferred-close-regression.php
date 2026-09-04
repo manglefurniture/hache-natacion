@@ -63,7 +63,7 @@ $incomplete['commercial_context']['sede_clave']=null;
 deferred_ok(!hache_sharky_whatsapp_deferred_close_eligible($incomplete,$event),'Incomplete commercial context must not use the contextual deferred-close response.');
 
 $source=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
-$callPos=strpos($source,'if(hache_sharky_whatsapp_deferred_close_eligible($state,$event))');
+$callPos=strpos($source,'if(hache_sharky_whatsapp_deferred_close_eligible($deferredState,$event))');
 $adapterPos=strpos($source,'$result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);');
 deferred_ok($callPos!==false&&$adapterPos!==false&&$callPos<$adapterPos,'Deferred-close routing must happen before the free-form adapter/model path.');
 
