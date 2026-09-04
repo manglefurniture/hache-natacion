@@ -40,7 +40,7 @@ $regular['commercial_context']['program']='regular';
 $regularMenu=hache_sharky_whatsapp_commercial_next_action($regular);
 commercial_next_ok(array_column($regularMenu['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],'Regular menu must not offer automatic intensive registration.');
 
-// Old production screenshot regression: once regular + Palapas is confirmed, the LLM
+// Historical production regression: once regular + Palapas is confirmed, the LLM
 // cannot make Sharky ask the venue again or resurrect Monteverde as a new choice.
 $knownPalapas=$regular;
 $knownPalapas['commercial_context']['age']=59;
