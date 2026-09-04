@@ -49,9 +49,8 @@ function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload
 
 function hache_sharky_outbox_enqueue(PDO $pdo,string $contact,array $payload,string $dedupeSeed): bool
 {
-    $ok=hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,$dedupeSeed,time());
-    if($ok&&!is_array($payload['_sharky_followup']??null))hache_sharky_followup_on_normal_outbound($pdo,$contact,$payload,$dedupeSeed);
-    return $ok;
+    if(!is_array($payload['_sharky_followup']??null))$payload=hache_sharky_followup_prepare_normal_outbound($pdo,$contact,$payload,$dedupeSeed);
+    return hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,$dedupeSeed,time());
 }
 
 function hache_sharky_outbox_exists(PDO $pdo,string $dedupeSeed): bool
@@ -170,6 +169,7 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
         $payload=hache_sharky_outbox_decrypt($row);
         if($payload===null){if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,7,'DECRYPT_FAILED'))$stats['dead']++;continue;}
         $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
+        $followupArm=is_array($payload['_sharky_followup_arm']??null)?$payload['_sharky_followup_arm']:null;unset($payload['_sharky_followup_arm']);
         $followupMeta=is_array($payload['_sharky_followup']??null)?$payload['_sharky_followup']:null;unset($payload['_sharky_followup']);
         $contact=preg_replace('/\D+/','',(string)($payload['to']??''))?:'';
         if($contact===''||!hash_equals((string)($row['contact_hash']??''),hache_sharky_orchestrator_contact_hash($contact))){
@@ -222,6 +222,7 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
                 if(hache_sharky_outbox_mark_sent($pdo,$id,$owner)){
                     $stats['sent']++;
                     if(is_array($followupMeta))hache_sharky_followup_after_sent($pdo,$contact,$followupMeta,time());
+                    elseif(is_array($followupArm))hache_sharky_followup_after_normal_sent($pdo,$contact,$followupArm,time());
                 }else error_log('[sharky-outbox] sender succeeded but sent marker failed');
             }else{
                 if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count']))$stats['failed']++;
