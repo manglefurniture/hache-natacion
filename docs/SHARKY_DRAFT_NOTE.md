@@ -1,0 +1,1 @@
+Draft PR #84: implementación en curso. No solicitar Codex hasta validación interna.
