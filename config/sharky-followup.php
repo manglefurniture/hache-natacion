@@ -43,10 +43,20 @@ function hache_sharky_followup_send_allowed_now(int $timestamp): bool
     return $hour>=HACHE_SHARKY_FOLLOWUP_START_HOUR&&$hour<HACHE_SHARKY_FOLLOWUP_END_HOUR;
 }
 
+function hache_sharky_followup_user_deferred(string $text): bool
+{
+    if(str_contains($text,'?')||str_contains($text,'¿'))return false;
+    $t=hache_sharky_orchestrator_normalize($text);
+    $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
+    if($t==='')return false;
+    return preg_match('/^(?:(?:gracias|muchas\s+gracias|perfecto|ok|vale)[,;.!\s]+)?(?:(?:te\s+)?(?:confirmo|aviso|digo)\s+(?:mas\s+tarde|luego|despues|manana)|(?:mas\s+tarde|luego|despues|manana)\s+(?:te\s+)?(?:confirmo|aviso|digo)|dejame\s+(?:checar|revisar(?:lo)?|ver|pensar(?:lo)?)(?:\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))?|(?:lo|me\s+lo)\s+(?:pienso|checo|reviso)\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))[.!\s]*$/u',$t)===1;
+}
+
 function hache_sharky_followup_user_opted_out(string $text): bool
 {
     $t=hache_sharky_orchestrator_normalize($text);
     if($t==='')return false;
+    if(hache_sharky_followup_user_deferred($text))return true;
     if(preg_match('/^(?:gracias|muchas gracias|listo gracias|gracias eso es todo|eso es todo|con eso gracias)[.! ]*$/u',$t)===1)return true;
     if(preg_match('/\b(?:no\s+gracias|no\s+me\s+interesa|ya\s+no\s+me\s+interesa|dejalo|dejala|yo\s+te\s+aviso|luego\s+te\s+escribo|despues\s+te\s+escribo|solo\s+estaba\s+preguntando|solo\s+queria\s+informacion)\b/u',$t)===1)return true;
     if(preg_match('/(?:^|\b)(?:por\s+favor[,.]?\s*)?(?:no|nunca)\s+me\s+(?:escribas|contactes|mandes|envies)(?:\s+mas(?:\s+mensajes)?)?(?:\s*(?:por\s+favor|gracias))?[.! ]*$/u',$t)===1)return true;
