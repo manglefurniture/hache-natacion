@@ -47,6 +47,7 @@ function hache_sharky_followup_user_opted_out(string $text): bool
 {
     $t=hache_sharky_orchestrator_normalize($text);
     if($t==='')return false;
+    if(preg_match('/^(?:gracias|muchas gracias|listo gracias|gracias eso es todo|eso es todo|con eso gracias)[.! ]*$/u',$t)===1)return true;
     return preg_match('/\b(no\s+gracias|no\s+me\s+interesa|ya\s+no\s+me\s+interesa|dejalo|dejala|yo\s+te\s+aviso|luego\s+te\s+escribo|despues\s+te\s+escribo|solo\s+estaba\s+preguntando|solo\s+queria\s+informacion)\b/u',$t)===1;
 }
 
@@ -70,7 +71,7 @@ function hache_sharky_followup_payload_body(array $payload): string
 
 function hache_sharky_followup_payload_armable(array $payload): bool
 {
-    if(is_array($payload['_sharky_followup']??null)||($payload['_sharky_allow_takeover']??false)===true)return false;
+    if(is_array($payload['_sharky_followup']??null)||is_array($payload['_sharky_followup_arm']??null)||($payload['_sharky_allow_takeover']??false)===true)return false;
     $body=hache_sharky_followup_payload_body($payload);
     if(mb_strlen($body)<20)return false;
     $t=hache_sharky_orchestrator_normalize($body);
@@ -123,34 +124,73 @@ function hache_sharky_followup_completed_recently(array $followup,int $now): boo
     return $completed>0&&$completed>$now-HACHE_SHARKY_FOLLOWUP_SESSION_SECONDS;
 }
 
-function hache_sharky_followup_on_normal_outbound(PDO $pdo,string $contact,array $payload,string $dedupeSeed,?int $now=null): void
+function hache_sharky_followup_arm_meta(array $state,string $contact,string $dedupeSeed): ?array
+{
+    $userTurnAt=(int)($state['updated_at']??0);if($userTurnAt<=0)return null;
+    [$program,]=hache_sharky_followup_label($state);
+    $token=substr(hash('sha256','idle-followup|'.hache_sharky_orchestrator_contact_hash($contact).'|'.$userTurnAt.'|'.$dedupeSeed),0,40);
+    return ['token'=>$token,'user_turn_at'=>$userTurnAt,'program'=>$program,'sede_clave'=>(string)($state['commercial_context']['sede_clave']??'')];
+}
+
+function hache_sharky_followup_prepare_normal_outbound(PDO $pdo,string $contact,array $payload,string $dedupeSeed,?int $now=null): array
 {
     $now??=time();
     try{
-        $state=hache_sharky_db_state_load($pdo,$contact);
-        $followup=hache_sharky_followup_state($state);
+        $state=hache_sharky_db_state_load($pdo,$contact);$followup=hache_sharky_followup_state($state);
         if((int)$followup['sent_count']>=1&&!str_starts_with((string)$followup['status'],'completed')){
             $followup['status']='completed_after_reply';$followup['next_stage']=null;$followup['completed_at']=$now;$followup['token']=null;
             hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
-            return;
+            return $payload;
         }
-        if(hache_sharky_followup_completed_recently($followup,$now))return;
+        if(hache_sharky_followup_completed_recently($followup,$now))return $payload;
         if(!hache_sharky_followup_commercial_ready($state)||!hache_sharky_followup_payload_armable($payload)){
-            if(($followup['status']??'')==='armed'){
+            if(in_array((string)($followup['status']??''),['armed','pending_delivery'],true)){
                 $followup['status']='idle';$followup['token']=null;$followup['next_stage']=null;
                 hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
             }
-            return;
+            return $payload;
         }
-        $userTurnAt=(int)($state['updated_at']??0);if($userTurnAt<=0)return;
-        $token=substr(hash('sha256','idle-followup|'.hache_sharky_orchestrator_contact_hash($contact).'|'.$userTurnAt.'|'.$dedupeSeed),0,40);
+        $meta=hache_sharky_followup_arm_meta($state,$contact,$dedupeSeed);if(!is_array($meta))return $payload;
+        $followup=['status'=>'pending_delivery','token'=>$meta['token'],'user_turn_at'=>$meta['user_turn_at'],'sent_count'=>0,'next_stage'=>1,'first_due_at'=>null,'first_sent_at'=>null,'second_due_at'=>null,'completed_at'=>null];
+        hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
+        $payload['_sharky_followup_arm']=$meta;
+    }catch(Throwable $e){error_log('[sharky-followup] outbound preparation failed');}
+    return $payload;
+}
+
+function hache_sharky_followup_newer_inbound_pending(PDO $pdo,string $contact,int $userTurnAt): bool
+{
+    if($userTurnAt<=0)return true;
+    try{
+        $st=$pdo->prepare("SELECT 1 FROM sharky_message_receipts WHERE contact_hash=:c AND processed_at IS NULL AND payload_ciphertext IS NOT NULL AND received_at>FROM_UNIXTIME(:u) LIMIT 1");
+        $st->execute([':c'=>hache_sharky_orchestrator_contact_hash($contact),':u'=>$userTurnAt]);
+        return (bool)$st->fetchColumn();
+    }catch(Throwable $e){return true;}
+}
+
+function hache_sharky_followup_context_matches(array $state,array $meta): bool
+{
+    [$program,]=hache_sharky_followup_label($state);
+    return ($meta['program']??'')===$program&&($meta['sede_clave']??'')===($state['commercial_context']['sede_clave']??'');
+}
+
+function hache_sharky_followup_after_normal_sent(PDO $pdo,string $contact,array $meta,?int $now=null): void
+{
+    $now??=time();$token=trim((string)($meta['token']??''));$userTurnAt=(int)($meta['user_turn_at']??0);
+    if($token===''||$userTurnAt<=0)return;
+    try{
+        $state=hache_sharky_db_state_load($pdo,$contact);$followup=hache_sharky_followup_state($state);
+        if(($followup['status']??'')!=='pending_delivery'||!hash_equals((string)($followup['token']??''),$token)||(int)($state['updated_at']??0)!==$userTurnAt)return;
+        if($now>=$userTurnAt+HACHE_SHARKY_FOLLOWUP_SESSION_SECONDS||!hache_sharky_followup_commercial_ready($state)||!hache_sharky_followup_context_matches($state,$meta))return;
         $due=hache_sharky_followup_next_allowed_at($now+HACHE_SHARKY_FOLLOWUP_FIRST_DELAY_SECONDS);
-        $followup=['status'=>'armed','token'=>$token,'user_turn_at'=>$userTurnAt,'sent_count'=>0,'next_stage'=>1,'first_due_at'=>$due,'first_sent_at'=>null,'second_due_at'=>null,'completed_at'=>null];
-        $state=hache_sharky_followup_set_state($state,$followup);
-        hache_sharky_db_state_save_now($pdo,$contact,$state);
-        $followPayload=hache_sharky_followup_payload($contact,$state,1,$token,$userTurnAt);
-        if(!hache_sharky_outbox_enqueue_raw($pdo,$contact,$followPayload,'idle-followup|'.$token.'|1',$due))error_log('[sharky-followup] unable to schedule first follow-up');
-    }catch(Throwable $e){error_log('[sharky-followup] arm failed');}
+        $followup['status']='armed';$followup['first_due_at']=$due;
+        $state=hache_sharky_followup_set_state($state,$followup);hache_sharky_db_state_save_now($pdo,$contact,$state);
+        $payload=hache_sharky_followup_payload($contact,$state,1,$token,$userTurnAt);
+        if(!hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,'idle-followup|'.$token.'|1',$due)){
+            $followup['status']='completed_first_schedule_failed';$followup['next_stage']=null;$followup['token']=null;$followup['completed_at']=$now;
+            hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
+        }
+    }catch(Throwable $e){error_log('[sharky-followup] first schedule failed');}
 }
 
 function hache_sharky_followup_validate_before_send(PDO $pdo,string $contact,array $meta,?int $now=null): array
@@ -160,11 +200,11 @@ function hache_sharky_followup_validate_before_send(PDO $pdo,string $contact,arr
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return ['ok'=>false,'reason'=>'STATE_UNAVAILABLE'];}
     $followup=hache_sharky_followup_state($state);
     if(!hash_equals((string)($followup['token']??''),$token)||((int)($followup['next_stage']??0))!==$stage)return ['ok'=>false,'reason'=>'STALE_FOLLOWUP'];
-    if((int)($state['updated_at']??0)!==$userTurnAt){return ['ok'=>false,'reason'=>'USER_REPLIED'];}
+    if((int)($state['updated_at']??0)!==$userTurnAt)return ['ok'=>false,'reason'=>'USER_REPLIED'];
+    if(hache_sharky_followup_newer_inbound_pending($pdo,$contact,$userTurnAt))return ['ok'=>false,'reason'=>'PENDING_INBOUND'];
     if($now>=$userTurnAt+HACHE_SHARKY_FOLLOWUP_SESSION_SECONDS)return ['ok'=>false,'reason'=>'SESSION_EXPIRED'];
     if(!hache_sharky_followup_commercial_ready($state))return ['ok'=>false,'reason'=>'CONTEXT_NOT_ELIGIBLE'];
-    [$program,]=$labels=hache_sharky_followup_label($state);
-    if(($meta['program']??'')!==$program||($meta['sede_clave']??'')!==($state['commercial_context']['sede_clave']??''))return ['ok'=>false,'reason'=>'CONTEXT_CHANGED'];
+    if(!hache_sharky_followup_context_matches($state,$meta))return ['ok'=>false,'reason'=>'CONTEXT_CHANGED'];
     if(!hache_sharky_followup_send_allowed_now($now))return ['ok'=>false,'reason'=>'QUIET_HOURS','reschedule_at'=>hache_sharky_followup_next_allowed_at($now)];
     return ['ok'=>true,'state'=>$state];
 }
@@ -175,7 +215,7 @@ function hache_sharky_followup_note_cancelled(PDO $pdo,string $contact,array $me
     try{
         $state=hache_sharky_db_state_load($pdo,$contact);$followup=hache_sharky_followup_state($state);
         if(!hash_equals((string)($followup['token']??''),$token))return;
-        if($reason==='USER_REPLIED'||$reason==='SESSION_EXPIRED'||$reason==='CONTEXT_NOT_ELIGIBLE'||$reason==='CONTEXT_CHANGED'){
+        if(in_array($reason,['USER_REPLIED','PENDING_INBOUND','SESSION_EXPIRED','CONTEXT_NOT_ELIGIBLE','CONTEXT_CHANGED'],true)){
             $followup['status']='completed_'.strtolower($reason);$followup['next_stage']=null;$followup['token']=null;$followup['completed_at']=$now;
             hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
         }
