@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/../config/sharky-orchestrator.php';
+require_once __DIR__.'/../config/sharky-orchestrator-store.php';
 require_once __DIR__.'/../config/sharky-followup.php';
 
 function followup_ok(bool $condition,string $message): void
