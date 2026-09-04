@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-whatsapp-adapter.php';
 
+function hache_sharky_whatsapp_student_claim_requires_handoff(array $state,array $event): bool
+{
+    return hache_sharky_orchestrator_contextual_intent(
+        $state,
+        (string)($event['text']??''),
+        (string)($event['interactive_id']??'')
+    )==='student_claim';
+}
+
 function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');
@@ -30,7 +39,36 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
             hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             $result=['skip'=>false,'code'=>'HUMAN_TAKEOVER','state'=>$state,'decision'=>$decision,'payload'=>null,'action_result'=>null];
         }else{
-            $result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+            // Temporary operating rule: existing students are handled by a person.
+            // Keep identity verification intact for future reactivation, but do not
+            // enter it from WhatsApp while this direct-handoff policy is active.
+            $state=hache_sharky_db_state_load($pdo,$contact);
+            if(hache_sharky_whatsapp_student_claim_requires_handoff($state,$event)){
+                $hash=hache_sharky_orchestrator_contact_hash($contact);
+                if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                    hache_sharky_orchestrator_unlock($lock);
+                    return ['skip'=>true,'code'=>'DUPLICATE'];
+                }
+                $state=hache_sharky_orchestrator_clear_flow($state);
+                $decision=hache_sharky_orchestrator_decision(
+                    'student_human_takeover',
+                    'Perfecto. Como ya eres alumno, te dejo directamente con una persona del equipo de Hache Natación para que continúe contigo por este mismo chat.',
+                    [],
+                    ['type'=>'human_takeover']
+                );
+                hache_sharky_db_state_save($pdo,$contact,$state);
+                hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                $result=[
+                    'skip'=>false,
+                    'code'=>'STUDENT_HUMAN_TAKEOVER',
+                    'state'=>$state,
+                    'decision'=>$decision,
+                    'payload'=>hache_sharky_whatsapp_render($contact,$decision),
+                    'action_result'=>['ok'=>true,'code'=>'HANDOFF'],
+                ];
+            }else{
+                $result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+            }
         }
     }catch(Throwable $e){
         hache_sharky_orchestrator_unlock($lock);
