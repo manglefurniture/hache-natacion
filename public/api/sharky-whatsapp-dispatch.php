@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/../../config/rate-limit.php';
 require_once __DIR__.'/../../config/sharky-runtime.php';
 require_once __DIR__.'/../../config/sharky-deterministic-replies.php';
 
@@ -74,6 +75,11 @@ $state=hache_sharky_dispatcher_state_from_history($data);
 $message=trim((string)($data['message']??''));
 $deterministic=$message!==''?hache_sharky_deterministic_reply($message,$state):null;
 if(is_string($deterministic)&&trim($deterministic)!==''){
+    $rate=security_rate_limit_record('sharky-internal-whatsapp','loopback',300,300);
+    if(!$rate['allowed']){
+        header('Retry-After: '.max(1,(int)$rate['retry_after']));
+        hache_sharky_dispatcher_out(['ok'=>false,'error'=>'Sharky recibió demasiados mensajes seguidos. Espera unos minutos e intenta otra vez.'],429);
+    }
     hache_sharky_metric_increment('answers_whatsapp');
     hache_sharky_metric_increment('deterministic_replies');
     hache_sharky_dispatcher_out(['ok'=>true,'answer'=>trim($deterministic),'channel'=>'whatsapp','source'=>'deterministic']);
