@@ -1,0 +1,120 @@
+name: Temporary PR82 review fixes
+on:
+  push:
+    branches:
+      - fix/sharky-commercial-next-action-20260903
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/sharky-commercial-next-action-20260903
+      - name: Apply exact review fixes and remove temporary workflow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          adapter = Path('config/sharky-whatsapp-adapter.php')
+          s = adapter.read_text()
+
+          old = """        if(($state['commercial_context']['program']??null)==='regular'){
+            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','daypart',$data,$now);
+            return [$state,hache_sharky_orchestrator_decision('prospect_daypart_prompt',$message.' Ya tengo tu sede: '.$label.'. ¿Prefieres horario matutino o vespertino?',['type'=>'buttons','buttons'=>[
+                hache_sharky_orchestrator_button('daypart:morning','Matutino'),
+                hache_sharky_orchestrator_button('daypart:evening','Vespertino'),
+            ]])];
+        }
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state,$message.' Perfecto.')];"""
+          new = """        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state,$message.' Ya tengo tu sede: '.$label.'.')];"""
+          if s.count(old) != 1:
+              raise SystemExit('known-venue regular block mismatch')
+          s = s.replace(old, new, 1)
+
+          old = """        if(($state['commercial_context']['program']??null)==='regular'){
+            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','daypart',$data,$now);
+            $label=$sede==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
+            return [$state,hache_sharky_orchestrator_decision('prospect_daypart_prompt','Perfecto. Para clases regulares en '.$label.', ¿prefieres horario matutino o vespertino?',['type'=>'buttons','buttons'=>[
+                hache_sharky_orchestrator_button('daypart:morning','Matutino'),hache_sharky_orchestrator_button('daypart:evening','Vespertino')]])];
+        }
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state)];"""
+          new = """        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state)];"""
+          if s.count(old) != 1:
+              raise SystemExit('sede regular block mismatch')
+          s = s.replace(old, new, 1)
+
+          old = """    if(!is_array($flow)){
+        return str_starts_with($id,'identity:')||str_starts_with($id,'action:');
+    }"""
+          new = """    if(!is_array($flow)){
+        if($id==='action:register_intensive')return ($state['commercial_context']['program']??null)==='intensive';
+        return str_starts_with($id,'identity:')||str_starts_with($id,'action:');
+    }"""
+          if s.count(old) != 1:
+              raise SystemExit('interactive no-flow block mismatch')
+          s = s.replace(old, new, 1)
+          adapter.write_text(s)
+
+          guided = Path('tests/sharky-guided-onboarding-regression.php')
+          g = guided.read_text()
+          old = """guided_ok(
+    ($knownRegularState['flow']['step']??null)==='daypart',
+    'A known venue with regular classes must skip the venue question and advance to daypart.'
+);
+guided_ok(
+    !str_contains(hache_sharky_orchestrator_normalize((string)($knownRegularDecision['message']??'')),'que sede'),
+    'A known venue must never be asked again during regular qualification.'
+);
+guided_ok(
+    str_contains(hache_sharky_orchestrator_normalize((string)($knownRegularDecision['message']??'')),'matutino'),
+    'A known regular venue should advance directly to the morning/evening preference.'
+);"""
+          new = """guided_ok(
+    ($knownRegularState['flow']??null)===null,
+    'A known venue with regular classes must complete discovery without another venue or daypart gate.'
+);
+guided_ok(
+    ($knownRegularDecision['kind']??null)==='commercial_next_action',
+    'Known regular program and venue must converge on the deterministic next-action menu.'
+);
+guided_ok(
+    array_column($knownRegularDecision['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],
+    'Known regular context must offer Horarios and Precio without re-asking venue.'
+);"""
+          if g.count(old) != 1:
+              raise SystemExit('guided known-regular expectation mismatch')
+          g = g.replace(old, new, 1)
+          guided.write_text(g)
+
+          reg = Path('tests/sharky-commercial-next-action-regression.php')
+          r = reg.read_text()
+          anchor = """commercial_next_ok(array_column($regularMenu['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],'Regular menu must not offer automatic intensive registration.');
+"""
+          addition = anchor + """commercial_next_ok(!hache_sharky_whatsapp_interactive_is_current($regular,['interactive_id'=>'action:register_intensive']),'An old intensive registration button must become stale after the confirmed program changes to regular.');
+
+$pdo=new PDO('sqlite::memory:');
+$regularSedeFlow=hache_sharky_orchestrator_flow($regular,'qualify_prospect','sede',[],1788460010);
+[$regularAfterSede,$regularAfterSedeDecision]=hache_sharky_whatsapp_qualification_input($pdo,$regularSedeFlow,['text'=>'Palapas','interactive_id'=>'sede:palapas'],1788460011,12);
+commercial_next_ok(($regularAfterSede['flow']??null)===null,'Selecting a regular venue must finish guided discovery instead of opening a daypart gate.');
+commercial_next_ok(($regularAfterSedeDecision['kind']??null)==='commercial_next_action','The normal regular venue path must converge on the next-action menu.');
+commercial_next_ok(array_column($regularAfterSedeDecision['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],'The normal regular path must expose Horarios and Precio immediately after venue selection.');
+"""
+          if r.count(anchor) != 1:
+              raise SystemExit('commercial regular menu anchor mismatch')
+          r = r.replace(anchor, addition, 1)
+          reg.write_text(r)
+
+          Path('.github/workflows/tmp-fix-pr82-codex.yml').unlink()
+          PY
+          git config user.name "Hache Interactive Automation"
+          git config user.email "manglefurniture@gmail.com"
+          git add config/sharky-whatsapp-adapter.php tests/sharky-guided-onboarding-regression.php tests/sharky-commercial-next-action-regression.php .github/workflows/tmp-fix-pr82-codex.yml
+          git commit -m "fix: close PR82 review findings"
+          git push origin HEAD:fix/sharky-commercial-next-action-20260903
