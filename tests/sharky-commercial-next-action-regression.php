@@ -28,7 +28,7 @@ commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===3,'
 
 // Schedule/price buttons deliberately remain contextual questions: their visible titles
 // reach the normal conversation path with program + venue memory. Registration keeps the
-// existing controlled intent and consent flow.
+// existing controlled intent and consent flow, while stale intensive actions are rejected.
 commercial_next_ok(hache_sharky_whatsapp_interactive_is_current($state,['interactive_id'=>'action:commercial_schedules']),'Schedule action must be valid while there is no controlled flow.');
 commercial_next_ok(hache_sharky_whatsapp_interactive_is_current($state,['interactive_id'=>'action:commercial_price']),'Price action must be valid while there is no controlled flow.');
 commercial_next_ok(hache_sharky_orchestrator_intent('Horarios','action:commercial_schedules')==='conversation','Schedule action must reach contextual conversation using the confirmed commercial state.');
