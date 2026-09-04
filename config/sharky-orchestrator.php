@@ -38,6 +38,7 @@ function hache_sharky_orchestrator_state(?array $state = null, ?int $now = null)
             'program' => null,
             'sede_clave' => null,
             'age' => null,
+            'swim_level' => null,
         ],
         'last_user_text' => '',
     ];
@@ -60,6 +61,7 @@ function hache_sharky_orchestrator_state(?array $state = null, ?int $now = null)
     if (!in_array($out['commercial_context']['sede_clave'], [null,'MONTEVERDE','PALAPAS'], true)) $out['commercial_context']['sede_clave'] = null;
     $age=$out['commercial_context']['age'];
     if ($age !== null && (!is_int($age) || $age < 1 || $age > 120)) $out['commercial_context']['age'] = null;
+    if (!in_array($out['commercial_context']['swim_level'], [null,'beginner','swims'], true)) $out['commercial_context']['swim_level'] = null;
     if ($out['flow'] !== null && !is_array($out['flow'])) $out['flow'] = null;
     if (!in_array($out['mode'], ['conversation','controlled'], true)) $out['mode'] = 'conversation';
     return $out;
