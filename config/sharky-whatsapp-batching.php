@@ -13,6 +13,33 @@ function hache_sharky_whatsapp_student_claim_requires_handoff(array $state,array
     )==='student_claim';
 }
 
+function hache_sharky_whatsapp_deferred_close_request(string $text): bool
+{
+    if(str_contains($text,'?')||str_contains($text,'¿'))return false;
+    $t=hache_sharky_orchestrator_normalize($text);
+    $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
+    if($t==='')return false;
+    return preg_match('/^(?:(?:gracias|muchas\s+gracias|perfecto|ok|vale)[,;.!\s]+)?(?:(?:te\s+)?(?:confirmo|aviso|digo)\s+(?:mas\s+tarde|luego|despues|manana)|(?:mas\s+tarde|luego|despues|manana)\s+(?:te\s+)?(?:confirmo|aviso|digo)|dejame\s+(?:checar|revisar(?:lo)?|ver|pensar(?:lo)?)(?:\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))?|(?:lo|me\s+lo)\s+(?:pienso|checo|reviso)\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))[.!\s]*$/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_deferred_close_eligible(array $state,array $event): bool
+{
+    if(trim((string)($event['interactive_id']??''))!=='')return false;
+    if(is_array($state['flow']??null))return false;
+    if(!hache_sharky_whatsapp_commercial_ready($state))return false;
+    return hache_sharky_whatsapp_deferred_close_request((string)($event['text']??''));
+}
+
+function hache_sharky_whatsapp_deferred_close_message(array $state): string
+{
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $sede=hache_sharky_whatsapp_venue_label((string)($commercial['sede_clave']??''));
+    if(($commercial['program']??null)==='regular'){
+        return 'Perfecto 😊 Cuando quieras continuar, aquí estaré. Ya tengo que te interesan las clases regulares en '.$sede.'.';
+    }
+    return 'Perfecto 😊 Cuando quieras continuar, aquí estaré. Ya tengo que te interesa el curso intensivo en '.$sede.'.';
+}
+
 function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');
@@ -43,7 +70,32 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
             // Keep identity verification intact for future reactivation, but do not
             // enter it from WhatsApp while this direct-handoff policy is active.
             $state=hache_sharky_db_state_load($pdo,$contact);
-            if(hache_sharky_whatsapp_student_claim_requires_handoff($state,$event)){
+            if(hache_sharky_whatsapp_deferred_close_eligible($state,$event)){
+                $hash=hache_sharky_orchestrator_contact_hash($contact);
+                if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                    hache_sharky_orchestrator_unlock($lock);
+                    return ['skip'=>true,'code'=>'DUPLICATE'];
+                }
+                $now=(int)($extraContext['now']??time());
+                $state['updated_at']=$now;
+                $state['last_user_text']=trim((string)($event['text']??''));
+                $ref=hache_sharky_orchestrator_referral($event,$now);
+                if($ref)$state=hache_sharky_orchestrator_capture_referral($state,$ref);
+                $decision=hache_sharky_orchestrator_decision(
+                    'commercial_deferred_close',
+                    hache_sharky_whatsapp_deferred_close_message($state)
+                );
+                hache_sharky_db_state_save($pdo,$contact,$state);
+                hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                $result=[
+                    'skip'=>false,
+                    'code'=>'COMMERCIAL_DEFERRED_CLOSE',
+                    'state'=>$state,
+                    'decision'=>$decision,
+                    'payload'=>hache_sharky_whatsapp_render($contact,$decision),
+                    'action_result'=>null,
+                ];
+            }elseif(hache_sharky_whatsapp_student_claim_requires_handoff($state,$event)){
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
                 if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
                     hache_sharky_orchestrator_unlock($lock);
