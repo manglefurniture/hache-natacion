@@ -24,7 +24,18 @@ jobs:
         with:
           node-version: '22'
       - name: Apply controlled implementation patch
-        run: python3 tools/sharky84_apply.py
+        run: |
+          python3 tools/sharky84_apply.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('config/sharky-deterministic-replies.php')
+          s=p.read_text(encoding='utf-8')
+          old="/^(?:y\\s+)?(?:la\\s+)?(?:de\\s+)?(?:monteverde|palapas(?:\\s+protudec)?)[?!. ]*$/u"
+          new="/^[¿?¡!\\s]*(?:y\\s+)?(?:la\\s+)?(?:de\\s+)?(?:monteverde|palapas(?:\\s+protudec)?)[?!.¿¡ ]*$/u"
+          if old not in s:
+              raise SystemExit('elliptical location regex anchor missing')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
       - name: PHP syntax on touched runtime files
         run: |
           php -l config/sharky-whatsapp-adapter.php
