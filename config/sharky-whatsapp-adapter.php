@@ -241,15 +241,8 @@ function hache_sharky_whatsapp_qualification_sede_step(array $state,array $data,
     $known=(string)($state['commercial_context']['sede_clave']??'');
     if(in_array($known,['MONTEVERDE','PALAPAS'],true)){
         $label=$known==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
-        if(($state['commercial_context']['program']??null)==='regular'){
-            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','daypart',$data,$now);
-            return [$state,hache_sharky_orchestrator_decision('prospect_daypart_prompt',$message.' Ya tengo tu sede: '.$label.'. ¿Prefieres horario matutino o vespertino?',['type'=>'buttons','buttons'=>[
-                hache_sharky_orchestrator_button('daypart:morning','Matutino'),
-                hache_sharky_orchestrator_button('daypart:evening','Vespertino'),
-            ]])];
-        }
         $state=hache_sharky_orchestrator_clear_flow($state);
-        return [$state,hache_sharky_whatsapp_commercial_next_action($state,$message.' Perfecto.')];
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state,$message.' Ya tengo tu sede: '.$label.'.')];
     }
     $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',$data,$now);
     return [$state,hache_sharky_orchestrator_decision('prospect_program_recommendation',$message.' ¿Qué sede te queda mejor?',['type'=>'buttons','buttons'=>[
@@ -353,12 +346,6 @@ function hache_sharky_whatsapp_qualification_input(PDO $pdo,array $state,array $
         if($sede===null)return [$state,hache_sharky_orchestrator_decision('prospect_sede_prompt','Elige Monteverde o Palapas Protudec.',['type'=>'buttons','buttons'=>[
             hache_sharky_orchestrator_button('sede:monteverde','Monteverde'),hache_sharky_orchestrator_button('sede:palapas','Palapas')]])];
         $state['commercial_context']['sede_clave']=$sede;
-        if(($state['commercial_context']['program']??null)==='regular'){
-            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','daypart',$data,$now);
-            $label=$sede==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
-            return [$state,hache_sharky_orchestrator_decision('prospect_daypart_prompt','Perfecto. Para clases regulares en '.$label.', ¿prefieres horario matutino o vespertino?',['type'=>'buttons','buttons'=>[
-                hache_sharky_orchestrator_button('daypart:morning','Matutino'),hache_sharky_orchestrator_button('daypart:evening','Vespertino')]])];
-        }
         $state=hache_sharky_orchestrator_clear_flow($state);
         return [$state,hache_sharky_whatsapp_commercial_next_action($state)];
     }
@@ -645,6 +632,7 @@ function hache_sharky_whatsapp_interactive_is_current(array $state,array $event)
     if($id==='')return true;
     $flow=$state['flow']??null;
     if(!is_array($flow)){
+        if($id==='action:register_intensive')return ($state['commercial_context']['program']??null)==='intensive';
         return str_starts_with($id,'identity:')||str_starts_with($id,'action:');
     }
     if(in_array($id,['flow:cancel','flow:no','action:human'],true))return true;
