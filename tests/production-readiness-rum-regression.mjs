@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const client = await readFile(new URL('../public/assets/field-rum.js', import.meta.url), 'utf8');
-const endpoint = await readFile(new URL('../public/api/rum-web-vitals.php', import.meta.url), 'utf8');
-const buildEndpoint = await readFile(new URL('../public/api/rum-build.php', import.meta.url), 'utf8');
+const endpoint = await readFile(new URL('../api/rum-web-vitals.php', import.meta.url), 'utf8');
+const buildEndpoint = await readFile(new URL('../api/rum-build.php', import.meta.url), 'utf8');
 const buildConfig = await readFile(new URL('../config/production-rum.php', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../database/migrations/20260905_production_rum.sql', import.meta.url), 'utf8');
 const collector = await readFile(new URL('../bin/production-readiness-evidence.php', import.meta.url), 'utf8');
@@ -49,7 +49,7 @@ for (const fragment of [
   "['LCP', 'INP', 'CLS']",
   "['home', 'registration', 'admin_payments']",
   "/^git-[a-f0-9]{12}$/",
-  "hache_rum_deployed_build_id(dirname(__DIR__, 2))",
+  "hache_rum_deployed_build_id(dirname(__DIR__))",
   "hash_equals($authoritativeBuildId, $buildId)",
   "rum_out(409, ['ok' => false])",
   "['mobile', 'desktop']",
@@ -79,7 +79,7 @@ for (const forbidden of [
 for (const fragment of [
   "$_SERVER['REQUEST_METHOD']",
   "'GET'",
-  "hache_rum_deployed_build_id(dirname(__DIR__, 2))",
+  "hache_rum_deployed_build_id(dirname(__DIR__))",
   "'build_id' => $buildId",
   'Cache-Control: no-store, max-age=0',
 ]) {
