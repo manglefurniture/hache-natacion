@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Probe origin and RUM git metadata without secrets
+      - name: Probe deployed SHA marker without secrets
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -46,45 +46,22 @@ jobs:
             'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           root=/var/www/hache-natacion
-          gitdir="$root/.git"
+          marker="$root/.hache-deployed-sha"
+          expected='fabd85959725ad1ea80dffeff109ae8ef6f86f5b'
 
-          printf 'nginx_active=%s\n' "$(systemctl is-active nginx 2>/dev/null || true)"
-          printf 'php8.4-fpm_active=%s\n' "$(systemctl is-active php8.4-fpm 2>/dev/null || true)"
+          printf 'home_status=%s\n' "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --resolve hnatacion.com:443:127.0.0.1 https://hnatacion.com/ || true)"
+          printf 'health_status=%s\n' "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --resolve hnatacion.com:443:127.0.0.1 https://hnatacion.com/api/health.php || true)"
 
-          probe() {
-            local label="$1" url="$2" code
-            code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-              --resolve hnatacion.com:443:127.0.0.1 \
-              --connect-timeout 10 --max-time 30 \
-              "$url" || true)"
-            printf '%s_status=%s\n' "$label" "${code:-curl_error}"
-          }
-          probe home https://hnatacion.com/
-          probe rum_build https://hnatacion.com/api/rum-build.php
-          probe health https://hnatacion.com/api/health.php
-
-          stat_safe() {
-            local label="$1" path="$2"
-            if [[ -e "$path" ]]; then
-              printf '%s_stat=%s\n' "$label" "$(stat -c '%U:%G %a %F' "$path" 2>/dev/null || echo stat_denied)"
-              printf '%s_readable=%s\n' "$label" "$([[ -r "$path" ]] && echo yes || echo no)"
-              printf '%s_traversable=%s\n' "$label" "$([[ -d "$path" && -x "$path" ]] && echo yes || echo no)"
+          if [[ -e "$marker" ]]; then
+            printf 'marker_stat=%s\n' "$(stat -c '%U:%G %a %F' "$marker" 2>/dev/null || echo stat_denied)"
+            printf 'marker_readable=%s\n' "$([[ -r "$marker" ]] && echo yes || echo no)"
+            actual="$(tr -d '\r\n' < "$marker" 2>/dev/null || true)"
+            if [[ "$actual" == "$expected" ]]; then
+              echo 'marker_matches_expected=yes'
             else
-              printf '%s_exists=no\n' "$label"
+              echo 'marker_matches_expected=no'
             fi
-          }
-
-          stat_safe repo "$root"
-          stat_safe gitdir "$gitdir"
-          stat_safe git_head "$gitdir/HEAD"
-          stat_safe refs "$gitdir/refs"
-          stat_safe refs_heads "$gitdir/refs/heads"
-          stat_safe main_ref "$gitdir/refs/heads/main"
-          stat_safe packed_refs "$gitdir/packed-refs"
-
-          if command -v namei >/dev/null 2>&1; then
-            printf 'head_path_components_begin\n'
-            namei -l "$gitdir/HEAD" 2>/dev/null | sed -E 's/[[:space:]]+/ /g' || true
-            printf 'head_path_components_end\n'
+          else
+            echo 'marker_exists=no'
           fi
           REMOTE
