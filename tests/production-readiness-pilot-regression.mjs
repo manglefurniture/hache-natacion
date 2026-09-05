@@ -6,6 +6,7 @@ const internalEndpoint = await readFile(new URL('../api/production-readiness-evi
 const workflow = await readFile(new URL('../.github/workflows/production-readiness-evidence.yml', import.meta.url), 'utf8');
 const quality = await readFile(new URL('../.github/workflows/quality.yml', import.meta.url), 'utf8');
 const pilot = await readFile(new URL('../docs/production-readiness/PILOT-C.md', import.meta.url), 'utf8');
+const communicationReview = await readFile(new URL('../docs/production-readiness/COMMUNICATION-DELIVERY-REVIEW-20260905.md', import.meta.url), 'utf8');
 
 for (const fragment of [
   "PHP_SAPI !== 'cli'",
@@ -120,12 +121,32 @@ for (const fragment of [
   'CUF-C-01',
   'CUF-C-02',
   'CUF-C-03',
-  '`NOT EVALUATED`',
-  '`PARTIAL`',
+  '| Campo | `NOT EVALUATED` |',
+  '| Restore | `PARTIAL` |',
+  '| Communication status | `PASS` |',
+  'COMMUNICATION-DELIVERY-REVIEW-20260905.md',
   'no ejecutar restore sobre la DB de producción',
   'read-only',
 ]) {
   assert.ok(pilot.includes(fragment), `missing pilot documentation boundary: ${fragment}`);
 }
+
+for (const fragment of [
+  '**Gate: Communication status — PASS.**',
+  '33945691437',
+  '35c305c0c92bf12915612a72b4a563744a0d09b1',
+  '`correlated_total = 36`',
+  '`DELIVERED = 10`',
+  '`READ = 26`',
+  '`FAILED = 0`',
+  '9963245317',
+  'aprobó explícitamente el snapshot',
+  'Este PASS no convierte los gates de Field ni Restore en PASS',
+]) {
+  assert.ok(communicationReview.includes(fragment), `missing reviewed communication evidence: ${fragment}`);
+}
+
+assert.ok(!communicationReview.includes('contains_contact_identifiers = true'), 'review must not claim contact identifiers are present');
+assert.ok(!communicationReview.includes('contains_credentials = true'), 'review must not claim credentials are present');
 
 console.log('PRODUCTION_READINESS_PILOT_REGRESSION_OK');
