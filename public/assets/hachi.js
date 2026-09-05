@@ -258,7 +258,6 @@
     const script = document.createElement('script');
     script.src = '/assets/field-rum.js?v=20260905-1';
     script.dataset.routeGroup = 'home';
-    script.dataset.buildId = 'pilot-c-field-v1';
     script.dataset.sampleRate = '1';
     document.head.appendChild(script);
   } catch {
