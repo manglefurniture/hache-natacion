@@ -23,6 +23,7 @@ deterministic_ok(hache_sharky_deterministic_detect_explicit_sede('Quiero la ubic
 deterministic_ok(hache_sharky_deterministic_detect_explicit_sede('Maps de Palapas Protudec')==='PALAPAS','Explicit Palapas must be recognized.');
 deterministic_ok(hache_sharky_deterministic_route_followup('En coche'),'Route follow-ups from the historical screenshot must be caught.');
 deterministic_ok(hache_sharky_deterministic_time_range('De 19:00 a 20:00')===['19:00','20:00'],'Time ranges must normalize to HH:MM.');
+deterministic_ok(hache_sharky_deterministic_sede_label('MONTEVERDE')==='Colegio Monteverde','All deterministic user-facing Monteverde labels must use Colegio Monteverde.');
 
 deterministic_ok(hache_sharky_reply_looks_incomplete('¡Claro! 😊'),'Greeting plus emoji only must be rejected as incomplete.');
 deterministic_ok(hache_sharky_reply_looks_incomplete('¡Hola! 💰'),'Repeated greeting plus emoji only must be rejected as incomplete.');
@@ -56,9 +57,17 @@ $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.p
 $wrapper=file_get_contents(__DIR__.'/../api/sharky.php')?:'';
 deterministic_ok(str_contains($wrapper,'sharky-whatsapp-dispatch.php'),'Public Sharky wrapper must route through the WhatsApp dispatcher.');
 deterministic_ok(str_contains($dispatcher,"source'=>'deterministic'"),'Dispatcher must expose deterministic responses without calling the LLM.');
+deterministic_ok(str_contains($dispatcher,"sede: colegio monteverde"),'Dispatcher must recover Colegio Monteverde from the system context before deterministic price/schedule handling.');
 deterministic_ok(str_contains($dispatcher,'hache_sharky_reply_looks_incomplete'),'Dispatcher must guard incomplete model answers.');
 deterministic_ok(str_contains($dispatcher,'hache_sharky_dispatcher_clean_model_answer'),'Dispatcher must clean repeated greetings and empty bullets.');
 
+$regularMonteverde=[
+    'identity'=>['kind'=>'prospect'],
+    'commercial_context'=>['program'=>'regular','sede_clave'=>'MONTEVERDE','age'=>null],
+];
+$regularPrice=hache_sharky_deterministic_price_message($regularMonteverde)??'';
+deterministic_ok(str_contains($regularPrice,'Clases regulares en Colegio Monteverde'),'Regular Monteverde price must answer directly with the already-confirmed venue.');
+deterministic_ok(str_contains($regularPrice,'$1,000')&&str_contains($regularPrice,'$1,200'),'Regular price reply must include both configured monthly plans.');
 
 $followupState=$state;
 $followupState['previous_user_text']='Me envías la ubicación';
