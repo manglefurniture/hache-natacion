@@ -1,0 +1,194 @@
+name: Production Readiness Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Evidence to collect
+        required: true
+        default: production_snapshot
+        type: choice
+        options:
+          - production_snapshot
+          - restore_lab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hache-natacion-production-readiness-${{ github.event.inputs.mode }}
+  cancel-in-progress: false
+
+jobs:
+  production-snapshot:
+    if: ${{ github.event.inputs.mode == 'production_snapshot' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Collect read-only production snapshot
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p evidence
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /var/www/hache-natacion && php bin/production-readiness-evidence.php" \
+            > evidence/production-snapshot.json
+
+          php -r '
+            $p=json_decode(file_get_contents("evidence/production-snapshot.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($p["ok"]??false)!==true||($p["collector"]??"")!=="hache-natacion-production-readiness-pilot-c"){
+              fwrite(STDERR,"invalid production evidence\n"); exit(1);
+            }
+            foreach(["field","restore","communication_delivery"] as $gate){
+              if(!isset($p["gates"][$gate])){fwrite(STDERR,"missing gate $gate\n"); exit(1);}
+            }
+          '
+
+      - name: Measure public HTTPS request without response body
+        run: |
+          set -Eeuo pipefail
+          curl \
+            --silent --show-error --location --max-redirs 3 \
+            --proto '=https' --tlsv1.2 \
+            --connect-timeout 5 --max-time 20 \
+            --output /dev/null \
+            --write-out '{"http_code":%{http_code},"time_namelookup_seconds":%{time_namelookup},"time_connect_seconds":%{time_connect},"time_appconnect_seconds":%{time_appconnect},"time_starttransfer_seconds":%{time_starttransfer},"time_total_seconds":%{time_total},"url_effective":"%{url_effective}"}\n' \
+            https://hnatacion.com/ > evidence/public-http.json
+          php -r '
+            $p=json_decode(file_get_contents("evidence/public-http.json"),true,512,JSON_THROW_ON_ERROR);
+            $code=(int)($p["http_code"]??0);
+            if($code<200||$code>=400){fwrite(STDERR,"unexpected public HTTP status\n");exit(1);}
+          '
+
+      - name: Upload production evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-readiness-production-snapshot-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  restore-lab:
+    if: ${{ github.event.inputs.mode == 'restore_lab' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MariaDB client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client
+
+      - name: Run isolated schema dump and restore drill
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -Eeuo pipefail
+          mkdir -p evidence
+          chmod 700 evidence
+          source_db=hache_pr_restore_source
+          target_db=hache_pr_restore_target
+          started="$(date -u +%s)"
+
+          cleanup() {
+            mariadb --host=127.0.0.1 --port=3306 --user=root \
+              -e "DROP DATABASE IF EXISTS \`$source_db\`; DROP DATABASE IF EXISTS \`$target_db\`;" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          mariadb --host=127.0.0.1 --port=3306 --user=root \
+            -e "CREATE DATABASE \`$source_db\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE DATABASE \`$target_db\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mariadb --host=127.0.0.1 --port=3306 --user=root "$source_db" < database/schema_hache_monteverde_v1.sql
+          mariadb --host=127.0.0.1 --port=3306 --user=root "$source_db" \
+            -e "CREATE TABLE production_readiness_restore_marker(id INT PRIMARY KEY, marker VARCHAR(64) NOT NULL); INSERT INTO production_readiness_restore_marker VALUES(1,'HACHE_PR_RESTORE_MARKER_V1');"
+
+          mariadb-dump \
+            --host=127.0.0.1 --port=3306 --user=root \
+            --single-transaction --routines --triggers --events --hex-blob \
+            "$source_db" > evidence/database.sql
+          dump_sha="$(sha256sum evidence/database.sql | awk '{print $1}')"
+          schema_sha="$(sha256sum database/schema_hache_monteverde_v1.sql | awk '{print $1}')"
+
+          mariadb --host=127.0.0.1 --port=3306 --user=root "$target_db" < evidence/database.sql
+
+          marker="$(mariadb --host=127.0.0.1 --port=3306 --user=root --batch --skip-column-names "$target_db" -e "SELECT marker FROM production_readiness_restore_marker WHERE id=1;")"
+          [[ "$marker" == 'HACHE_PR_RESTORE_MARKER_V1' ]]
+
+          payment_table="$(mariadb --host=127.0.0.1 --port=3306 --user=root --batch --skip-column-names "$target_db" -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pagos';")"
+          [[ "$payment_table" == '1' ]]
+          payment_triggers="$(mariadb --host=127.0.0.1 --port=3306 --user=root --batch --skip-column-names "$target_db" -e "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME IN ('trg_un_pago_valido_insert','trg_un_pago_valido_update');")"
+          [[ "$payment_triggers" == '2' ]]
+
+          finished="$(date -u +%s)"
+          duration="$((finished-started))"
+          cat > evidence/restore-lab.json <<EOF
+          {
+            "schema_version": 1,
+            "result": "PASS_SYNTHETIC_SCHEMA_RESTORE",
+            "source": "database/schema_hache_monteverde_v1.sql",
+            "source_schema_sha256": "$schema_sha",
+            "dump_sha256": "$dump_sha",
+            "restore_duration_seconds": $duration,
+            "marker_verified": true,
+            "payment_table_verified": true,
+            "payment_validity_triggers_verified": true,
+            "production_backup_used": false,
+            "gate_effect": "RESTORE_REMAINS_PARTIAL"
+          }
+          EOF
+          rm -f evidence/database.sql
+
+      - name: Validate restore evidence
+        run: |
+          php -r '
+            $p=json_decode(file_get_contents("evidence/restore-lab.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($p["result"]??"")!=="PASS_SYNTHETIC_SCHEMA_RESTORE"||($p["production_backup_used"]??true)!==false||($p["gate_effect"]??"")!=="RESTORE_REMAINS_PARTIAL"){
+              fwrite(STDERR,"invalid restore evidence\n"); exit(1);
+            }
+          '
+
+      - name: Upload restore evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-readiness-restore-lab-${{ github.run_id }}
+          path: evidence/restore-lab.json
+          if-no-files-found: error
+          retention-days: 14
