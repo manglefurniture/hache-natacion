@@ -73,9 +73,11 @@ Este CUF hace que el proyecto sea apto para el criterio de piloto que exige una 
 
 No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciales ni contenido de conversaciones. Aunque existan `DELIVERED`/`READ`, el collector expone `EVIDENCE AVAILABLE — HUMAN REVIEW REQUIRED` y nunca convierte por sí solo el gate en PASS.
 
+En producción el usuario SSH de deploy no tiene permiso de lectura sobre `config/database.local.php`, que permanece `root:www-data` con acceso restringido. Para no ampliar permisos sobre secretos, `api/production-readiness-evidence.php` ofrece una entrada **solo loopback**, `POST` y con guarda explícita; una petición externa recibe `404` antes de cargar configuración. Esa entrada ejecuta el mismo collector bajo el usuario PHP/FPM, que ya posee el acceso mínimo necesario a la configuración local. No confía en `X-Forwarded-For` ni en cabeceras de Cloudflare y no introduce mutaciones de negocio.
+
 `.github/workflows/production-readiness-evidence.yml` permite obtener dos artefactos manuales y auditables:
 
-1. **production snapshot**: ejecuta el collector por el mismo canal SSH del deploy, exige que el SHA desplegado coincida exactamente con el SHA del workflow y mide una solicitud HTTPS pública a `https://hnatacion.com/`;
+1. **production snapshot**: usa el mismo canal SSH del deploy únicamente para invocar por loopback la entrada interna del collector, exige que el SHA desplegado coincida exactamente con el SHA del workflow, verifica que la entrada sea `404` desde Internet y mide una solicitud HTTPS pública a `https://hnatacion.com/`;
 2. **restore lab**: crea dos DB aisladas en MariaDB de CI, importa `database/schema_hache_monteverde_v1.sql` como baseline sintético versionado, inserta un marker, hace dump y restore, y verifica integridad básica. Este drill **no reproduce por sí solo todas las migraciones aplicadas en producción** y no sustituye un restore de un backup real de producción.
 
 El 2026-09-05 se ejecutó correctamente el restore lab sintético aislado: marker, tabla `pagos` y los dos triggers de validez de pago fueron verificados tras dump/restore. Este resultado reduce incertidumbre del mecanismo, pero no cambia por sí solo el gate de restore a PASS porque no utilizó un backup real de producción ni midió RPO/RTO del proceso real.
