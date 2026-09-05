@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/sharky-runtime.php';
 require_once __DIR__.'/../config/sharky-inbox.php';
 require_once __DIR__.'/../config/sharky-lab-worker.php';
+require_once __DIR__.'/../config/sharky-groups.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
@@ -20,9 +21,20 @@ try{
     $business=hache_sharky_business_values($pdo);
     $minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);
     $threshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
-    $processor=static fn(array $event):bool=>hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$threshold);
+    $processor=static function(array $event) use($pdo,$business,$minAge,$threshold): bool {
+        $groupId=trim((string)($event['group_id']??''));
+        if($groupId!==''&&!hache_sharky_groups_enabled($pdo)){
+            $messageId=trim((string)($event['id']??''));
+            if($messageId==='')return false;
+            hache_sharky_metric_increment('messages_skipped_group');
+            return hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+        }
+        return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$threshold);
+    };
     // Recovery is intentionally bounded: realtime webhook processing does the
     // normal path; this worker catches abandoned rows without monopolizing a timer.
+    // Recovered group events are re-gated so disabling the admin checkbox is
+    // authoritative even for traffic persisted while the feature was enabled.
     $stats=hache_sharky_inbox_dispatch($pdo,$processor,10,$enabled);
     if($enabled())hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10);
     fwrite(STDOUT,json_encode($stats,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
