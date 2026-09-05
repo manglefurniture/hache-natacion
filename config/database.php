@@ -41,7 +41,6 @@ if (str_starts_with($uri, '/api/')) {
         '/api/whatsapp-webhook.php',
         '/api/rum-build.php',
         '/api/rum-web-vitals.php',
-        '/api/ops-apply-production-rum.php',
     ];
     if (!in_array($uri, $publicApi, true)) {
         require_once __DIR__ . '/auth.php';
@@ -79,8 +78,6 @@ if (str_starts_with($uri, '/api/')) {
         '/api/whatsapp-webhook.php',
         // RUM es anónimo y minimizado; no debe heredar la auditoría genérica que registra IP.
         '/api/rum-web-vitals.php',
-        // Puente operativo temporal: autenticación propia por loopback + token efímero.
-        '/api/ops-apply-production-rum.php',
     ];
     if (!in_array($method, ['GET','HEAD','OPTIONS'], true) && !in_array($uri, $skipAudit, true)) {
         $auditConfig = $config;
