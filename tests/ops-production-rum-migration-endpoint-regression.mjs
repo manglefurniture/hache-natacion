@@ -28,11 +28,29 @@ for (const fragment of [
 
 const expectedHash = createHash('sha256').update(migration).digest('hex');
 assert.ok(endpoint.includes(`$expectedSha256='${expectedHash}'`), 'temporary endpoint must pin the reviewed RUM migration hash');
-assert.ok(endpoint.includes("$expectedColumns=['id','metric','value','route_group','build_id','form_factor','created_at_utc']"), 'temporary endpoint must verify exact minimized RUM columns');
-assert.ok(endpoint.includes("(int)$valueMeta['NUMERIC_PRECISION']===20"), 'temporary endpoint must verify value precision');
-assert.ok(endpoint.includes("(int)$valueMeta['NUMERIC_SCALE']===8"), 'temporary endpoint must verify value scale');
-assert.ok(endpoint.includes("idx_production_rum_window"), 'temporary endpoint must verify window index');
-assert.ok(endpoint.includes("idx_production_rum_build"), 'temporary endpoint must verify build index');
+
+for (const fragment of [
+  'TABLE_COLLATION',
+  "utf8mb4_unicode_ci",
+  "['COLUMN_NAME'=>'id','COLUMN_TYPE'=>'bigint unsigned','IS_NULLABLE'=>'NO','EXTRA'=>'auto_increment'",
+  "['COLUMN_NAME'=>'metric','COLUMN_TYPE'=>\"enum('lcp','inp','cls')\"",
+  "['COLUMN_NAME'=>'value','COLUMN_TYPE'=>'decimal(20,8) unsigned'",
+  "['COLUMN_NAME'=>'route_group','COLUMN_TYPE'=>'varchar(64)'",
+  "['COLUMN_NAME'=>'build_id','COLUMN_TYPE'=>'varchar(64)'",
+  "['COLUMN_NAME'=>'form_factor','COLUMN_TYPE'=>\"enum('mobile','desktop')\"",
+  "['COLUMN_NAME'=>'created_at_utc','COLUMN_TYPE'=>'datetime(6)'",
+  "'PRIMARY'=>['non_unique'=>0,'type'=>'BTREE','columns'=>['id']]",
+  "'idx_production_rum_build'=>['non_unique'=>1,'type'=>'BTREE','columns'=>['build_id','created_at_utc']]",
+  "'idx_production_rum_window'=>['non_unique'=>1,'type'=>'BTREE','columns'=>['created_at_utc','metric','route_group','form_factor']]",
+  "'table_collation_verified'=>true",
+  "'column_types_verified'=>true",
+  "'nullability_verified'=>true",
+  "'value_precision_verified'=>true",
+  "'enum_contract_verified'=>true",
+  "'indexes_verified'=>true",
+]) {
+  assert.ok(endpoint.includes(fragment), `temporary endpoint must verify full RUM schema contract: ${fragment}`);
+}
 
 for (const forbidden of [
   'HTTP_X_FORWARDED_FOR',
