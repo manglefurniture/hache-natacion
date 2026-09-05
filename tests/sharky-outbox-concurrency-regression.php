@@ -10,6 +10,7 @@ function outbox_expect(bool $ok,string $message):void
 }
 
 $outbox=file_get_contents(__DIR__.'/../config/sharky-outbox.php')?:'';
+$orchestrator=file_get_contents(__DIR__.'/../config/sharky-orchestrator.php')?:'';
 $migration=file_get_contents(__DIR__.'/../database/migrations/20260902_sharky_orchestrator.sql')?:'';
 
 outbox_expect(str_contains($migration,'ALTER TABLE sharky_outbox ADD COLUMN IF NOT EXISTS owner_token CHAR(48) NULL'),'Existing installs must receive the outbox ownership fence.');
@@ -56,5 +57,39 @@ $decoratedTwice=hache_sharky_outbox_add_venue_hints($decorated);
 outbox_expect(substr_count((string)($decoratedTwice['interactive']['body']['text']??''),'Av. Bonampak')===1,'Retry/de-dup paths must not duplicate the venue legend.');
 $textPayload=['type'=>'text','text'=>['body'=>'Hola']];
 outbox_expect(hache_sharky_outbox_add_venue_hints($textPayload)===$textPayload,'Non-venue payloads must remain byte-for-byte equivalent as arrays.');
+
+// The intensive-registration offer is the commercial close. Improve only its
+// presentation while preserving the existing controlled-flow IDs and adding
+// the already-supported human takeover route.
+$salesPayload=[
+    'messaging_product'=>'whatsapp',
+    'recipient_type'=>'individual',
+    'to'=>'529900000002',
+    'type'=>'interactive',
+    'interactive'=>[
+        'type'=>'button',
+        'body'=>['text'=>'Perfecto. Ya tengo: curso intensivo en Palapas Protudec. ¿Quieres que te ayude a registrarte al curso intensivo?'],
+        'action'=>['buttons'=>[
+            ['type'=>'reply','reply'=>['id'=>'flow:yes','title'=>'Sí']],
+            ['type'=>'reply','reply'=>['id'=>'flow:no','title'=>'No']],
+            ['type'=>'reply','reply'=>['id'=>'flow:cancel','title'=>'Cancelar']],
+        ]],
+    ],
+];
+$salesClose=hache_sharky_outbox_add_sales_close($salesPayload);
+$salesBody=(string)($salesClose['interactive']['body']['text']??'');
+$salesReplies=array_column($salesClose['interactive']['action']['buttons']??[],'reply');
+outbox_expect(str_contains($salesBody,'curso intensivo en Palapas Protudec'),'Sales close must keep the already-selected program and venue visible.');
+outbox_expect(str_contains($salesBody,'apartar tu lugar ahora mismo'),'Sales close must use a clear reservation-oriented CTA.');
+outbox_expect(str_contains($salesBody,'¿Cómo quieres continuar?'),'Sales close must invite one explicit next decision.');
+outbox_expect(array_column($salesReplies,'id')===['flow:yes','action:human','flow:no'],'Sales close must preserve yes/no flow routing and expose the established human handoff route.');
+outbox_expect(array_column($salesReplies,'title')===['Apartar mi lugar','Hablar con un profe','Ahora no'],'Sales close must use the agreed customer-facing labels.');
+outbox_expect(!in_array('flow:cancel',array_column($salesReplies,'id'),true),'Sales close must not show duplicate No/Cancelar exits.');
+outbox_expect(hache_sharky_outbox_add_sales_close($salesClose)===$salesClose,'Sales close decoration must be idempotent on retries.');
+outbox_expect(str_contains($orchestrator,"'human' => ['action:human']"),'Hablar con un profe must keep using the orchestrator human-takeover intent.');
+
+$unrelatedOffer=$salesPayload;
+$unrelatedOffer['interactive']['body']['text']='¿Confirmas registrar la ausencia para mañana?';
+outbox_expect(hache_sharky_outbox_add_sales_close($unrelatedOffer)===$unrelatedOffer,'Unrelated yes/no/cancel flows must not be rewritten as a sales close.');
 
 fwrite(STDOUT,"SHARKY_OUTBOX_CONCURRENCY_OK\n");
