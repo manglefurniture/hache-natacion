@@ -1,0 +1,136 @@
+name: Ops Apply Production RUM 20260905
+
+on:
+  push:
+    branches:
+      - ops/apply-production-rum-20260905
+
+permissions:
+  contents: read
+
+jobs:
+  apply-production-rum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Apply and verify minimized RUM schema through local origin
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          EXPECTED_DEPLOYED_SHA: 72fd889b9f2f8140fe40f30c5b071585ba948306
+        run: |
+          set -Eeuo pipefail
+
+          remote_sha="$(ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "git -c safe.directory=/var/www/hache-natacion -C /var/www/hache-natacion rev-parse HEAD")"
+          test "$remote_sha" = "$EXPECTED_DEPLOYED_SHA"
+
+          token="$(openssl rand -hex 32)"
+          test "${#token}" = "64"
+          printf '%s' "$token" | ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "umask 022; cat > /tmp/hache-rum-migration-token; chmod 644 /tmp/hache-rum-migration-token"
+
+          cleanup_token() {
+            ssh \
+              -p "$DEPLOY_PORT" \
+              -i "$HOME/.ssh/id_ed25519" \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "rm -f /tmp/hache-rum-migration-token" >/dev/null 2>&1 || true
+          }
+          trap cleanup_token EXIT
+
+          response="$(ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Rum-Migration-Token: $token' https://hnatacion.com/api/ops-apply-production-rum.php")"
+
+          cleanup_token
+          trap - EXIT
+          unset token
+
+          printf '%s' "$response" | php -r '
+            $p=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);
+            $required=[
+              "ok"=>true,
+              "migration"=>"20260905_production_rum.sql",
+              "table"=>"production_rum_samples",
+              "engine"=>"InnoDB",
+              "table_collation_verified"=>true,
+              "columns_verified"=>true,
+              "column_types_verified"=>true,
+              "nullability_verified"=>true,
+              "column_defaults_verified"=>true,
+              "value_precision_verified"=>true,
+              "enum_contract_verified"=>true,
+              "indexes_verified"=>true,
+            ];
+            foreach($required as $key=>$value){
+              if(!array_key_exists($key,$p)||$p[$key]!==$value){fwrite(STDERR,"verification failed: $key\n");exit(1);}
+            }
+            echo "PRODUCTION_RUM_SCHEMA_VERIFIED\n";
+          '
+
+      - name: Verify bridge is unavailable externally without ephemeral token
+        run: |
+          set -Eeuo pipefail
+          code="$(curl --silent --show-error --location --max-redirs 3 --output /dev/null --write-out '%{http_code}' --request POST https://hnatacion.com/api/ops-apply-production-rum.php)"
+          echo "external_status=$code"
+          [[ "$code" =~ ^4[0-9]{2}$ ]]
+
+      - name: Production health smoke through local origin
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -Eeuo pipefail
+          code="$(ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "curl --silent --show-error --output /dev/null --write-out '%{http_code}' --resolve hnatacion.com:443:127.0.0.1 https://hnatacion.com/api/health.php")"
+          echo "local_health_status=$code"
+          test "$code" = "200"
