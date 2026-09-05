@@ -84,47 +84,55 @@
   addEventListener('pointerdown', finalizeLcp, {once: true, capture: true, passive: true});
   addEventListener('keydown', finalizeLcp, {once: true, capture: true});
 
-  // CLS: official-style session windows (max 5 s, gaps below 1 s), excluding recent input shifts.
+  // CLS: session windows (max 5 s, gaps below 1 s), excluding shifts after recent input.
   let clsMax = 0;
   let clsSessionValue = 0;
   let clsSessionStart = 0;
   let clsSessionEnd = 0;
   let clsObserver = null;
+
+  function processClsEntry(entry) {
+    if (entry.hadRecentInput) return;
+    const value = Number(entry.value);
+    if (!Number.isFinite(value) || value < 0) return;
+    const start = Number(entry.startTime) || 0;
+
+    if (
+      clsSessionValue > 0
+      && start - clsSessionEnd < 1000
+      && start - clsSessionStart < 5000
+    ) {
+      clsSessionValue += value;
+      clsSessionEnd = start;
+    } else {
+      clsSessionValue = value;
+      clsSessionStart = start;
+      clsSessionEnd = start;
+    }
+    clsMax = Math.max(clsMax, clsSessionValue);
+  }
+
   try {
     clsObserver = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        if (entry.hadRecentInput) continue;
-        const value = Number(entry.value);
-        if (!Number.isFinite(value) || value < 0) continue;
-        const start = Number(entry.startTime) || 0;
-
-        if (
-          clsSessionValue > 0
-          && start - clsSessionEnd < 1000
-          && start - clsSessionStart < 5000
-        ) {
-          clsSessionValue += value;
-          clsSessionEnd = start;
-        } else {
-          clsSessionValue = value;
-          clsSessionStart = start;
-          clsSessionEnd = start;
-        }
-        clsMax = Math.max(clsMax, clsSessionValue);
-      }
+      for (const entry of list.getEntries()) processClsEntry(entry);
     });
     clsObserver.observe({type: 'layout-shift', buffered: true});
   } catch {
     clsObserver = null;
   }
 
-  // INP: retain the 10 longest interactions and use the same p98 candidate rule
-  // as the web-vitals algorithm: candidate index floor(interactionCount / 50).
+  // INP: only emit on browsers with Event Timing interaction IDs. Keep at most
+  // the 10 longest interactions and use the same p98 candidate rule as web-vitals.
+  const inpSupported = Boolean(
+    window.PerformanceEventTiming
+    && 'interactionId' in PerformanceEventTiming.prototype,
+  );
   const interactions = new Map();
   let minInteractionId = Infinity;
   let maxInteractionId = 0;
   let firstInputDuration = null;
-  let inpObserver = null;
+  let eventObserver = null;
+  let firstInputObserver = null;
 
   function interactionCountEstimate() {
     if ('interactionCount' in performance) {
@@ -135,55 +143,89 @@
     return Math.max(1, (maxInteractionId - minInteractionId) / 7 + 1);
   }
 
+  function addInteractionCandidate(id, duration) {
+    if (interactions.has(id)) {
+      if (duration > interactions.get(id)) interactions.set(id, duration);
+      return;
+    }
+    if (interactions.size < 10) {
+      interactions.set(id, duration);
+      return;
+    }
+
+    let minId = null;
+    let minDuration = Infinity;
+    for (const [candidateId, candidateDuration] of interactions) {
+      if (candidateDuration < minDuration) {
+        minDuration = candidateDuration;
+        minId = candidateId;
+      }
+    }
+    if (duration > minDuration && minId !== null) {
+      interactions.delete(minId);
+      interactions.set(id, duration);
+    }
+  }
+
   function processEventEntry(entry) {
     const duration = Number(entry.duration);
     if (!Number.isFinite(duration) || duration < 0) return;
 
-    if (entry.entryType === 'first-input') {
-      firstInputDuration = firstInputDuration === null
-        ? duration
-        : Math.max(firstInputDuration, duration);
-    }
-
     const id = Number(entry.interactionId || 0);
     if (!id) return;
-
     minInteractionId = Math.min(minInteractionId, id);
     maxInteractionId = Math.max(maxInteractionId, id);
-    const previous = interactions.get(id) || 0;
-    if (duration > previous) interactions.set(id, duration);
-
-    if (interactions.size > 20) {
-      const keep = [...interactions.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
-      interactions.clear();
-      for (const [keepId, keepDuration] of keep) interactions.set(keepId, keepDuration);
-    }
+    addInteractionCandidate(id, duration);
   }
 
-  try {
-    inpObserver = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) processEventEntry(entry);
-    });
-    inpObserver.observe({type: 'event', buffered: true, durationThreshold: 16});
+  function processFirstInputEntry(entry) {
+    const duration = Number(entry.duration);
+    if (!Number.isFinite(duration) || duration < 0) return;
+    firstInputDuration = firstInputDuration === null
+      ? duration
+      : Math.max(firstInputDuration, duration);
+    processEventEntry(entry);
+  }
+
+  if (inpSupported) {
     try {
-      inpObserver.observe({type: 'first-input', buffered: true});
-    } catch {}
-  } catch {
-    inpObserver = null;
+      eventObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) processEventEntry(entry);
+      });
+      eventObserver.observe({type: 'event', buffered: true, durationThreshold: 40});
+    } catch {
+      eventObserver = null;
+    }
+
+    try {
+      firstInputObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) processFirstInputEntry(entry);
+      });
+      firstInputObserver.observe({type: 'first-input', buffered: true});
+    } catch {
+      firstInputObserver = null;
+    }
   }
 
   function finalizeInp() {
-    if (inpObserver) {
+    if (!inpSupported) return;
+
+    if (eventObserver) {
       try {
-        for (const entry of inpObserver.takeRecords()) processEventEntry(entry);
-        inpObserver.disconnect();
+        for (const entry of eventObserver.takeRecords()) processEventEntry(entry);
+        eventObserver.disconnect();
       } catch {}
-      inpObserver = null;
+      eventObserver = null;
+    }
+    if (firstInputObserver) {
+      try {
+        for (const entry of firstInputObserver.takeRecords()) processFirstInputEntry(entry);
+        firstInputObserver.disconnect();
+      } catch {}
+      firstInputObserver = null;
     }
 
-    const longest = [...interactions.values()].sort((a, b) => b - a).slice(0, 10);
+    const longest = [...interactions.values()].sort((a, b) => b - a);
     if (longest.length) {
       const index = Math.min(longest.length - 1, Math.floor(interactionCountEstimate() / 50));
       send('INP', longest[index]);
@@ -196,26 +238,7 @@
     finalizeLcp();
     if (clsObserver) {
       try {
-        const records = clsObserver.takeRecords();
-        for (const entry of records) {
-          if (entry.hadRecentInput) continue;
-          const value = Number(entry.value);
-          if (!Number.isFinite(value) || value < 0) continue;
-          const start = Number(entry.startTime) || 0;
-          if (
-            clsSessionValue > 0
-            && start - clsSessionEnd < 1000
-            && start - clsSessionStart < 5000
-          ) {
-            clsSessionValue += value;
-            clsSessionEnd = start;
-          } else {
-            clsSessionValue = value;
-            clsSessionStart = start;
-            clsSessionEnd = start;
-          }
-          clsMax = Math.max(clsMax, clsSessionValue);
-        }
+        for (const entry of clsObserver.takeRecords()) processClsEntry(entry);
         clsObserver.disconnect();
       } catch {}
       clsObserver = null;
