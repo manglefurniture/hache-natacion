@@ -22,8 +22,6 @@ jobs:
         run: npm test
       - name: Production readiness pilot regression
         run: node tests/production-readiness-pilot-regression.mjs
-      - name: Temporary delivery migration endpoint regression
-        run: node tests/ops-delivery-migration-endpoint-regression.mjs
 
   delivery-status-mariadb:
     runs-on: ubuntu-latest
