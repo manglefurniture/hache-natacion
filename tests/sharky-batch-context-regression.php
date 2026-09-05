@@ -148,7 +148,7 @@ batch_context_ok(str_contains($source,"\$textMessage=hache_sharky_whatsapp_displ
 batch_context_ok(str_contains($source,'$bodyLimit=1024')&&str_contains($source,'$room=$bodyLimit-mb_strlen($nextMessage)'),'Semantic prompt space must be reserved before trimming a long side-question answer.');
 batch_context_ok(!str_contains($source,'hache_sharky_whatsapp_batch_answer_after_choice'),'Coalesced text must not bypass policy guards through the legacy LLM-only side-question helper.');
 batch_context_ok(str_contains($source,"if(\$groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock"),'Group messages must remain outside direct-chat batching.');
-batch_context_ok(str_contains($source,'hache_sharky_whatsapp_historical_venue_reselection($deferredState,$event)'),'Historical venue correction must run before the adapter can reject an old venue button as stale.');
+batch_context_ok(str_contains($source,'hache_sharky_whatsapp_guarded_historical_venue_reselection($deferredState,$event')&&str_contains($source,'hache_sharky_whatsapp_underage_gate($state,$event,$minAge)'),'Historical venue correction must pass through the minimum-age guard before stale-button handling.');
 
 $pendingReadPos=strpos($dbSource,"\$pending=\$GLOBALS['hache_sharky_db_state_pending']??null");
 $readyCheckPos=strpos($dbSource,'if(!hache_sharky_db_state_ready($pdo))');
