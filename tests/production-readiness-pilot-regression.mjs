@@ -3,8 +3,8 @@ import {readFile} from 'node:fs/promises';
 
 const collector = await readFile(new URL('../bin/production-readiness-evidence.php', import.meta.url), 'utf8');
 const workflow = await readFile(new URL('../.github/workflows/production-readiness-evidence.yml', import.meta.url), 'utf8');
+const quality = await readFile(new URL('../.github/workflows/quality.yml', import.meta.url), 'utf8');
 const pilot = await readFile(new URL('../docs/production-readiness/PILOT-C.md', import.meta.url), 'utf8');
-const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
 for (const fragment of [
   "PHP_SAPI !== 'cli'",
@@ -58,6 +58,7 @@ for (const fragment of [
 assert.ok(workflow.indexOf('rm -f evidence/database.sql') < workflow.lastIndexOf('Upload restore evidence'), 'raw SQL dump must be removed before artifact upload');
 assert.ok(workflow.includes('path: evidence/restore-lab.json'), 'restore artifact must contain only the minimized report');
 assert.ok(!workflow.includes('cancel-in-progress: true'), 'evidence runs must not cancel one another');
+assert.ok(quality.includes('node tests/production-readiness-pilot-regression.mjs'), 'pilot regression must stay connected to Quality CI');
 
 for (const fragment of [
   'Nivel: C — Crítico',
@@ -71,7 +72,5 @@ for (const fragment of [
 ]) {
   assert.ok(pilot.includes(fragment), `missing pilot documentation boundary: ${fragment}`);
 }
-
-assert.ok(pkg.scripts?.test?.includes('tests/production-readiness-pilot-regression.mjs'), 'pilot regression must stay in npm test');
 
 console.log('PRODUCTION_READINESS_PILOT_REGRESSION_OK');
