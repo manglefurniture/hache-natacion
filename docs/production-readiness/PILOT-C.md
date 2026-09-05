@@ -86,15 +86,17 @@ El 2026-09-05 se ejecutó correctamente el restore lab sintético aislado: marke
 
 El 2026-09-05 se hizo un preflight operativo no mutante sobre el host mediante los runs `33984052663`, `33984088882` y `33984134423`. Confirmó que existen los clientes MariaDB y `/var/backups/hache-natacion`, pero **no existía ningún `BACKUP_COMPLETE` bajo ese root**. También confirmó que el helper de deploy instalado en `/usr/local/sbin/deploy-hache-natacion` hacía únicamente el fast-forward/validación del SHA y no generaba backup de DB.
 
-Esta adopción prepara una corrección versionada, pero no la considera activa hasta completar el bootstrap del host:
+La corrección operativa quedó activada el mismo día: el helper protegido está instalado en `/usr/local/sbin/deploy-hache-natacion`, ya creó backups completos reales y cada fast-forward de producción exige un backup completo previo.
 
 - `ops/production-readiness/deploy-hache-natacion` conserva la interfaz histórica `<sha40>` y exige un backup completo de la DB productiva antes de cualquier fast-forward real;
 - el mismo helper expone `backup` para crear una evidencia completa bajo `/var/backups/hache-natacion` y `restore-drill <rpo_seconds> <rto_seconds> <run_id>` para restaurar el último backup completo en una DB nueva `hache_restore_<run_id>`;
 - el restore rechaza un target preexistente o igual a la DB fuente, valida checksums, restaura con root local de MariaDB, verifica las tablas críticas del piloto, los dos triggers de validez de pago y el índice único de `pagos.folio`, y elimina el target al final;
-- `.github/workflows/production-restore-drill.yml` solo puede ejecutar el drill desde `main`, exige RPO y RTO explícitos sin defaults y publica únicamente JSON minimizado; ningún `database.sql` sale del host;
-- los objetivos RPO/RTO siguen **sin definir** hasta una decisión explícita del owner. La disponibilidad de defaults en herramientas de Hache Base no se adopta automáticamente en Hache Natación.
+- `.github/workflows/production-restore-drill.yml` mantiene el drill manual desde `main` con RPO y RTO explícitos y publica únicamente JSON minimizado; ningún `database.sql` sale del host;
+- el owner aprobó el 2026-09-05 **RPO = 24 horas (`86400` s)**, **RTO = 1 hora (`3600` s)** y **cadencia de backup diaria**;
+- `.github/workflows/production-backup-daily.yml` ejecuta el backup diario a las `09:17 UTC` (`04:17 America/Cancun`) para reducir contención del VPS; los backups previos a deploy se conservan como protección adicional y no sustituyen la cadencia diaria;
+- `.github/workflows/ops-production-restore-evidence-once.yml` ejecuta una sola vez, al entrar esta adopción a `main`, el restore del último backup completo real contra los objetivos aprobados y publica solo el JSON minimizado de evidencia.
 
-Hasta que el helper versionado sea instalado en el path root aprobado, se cree al menos un backup completo real y se ejecute el drill con objetivos aprobados, el gate Restore continúa en `PARTIAL`. La preparación de código no es evidencia de recuperación.
+Hasta que el one-shot de restore termine en PASS con `production_backup_used=true`, target aislado verificado, cleanup exitoso y RPO/RTO cumplidos, el gate Restore continúa en `PARTIAL`. La aprobación de objetivos por sí sola no equivale a evidencia de recuperación.
 
 El mismo día se ejecutó el snapshot productivo seguro del run `33945691437` contra `35c305c0c92bf12915612a72b4a563744a0d09b1`. La evidencia minimizada confirmó schema de delivery disponible, 36 estados reales correlacionados (`DELIVERED=10`, `READ=26`, `FAILED=0`), bloqueo externo sin token válido y health local `200`. Tras revisión humana explícita, `Communication status` queda cerrado en PASS; véase `COMMUNICATION-DELIVERY-REVIEW-20260905.md`.
 
@@ -103,7 +105,7 @@ El mismo día se ejecutó el snapshot productivo seguro del run `33945691437` co
 | Gate | Estado | Evidencia necesaria para cerrarlo |
 | --- | --- | --- |
 | Campo | `NOT EVALUATED` | ventana representativa de RUM/Web Vitals o evidencia de campo equivalente aprobada; una medición HTTP aislada no cuenta como p75 de campo |
-| Restore | `PARTIAL` | restore lab sintético del baseline ya ejecutado y verificado; falta instalar el helper versionado, generar un backup completo real y ejecutar un restore aislado con RPO/RTO explícitamente aprobados y medidos |
+| Restore | `PARTIAL` | helper y backups reales activos; RPO 24 h / RTO 1 h / cadencia diaria aprobados; falta que el restore real aislado one-shot demuestre cumplimiento e integridad con evidencia minimizada |
 | Communication status | `PASS` | evidencia real de Meta correlacionada y revisión humana registradas en `COMMUNICATION-DELIVERY-REVIEW-20260905.md` |
 
 El PASS de Communication status no altera los otros dos gates. Field y Restore se mantienen abiertos hasta tener su evidencia específica.
