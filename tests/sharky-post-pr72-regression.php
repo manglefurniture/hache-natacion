@@ -91,9 +91,11 @@ $message=hache_sharky_post72_registration_message([
     ],
 ],$business);
 post72_expect(is_string($message),'Registration success message must render.');
-foreach(['Total del curso: $1,200 MXN','Reserva mínima (50%): $600 MXN','Usuario: juan.perez','Contraseña temporal: Temporal-2026','CLABE: 123456789012345678','Tarjeta: 5% de recargo'] as $needle){
+foreach(['Total del curso: $1,200 MXN','Reserva mínima (50%): $600 MXN','Usuario: juan.perez','Contraseña temporal: Temporal-2026','📋 CLABE para copiar','Mantén pulsada la CLABE para copiarla.','https://hnatacion.com/index.php','Acceso al portal Hache Natación'] as $needle){
     post72_expect(str_contains((string)$message,$needle),'Registration message missing: '.$needle);
 }
+post72_expect(str_contains((string)$message,"\n123456789012345678\n"),'CLABE digits must stay isolated on their own line for easy copy.');
+post72_expect(!str_contains((string)$message,'Tarjeta: 5% de recargo'),'Registration transfer message must not mix in the card surcharge.');
 
 $adapter=file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php')?:'';
 $worker=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
