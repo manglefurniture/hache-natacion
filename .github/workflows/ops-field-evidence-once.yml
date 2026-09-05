@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: hache-natacion-production-readiness-production_snapshot
+  group: hache-natacion-ops-field-evidence-once
   cancel-in-progress: false
 
 jobs:
@@ -94,6 +94,7 @@ jobs:
 
           token="$(openssl rand -hex 32)"
           test "${#token}" = "64"
+          token_path="/tmp/hache-pr-evidence-token-${GITHUB_RUN_ID}"
 
           printf '%s' "$token" | ssh \
             -p "$DEPLOY_PORT" \
@@ -103,7 +104,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "umask 022; cat > /tmp/hache-pr-evidence-token; chmod 644 /tmp/hache-pr-evidence-token"
+            "umask 022; cat > '$token_path'; chmod 644 '$token_path'"
 
           cleanup_token() {
             ssh \
@@ -114,7 +115,7 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               "$DEPLOY_USER@$DEPLOY_HOST" \
-              "rm -f /tmp/hache-pr-evidence-token" >/dev/null 2>&1 || true
+              "rm -f '$token_path'" >/dev/null 2>&1 || true
           }
           trap cleanup_token EXIT
 
@@ -126,7 +127,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Evidence-Token: $token' https://hnatacion.com/api/production-readiness-evidence.php" \
+            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Evidence-Run-Id: $GITHUB_RUN_ID' --header 'X-Hache-Evidence-Token: $token' https://hnatacion.com/api/production-readiness-evidence.php" \
             > evidence/raw-production-snapshot.json
 
           cleanup_token
