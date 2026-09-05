@@ -7,6 +7,7 @@ const workflow = await readFile(new URL('../.github/workflows/production-readine
 const quality = await readFile(new URL('../.github/workflows/quality.yml', import.meta.url), 'utf8');
 const pilot = await readFile(new URL('../docs/production-readiness/PILOT-C.md', import.meta.url), 'utf8');
 const communicationReview = await readFile(new URL('../docs/production-readiness/COMMUNICATION-DELIVERY-REVIEW-20260905.md', import.meta.url), 'utf8');
+const restoreReview = await readFile(new URL('../docs/production-readiness/RESTORE-REVIEW-20260905.md', import.meta.url), 'utf8');
 
 for (const fragment of [
   "PHP_SAPI !== 'cli'",
@@ -39,6 +40,7 @@ for (const fragment of [
 }
 
 assert.ok(!collector.includes("'communication_delivery' => 'PASS'"), 'collector must never auto-PASS communication delivery');
+assert.ok(!collector.includes("'restore' => 'PASS'"), 'collector must never auto-PASS restore without reviewed evidence');
 assert.ok(!collector.includes('git config --global --add safe.directory'), 'collector must not mutate global Git configuration');
 
 for (const forbidden of [
@@ -130,9 +132,10 @@ for (const fragment of [
   'CUF-C-02',
   'CUF-C-03',
   '| Campo | `NOT EVALUATED` |',
-  '| Restore | `PARTIAL` |',
+  '| Restore | `PASS` |',
   '| Communication status | `PASS` |',
   'COMMUNICATION-DELIVERY-REVIEW-20260905.md',
+  'RESTORE-REVIEW-20260905.md',
   'no ejecutar restore sobre la DB de producción',
   'read-only',
 ]) {
@@ -156,5 +159,29 @@ for (const fragment of [
 
 assert.ok(!communicationReview.includes('contains_contact_identifiers = true'), 'review must not claim contact identifiers are present');
 assert.ok(!communicationReview.includes('contains_credentials = true'), 'review must not claim credentials are present');
+
+for (const fragment of [
+  '**Restore: PASS**',
+  '33999270733',
+  'f6f5c974bc163041bb866b9546c5b6f94ac9d160',
+  'deploy-20260905-231912-oXrgzo',
+  '1248',
+  '86400',
+  '3',
+  '3600',
+  'hache_restore_33999270733',
+  'tablas críticas verificadas: `true`',
+  'guardas financieras verificadas: `true`',
+  'cleanup del target: `passed`',
+  'contiene filas personales: `false`',
+  'contiene credenciales: `false`',
+  'Field',
+  '`NOT EVALUATED`',
+]) {
+  assert.ok(restoreReview.includes(fragment), `missing reviewed restore evidence: ${fragment}`);
+}
+
+assert.ok(!restoreReview.includes('contains_personal_rows = true'), 'restore review must not claim personal rows are exported');
+assert.ok(!restoreReview.includes('contains_credentials = true'), 'restore review must not claim credentials are exported');
 
 console.log('PRODUCTION_READINESS_PILOT_REGRESSION_OK');
