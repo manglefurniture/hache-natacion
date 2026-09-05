@@ -57,7 +57,7 @@ rum_db_expect((int) $valueColumn['NUMERIC_SCALE'] === 8, 'RUM value scale drift.
 
 $insert = $pdo->prepare(
     'INSERT INTO production_rum_samples(metric,value,route_group,build_id,form_factor,created_at_utc) '
-    . "VALUES('CLS',:value,'home','pilot-c-field-v1','mobile',UTC_TIMESTAMP(6))"
+    . "VALUES('CLS',:value,'home','git-0123456789ab','mobile',UTC_TIMESTAMP(6))"
 );
 $insert->execute([':value' => '0.10000001']);
 $stored = $pdo->query('SELECT CAST(value AS CHAR) FROM production_rum_samples LIMIT 1')->fetchColumn();
