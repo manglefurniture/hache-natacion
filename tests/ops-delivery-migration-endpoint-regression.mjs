@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const endpoint = await readFile(new URL('../api/ops-apply-sharky-delivery-status.php', import.meta.url), 'utf8');
+const databaseGate = await readFile(new URL('../config/database.php', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../database/migrations/20260905_sharky_delivery_status.sql', import.meta.url), 'utf8');
 const crypto = await import('node:crypto');
 
@@ -28,5 +29,10 @@ assert.ok(!endpoint.includes('HTTP_X_FORWARDED_FOR'), 'loopback authorization mu
 assert.ok(!endpoint.includes('HTTP_CF_CONNECTING_IP'), 'loopback authorization must not trust Cloudflare client headers');
 assert.ok(!endpoint.includes('$e->getMessage()'), 'temporary endpoint must not expose exception details');
 assert.ok(!endpoint.includes("'password'"), 'temporary endpoint must not contain database credentials');
+
+const route = "'/api/ops-apply-sharky-delivery-status.php'";
+assert.equal(databaseGate.split(route).length - 1, 2, 'temporary endpoint must bypass browser-session auth and generic mutation audit only through the two explicit central-gate lists');
+assert.ok(databaseGate.includes('$publicApi = ['), 'central public API list missing');
+assert.ok(databaseGate.includes('$skipAudit = ['), 'central audit exclusion list missing');
 
 console.log('OPS_DELIVERY_MIGRATION_ENDPOINT_REGRESSION_OK');
