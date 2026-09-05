@@ -56,23 +56,23 @@ try{
         && strtoupper((string)($tableMeta['ENGINE']??''))==='INNODB'
         && strtolower((string)($tableMeta['TABLE_COLLATION']??''))==='utf8mb4_unicode_ci';
 
-    $columnRows=$pdo->query("SELECT COLUMN_NAME,LOWER(COLUMN_TYPE) AS COLUMN_TYPE,IS_NULLABLE,EXTRA,CHARACTER_SET_NAME,COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' ORDER BY ORDINAL_POSITION")->fetchAll(PDO::FETCH_ASSOC);
+    $columnRows=$pdo->query("SELECT COLUMN_NAME,LOWER(COLUMN_TYPE) AS COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT,EXTRA,CHARACTER_SET_NAME,COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' ORDER BY ORDINAL_POSITION")->fetchAll(PDO::FETCH_ASSOC);
     $expectedColumns=[
-        ['COLUMN_NAME'=>'id','COLUMN_TYPE'=>'bigint unsigned','IS_NULLABLE'=>'NO','EXTRA'=>'auto_increment','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
-        ['COLUMN_NAME'=>'metric','COLUMN_TYPE'=>"enum('lcp','inp','cls')",'IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
-        ['COLUMN_NAME'=>'value','COLUMN_TYPE'=>'decimal(20,8) unsigned','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
-        ['COLUMN_NAME'=>'route_group','COLUMN_TYPE'=>'varchar(64)','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
-        ['COLUMN_NAME'=>'build_id','COLUMN_TYPE'=>'varchar(64)','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
-        ['COLUMN_NAME'=>'form_factor','COLUMN_TYPE'=>"enum('mobile','desktop')",'IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
-        ['COLUMN_NAME'=>'created_at_utc','COLUMN_TYPE'=>'datetime(6)','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
+        ['COLUMN_NAME'=>'id','COLUMN_TYPE'=>'bigint unsigned','IS_NULLABLE'=>'NO','COLUMN_DEFAULT'=>null,'EXTRA'=>'auto_increment','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
+        ['COLUMN_NAME'=>'metric','COLUMN_TYPE'=>"enum('lcp','inp','cls')",'IS_NULLABLE'=>'NO','COLUMN_DEFAULT'=>null,'EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'value','COLUMN_TYPE'=>'decimal(20,8) unsigned','IS_NULLABLE'=>'NO','COLUMN_DEFAULT'=>null,'EXTRA'=>'','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
+        ['COLUMN_NAME'=>'route_group','COLUMN_TYPE'=>'varchar(64)','IS_NULLABLE'=>'NO','COLUMN_DEFAULT'=>null,'EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'build_id','COLUMN_TYPE'=>'varchar(64)','IS_NULLABLE'=>'NO','COLUMN_DEFAULT'=>null,'EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'form_factor','COLUMN_TYPE'=>"enum('mobile','desktop')",'IS_NULLABLE'=>'NO','COLUMN_DEFAULT'=>null,'EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'created_at_utc','COLUMN_TYPE'=>'datetime(6)','IS_NULLABLE'=>'NO','COLUMN_DEFAULT'=>null,'EXTRA'=>'','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
     ];
     $columnsOk=$columnRows===$expectedColumns;
 
-    $indexRows=$pdo->query("SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' ORDER BY INDEX_NAME,SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
+    $indexRows=$pdo->query("SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,INDEX_TYPE,SUB_PART FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' ORDER BY INDEX_NAME,SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
     $requiredIndexes=[
-        'PRIMARY'=>['non_unique'=>0,'type'=>'BTREE','columns'=>['id']],
-        'idx_production_rum_build'=>['non_unique'=>1,'type'=>'BTREE','columns'=>['build_id','created_at_utc']],
-        'idx_production_rum_window'=>['non_unique'=>1,'type'=>'BTREE','columns'=>['created_at_utc','metric','route_group','form_factor']],
+        'PRIMARY'=>['non_unique'=>0,'type'=>'BTREE','columns'=>[['name'=>'id','sub_part'=>null]]],
+        'idx_production_rum_build'=>['non_unique'=>1,'type'=>'BTREE','columns'=>[['name'=>'build_id','sub_part'=>null],['name'=>'created_at_utc','sub_part'=>null]]],
+        'idx_production_rum_window'=>['non_unique'=>1,'type'=>'BTREE','columns'=>[['name'=>'created_at_utc','sub_part'=>null],['name'=>'metric','sub_part'=>null],['name'=>'route_group','sub_part'=>null],['name'=>'form_factor','sub_part'=>null]]],
     ];
     $seenIndexes=[];
     foreach($indexRows as $indexRow){
@@ -85,9 +85,15 @@ try{
                 'columns'=>[],
             ];
         }
-        $seenIndexes[$name]['columns'][]=(string)($indexRow['COLUMN_NAME']??'');
+        $seenIndexes[$name]['columns'][]=[
+            'name'=>(string)($indexRow['COLUMN_NAME']??''),
+            'sub_part'=>$indexRow['SUB_PART']===null?null:(int)$indexRow['SUB_PART'],
+        ];
     }
-    $indexesOk=$seenIndexes===$requiredIndexes;
+    $indexesOk=count($seenIndexes)===count($requiredIndexes);
+    foreach($requiredIndexes as $name=>$requiredIndex){
+        if(($seenIndexes[$name]??null)!==$requiredIndex){$indexesOk=false;break;}
+    }
 
     if(!$tableOk||!$columnsOk||!$indexesOk)throw new RuntimeException('verify');
 
@@ -100,6 +106,7 @@ try{
         'columns_verified'=>true,
         'column_types_verified'=>true,
         'nullability_verified'=>true,
+        'column_defaults_verified'=>true,
         'value_precision_verified'=>true,
         'enum_contract_verified'=>true,
         'indexes_verified'=>true,
