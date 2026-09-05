@@ -34,6 +34,7 @@ $root=dirname(__DIR__);
 $migrations=[
     $root.'/database/migrations/20260902_sharky_orchestrator.sql',
     $root.'/database/migrations/20260903_sharky_orchestrator_hardening.sql',
+    $root.'/database/migrations/20260905_sharky_delivery_status.sql',
 ];
 
 try{

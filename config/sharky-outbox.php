@@ -6,6 +6,7 @@ require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-followup.php';
 require_once __DIR__.'/sharky-groups.php';
+require_once __DIR__.'/sharky-delivery-status.php';
 
 const HACHE_SHARKY_OUTBOX_LEASE_SECONDS=90;
 
@@ -98,12 +99,6 @@ function hache_sharky_outbox_renew_owner(PDO $pdo,string $id,string $ownerToken)
         $st=$pdo->prepare('UPDATE sharky_outbox SET lease_until=DATE_ADD(NOW(),INTERVAL '.HACHE_SHARKY_OUTBOX_LEASE_SECONDS.' SECOND) WHERE id=:id AND status=\'PENDING\' AND owner_token=:o');
         $st->execute($params);
         if($st->rowCount()===1)return true;
-
-        // MariaDB/PDO reports changed rows by default. A claim followed by a
-        // renewal in the same second can write the identical lease timestamp
-        // and therefore report rowCount()=0 even though this owner still holds
-        // a valid fenced lease. Verify ownership explicitly instead of silently
-        // skipping delivery and leaving the row leased until expiry.
         $check=$pdo->prepare("SELECT 1 FROM sharky_outbox WHERE id=:id AND status='PENDING' AND owner_token=:o AND lease_until>=NOW() LIMIT 1");
         $check->execute($params);
         return (bool)$check->fetchColumn();
@@ -128,9 +123,14 @@ function hache_sharky_outbox_reschedule_owner(PDO $pdo,string $id,string $ownerT
     }catch(Throwable $e){return false;}
 }
 
-function hache_sharky_outbox_mark_sent(PDO $pdo,string $id,string $ownerToken): bool
+function hache_sharky_outbox_mark_sent(PDO $pdo,string $id,string $ownerToken,string $providerMessageId=''): bool
 {
     try{
+        $providerMessageId=trim($providerMessageId);
+        if($providerMessageId!==''&&strlen($providerMessageId)<=191&&hache_sharky_delivery_schema_ready($pdo)){
+            $st=$pdo->prepare("UPDATE sharky_outbox SET status='SENT',sent_at=NOW(),provider_message_id=:pm,lease_until=NULL,owner_token=NULL,last_error=NULL WHERE id=:id AND status='PENDING' AND owner_token=:o");
+            $st->execute([':pm'=>$providerMessageId,':id'=>$id,':o'=>$ownerToken]);return $st->rowCount()===1;
+        }
         $st=$pdo->prepare("UPDATE sharky_outbox SET status='SENT',sent_at=NOW(),lease_until=NULL,owner_token=NULL,last_error=NULL WHERE id=:id AND status='PENDING' AND owner_token=:o");
         $st->execute([':id'=>$id,':o'=>$ownerToken]);return $st->rowCount()===1;
     }catch(Throwable $e){return false;}
@@ -156,13 +156,10 @@ function hache_sharky_outbox_mark_failed(PDO $pdo,string $id,string $ownerToken,
 /** @return array{sent:int,failed:int,dead:int,cancelled:int} */
 function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,string $lockedContact=''): array
 {
+    if(is_string($sender)&&in_array($sender,['hache_sharky_lab_send','hache_sharky_outbox_meta_send'],true))$sender='hache_sharky_delivery_meta_send';
     $stats=['sent'=>0,'failed'=>0,'dead'=>0,'cancelled'=>0];$limit=max(1,min(50,$limit));$lockedContact=preg_replace('/\D+/','',$lockedContact)?:'';
     if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')return $stats;
     $lockedHash=$lockedContact!==''?hache_sharky_orchestrator_contact_hash($lockedContact):'';
-    // A row is claimed immediately before send. If this worker already owns a
-    // contact lock, it may only claim that contact's rows, preventing A→B/B→A
-    // lock inversion. Ownership is renewed after acquiring the delivery lock,
-    // so a lease stolen while waiting can never send from the stale worker.
     for($i=0;$i<$limit;$i++){
         if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
         $claimed=$lockedHash!==''?hache_sharky_outbox_claim($pdo,1,$lockedHash):hache_sharky_outbox_claim($pdo,1);if(!$claimed)break;$row=$claimed[0];
@@ -181,7 +178,6 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
             if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,7,'INVALID_CONTACT'))$stats['dead']++;
             continue;
         }
-
         $deliveryLock=null;$callerOwnsLock=$lockedContact!==''&&hash_equals($lockedContact,$contact);
         if(!$callerOwnsLock){
             $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);
@@ -191,16 +187,12 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
             }
         }
         try{
-            // Lease may have expired while waiting for the contact lock. Renewing
-            // with the fenced token proves this worker still owns the row.
             if(!hache_sharky_outbox_renew_owner($pdo,$id,$owner))continue;
             if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
-                hache_sharky_outbox_release_owner($pdo,$id,$owner);
-                break;
+                hache_sharky_outbox_release_owner($pdo,$id,$owner);break;
             }
             if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){
-                if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;
-                continue;
+                if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;continue;
             }
             if(is_array($followupMeta)){
                 $gate=hache_sharky_followup_validate_before_send($pdo,$contact,$followupMeta,time());
@@ -216,15 +208,14 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
                     continue;
                 }
             }
-            // Rollback is a kill switch, not merely a startup guard. Revalidate
-            // again immediately before the external side effect.
             if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
-                hache_sharky_outbox_release_owner($pdo,$id,$owner);
-                break;
+                hache_sharky_outbox_release_owner($pdo,$id,$owner);break;
             }
-            $ok=false;try{$ok=$sender($payload)===true;}catch(Throwable $e){$ok=false;}
+            $sendResult=false;try{$sendResult=$sender($payload);}catch(Throwable $e){$sendResult=false;}
+            $ok=$sendResult===true||(is_array($sendResult)&&($sendResult['ok']??false)===true);
+            $providerMessageId=is_array($sendResult)?trim((string)($sendResult['provider_message_id']??'')):'';
             if($ok){
-                if(hache_sharky_outbox_mark_sent($pdo,$id,$owner)){
+                if(hache_sharky_outbox_mark_sent($pdo,$id,$owner,$providerMessageId)){
                     $stats['sent']++;
                     if(is_array($followupMeta))hache_sharky_followup_after_sent($pdo,$contact,$followupMeta,time());
                     elseif(is_array($followupArm))hache_sharky_followup_after_normal_sent($pdo,$contact,$followupArm,time());

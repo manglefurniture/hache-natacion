@@ -22,3 +22,33 @@ jobs:
         run: npm test
       - name: Production readiness pilot regression
         run: node tests/production-readiness-pilot-regression.mjs
+
+  delivery-status-mariadb:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: hache_delivery_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql
+      - name: Delivery status MariaDB regression
+        env:
+          DELIVERY_DB_HOST: 127.0.0.1
+          DELIVERY_DB_PORT: 3306
+          DELIVERY_DB_NAME: hache_delivery_test
+          DELIVERY_DB_USER: root
+          DELIVERY_DB_PASS: root
+        run: php tests/sharky-delivery-status-mariadb.php
