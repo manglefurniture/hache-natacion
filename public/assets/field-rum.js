@@ -105,6 +105,7 @@
   let clsSessionStart = 0;
   let clsSessionEnd = 0;
   let clsObserver = null;
+  let clsSupported = false;
 
   function processClsEntry(entry) {
     if (entry.hadRecentInput) return;
@@ -132,8 +133,10 @@
       for (const entry of list.getEntries()) processClsEntry(entry);
     });
     clsObserver.observe({type: 'layout-shift', buffered: true});
+    clsSupported = true;
   } catch {
     clsObserver = null;
+    clsSupported = false;
   }
 
   // INP: only emit on browsers with Event Timing interaction IDs. Keep at most
@@ -258,7 +261,7 @@
       } catch {}
       clsObserver = null;
     }
-    send('CLS', clsMax);
+    if (clsSupported) send('CLS', clsMax);
     finalizeInp();
   }
 
