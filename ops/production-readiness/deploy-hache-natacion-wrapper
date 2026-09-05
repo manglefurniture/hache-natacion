@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+REPO="/var/www/hache-natacion"
+IMPLEMENTATION_PATH="ops/production-readiness/deploy-hache-natacion"
+WRAPPER_PATH="ops/production-readiness/deploy-hache-natacion-wrapper"
+INSTALLED_HELPER="/usr/local/sbin/deploy-hache-natacion"
+DEPLOY_SHA_FILE="${REPO}/.hache-deployed-sha"
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+require_root() {
+  [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "este wrapper debe ejecutarse como root mediante sudo."
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "falta el comando requerido: $1"
+}
+
+validate_sha() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "se requiere un SHA Git completo de 40 caracteres."
+}
+
+publish_deployed_sha() {
+  local sha="$1" temp
+  validate_sha "$sha"
+  temp="$(mktemp "${REPO}/.hache-deployed-sha.tmp.XXXXXX")"
+  printf '%s\n' "$sha" > "$temp"
+  chmod 0644 "$temp"
+  chown root:root "$temp"
+  mv -f -- "$temp" "$DEPLOY_SHA_FILE"
+}
+
+normalize_tracked_worktree_permissions() {
+  local entry mode path parent
+  cd "$REPO"
+  chmod 0755 "$REPO"
+
+  while IFS= read -r -d '' entry; do
+    mode="${entry%% *}"
+    path="${entry#*$'\t'}"
+
+    [[ "$path" != /* && "$path" != ".." && "$path" != ../* && "$path" != */../* ]] || \
+      fail "ruta Git inesperada durante normalización."
+
+    parent="$(dirname -- "$path")"
+    while [[ "$parent" != "." && "$parent" != "/" ]]; do
+      [[ -d "$REPO/$parent" && ! -L "$REPO/$parent" ]] || break
+      chmod 0755 -- "$REPO/$parent"
+      parent="$(dirname -- "$parent")"
+    done
+
+    case "$mode" in
+      100644)
+        [[ -f "$REPO/$path" && ! -L "$REPO/$path" ]] && chmod 0644 -- "$REPO/$path"
+        ;;
+      100755)
+        [[ -f "$REPO/$path" && ! -L "$REPO/$path" ]] && chmod 0755 -- "$REPO/$path"
+        ;;
+      120000|160000)
+        ;;
+      *)
+        fail "modo Git inesperado durante normalización: $mode"
+        ;;
+    esac
+  done < <(git ls-files -z --stage)
+}
+
+extract_target_file() {
+  local sha="$1" repo_path="$2" destination="$3"
+  git -C "$REPO" show "${sha}:${repo_path}" > "$destination"
+}
+
+sync_wrapper_from_target_if_present() {
+  local sha="$1" candidate
+  candidate="$(mktemp /tmp/hache-deploy-wrapper.XXXXXX)"
+
+  if extract_target_file "$sha" "$WRAPPER_PATH" "$candidate" 2>/dev/null; then
+    bash -n "$candidate"
+    chmod 0755 "$candidate"
+    chown root:root "$candidate"
+    if ! cmp -s "$candidate" "$INSTALLED_HELPER"; then
+      install -o root -g root -m 0755 "$candidate" "$INSTALLED_HELPER"
+      echo "DEPLOY_HELPER_SYNC sha=$sha"
+    fi
+  fi
+
+  rm -f -- "$candidate"
+}
+
+run_target_deploy() {
+  local sha="$1" implementation rc=0 deployed
+  validate_sha "$sha"
+  require_command git
+  require_command mktemp
+  require_command install
+  require_command cmp
+
+  cd "$REPO"
+  git fetch origin main
+  [[ "$(git rev-parse origin/main)" == "$sha" ]] || \
+    fail "origin/main no coincide con el SHA aprobado."
+
+  sync_wrapper_from_target_if_present "$sha"
+
+  implementation="$(mktemp /tmp/hache-deploy-implementation.XXXXXX)"
+  extract_target_file "$sha" "$IMPLEMENTATION_PATH" "$implementation"
+  bash -n "$implementation"
+  chmod 0700 "$implementation"
+
+  set +e
+  bash "$implementation" "$sha"
+  rc=$?
+  set -e
+  rm -f -- "$implementation"
+
+  deployed="$(git -C "$REPO" rev-parse HEAD 2>/dev/null || true)"
+  if [[ "$deployed" == "$sha" ]]; then
+    normalize_tracked_worktree_permissions
+    publish_deployed_sha "$deployed"
+    echo "WORKTREE_PERMISSIONS_OK sha=$deployed"
+  fi
+
+  return "$rc"
+}
+
+run_current_implementation() {
+  local implementation="$REPO/$IMPLEMENTATION_PATH"
+  [[ -f "$implementation" ]] || fail "helper de implementación ausente."
+  bash -n "$implementation"
+  bash "$implementation" "$@"
+}
+
+main() {
+  require_root
+  [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
+
+  case "$1" in
+    backup|restore-drill)
+      run_current_implementation "$@"
+      ;;
+    *)
+      [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."
+      run_target_deploy "$1"
+      ;;
+  esac
+}
+
+main "$@"
