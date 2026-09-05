@@ -251,3 +251,16 @@
     showNudge(contextualPrompt);
   }, 900);
 })();
+
+// Pilot C field evidence: load minimized, same-origin RUM only on the public home page.
+(() => {
+  try {
+    const script = document.createElement('script');
+    script.src = '/assets/field-rum.js?v=20260905-1';
+    script.dataset.routeGroup = 'home';
+    script.dataset.sampleRate = '1';
+    document.head.appendChild(script);
+  } catch {
+    // Telemetry must never affect Sharky or the public page.
+  }
+})();
