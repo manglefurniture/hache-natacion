@@ -74,5 +74,8 @@ function hache_rum_deployed_sha(string $root): ?string
 function hache_rum_deployed_build_id(string $root): ?string
 {
     $sha = hache_rum_deployed_sha($root);
-    return is_string($sha) ? 'git-' . substr($sha, 0, 12) : null;
+    if (!is_string($sha)) {
+        return null;
+    }
+    return 'git-' . substr($sha, 0, 12);
 }
