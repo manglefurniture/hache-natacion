@@ -34,7 +34,7 @@ function hache_sharky_dispatcher_state_from_history(array $data): array
         if(str_contains($t,'programa: curso intensivo'))$state['commercial_context']['program']='intensive';
         elseif(str_contains($t,'programa: clases regulares'))$state['commercial_context']['program']='regular';
         if(str_contains($t,'sede: palapas protudec'))$state['commercial_context']['sede_clave']='PALAPAS';
-        elseif(str_contains($t,'sede: monteverde'))$state['commercial_context']['sede_clave']='MONTEVERDE';
+        elseif(str_contains($t,'sede: colegio monteverde')||str_contains($t,'sede: monteverde'))$state['commercial_context']['sede_clave']='MONTEVERDE';
         if(preg_match('/\bedad:\s*(\d{1,3})\s+anos\b/u',$t,$m)===1){$age=(int)$m[1];if($age>=1&&$age<=120)$state['commercial_context']['age']=$age;}
     }
     return $state;
