@@ -8,9 +8,10 @@ const pilot = await readFile(new URL('../docs/production-readiness/PILOT-C.md', 
 
 for (const fragment of [
   "PHP_SAPI !== 'cli'",
-  "SET SESSION time_zone = '+00:00'",
   "'pagos'",
   "'sharky_outbox'",
+  "'latest_sent_day_stored'",
+  "'sent_at_semantics'",
   "'provider_delivery_status' => 'NOT EVALUATED'",
   "'field' => 'NOT EVALUATED'",
   "'restore' => 'PARTIAL'",
@@ -24,6 +25,7 @@ for (const fragment of [
 }
 
 for (const forbidden of [
+  'latest_sent_day_utc',
   'SELECT * FROM alumnos',
   'payload_ciphertext',
   'payload_iv',
@@ -32,7 +34,7 @@ for (const forbidden of [
   'WHATSAPP_ACCESS_TOKEN',
   'HACHE_RESEND_API_KEY',
 ]) {
-  assert.ok(!collector.includes(forbidden), `collector must not expose sensitive field/secret: ${forbidden}`);
+  assert.ok(!collector.includes(forbidden), `collector must not expose sensitive or misleading field: ${forbidden}`);
 }
 
 assert.match(workflow, /workflow_dispatch:/);
