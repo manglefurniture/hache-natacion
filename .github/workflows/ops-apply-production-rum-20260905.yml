@@ -33,7 +33,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          EXPECTED_DEPLOYED_SHA: 72fd889b9f2f8140fe40f30c5b071585ba948306
+          EXPECTED_DEPLOYED_SHA: 959cd3a0321f726f391594e46845fd9909533920
         run: |
           set -Eeuo pipefail
 
