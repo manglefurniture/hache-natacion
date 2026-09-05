@@ -154,6 +154,42 @@ function hache_sharky_whatsapp_batch_merge_semantic_controls(string $contact,arr
     ]);
 }
 
+/**
+ * Venue buttons are intentionally durable navigation. A prospect may scroll
+ * back and choose the other sede after already seeing prices or schedules.
+ * Treat that tap as an explicit correction, not as a stale transactional action.
+ */
+function hache_sharky_whatsapp_historical_venue_reselection(array $state,array $event): ?array
+{
+    if(($state['identity']['kind']??'unknown')!=='prospect')return null;
+    $id=strtolower(trim((string)($event['interactive_id']??'')));
+    if(!in_array($id,['sede:monteverde','sede:palapas'],true))return null;
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    if(!in_array(($commercial['program']??null),['intensive','regular'],true))return null;
+    $current=(string)($commercial['sede_clave']??'');
+    if(!in_array($current,['MONTEVERDE','PALAPAS'],true))return null;
+    $target=hache_sharky_whatsapp_detect_venue_preference((string)($event['text']??''),$id);
+    if(!in_array($target,['MONTEVERDE','PALAPAS'],true))return null;
+    $label=hache_sharky_whatsapp_venue_label($target);
+
+    if($target===$current){
+        if(is_array($state['flow']??null)){
+            return [$state,hache_sharky_orchestrator_decision(
+                'venue_reselection_unchanged',
+                'Sí, seguimos con '.$label.'. Continúa con el paso que tienes activo.'
+            )];
+        }
+        return [$state,hache_sharky_whatsapp_commercial_next_action($state,'Sí, seguimos con '.$label.'.')];
+    }
+
+    // Program, swim level and age remain valid. The controlled flow may contain
+    // a course/schedule/payment tied to the previous venue, so discard only that
+    // pending flow before returning to the commercial menu for the new sede.
+    $state['commercial_context']['sede_clave']=$target;
+    if(is_array($state['flow']??null))$state=hache_sharky_orchestrator_clear_flow($state);
+    return [$state,hache_sharky_whatsapp_commercial_next_action($state,'Perfecto, cambiamos a '.$label.'.')];
+}
+
 function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');
@@ -208,6 +244,25 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
                 $result=[
                     'skip'=>false,
                     'code'=>'COMMERCIAL_DEFERRED_CLOSE',
+                    'state'=>$state,
+                    'decision'=>$decision,
+                    'payload'=>hache_sharky_whatsapp_render($contact,$decision),
+                    'action_result'=>null,
+                ];
+            }elseif(($venueReselection=hache_sharky_whatsapp_historical_venue_reselection($deferredState,$event))!==null){
+                $hash=hache_sharky_orchestrator_contact_hash($contact);
+                if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                    hache_sharky_orchestrator_unlock($lock);
+                    return ['skip'=>true,'code'=>'DUPLICATE'];
+                }
+                [$state,$decision]=$venueReselection;
+                $state['updated_at']=$now;
+                $state['last_user_text']=trim((string)($event['text']??''));
+                hache_sharky_db_state_save($pdo,$contact,$state);
+                hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                $result=[
+                    'skip'=>false,
+                    'code'=>'VENUE_RESELECTED',
                     'state'=>$state,
                     'decision'=>$decision,
                     'payload'=>hache_sharky_whatsapp_render($contact,$decision),
