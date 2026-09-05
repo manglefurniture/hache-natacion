@@ -63,7 +63,7 @@ $storePos=strpos($webhook,'hache_sharky_inbox_store');
 groups_ok($filterPos!==false&&$storePos!==false&&$filterPos<$storePos,'Disabled group traffic must be filtered before durable inbox persistence.');
 groups_ok(str_contains($worker,"hache_sharky_outbox_enqueue_raw(\$pdo,\$contact,\$payload"),'Group replies must bypass idle sales-followup arming.');
 groups_ok(str_contains($worker,'hache_sharky_groups_finalize_outbound($payload)'),'Group target must be swapped only at the final Meta send boundary.');
-groups_ok(str_contains($adminApi,"'tipo'=>'checkbox'")&&str_contains($adminApi,'Responder en grupos de WhatsApp'),'Admin API must expose a clear checkbox.');
+groups_ok(str_contains($adminApi,"\$groupConfig['tipo']='checkbox'")&&str_contains($adminApi,'Responder en grupos de WhatsApp'),'Admin API must expose a clear checkbox.');
 groups_ok(str_contains($adminUi,"type=\"checkbox\""),'Sharky backend must render checkbox configuration.');
 
 echo "SHARKY_GROUPS_REGRESSION_OK\n";
