@@ -432,6 +432,6 @@ window.addEventListener('scroll', () => {
   if (menuOpen) setMenu(false);
 }, {passive: true});
 </script>
-<script src="/assets/hachi.js?v=20260822-seo1" defer></script>
+<script src="/assets/hachi.js?v=20260905-rum1" defer></script>
 </body>
 </html>
