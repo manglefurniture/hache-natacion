@@ -49,7 +49,8 @@ function pr_deployed_sha(string $root): ?string
     if (!function_exists('shell_exec')) {
         return null;
     }
-    $command = sprintf('git -C %s rev-parse HEAD 2>/dev/null', escapeshellarg($root));
+    $rootArg = escapeshellarg($root);
+    $command = sprintf('git -c safe.directory=%s -C %s rev-parse HEAD 2>/dev/null', $rootArg, $rootArg);
     $sha = trim((string) shell_exec($command));
     return preg_match('/^[a-f0-9]{40}$/', $sha) ? $sha : null;
 }
