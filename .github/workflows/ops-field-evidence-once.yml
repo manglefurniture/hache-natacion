@@ -1,0 +1,136 @@
+name: Ops Field Evidence Once
+
+on:
+  workflow_run:
+    workflows: ["Deploy"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hache-natacion-ops-field-evidence-once
+  cancel-in-progress: false
+
+jobs:
+  field-evidence:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Collect minimized production field snapshot
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p evidence
+          chmod 700 evidence
+
+          token="$(openssl rand -hex 32)"
+          test "${#token}" = "64"
+
+          printf '%s' "$token" | ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "umask 022; cat > /tmp/hache-pr-evidence-token; chmod 644 /tmp/hache-pr-evidence-token"
+
+          cleanup_token() {
+            ssh \
+              -p "$DEPLOY_PORT" \
+              -i "$HOME/.ssh/id_ed25519" \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "rm -f /tmp/hache-pr-evidence-token" >/dev/null 2>&1 || true
+          }
+          trap cleanup_token EXIT
+
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Evidence-Token: $token' https://hnatacion.com/api/production-readiness-evidence.php" \
+            > evidence/raw-production-snapshot.json
+
+          cleanup_token
+          trap - EXIT
+          unset token
+
+          php -r '
+            $p=json_decode(file_get_contents("evidence/raw-production-snapshot.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($p["ok"]??false)!==true||($p["collector"]??"")!=="hache-natacion-production-readiness-pilot-c"){
+              fwrite(STDERR,"invalid production evidence\n"); exit(1);
+            }
+            $expected=(string)getenv("EXPECTED_SHA");
+            $deployed=(string)($p["deployed_sha"]??"");
+            if($expected===""||$deployed===""||!hash_equals($expected,$deployed)){
+              fwrite(STDERR,"production SHA does not match deployed workflow SHA\n"); exit(1);
+            }
+            $rum=$p["field"]["rum"]??null;
+            if(!is_array($rum)){
+              fwrite(STDERR,"missing RUM field evidence\n"); exit(1);
+            }
+            foreach(["contains_personal_rows","contains_message_payloads","contains_contact_identifiers","contains_credentials"] as $privacyKey){
+              if(($p["privacy"][$privacyKey]??true)!==false){
+                fwrite(STDERR,"privacy contract not satisfied\n"); exit(1);
+              }
+            }
+            $out=[
+              "schema_version"=>1,
+              "evidence_type"=>"production_rum_field_snapshot",
+              "workflow_sha"=>$expected,
+              "generated_at_utc"=>$p["generated_at_utc"]??null,
+              "collector_gate_state"=>$p["gates"]["field"]??"NOT EVALUATED",
+              "field_rum"=>$rum,
+              "decision"=>"HUMAN_REVIEW_REQUIRED",
+              "note"=>"Snapshot de evidencia de campo; nunca convierte por sí solo el gate Field en PASS."
+            ];
+            file_put_contents("evidence/field-evidence.json",json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR)."\n");
+          '
+
+          rm -f evidence/raw-production-snapshot.json
+
+      - name: Verify internal evidence endpoint remains blocked externally
+        run: |
+          set -Eeuo pipefail
+          code="$(curl --silent --show-error --location --max-redirs 3 --output /dev/null --write-out '%{http_code}' --request POST --header 'X-Hache-Evidence-Token: 0000000000000000000000000000000000000000000000000000000000000000' https://hnatacion.com/api/production-readiness-evidence.php)"
+          [[ "$code" =~ ^4[0-9]{2}$ ]]
+
+      - name: Upload minimized field evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-readiness-field-snapshot-${{ github.run_id }}
+          path: evidence/field-evidence.json
+          if-no-files-found: error
+          retention-days: 14
