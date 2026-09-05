@@ -5,6 +5,7 @@ const client = await readFile(new URL('../public/assets/field-rum.js', import.me
 const endpoint = await readFile(new URL('../api/rum-web-vitals.php', import.meta.url), 'utf8');
 const buildEndpoint = await readFile(new URL('../api/rum-build.php', import.meta.url), 'utf8');
 const buildConfig = await readFile(new URL('../config/production-rum.php', import.meta.url), 'utf8');
+const databaseConfig = await readFile(new URL('../config/database.php', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../database/migrations/20260905_production_rum.sql', import.meta.url), 'utf8');
 const collector = await readFile(new URL('../bin/production-readiness-evidence.php', import.meta.url), 'utf8');
 const hachi = await readFile(new URL('../public/assets/hachi.js', import.meta.url), 'utf8');
@@ -27,6 +28,9 @@ for (const fragment of [
   "type: 'event'",
   "type: 'first-input'",
   "Math.floor(interactionCountEstimate() / 50)",
+  'let clsSupported = false',
+  'clsSupported = true',
+  "if (clsSupported) send('CLS', clsMax)",
 ]) {
   assert.ok(client.includes(fragment), `missing RUM client contract: ${fragment}`);
 }
@@ -88,6 +92,12 @@ for (const fragment of [
 for (const forbidden of ['$_COOKIE', 'session_start(', 'REMOTE_ADDR', 'HTTP_USER_AGENT']) {
   assert.ok(!buildEndpoint.includes(forbidden), `RUM build endpoint must not inspect client identity: ${forbidden}`);
 }
+
+const publicApiBlock = databaseConfig.match(/\$publicApi\s*=\s*\[(.*?)\];/s)?.[1] || '';
+assert.ok(publicApiBlock.includes("'/api/rum-build.php'"), 'RUM build lookup must remain anonymously readable');
+assert.ok(publicApiBlock.includes("'/api/rum-web-vitals.php'"), 'RUM ingest must bypass authenticated API bootstrap');
+const skipAuditBlock = databaseConfig.match(/\$skipAudit\s*=\s*\[(.*?)\];/s)?.[1] || '';
+assert.ok(skipAuditBlock.includes("'/api/rum-web-vitals.php'"), 'anonymous RUM ingest must bypass generic mutation audit that records IP');
 
 for (const fragment of [
   "function hache_rum_deployed_build_id",
