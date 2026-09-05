@@ -54,10 +54,10 @@ Por esa razón una clasificación B sería insuficiente para el proyecto complet
 - **Correlación de proveedor:** cuando `20260905_sharky_delivery_status.sql` está aplicado, el outbox conserva únicamente el `provider_message_id` devuelto por Meta y los webhooks firmados persisten `SENT`, `DELIVERED`, `READ` o `FAILED` en `sharky_delivery_status`.
 - **Privacidad:** la tabla de delivery no conserva teléfono, `recipient_id`, payload, conversación ni hash de contacto.
 - **Orden:** eventos duplicados/fuera de orden no regresan un estado cuyo `provider_event_at_utc` sea posterior; el timestamp se deriva del Unix epoch del proveedor.
-- **Límite:** la migración de delivery ya está aplicada y el schema fue verificado en producción. El gate sigue `PARTIAL` hasta observar eventos reales correlacionados y revisar el artefacto del collector.
+- **Evidencia cerrada:** el 2026-09-05 se revisó un snapshot real de producción con 36 estados correlacionados (`DELIVERED=10`, `READ=26`, `FAILED=0`) y aprobación humana explícita. La decisión está documentada en `COMMUNICATION-DELIVERY-REVIEW-20260905.md`.
 - **Recovery:** reintento fenced del mismo outbox; nunca generar una segunda intención para resolver un resultado ambiguo.
 
-Este CUF hace que el proyecto sea apto para el criterio de piloto que exige una comunicación aplicable, pero el gate no se cierra hasta tener evidencia real del estado requerido.
+Este CUF satisface el criterio de piloto que exige una comunicación aplicable con estado real de proveedor correlacionado y revisión humana.
 
 ## Evidencia automatizada del piloto
 
@@ -71,7 +71,7 @@ Este CUF hace que el proyecto sea apto para el criterio de piloto que exige una 
 - disponibilidad del schema de delivery y conteos agregados de estados de proveedor correlacionados a un outbox mediante `provider_message_id`;
 - estado explícito de los gates `field`, `restore` y `communication_delivery`.
 
-No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciales ni contenido de conversaciones. Aunque existan `DELIVERED`/`READ`, el collector expone `EVIDENCE AVAILABLE — HUMAN REVIEW REQUIRED` y nunca convierte por sí solo el gate en PASS.
+No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciales ni contenido de conversaciones. Aunque existan `DELIVERED`/`READ`, el collector expone `EVIDENCE AVAILABLE — HUMAN REVIEW REQUIRED` y nunca convierte por sí solo el gate en PASS. El PASS de Communication status es una decisión humana versionada, no una salida automática del collector.
 
 En producción el usuario SSH de deploy no tiene permiso de lectura sobre `config/database.local.php`, que permanece `root:www-data` con acceso restringido. Para no ampliar permisos sobre secretos, `api/production-readiness-evidence.php` se usa únicamente a través del host local y exige `POST` más un token aleatorio de 256 bits creado por el workflow en `/tmp`, válido como máximo 120 segundos y eliminado al terminar. El check de `REMOTE_ADDR` se conserva como defensa adicional, pero el token efímero es obligatorio incluso si un proxy altera la dirección observada. La entrada ejecuta el mismo collector bajo PHP/FPM, que ya posee el acceso mínimo necesario a la configuración local; no confía en `X-Forwarded-For` ni en cabeceras de Cloudflare y no introduce mutaciones de negocio.
 
@@ -82,15 +82,17 @@ En producción el usuario SSH de deploy no tiene permiso de lectura sobre `confi
 
 El 2026-09-05 se ejecutó correctamente el restore lab sintético aislado: marker, tabla `pagos` y los dos triggers de validez de pago fueron verificados tras dump/restore. Este resultado reduce incertidumbre del mecanismo, pero no cambia por sí solo el gate de restore a PASS porque no utilizó un backup real de producción ni midió RPO/RTO del proceso real.
 
+El mismo día se ejecutó el snapshot productivo seguro del run `33945691437` contra `35c305c0c92bf12915612a72b4a563744a0d09b1`. La evidencia minimizada confirmó schema de delivery disponible, 36 estados reales correlacionados (`DELIVERED=10`, `READ=26`, `FAILED=0`), bloqueo externo sin token válido y health local `200`. Tras revisión humana explícita, `Communication status` queda cerrado en PASS; véase `COMMUNICATION-DELIVERY-REVIEW-20260905.md`.
+
 ## Estado de los tres gates del criterio de salida P1
 
 | Gate | Estado | Evidencia necesaria para cerrarlo |
 | --- | --- | --- |
 | Campo | `NOT EVALUATED` | ventana representativa de RUM/Web Vitals o evidencia de campo equivalente aprobada; una medición HTTP aislada no cuenta como p75 de campo |
 | Restore | `PARTIAL` | restore lab sintético del baseline ya ejecutado y verificado; falta restore aislado de un backup real con RPO/RTO medidos |
-| Communication status | `PARTIAL` | pipeline durable implementado y migración/schema de delivery aplicados en producción; faltan uno o más status webhooks reales correlacionados y la revisión del snapshot |
+| Communication status | `PASS` | evidencia real de Meta correlacionada y revisión humana registradas en `COMMUNICATION-DELIVERY-REVIEW-20260905.md` |
 
-No se convierte ninguno de esos estados en PASS por el mero hecho de mergear este paquete.
+El PASS de Communication status no altera los otros dos gates. Field y Restore se mantienen abiertos hasta tener su evidencia específica.
 
 ## Política de cambios del piloto
 
