@@ -5,6 +5,7 @@ declare(strict_types=1);
 header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-lab-worker.php';
 require_once __DIR__.'/../../config/sharky-inbox.php';
+require_once __DIR__.'/../../config/sharky-groups.php';
 
 function sharky_lab_json(int $status,array $body): never
 {
@@ -27,15 +28,24 @@ $raw=(string)file_get_contents('php://input');$secret=hache_sharky_lab_secret('M
 if($secret===''||$signature===''||!hash_equals($expectedSignature,$signature))sharky_lab_json(401,['ok'=>false,'error'=>'Invalid signature']);
 $payload=json_decode($raw,true);if(!is_array($payload))sharky_lab_json(400,['ok'=>false,'error'=>'Invalid JSON']);
 
+// Group traffic is fail-closed. With the backend toggle off, group messages are
+// acknowledged but never normalized, persisted, sent to OpenAI or answered.
+$pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)sharky_lab_json(503,['ok'=>false,'error'=>'Database unavailable']);
+if(!hache_sharky_orchestrator_store_ready($pdo))sharky_lab_json(503,['ok'=>false,'error'=>'Sharky migration incomplete']);
+$groupsEnabled=hache_sharky_groups_enabled($pdo);
+$groupCount=hache_sharky_groups_count_messages($payload);
+$payload=hache_sharky_groups_filter_payload($payload,$groupsEnabled);
+if(!$groupsEnabled&&$groupCount>0){
+    for($i=0;$i<$groupCount;$i++)hache_sharky_metric_increment('messages_skipped_group');
+}
+
 $events=array_merge(hache_sharky_whatsapp_extract($payload),hache_sharky_draft_extract_audio_events($payload));
+$events=hache_sharky_groups_decorate_events($events,$payload);
 foreach($events as &$event)$event['kind']='message';unset($event);
 $echoes=hache_sharky_whatsapp_extract_echoes($payload);foreach($echoes as &$echo)$echo['kind']='echo';unset($echo);
 $durable=array_merge($events,$echoes);usort($durable,static fn(array $a,array $b):int=>(int)($a['timestamp_ms']??0)<=>(int)($b['timestamp_ms']??0));
 
-// P0 durability: persist every normalized inbound message/echo before returning 200.
-// If DB/migration is unavailable we intentionally do NOT ACK, so Meta can retry.
-$pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)sharky_lab_json(503,['ok'=>false,'error'=>'Database unavailable']);
-if(!hache_sharky_orchestrator_store_ready($pdo))sharky_lab_json(503,['ok'=>false,'error'=>'Sharky migration incomplete']);
+// P0 durability: persist every supported normalized inbound message/echo before returning 200.
 foreach($durable as $event)if(!hache_sharky_inbox_store($pdo,$event))sharky_lab_json(503,['ok'=>false,'error'=>'Unable to persist inbound event']);
 
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);

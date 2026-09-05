@@ -5,6 +5,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/sharky-runtime.php';
+require_once __DIR__.'/../config/sharky-groups.php';
 
 $me = auth_require(['ADMIN']);
 
@@ -28,8 +29,15 @@ if ($method === 'GET') {
             'clave'=>$key,
             'valor'=>(string) ($values[$key] ?? $row['valor']),
             'descripcion'=>(string) $row['descripcion'],
+            'tipo'=>'text',
         ];
     }
+    $groupConfig=hache_sharky_groups_config_row();
+    $groupConfig['valor']=hache_sharky_groups_enabled($pdo)?'1':'0';
+    $groupConfig['tipo']='checkbox';
+    $groupConfig['etiqueta']='Responder en grupos de WhatsApp';
+    $config[]=$groupConfig;
+
     $metrics = hache_sharky_metrics(7);
     $totals = [];
     foreach ($metrics as $day) {
@@ -56,13 +64,20 @@ if ($action === 'CONFIG') {
     $key = trim((string) ($input['clave'] ?? ''));
     $value = trim((string) ($input['valor'] ?? ''));
     $defaults = hache_sharky_config_defaults();
-    if (!isset($defaults[$key]) || !hache_sharky_config_value_valid($key, $value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
-    if ($key === 'sharky_whatsapp') $value = preg_replace('/\D+/', '', $value) ?: '';
+    $description='';
+    if ($key === HACHE_SHARKY_GROUPS_KEY) {
+        if (!hache_sharky_groups_config_valid($value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
+        $description=(string)hache_sharky_groups_config_row()['descripcion'];
+    } else {
+        if (!isset($defaults[$key]) || !hache_sharky_config_value_valid($key, $value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
+        if ($key === 'sharky_whatsapp') $value = preg_replace('/\D+/', '', $value) ?: '';
+        $description=(string)$defaults[$key]['descripcion'];
+    }
     $stmt = $pdo->prepare(
         'INSERT INTO configuracion(clave,valor,descripcion,updated_by,updated_at) VALUES(:clave,:valor,:descripcion,:usuario,NOW()) '
         .'ON DUPLICATE KEY UPDATE valor=VALUES(valor),descripcion=VALUES(descripcion),updated_by=VALUES(updated_by),updated_at=NOW()'
     );
-    $stmt->execute([':clave'=>$key, ':valor'=>$value, ':descripcion'=>(string) $defaults[$key]['descripcion'], ':usuario'=>(string) $me['id']]);
+    $stmt->execute([':clave'=>$key, ':valor'=>$value, ':descripcion'=>$description, ':usuario'=>(string) $me['id']]);
     hache_sharky_metric_increment('config_updates');
     sharky_admin_out(['ok'=>true]);
 }
