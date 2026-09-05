@@ -1,0 +1,72 @@
+name: Ops Restore Preflight Probe
+
+on:
+  push:
+    branches:
+      - ops/restore-real-backup-20260905
+    paths:
+      - .github/workflows/ops-restore-preflight-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Probe production restore prerequisites without reading secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          helper=/usr/local/sbin/deploy-hache-natacion
+          printf 'helper_present=%s\n' "$([[ -f "$helper" ]] && echo yes || echo no)"
+          printf 'helper_readable=%s\n' "$([[ -r "$helper" ]] && echo yes || echo no)"
+          printf 'helper_executable=%s\n' "$([[ -x "$helper" ]] && echo yes || echo no)"
+          if [[ -r "$helper" ]]; then
+            printf 'helper_sha256=%s\n' "$(sha256sum "$helper" | awk '{print $1}')"
+            printf 'helper_mentions_dump=%s\n' "$(grep -Eq '(^|[^[:alnum:]_])(mysqldump|mariadb-dump)([^[:alnum:]_]|$)' "$helper" && echo yes || echo no)"
+            printf 'helper_mentions_backup=%s\n' "$(grep -Eqi 'backup|snapshot' "$helper" && echo yes || echo no)"
+            printf 'helper_mentions_database_local=%s\n' "$(grep -Fq 'database.local.php' "$helper" && echo yes || echo no)"
+          fi
+          for cmd in mariadb mysql mariadb-dump mysqldump sha256sum; do
+            if command -v "$cmd" >/dev/null 2>&1; then
+              printf 'command_%s=yes\n' "$cmd"
+            else
+              printf 'command_%s=no\n' "$cmd"
+            fi
+          done
+          printf 'sudo_deploy_helper_allowed=%s\n' "$(sudo -n -l 2>/dev/null | grep -Fq '/usr/local/sbin/deploy-hache-natacion' && echo yes || echo no)"
+          printf 'sudo_unrestricted=%s\n' "$(sudo -n -l 2>/dev/null | grep -Eq '\(ALL(:ALL)?\) NOPASSWD: ALL' && echo yes || echo no)"
+          for dir in /var/backups/hache-natacion /var/backups /srv/backups/hache-natacion /srv/backups; do
+            key="$(printf '%s' "$dir" | tr '/-' '__')"
+            printf 'dir%s_exists=%s\n' "$key" "$([[ -d "$dir" ]] && echo yes || echo no)"
+            printf 'dir%s_readable=%s\n' "$key" "$([[ -d "$dir" && -r "$dir" ]] && echo yes || echo no)"
+          done
+          REMOTE
