@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const collector = await readFile(new URL('../bin/production-readiness-evidence.php', import.meta.url), 'utf8');
+const internalEndpoint = await readFile(new URL('../api/production-readiness-evidence.php', import.meta.url), 'utf8');
 const workflow = await readFile(new URL('../.github/workflows/production-readiness-evidence.yml', import.meta.url), 'utf8');
 const quality = await readFile(new URL('../.github/workflows/quality.yml', import.meta.url), 'utf8');
 const pilot = await readFile(new URL('../docs/production-readiness/PILOT-C.md', import.meta.url), 'utf8');
 
 for (const fragment of [
   "PHP_SAPI !== 'cli'",
+  "HACHE_PR_INTERNAL_HTTP",
+  "'/config/database.local.php'",
   "'pagos'",
   "'sharky_outbox'",
   "'latest_sent_day_stored'",
@@ -50,12 +53,33 @@ for (const forbidden of [
   assert.ok(!collector.includes(forbidden), `collector must not expose sensitive or misleading field: ${forbidden}`);
 }
 
+for (const fragment of [
+  "$_SERVER['REMOTE_ADDR']",
+  "['127.0.0.1', '::1']",
+  "$_SERVER['REQUEST_METHOD']",
+  "'POST'",
+  "$_SERVER['HTTP_X_HACHE_OPS']",
+  'production-readiness-evidence-v1',
+  "define('HACHE_PR_INTERNAL_HTTP', true)",
+  "'/bin/production-readiness-evidence.php'",
+  'Cache-Control: no-store, max-age=0',
+  'X-Robots-Tag: noindex, nofollow',
+]) {
+  assert.ok(internalEndpoint.includes(fragment), `missing internal evidence endpoint guard: ${fragment}`);
+}
+assert.ok(!internalEndpoint.includes('HTTP_X_FORWARDED_FOR'), 'internal endpoint must not trust forwarded-for');
+assert.ok(!internalEndpoint.includes('HTTP_CF_CONNECTING_IP'), 'internal endpoint must not trust Cloudflare client headers');
+assert.ok(!internalEndpoint.includes('database.local.php'), 'internal endpoint must delegate config handling to collector');
+
 assert.match(workflow, /workflow_dispatch:/);
 assert.doesNotMatch(workflow, /^\s{0,4}(push|schedule):/m, 'evidence workflow must remain manual-only');
 for (const fragment of [
   'production_snapshot',
   'restore_lab',
-  'php bin/production-readiness-evidence.php',
+  'X-Hache-Ops: production-readiness-evidence-v1',
+  '--resolve hnatacion.com:443:127.0.0.1',
+  'https://hnatacion.com/api/production-readiness-evidence.php',
+  'Verify evidence endpoint is external-404',
   'EXPECTED_SHA: ${{ github.sha }}',
   'hash_equals($expected,$deployed)',
   'workflow-context.json',

@@ -2,7 +2,8 @@
 
 declare(strict_types=1);
 
-if (PHP_SAPI !== 'cli') {
+$internalHttp = defined('HACHE_PR_INTERNAL_HTTP') && HACHE_PR_INTERNAL_HTTP === true;
+if (PHP_SAPI !== 'cli' && !$internalHttp) {
     fwrite(STDERR, "CLI only\n");
     exit(2);
 }
@@ -97,7 +98,11 @@ function pr_sharky_outbox_summary(PDO $pdo): array
 
 try {
     $root = dirname(__DIR__);
-    $config = require $root . '/config/database.php';
+    $configPath = $internalHttp ? $root . '/config/database.local.php' : $root . '/config/database.php';
+    if ($internalHttp && !is_readable($configPath)) {
+        throw new RuntimeException('database_config_unreadable');
+    }
+    $config = require $configPath;
     if (!is_array($config)) {
         throw new RuntimeException('database_config_invalid');
     }
@@ -187,6 +192,12 @@ try {
         'generated_at_utc' => gmdate('c'),
         'error' => 'EVIDENCE_COLLECTION_FAILED',
     ];
-    fwrite(STDERR, json_encode($error, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
+    $encoded = json_encode($error, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+    if ($internalHttp) {
+        http_response_code(500);
+        echo $encoded;
+    } else {
+        fwrite(STDERR, $encoded);
+    }
     exit(1);
 }
