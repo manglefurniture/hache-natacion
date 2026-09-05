@@ -145,8 +145,10 @@ function hache_sharky_deterministic_schedule_selection_message(string $text,arra
     $needle=$range[0].'–'.$range[1];
     if(!in_array($needle,$hours,true))return null;
     $label=hache_sharky_deterministic_sede_label($commercial['sede']);
-    $programLabel=$commercial['program']==='regular'?'clases regulares':'curso intensivo';
-    return 'Sí, el horario '.$needle.' está activo para '.$programLabel.' en '.$label.'. Si quieres, te digo el precio o continuamos con el siguiente paso.';
+    if($commercial['program']==='regular'){
+        return 'Perfecto 😊 Ya tengo: clases regulares en '.$label.', horario '.$needle.'. Para seguir, dime si prefieres 3 o 5 clases por semana.';
+    }
+    return 'Sí, el horario '.$needle.' está activo para curso intensivo en '.$label.'. Si quieres, te digo el precio o continuamos con el siguiente paso.';
 }
 
 function hache_sharky_deterministic_reply(string $text,array $state,array $context=[]): ?string
