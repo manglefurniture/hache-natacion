@@ -29,7 +29,7 @@ $decoded=hache_sharky_whatsapp_batch_decode_interactive($marker);
 batch_context_ok(is_array($decoded)&&($decoded['id']??'')==='qualify:beginner'&&($decoded['title']??'')==='Desde cero','Serialized qualification choice must round-trip without losing semantic ID or title.');
 
 $burst=hache_sharky_whatsapp_batch_unpack("Que precio tienen las clases de natación\n".$marker);
-batch_context_ok(($burst['text']??'')==='Que precio tienen las clases de natación','Batch must keep the customer's free-text question separate from button metadata.');
+batch_context_ok(($burst['text']??'')==='Que precio tienen las clases de natación',"Batch must keep the customer's free-text question separate from button metadata.");
 batch_context_ok(count($burst['interactives']??[])===1&&($burst['interactives'][0]['id']??'')==='qualify:beginner','Batch must retain beginner button semantics instead of flattening it to plain text.');
 
 $source=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
