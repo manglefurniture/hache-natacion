@@ -37,11 +37,51 @@ function hache_sharky_outbox_allow_during_takeover(array $payload): array
     return $payload;
 }
 
+/**
+ * Adds friendly location references only at the final outbound-payload layer.
+ * The interactive IDs and Sharky conversation state remain untouched, so this
+ * cannot alter qualification, commercial context or controlled-flow routing.
+ */
+function hache_sharky_outbox_add_venue_hints(array $payload): array
+{
+    if(($payload['type']??'')!=='interactive')return $payload;
+    $interactive=$payload['interactive']??null;
+    if(!is_array($interactive)||($interactive['type']??'')!=='button')return $payload;
+    $buttons=$interactive['action']['buttons']??null;
+    if(!is_array($buttons))return $payload;
+
+    $hasMonteverde=false;$hasPalapas=false;
+    foreach($buttons as $button){
+        if(!is_array($button))continue;
+        $id=strtolower(trim((string)($button['reply']['id']??'')));
+        if($id==='sede:monteverde')$hasMonteverde=true;
+        elseif($id==='sede:palapas')$hasPalapas=true;
+    }
+    if(!$hasMonteverde||!$hasPalapas)return $payload;
+
+    foreach($buttons as $index=>$button){
+        if(!is_array($button))continue;
+        $id=strtolower(trim((string)($button['reply']['id']??'')));
+        if($id==='sede:monteverde')$payload['interactive']['action']['buttons'][$index]['reply']['title']='Colegio Monteverde';
+        elseif($id==='sede:palapas')$payload['interactive']['action']['buttons'][$index]['reply']['title']='Palapas Protudec';
+    }
+
+    $body=trim((string)($payload['interactive']['body']['text']??''));
+    $monteverdeHint='📍 Colegio Monteverde — al inicio de Av. Bonampak';
+    $palapasHint='📍 Palapas Protudec — a 100 m del Parque de las Palapas';
+    if(!str_contains($body,'Av. Bonampak')&&!str_contains($body,'Parque de las Palapas')){
+        $decorated=trim($body)."\n\n".$monteverdeHint."\n".$palapasHint;
+        if(mb_strlen($decorated)<=1024)$payload['interactive']['body']['text']=$decorated;
+    }
+    return $payload;
+}
+
 function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload,string $dedupeSeed,?int $availableAt=null): bool
 {
     if(!hache_sharky_orchestrator_store_ready($pdo))return false;
     $availableAt??=time();
     try{
+        $payload=hache_sharky_outbox_add_venue_hints($payload);
         $sealed=hache_sharky_outbox_encrypt($payload);$dedupe=hash('sha256','outbox|'.$dedupeSeed);
         $st=$pdo->prepare("INSERT IGNORE INTO sharky_outbox(dedupe_key,contact_hash,payload_ciphertext,payload_iv,payload_tag,status,available_at) VALUES(:d,:c,:p,:iv,:tag,'PENDING',FROM_UNIXTIME(:a))");
         $st->execute([':d'=>$dedupe,':c'=>hache_sharky_orchestrator_contact_hash($contact),':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':a'=>$availableAt]);
