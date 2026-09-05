@@ -138,14 +138,14 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
 
 /**
  * Claims the original Meta message before waiting. Only the worker that reaches
- * the flush boundary processes the aggregated text. Interactive replies bypass
- * batching so button/list selections remain deterministic.
+ * the flush boundary processes the aggregated text. Interactive and group turns
+ * bypass batching so a participant cannot mix direct/group or two group contexts.
  */
 function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');$id=(string)($event['id']??'');
     if($contact===''||$id==='')return ['skip'=>true,'code'=>'INVALID_EVENT'];
-    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!==''||trim((string)($event['group_id']??''))!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
 
     $hash=hache_sharky_orchestrator_contact_hash($contact);
     if(!hache_sharky_orchestrator_claim_message($pdo,$id,$hash,(string)($event['type']??'text')))return ['skip'=>true,'code'=>'DUPLICATE'];
