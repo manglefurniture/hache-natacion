@@ -20,6 +20,8 @@ for (const fragment of [
   "'contains_message_payloads' => false",
   "'contains_contact_identifiers' => false",
   "'contains_credentials' => false",
+  'safe.directory=%s',
+  'rev-parse HEAD',
 ]) {
   assert.ok(collector.includes(fragment), `missing collector guard: ${fragment}`);
 }
@@ -33,6 +35,7 @@ for (const fragment of [
 }
 
 assert.ok(!collector.includes("'communication_delivery' => 'PASS'"), 'collector must never auto-PASS communication delivery');
+assert.ok(!collector.includes('git config --global --add safe.directory'), 'collector must not mutate global Git configuration');
 
 for (const forbidden of [
   'latest_sent_day_utc',
