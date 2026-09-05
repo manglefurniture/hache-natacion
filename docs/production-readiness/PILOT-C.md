@@ -51,7 +51,10 @@ Por esa razón una clasificación B sería insuficiente para el proyecto complet
 - **Objetivo:** emitir una respuesta automática como máximo una vez por intención durable y conservar un estado observable del envío.
 - **Precondiciones:** Sharky habilitado, migración completa, secretos estables y contacto no tomado por humano.
 - **Resultado autoritativo local:** `sharky_outbox` (`PENDING`, `SENT`, `DEAD`, `CANCELLED`) y sus attempts/leases.
-- **Límite actual:** `SENT` demuestra aceptación de la llamada HTTP a Meta, **no entrega al dispositivo**. Delivery/read de Meta permanece `NOT EVALUATED` hasta persistir los status webhooks correspondientes.
+- **Correlación de proveedor:** cuando `20260905_sharky_delivery_status.sql` está aplicado, el outbox conserva únicamente el `provider_message_id` devuelto por Meta y los webhooks firmados persisten `SENT`, `DELIVERED`, `READ` o `FAILED` en `sharky_delivery_status`.
+- **Privacidad:** la tabla de delivery no conserva teléfono, `recipient_id`, payload, conversación ni hash de contacto.
+- **Orden:** eventos duplicados/fuera de orden no regresan un estado cuyo `provider_event_at_utc` sea posterior; el timestamp se deriva del Unix epoch del proveedor.
+- **Límite:** la existencia del pipeline no es evidencia de producción. El gate sigue `PARTIAL` hasta aplicar la migración, observar eventos reales correlacionados y revisar el artefacto del collector.
 - **Recovery:** reintento fenced del mismo outbox; nunca generar una segunda intención para resolver un resultado ambiguo.
 
 Este CUF hace que el proyecto sea apto para el criterio de piloto que exige una comunicación aplicable, pero el gate no se cierra hasta tener evidencia real del estado requerido.
@@ -65,9 +68,10 @@ Este CUF hace que el proyecto sea apto para el criterio de piloto que exige una 
 - presencia de tablas críticas (sin filas ni valores personales);
 - presencia de tablas/constraints financieros relevantes;
 - agregados de estados de `sharky_outbox` y día almacenado del último `SENT`; `sent_at` es un `DATETIME` sin zona normalizada y por eso el collector **no lo etiqueta como UTC**;
+- disponibilidad del schema de delivery y conteos agregados de estados de proveedor correlacionados a un outbox mediante `provider_message_id`;
 - estado explícito de los gates `field`, `restore` y `communication_delivery`.
 
-No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciales ni contenido de conversaciones.
+No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciales ni contenido de conversaciones. Aunque existan `DELIVERED`/`READ`, el collector expone `EVIDENCE AVAILABLE — HUMAN REVIEW REQUIRED` y nunca convierte por sí solo el gate en PASS.
 
 `.github/workflows/production-readiness-evidence.yml` permite obtener dos artefactos manuales y auditables:
 
@@ -76,11 +80,11 @@ No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciale
 
 ## Estado de los tres gates del criterio de salida P1
 
-| Gate | Estado al introducir este piloto | Evidencia necesaria para cerrarlo |
+| Gate | Estado | Evidencia necesaria para cerrarlo |
 | --- | --- | --- |
 | Campo | `NOT EVALUATED` | ventana representativa de RUM/Web Vitals o evidencia de campo equivalente aprobada; una medición HTTP aislada no cuenta como p75 de campo |
 | Restore | `PARTIAL` | restore lab del baseline de schema versionado + posteriormente restore aislado de un backup real con RPO/RTO medidos |
-| Communication status | `PARTIAL` | outbox real aporta `PENDING/SENT/DEAD/CANCELLED`; falta delivery status autoritativo del proveedor |
+| Communication status | `PARTIAL` | pipeline durable implementado; falta aplicar la migración en producción, conservar uno o más status webhooks reales correlacionados y revisar la evidencia del snapshot |
 
 No se convierte ninguno de esos estados en PASS por el mero hecho de mergear este paquete.
 
