@@ -71,7 +71,7 @@ if (!in_array($metric, ['LCP', 'INP', 'CLS'], true)) {
 if (!in_array($routeGroup, ['home', 'registration', 'admin_payments'], true)) {
     rum_out(400, ['ok' => false]);
 }
-if ($buildId !== 'pilot-c-field-v1') {
+if (!preg_match('/^git-[a-f0-9]{12}$/', $buildId)) {
     rum_out(400, ['ok' => false]);
 }
 if (!in_array($formFactor, ['mobile', 'desktop'], true)) {
@@ -87,6 +87,16 @@ if (!is_finite($value) || $value < 0) {
 }
 if (($metric === 'CLS' && $value > 10.0) || ($metric !== 'CLS' && $value > 120000.0)) {
     rum_out(400, ['ok' => false]);
+}
+
+require_once __DIR__ . '/../../config/production-rum.php';
+$authoritativeBuildId = hache_rum_deployed_build_id(dirname(__DIR__, 2));
+if ($authoritativeBuildId === null) {
+    rum_out(503, ['ok' => false]);
+}
+if (!hash_equals($authoritativeBuildId, $buildId)) {
+    // A deploy may race with an already-open page. Drop rather than mix releases.
+    rum_out(409, ['ok' => false]);
 }
 
 try {
@@ -130,7 +140,7 @@ try {
         // Preserve substantially more precision than the normative CLS boundary requires.
         ':value' => sprintf('%.8F', $value),
         ':route_group' => $routeGroup,
-        ':build_id' => $buildId,
+        ':build_id' => $authoritativeBuildId,
         ':form_factor' => $formFactor,
     ]);
 
