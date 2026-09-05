@@ -4,7 +4,7 @@
 
 ALTER TABLE sharky_outbox
   ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(191) NULL AFTER sent_at,
-  ADD INDEX IF NOT EXISTS idx_sharky_outbox_provider_message (provider_message_id);
+  ADD UNIQUE INDEX IF NOT EXISTS uq_sharky_outbox_provider_message (provider_message_id);
 
 CREATE TABLE IF NOT EXISTS sharky_delivery_status (
   provider_message_id VARCHAR(191) NOT NULL PRIMARY KEY,
