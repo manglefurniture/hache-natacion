@@ -22,6 +22,12 @@ ok(helper.includes(': > "$destination/BACKUP_COMPLETE"'), 'BACKUP_COMPLETE must 
 ok(helper.indexOf('sha256sum commit.txt database.sql > SHA256SUMS') < helper.indexOf(': > "$destination/BACKUP_COMPLETE"'), 'completion marker must be created only after checksums');
 ok(helper.includes('--single-transaction') && helper.includes('--routines --triggers --events'), 'real MariaDB backup must use the Hache Base consistency contract');
 
+ok(helper.includes('BACKUP_MAX_COMPLETE="${HACHE_BACKUP_MAX_COMPLETE:-20}"'), 'backup retention must have a finite operational safety ceiling');
+ok(helper.includes('prune_incomplete_backups()') && helper.includes('prune_complete_backups()'), 'helper must prune failed and excess complete backup directories');
+ok(helper.includes('rm -rf -- "$dir"'), 'backup pruning must actually remove selected backup directories');
+ok(helper.includes('flock -x 9'), 'backup, deploy and restore operations must serialize while pruning can occur');
+ok(helper.indexOf(': > "$destination/BACKUP_COMPLETE"') < helper.indexOf('prune_complete_backups', helper.indexOf('create_complete_backup()')), 'complete backup must be marked before complete-backup pruning runs');
+
 const deployStart = helper.indexOf('deploy_sha()');
 const backupCall = helper.indexOf('create_complete_backup', deployStart);
 const mergeCall = helper.indexOf('git merge --ff-only origin/main', deployStart);
@@ -36,6 +42,13 @@ ok(helper.includes('DROP DATABASE IF EXISTS'), 'isolated restore target must be 
 ok(helper.includes("'pagos','mensualidades','inscripciones','cursos_intensivos','curso_intensivo_alumnos','cierres_mensuales','auditoria_eventos','sharky_outbox'"), 'restore must verify the Level C critical table set');
 ok(helper.includes("'trg_un_pago_valido_insert','trg_un_pago_valido_update'"), 'restore must verify financial validity triggers');
 ok(helper.includes("COLUMN_NAME='folio' AND NON_UNIQUE=0"), 'restore must verify the unique payment folio guard');
+
+ok(helper.includes('RESTORE_BACKUP_SELECTED="false"') && helper.includes('RESTORE_PRODUCTION_BACKUP_USED="false"'), 'restore evidence state must start false');
+ok(helper.includes('"production_backup_selected"=>$bool("BACKUP_SELECTED")'), 'report must derive backup selection from runtime state');
+ok(helper.includes('"production_backup_used"=>$bool("PRODUCTION_BACKUP_USED")'), 'report must derive backup usage from runtime state rather than hard-code true');
+const importCall = helper.indexOf('mariadb --protocol=socket --user=root "$RESTORE_TARGET" < "$backup_dir/database.sql"');
+const usedTrue = helper.indexOf('RESTORE_PRODUCTION_BACKUP_USED="true"');
+ok(importCall >= 0 && usedTrue > importCall, 'production_backup_used may become true only after the real backup imports successfully');
 
 ok(workflow.includes("github.ref == 'refs/heads/main'"), 'real restore workflow must run only from main');
 ok(workflow.includes('rpo_seconds:') && workflow.includes('rto_seconds:'), 'workflow must request both recovery objectives');
