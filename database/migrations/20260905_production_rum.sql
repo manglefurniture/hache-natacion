@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS production_rum_samples (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   metric ENUM('LCP','INP','CLS') NOT NULL,
-  value DECIMAL(14,4) UNSIGNED NOT NULL,
+  value DECIMAL(20,8) UNSIGNED NOT NULL,
   route_group VARCHAR(64) NOT NULL,
   build_id VARCHAR(64) NOT NULL,
   form_factor ENUM('mobile','desktop') NOT NULL,
