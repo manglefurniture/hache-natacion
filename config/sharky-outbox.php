@@ -76,12 +76,66 @@ function hache_sharky_outbox_add_venue_hints(array $payload): array
     return $payload;
 }
 
+/**
+ * Turns the final intensive-registration offer into a clearer sales close.
+ * This is deliberately presentation-only: durable Sharky state is already
+ * decided before this layer. The existing flow:yes / flow:no IDs are preserved
+ * and action:human uses the orchestrator's established takeover path.
+ */
+function hache_sharky_outbox_add_sales_close(array $payload): array
+{
+    if(($payload['type']??'')!=='interactive')return $payload;
+    $interactive=$payload['interactive']??null;
+    if(!is_array($interactive)||($interactive['type']??'')!=='button')return $payload;
+    $buttons=$interactive['action']['buttons']??null;
+    if(!is_array($buttons))return $payload;
+
+    $ids=[];
+    foreach($buttons as $button){
+        if(!is_array($button))continue;
+        $id=strtolower(trim((string)($button['reply']['id']??'')));
+        if($id!=='')$ids[]=$id;
+    }
+    if(!in_array('flow:yes',$ids,true)||!in_array('flow:no',$ids,true)||!in_array('flow:cancel',$ids,true))return $payload;
+
+    $body=trim((string)($payload['interactive']['body']['text']??''));
+    $normalized=mb_strtolower($body,'UTF-8');
+    $isRegistrationOffer=str_contains($normalized,'registrarte al curso intensivo')
+        ||str_contains($normalized,'registrarte al intensivo')
+        ||str_contains($normalized,'continuemos con el intensivo');
+    if(!$isRegistrationOffer)return $payload;
+
+    $venue='';
+    if(str_contains($normalized,'palapas'))$venue='Palapas Protudec';
+    elseif(str_contains($normalized,'monteverde'))$venue='Colegio Monteverde';
+
+    if($venue!==''){
+        $message='Perfecto 😊 Ya tengo tu opción: curso intensivo en '.$venue.'.'
+            ."\n\n".'Si quieres, puedo ayudarte a apartar tu lugar ahora mismo. Elegimos fecha y horario y completamos tu inscripción.'
+            ."\n\n".'¿Cómo quieres continuar?';
+    }else{
+        $message='Perfecto 😊 Si quieres, puedo ayudarte a apartar tu lugar en el curso intensivo ahora mismo.'
+            ."\n\n".'Elegimos sede, fecha y horario y completamos tu inscripción.'
+            ."\n\n".'¿Cómo quieres continuar?';
+    }
+    if(mb_strlen($message)>1024)return $payload;
+
+    $payload['interactive']['body']['text']=$message;
+    $payload['interactive']['action']['buttons']=[
+        ['type'=>'reply','reply'=>['id'=>'flow:yes','title'=>'Apartar mi lugar']],
+        ['type'=>'reply','reply'=>['id'=>'action:human','title'=>'Hablar con un profe']],
+        ['type'=>'reply','reply'=>['id'=>'flow:no','title'=>'Ahora no']],
+    ];
+    return $payload;
+}
+
 function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload,string $dedupeSeed,?int $availableAt=null): bool
 {
     if(!hache_sharky_orchestrator_store_ready($pdo))return false;
     $availableAt??=time();
     try{
         $payload=hache_sharky_outbox_add_venue_hints($payload);
+        $payload=hache_sharky_outbox_add_sales_close($payload);
         $sealed=hache_sharky_outbox_encrypt($payload);$dedupe=hash('sha256','outbox|'.$dedupeSeed);
         $st=$pdo->prepare("INSERT IGNORE INTO sharky_outbox(dedupe_key,contact_hash,payload_ciphertext,payload_iv,payload_tag,status,available_at) VALUES(:d,:c,:p,:iv,:tag,'PENDING',FROM_UNIXTIME(:a))");
         $st->execute([':d'=>$dedupe,':c'=>hache_sharky_orchestrator_contact_hash($contact),':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':a'=>$availableAt]);
