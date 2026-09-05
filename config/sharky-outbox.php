@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-followup.php';
+require_once __DIR__.'/sharky-groups.php';
 
 const HACHE_SHARKY_OUTBOX_LEASE_SECONDS=90;
 
@@ -168,6 +169,10 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
         $owner=trim((string)($row['owner_token']??''));$id=(string)($row['id']??'');
         $payload=hache_sharky_outbox_decrypt($row);
         if($payload===null){if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,7,'DECRYPT_FAILED'))$stats['dead']++;continue;}
+        if(($payload['_sharky_group']??false)===true&&!hache_sharky_groups_enabled($pdo)){
+            if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,'GROUPS_DISABLED'))$stats['cancelled']++;
+            continue;
+        }
         $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
         $followupArm=is_array($payload['_sharky_followup_arm']??null)?$payload['_sharky_followup_arm']:null;unset($payload['_sharky_followup_arm']);
         $followupMeta=is_array($payload['_sharky_followup']??null)?$payload['_sharky_followup']:null;unset($payload['_sharky_followup']);
