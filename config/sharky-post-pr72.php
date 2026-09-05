@@ -105,16 +105,18 @@ function hache_sharky_post72_registration_message(array $actionResult, array $bu
         $lines[] = 'Transferencia';
         $lines[] = '• Institución: '.$institution;
         $lines[] = '• Beneficiario: '.$beneficiary;
-        $lines[] = '• CLABE: '.$clabe;
+        $lines[] = '';
+        $lines[] = '📋 CLABE para copiar';
+        $lines[] = $clabe;
+        $lines[] = 'Mantén pulsada la CLABE para copiarla.';
     }
-    $card = (int)($business['sharky_recargo_tarjeta_pct'] ?? 0);
-    if ($card > 0) $lines[] = '• Tarjeta: '.$card.'% de recargo';
 
     $username = trim((string)($result['username'] ?? ''));
     $temporaryPassword = trim((string)($result['temporary_password'] ?? ''));
     if ($username !== '' && $temporaryPassword !== '') {
         $lines[] = '';
-        $lines[] = '🔐 Acceso al portal';
+        $lines[] = '🔐 Acceso al portal Hache Natación';
+        $lines[] = '• Portal: https://hnatacion.com/index.php';
         $lines[] = '• Usuario: '.$username;
         $lines[] = '• Contraseña temporal: '.$temporaryPassword;
         $lines[] = '• Cámbiala al iniciar sesión.';
