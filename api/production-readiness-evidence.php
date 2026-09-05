@@ -27,7 +27,13 @@ if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
     pr_internal_out(405, ['ok' => false]);
 }
 
-$tokenPath = '/tmp/hache-pr-evidence-token';
+$runId = trim((string) ($_SERVER['HTTP_X_HACHE_EVIDENCE_RUN_ID'] ?? ''));
+if ($runId !== '' && !preg_match('/^[0-9]{1,20}$/', $runId)) {
+    pr_internal_out(404, ['ok' => false]);
+}
+$tokenPath = $runId === ''
+    ? '/tmp/hache-pr-evidence-token'
+    : '/tmp/hache-pr-evidence-token-' . $runId;
 $mtime = @filemtime($tokenPath);
 if (!is_int($mtime) || $mtime < time() - 120 || !is_readable($tokenPath)) {
     pr_internal_out(404, ['ok' => false]);
