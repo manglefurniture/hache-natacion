@@ -40,6 +40,104 @@ function hache_sharky_whatsapp_deferred_close_message(array $state): string
     return 'Perfecto 😊 Cuando quieras continuar, aquí estaré. Ya tengo que te interesa el curso intensivo en '.$sede.'.';
 }
 
+function hache_sharky_whatsapp_batch_question_like(string $text): bool
+{
+    $text=trim($text);if($text==='')return false;
+    if(str_contains($text,'?')||str_contains($text,'¿'))return true;
+    $t=hache_sharky_orchestrator_normalize($text);
+    return preg_match('/^(?:cuanto|como|donde|cuando|que\b|cual\b|aceptan|puedo|tienen|hay\b|precio\b|precios\b|costo\b|costos\b|horario\b|horarios\b|ubicacion\b)/u',$t)===1;
+}
+
+/**
+ * A safe discovery tap may join only when a direct-chat text question is
+ * already sleeping in the debounce queue. Standalone buttons keep their fast
+ * path and transactional/action buttons never enter this coalescing path.
+ */
+function hache_sharky_whatsapp_batch_pending_question(string $contact): bool
+{
+    try{
+        $dir=hache_sharky_orchestrator_runtime_dir('batch');if($dir==='')return false;
+        $queue=$dir.'/'.hache_sharky_orchestrator_contact_hash($contact).'.json';
+        if(!is_file($queue))return false;
+        $stored=json_decode((string)@file_get_contents($queue),true);if(!is_array($stored))return false;
+        $parts=[];
+        foreach(is_array($stored['events']??null)?$stored['events']:[] as $queued){
+            if(!is_array($queued))continue;
+            if(trim((string)($queued['interactive_id']??''))!=='')continue;
+            $text=trim((string)($queued['text']??''));if($text!=='')$parts[]=$text;
+        }
+        return hache_sharky_whatsapp_batch_question_like(implode("\n",$parts));
+    }catch(Throwable $e){return false;}
+}
+
+function hache_sharky_whatsapp_batch_joinable_interactive(string $interactiveId): bool
+{
+    $id=strtolower(trim($interactiveId));
+    if(in_array($id,[
+        'qualify:swims','qualify:beginner','qualify:formal','qualify:self',
+        'qualify:intensive','qualify:regular',
+    ],true))return true;
+    return str_starts_with($id,'sede:')||str_starts_with($id,'daypart:');
+}
+
+function hache_sharky_whatsapp_batch_encode_interactive(array $event): string
+{
+    $data=json_encode([
+        'id'=>trim((string)($event['interactive_id']??'')),
+        'title'=>trim((string)($event['text']??'')),
+    ],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    if(!is_string($data))return '';
+    $token=rtrim(strtr(base64_encode($data),'+/','-_'),'=');
+    return '[[SHARKY_INTERACTIVE:'.$token.']]';
+}
+
+function hache_sharky_whatsapp_batch_decode_interactive(string $line): ?array
+{
+    $line=trim($line);
+    if(preg_match('/^\[\[SHARKY_INTERACTIVE:([A-Za-z0-9_-]+)\]\]$/',$line,$m)!==1)return null;
+    $token=strtr((string)$m[1],'-_','+/');$padding=(4-(strlen($token)%4))%4;
+    if($padding)$token.=str_repeat('=',$padding);
+    $raw=base64_decode($token,true);if(!is_string($raw))return null;
+    $data=json_decode($raw,true);if(!is_array($data))return null;
+    $id=trim((string)($data['id']??''));$title=trim((string)($data['title']??''));
+    if($id===''||!hache_sharky_whatsapp_batch_joinable_interactive($id))return null;
+    return ['id'=>$id,'title'=>$title];
+}
+
+/** @return array{text:string,interactives:list<array{id:string,title:string}>} */
+function hache_sharky_whatsapp_batch_unpack(string $text): array
+{
+    $parts=[];$interactives=[];
+    foreach(preg_split('/\R/u',$text)?:[] as $line){
+        $decoded=hache_sharky_whatsapp_batch_decode_interactive((string)$line);
+        if(is_array($decoded)){$interactives[]=$decoded;continue;}
+        $line=trim((string)$line);if($line!=='')$parts[]=$line;
+    }
+    return ['text'=>implode("\n",$parts),'interactives'=>$interactives];
+}
+
+function hache_sharky_whatsapp_batch_answer_after_choice(PDO $pdo,string $contact,string $text,array $semanticResult,callable $conversationAnswer,array $extraContext=[]): array
+{
+    $state=is_array($semanticResult['state']??null)?$semanticResult['state']:null;
+    if(!is_array($state)||!hache_sharky_whatsapp_batch_question_like($text))return $semanticResult;
+    $context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
+    $context['contact']=$contact;
+    $context['previous_user_text']=trim((string)($state['last_user_text']??''));
+    $instruction=hache_sharky_whatsapp_style_instruction(['kind'=>'side_question'],$state).' El usuario hizo esta duda en la misma ráfaga en que eligió una opción. Responde usando la opción recién elegida y no la contradigas.';
+    $answer=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer($text,$instruction,$state,$context));
+    $answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state);
+    $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$state,$text);
+    if(hache_sharky_whatsapp_answer_looks_incomplete($answer))$answer=hache_sharky_whatsapp_incomplete_recovery($state);
+
+    $next=$semanticResult['decision']??null;
+    if(is_array($next)&&in_array(($next['ui']['type']??''),['buttons','list'],true)&&trim((string)($next['message']??''))!==''){
+        $next['message']=trim($answer)."\n\n".trim((string)$next['message']);
+        return array_replace($semanticResult,['decision'=>$next,'payload'=>hache_sharky_whatsapp_render($contact,$next)]);
+    }
+    $decision=hache_sharky_orchestrator_decision('side_question',$answer);
+    return array_replace($semanticResult,['decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision)]);
+}
+
 function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');
@@ -137,31 +235,68 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
 }
 
 /**
- * Claims the original Meta message before waiting. Only the worker that reaches
- * the flush boundary processes the aggregated text. Interactive and group turns
- * bypass batching so a participant cannot mix direct/group or two group contexts.
+ * Text turns wait for the normal debounce window. A safe discovery button may
+ * join an already-open direct-chat question burst, so Sharky applies the button
+ * choice before answering the customer's question. Groups and business-changing
+ * actions continue to bypass batching.
  */
 function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');$id=(string)($event['id']??'');
     if($contact===''||$id==='')return ['skip'=>true,'code'=>'INVALID_EVENT'];
-    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!==''||trim((string)($event['group_id']??''))!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+    $groupId=trim((string)($event['group_id']??''));$interactiveId=trim((string)($event['interactive_id']??''));
+    $isInteractive=(string)($event['type']??'')==='interactive'||$interactiveId!=='';
+    if($groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+    $joinInteractive=$isInteractive
+        &&hache_sharky_whatsapp_batch_joinable_interactive($interactiveId)
+        &&hache_sharky_whatsapp_batch_pending_question($contact);
+    if($isInteractive&&!$joinInteractive)return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
 
     $hash=hache_sharky_orchestrator_contact_hash($contact);
     if(!hache_sharky_orchestrator_claim_message($pdo,$id,$hash,(string)($event['type']??'text')))return ['skip'=>true,'code'=>'DUPLICATE'];
     $ref=hache_sharky_orchestrator_referral($event,(int)($extraContext['now']??time()));
     if($ref){$identity=hache_sharky_business_identity_by_whatsapp($pdo,$contact);hache_sharky_orchestrator_store_referral($pdo,$id,$hash,$ref,($identity['found']??false)?(string)$identity['student_id']:null);}
 
-    $batch=hache_sharky_orchestrator_batch_enqueue_and_wait($contact,$event,(int)($extraContext['batch_window_ms']??HACHE_SHARKY_BATCH_WINDOW_MS));
+    $batchEvent=$event;
+    if($joinInteractive){
+        $encoded=hache_sharky_whatsapp_batch_encode_interactive($event);
+        if($encoded==='')return ['skip'=>true,'code'=>'BATCH_INTERACTIVE_ENCODING_FAILED'];
+        $batchEvent['text']=$encoded;
+    }
+    $batch=hache_sharky_orchestrator_batch_enqueue_and_wait($contact,$batchEvent,(int)($extraContext['batch_window_ms']??HACHE_SHARKY_BATCH_WINDOW_MS));
     if($batch===null)return ['skip'=>true,'code'=>'BATCH_DEFERRED'];
     $ids=is_array($batch['ids']??null)?$batch['ids']:[$id];$latestReferral=is_array($batch['referral']??null)?$batch['referral']:null;
     if($latestReferral===null&&is_array($event['referral']??null))$latestReferral=$event['referral'];
-    $synthetic=['id'=>'batch:'.hash('sha256',implode('|',$ids)),'from'=>$contact,'type'=>'text','text'=>(string)($batch['text']??''),'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];
-    if($latestReferral!==null)$synthetic['referral']=$latestReferral;
-    $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$synthetic,$conversationAnswer,$extraContext);
-    $deliveryPending=function_exists('hache_sharky_action_delivery_pending_for_message')&&hache_sharky_action_delivery_pending_for_message($pdo,$synthetic['id']);
+    $baseId='batch:'.hash('sha256',implode('|',$ids));$unpacked=hache_sharky_whatsapp_batch_unpack((string)($batch['text']??''));
+    $plainText=trim((string)$unpacked['text']);$choices=is_array($unpacked['interactives']??null)?$unpacked['interactives']:[];
+
+    if($choices){
+        // Multiple taps on the same stale prompt can arrive in one debounce window.
+        // The latest tap is the customer's final choice; never execute intermediate taps.
+        $choice=$choices[array_key_last($choices)];
+        $semantic=[
+            'id'=>$baseId.':semantic',
+            'from'=>$contact,
+            'type'=>'interactive',
+            'text'=>(string)($choice['title']??''),
+            'interactive_id'=>(string)($choice['id']??''),
+            'timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000)),
+        ];
+        $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$semantic,$conversationAnswer,$extraContext);
+        if($plainText!==''&&($result['skip']??false)!==true&&($result['payload']??null)!==null){
+            $result=hache_sharky_whatsapp_batch_answer_after_choice($pdo,$contact,$plainText,$result,$conversationAnswer,$extraContext);
+        }
+        $syntheticId=$semantic['id'];
+    }else{
+        $synthetic=['id'=>$baseId,'from'=>$contact,'type'=>'text','text'=>$plainText,'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];
+        if($latestReferral!==null)$synthetic['referral']=$latestReferral;
+        $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$synthetic,$conversationAnswer,$extraContext);
+        $syntheticId=$synthetic['id'];
+    }
+
+    $deliveryPending=function_exists('hache_sharky_action_delivery_pending_for_message')&&hache_sharky_action_delivery_pending_for_message($pdo,$syntheticId);
     $deferCompletion=($extraContext['defer_receipt_completion']??false)===true||$deliveryPending;
-    $result['batched_ids']=$ids;$result['synthetic_id']=$synthetic['id'];$result['defer_processed']=$deferCompletion;
+    $result['batched_ids']=$ids;$result['synthetic_id']=$syntheticId;$result['defer_processed']=$deferCompletion;
     if(!$deferCompletion)foreach($ids as $messageId)hache_sharky_orchestrator_mark_processed($pdo,(string)$messageId);
     return $result;
 }
