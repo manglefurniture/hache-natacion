@@ -29,7 +29,7 @@ function hache_sharky_lab_today(): string
 
 function hache_sharky_lab_send(array $payload): bool
 {
-    unset($payload['_sharky_group']);
+    $payload=hache_sharky_groups_finalize_outbound($payload);
     $token=hache_sharky_lab_secret('WHATSAPP_ACCESS_TOKEN');$phoneId=hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID');if($token===''||$phoneId==='')return false;
     $json=json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)return false;
     $ch=curl_init('https://graph.facebook.com/'.rawurlencode(hache_sharky_lab_graph_version()).'/'.rawurlencode($phoneId).'/messages');
@@ -120,7 +120,10 @@ function hache_sharky_lab_queue_and_complete(PDO $pdo,string $contact,array $pay
         if($pdo->inTransaction())throw new RuntimeException('Unexpected open transaction before Sharky delivery boundary');
         $pdo->beginTransaction();
         hache_sharky_lab_persist_deferred_state($pdo,$deferredState);
-        if(!hache_sharky_outbox_enqueue($pdo,$contact,$payload,$dedupeSeed))throw new RuntimeException('Unable to persist Sharky outbound payload');
+        $queued=($payload['_sharky_group']??false)===true
+            ?hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,$dedupeSeed,time())
+            :hache_sharky_outbox_enqueue($pdo,$contact,$payload,$dedupeSeed);
+        if(!$queued)throw new RuntimeException('Unable to persist Sharky outbound payload');
         if(!hache_sharky_action_delivery_queued_by_message($pdo,$sourceMessageId))throw new RuntimeException('Unable to mark Sharky action delivery as queued');
         foreach(hache_sharky_lab_receipt_ids($sourceMessageId,$batchedIds) as $messageId){
             if(!hache_sharky_orchestrator_mark_processed($pdo,$messageId))throw new RuntimeException('Unable to complete Sharky inbox receipt');
