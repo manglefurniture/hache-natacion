@@ -107,6 +107,35 @@ function hache_sharky_delivery_provider_message_id(string $response): string
     return $id!==''&&strlen($id)<=191?$id:'';
 }
 
+/** @return array{ok:bool,provider_message_id:string} */
+function hache_sharky_delivery_meta_send(array $payload): array
+{
+    if(function_exists('hache_sharky_groups_finalize_outbound'))$payload=hache_sharky_groups_finalize_outbound($payload);
+    if(!function_exists('hache_sharky_orchestrator_secret'))return ['ok'=>false,'provider_message_id'=>''];
+    if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')return ['ok'=>false,'provider_message_id'=>''];
+    $token=hache_sharky_orchestrator_secret('WHATSAPP_ACCESS_TOKEN');
+    $phoneId=hache_sharky_orchestrator_secret('WHATSAPP_PHONE_NUMBER_ID');
+    $version=hache_sharky_orchestrator_secret('WHATSAPP_GRAPH_VERSION');
+    if(!preg_match('/^v\d+\.\d+$/',$version))$version='v26.0';
+    if($token===''||$phoneId==='')return ['ok'=>false,'provider_message_id'=>''];
+    $json=json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)return ['ok'=>false,'provider_message_id'=>''];
+    $ch=curl_init('https://graph.facebook.com/'.rawurlencode($version).'/'.rawurlencode($phoneId).'/messages');
+    curl_setopt_array($ch,[
+        CURLOPT_POST=>true,
+        CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_CONNECTTIMEOUT=>5,
+        CURLOPT_TIMEOUT=>15,
+        CURLOPT_HTTPHEADER=>['Content-Type: application/json','Authorization: Bearer '.$token],
+        CURLOPT_POSTFIELDS=>$json,
+    ]);
+    $response=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);$error=curl_error($ch);curl_close($ch);
+    $ok=is_string($response)&&$error===''&&$status>=200&&$status<300;
+    return [
+        'ok'=>$ok,
+        'provider_message_id'=>$ok?hache_sharky_delivery_provider_message_id($response):'',
+    ];
+}
+
 /** @return array{correlated_total:int,status_counts:array<string,int>,latest_provider_event_at_utc:?string} */
 function hache_sharky_delivery_correlated_summary(PDO $pdo): array
 {
