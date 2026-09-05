@@ -8,6 +8,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 umask(0077);
+require_once __DIR__ . '/../config/sharky-delivery-status.php';
 
 /** @return array{exists:bool,engine:?string} */
 function pr_table_state(PDO $pdo, string $table): array
@@ -132,6 +133,12 @@ try {
         $tables[$table] = pr_table_state($pdo, $table);
     }
 
+    $deliverySchemaReady = hache_sharky_delivery_schema_ready($pdo);
+    $deliverySummary = hache_sharky_delivery_correlated_summary($pdo);
+    $providerEvidenceState = $deliverySchemaReady && $deliverySummary['correlated_total'] > 0
+        ? 'EVIDENCE AVAILABLE — HUMAN REVIEW REQUIRED'
+        : 'NOT EVALUATED';
+
     $payload = [
         'schema_version' => 1,
         'collector' => 'hache-natacion-production-readiness-pilot-c',
@@ -152,13 +159,15 @@ try {
         ],
         'communication' => [
             'sharky_outbox' => pr_sharky_outbox_summary($pdo),
-            'provider_delivery_status' => 'NOT EVALUATED',
-            'note' => 'Local SENT means the outbound provider call was accepted; it is not device delivery evidence.',
+            'delivery_schema_ready' => $deliverySchemaReady,
+            'provider_delivery' => $deliverySummary,
+            'provider_delivery_status' => $providerEvidenceState,
+            'note' => 'Local outbox SENT means the provider HTTP call was accepted. DELIVERED/READ evidence comes only from signed Meta status webhooks correlated by provider message id.',
         ],
         'gates' => [
             'field' => 'NOT EVALUATED',
             'restore' => 'PARTIAL',
-            'communication_delivery' => 'PARTIAL',
+            'communication_delivery' => 'PARTIAL — HUMAN REVIEW REQUIRED',
         ],
         'privacy' => [
             'contains_personal_rows' => false,
