@@ -85,6 +85,8 @@ outbox_expect(str_contains($salesBody,'¿Cómo quieres continuar?'),'Sales close
 outbox_expect(array_column($salesReplies,'id')===['flow:yes','action:human','flow:no'],'Sales close must preserve yes/no flow routing and expose the established human handoff route.');
 outbox_expect(array_column($salesReplies,'title')===['Apartar mi lugar','Hablar con un profe','Ahora no'],'Sales close must use the agreed customer-facing labels.');
 outbox_expect(!in_array('flow:cancel',array_column($salesReplies,'id'),true),'Sales close must not show duplicate No/Cancelar exits.');
+outbox_expect(mb_strlen($salesBody)<=1024,'Sales close body must stay inside WhatsApp interactive-body limits.');
+foreach($salesReplies as $reply)outbox_expect(mb_strlen((string)($reply['title']??''))<=20,'Sales close button titles must stay inside WhatsApp reply-title limits.');
 outbox_expect(hache_sharky_outbox_add_sales_close($salesClose)===$salesClose,'Sales close decoration must be idempotent on retries.');
 outbox_expect(str_contains($orchestrator,"'human' => ['action:human']"),'Hablar con un profe must keep using the orchestrator human-takeover intent.');
 
