@@ -20,3 +20,5 @@ jobs:
         run: find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
       - name: Static regressions and JavaScript syntax
         run: npm test
+      - name: Production readiness pilot regression
+        run: node tests/production-readiness-pilot-regression.mjs
