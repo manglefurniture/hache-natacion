@@ -66,6 +66,22 @@ batch_context_ok(($merged['decision']['kind']??'')==='side_question','Merged sid
 batch_context_ok(($merged['decision']['ui']['type']??'')==='buttons','Semantic next-step buttons must survive the text pass.');
 batch_context_ok(str_contains((string)($merged['decision']['message']??''),'El precio depende del programa.')&&str_contains((string)($merged['decision']['message']??''),'¿Cómo aprendiste a nadar?'),'Merged reply must include both the answer and the semantic next-step prompt.');
 
+// Long answers containing bare venue labels exercise the renderer's display-label
+// expansion (Monteverde -> Colegio Monteverde) before the 1,024-character cap.
+$longAnswer=str_repeat('Monteverde ',140);
+$longTextResult=[
+    'decision'=>['kind'=>'side_question','message'=>$longAnswer,'ui'=>[],'action'=>null],
+    'payload'=>hache_sharky_whatsapp_text_payload($contact,$longAnswer),
+];
+$longMerged=hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$longTextResult);
+$longDecisionMessage=(string)($longMerged['decision']['message']??'');
+$longInteractiveBody=(string)($longMerged['payload']['interactive']['body']['text']??'');
+batch_context_ok(mb_strlen($longDecisionMessage)<=1024,'Merged interactive decision must stay within the WhatsApp body limit after display-label expansion.');
+batch_context_ok(mb_strlen($longInteractiveBody)<=1024,'Rendered interactive body must stay within the WhatsApp body limit.');
+batch_context_ok(str_ends_with($longDecisionMessage,'¿Cómo aprendiste a nadar?'),'Long merged answer must reserve the tail for the semantic next-step prompt.');
+batch_context_ok(str_contains($longInteractiveBody,'¿Cómo aprendiste a nadar?'),'Rendered long interactive body must retain the prompt that explains its buttons.');
+batch_context_ok(!preg_match('/(?<!Colegio )\bMonteverde\b/u',$longDecisionMessage),'Body budgeting must happen after venue display labels are normalized.');
+
 $handoffDecision=hache_sharky_orchestrator_decision('student_human_takeover','Te dejo con el equipo.',[],['type'=>'human_takeover']);
 $handoffResult=['decision'=>$handoffDecision,'payload'=>hache_sharky_whatsapp_render($contact,$handoffDecision)];
 $handoffMerged=hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$handoffResult);
@@ -81,6 +97,8 @@ batch_context_ok(str_contains($source,"'id'=>\$baseId.':text'")&&str_contains($s
 batch_context_ok(str_contains($source,"\$transferredLock=\$extraContext['_delivery_lock']??null")&&str_contains($source,"if(is_resource(\$heldDeliveryLock))\$textContext['_delivery_lock']=\$heldDeliveryLock"),'Coalesced semantic and text passes must transfer one delivery lock instead of reacquiring it.');
 batch_context_ok(str_contains($source,"if(\$plainText!=='')\$semanticContext['defer_delivery_unlock']=true"),'Semantic pass must hold the delivery lock until the queued text pass completes.');
 batch_context_ok(str_contains($source,'hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$textResult)'),'Text side questions must preserve semantic next-step controls.');
+batch_context_ok(str_contains($source,"\$textMessage=hache_sharky_whatsapp_display_labels")&&str_contains($source,"\$nextMessage=hache_sharky_whatsapp_display_labels"),'Display labels must be normalized before interactive body budgeting.');
+batch_context_ok(str_contains($source,'$bodyLimit=1024')&&str_contains($source,'$room=$bodyLimit-mb_strlen($nextMessage)'),'Semantic prompt space must be reserved before trimming a long side-question answer.');
 batch_context_ok(!str_contains($source,'hache_sharky_whatsapp_batch_answer_after_choice'),'Coalesced text must not bypass policy guards through the legacy LLM-only side-question helper.');
 batch_context_ok(str_contains($source,"if(\$groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock"),'Group messages must remain outside direct-chat batching.');
 
