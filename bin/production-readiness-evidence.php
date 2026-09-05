@@ -96,6 +96,125 @@ function pr_sharky_outbox_summary(PDO $pdo): array
     ];
 }
 
+/** @param list<float> $values */
+function pr_nearest_rank_p75(array $values): float
+{
+    sort($values, SORT_NUMERIC);
+    $count = count($values);
+    if ($count === 0) {
+        throw new InvalidArgumentException('empty_values');
+    }
+    $index = max(0, (int) ceil(0.75 * $count) - 1);
+    return (float) $values[$index];
+}
+
+/** @return array<string,mixed> */
+function pr_rum_summary(PDO $pdo): array
+{
+    $tableState = pr_table_state($pdo, 'production_rum_samples');
+    $targets = ['LCP' => 2500.0, 'INP' => 200.0, 'CLS' => 0.1];
+    $windowDays = 14;
+    $projectSampleFloor = 20;
+    $maxRows = 100000;
+
+    if (!$tableState['exists']) {
+        return [
+            'present' => false,
+            'window_days' => $windowDays,
+            'minimum_sample_count_per_group' => $projectSampleFloor,
+            'production_readiness_state' => 'NOT EVALUATED',
+            'decision' => 'HUMAN_REVIEW_REQUIRED',
+            'groups' => [],
+        ];
+    }
+
+    $total = (int) $pdo->query(
+        "SELECT COUNT(*) FROM production_rum_samples WHERE created_at_utc >= UTC_TIMESTAMP(6) - INTERVAL {$windowDays} DAY"
+    )->fetchColumn();
+
+    if ($total > $maxRows) {
+        return [
+            'present' => true,
+            'window_days' => $windowDays,
+            'sample_count' => $total,
+            'minimum_sample_count_per_group' => $projectSampleFloor,
+            'production_readiness_state' => 'NOT EVALUATED',
+            'decision' => 'HUMAN_REVIEW_REQUIRED',
+            'evidence_status' => 'WINDOW_TOO_LARGE_FOR_INLINE_AGGREGATION',
+            'groups' => [],
+        ];
+    }
+
+    $st = $pdo->query(
+        "SELECT metric, value, route_group, build_id, form_factor "
+        . "FROM production_rum_samples "
+        . "WHERE created_at_utc >= UTC_TIMESTAMP(6) - INTERVAL {$windowDays} DAY "
+        . "ORDER BY id ASC"
+    );
+
+    /** @var array<string,array{metric:string,route_group:string,build_id:string,form_factor:string,values:list<float>}> $groups */
+    $groups = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $metric = strtoupper((string) ($row['metric'] ?? ''));
+        $route = (string) ($row['route_group'] ?? '');
+        $build = (string) ($row['build_id'] ?? '');
+        $form = (string) ($row['form_factor'] ?? '');
+        $value = (float) ($row['value'] ?? -1);
+        if (!isset($targets[$metric]) || $route === '' || $build === '' || !in_array($form, ['mobile', 'desktop'], true) || !is_finite($value) || $value < 0) {
+            continue;
+        }
+        $key = implode("\0", [$metric, $route, $build, $form]);
+        if (!isset($groups[$key])) {
+            $groups[$key] = [
+                'metric' => $metric,
+                'route_group' => $route,
+                'build_id' => $build,
+                'form_factor' => $form,
+                'values' => [],
+            ];
+        }
+        $groups[$key]['values'][] = $value;
+    }
+
+    $summaries = [];
+    foreach ($groups as $group) {
+        $count = count($group['values']);
+        if ($count === 0) {
+            continue;
+        }
+        $p75 = pr_nearest_rank_p75($group['values']);
+        $target = $targets[$group['metric']];
+        $summaries[] = [
+            'metric' => $group['metric'],
+            'route_group' => $group['route_group'],
+            'build_id' => $group['build_id'],
+            'form_factor' => $group['form_factor'],
+            'sample_count' => $count,
+            'p75' => $p75,
+            'target_max' => $target,
+            'within_target' => $p75 <= $target,
+            'meets_project_sample_floor' => $count >= $projectSampleFloor,
+        ];
+    }
+
+    usort($summaries, static function (array $left, array $right): int {
+        return [$left['route_group'], $left['form_factor'], $left['metric'], $left['build_id']]
+            <=> [$right['route_group'], $right['form_factor'], $right['metric'], $right['build_id']];
+    });
+
+    return [
+        'present' => true,
+        'window_days' => $windowDays,
+        'sample_count' => $total,
+        'percentile_method' => 'nearest-rank',
+        'minimum_sample_count_per_group' => $projectSampleFloor,
+        'production_readiness_state' => 'NOT EVALUATED',
+        'decision' => 'HUMAN_REVIEW_REQUIRED',
+        'note' => 'Targets, p75 and the project sample floor are evidence only. Field PASS requires representative CUF/form-factor coverage and human review.',
+        'groups' => $summaries,
+    ];
+}
+
 try {
     $root = dirname(__DIR__);
     $configPath = $internalHttp ? $root . '/config/database.local.php' : $root . '/config/database.php';
@@ -169,6 +288,9 @@ try {
             'provider_delivery' => $deliverySummary,
             'provider_delivery_status' => $providerEvidenceState,
             'note' => 'Local outbox SENT means the provider HTTP call was accepted. DELIVERED/READ evidence comes only from signed Meta status webhooks correlated by provider message id.',
+        ],
+        'field' => [
+            'rum' => pr_rum_summary($pdo),
         ],
         'gates' => [
             'field' => 'NOT EVALUATED',
