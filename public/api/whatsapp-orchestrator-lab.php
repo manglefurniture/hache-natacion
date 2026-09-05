@@ -6,6 +6,7 @@ header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-lab-worker.php';
 require_once __DIR__.'/../../config/sharky-inbox.php';
 require_once __DIR__.'/../../config/sharky-groups.php';
+require_once __DIR__.'/../../config/sharky-delivery-status.php';
 
 function sharky_lab_json(int $status,array $body): never
 {
@@ -28,10 +29,17 @@ $raw=(string)file_get_contents('php://input');$secret=hache_sharky_lab_secret('M
 if($secret===''||$signature===''||!hash_equals($expectedSignature,$signature))sharky_lab_json(401,['ok'=>false,'error'=>'Invalid signature']);
 $payload=json_decode($raw,true);if(!is_array($payload))sharky_lab_json(400,['ok'=>false,'error'=>'Invalid JSON']);
 
-// Group traffic is fail-closed. With the backend toggle off, group messages are
-// acknowledged but never normalized, persisted, sent to OpenAI or answered.
 $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)sharky_lab_json(503,['ok'=>false,'error'=>'Database unavailable']);
 if(!hache_sharky_orchestrator_store_ready($pdo))sharky_lab_json(503,['ok'=>false,'error'=>'Sharky migration incomplete']);
+
+// Delivery/read evidence is accepted only after the Meta signature above. The
+// optional schema keeps deploy-before-migration backward compatible; once it is
+// present, an eligible status that cannot be persisted returns 503 so Meta may retry.
+$delivery=hache_sharky_delivery_store_payload($pdo,$payload,hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID'));
+if(($delivery['schema_ready']??false)===true&&($delivery['eligible']??0)>($delivery['stored']??0))sharky_lab_json(503,['ok'=>false,'error'=>'Unable to persist delivery status']);
+
+// Group traffic is fail-closed. With the backend toggle off, group messages are
+// acknowledged but never normalized, persisted, sent to OpenAI or answered.
 $groupsEnabled=hache_sharky_groups_enabled($pdo);
 $groupCount=hache_sharky_groups_count_messages($payload);
 $payload=hache_sharky_groups_filter_payload($payload,$groupsEnabled);
