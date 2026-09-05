@@ -8,6 +8,10 @@ RESTORE_EVIDENCE_ROOT="${BACKUP_ROOT}/restore-evidence"
 DB_CONFIG="${REPO}/config/database.local.php"
 BASH_ARITH_MAX="9223372036854775807"
 
+# Hard operational ceiling, not an RPO/RTO or business retention promise.
+# It prevents unbounded disk/PII growth until the owner defines a stricter policy.
+BACKUP_MAX_COMPLETE="${HACHE_BACKUP_MAX_COMPLETE:-20}"
+
 fail() {
   echo "ERROR: $*" >&2
   exit 1
@@ -33,6 +37,15 @@ is_bash_decimal() {
 
 is_positive_bash_decimal() {
   is_bash_decimal "$1" && [[ "$1" != "0" ]]
+}
+
+init_ops_lock() {
+  require_root
+  require_command flock
+  mkdir -p "$BACKUP_ROOT"
+  chmod 700 "$BACKUP_ROOT"
+  exec 9>"$BACKUP_ROOT/.ops.lock"
+  flock -x 9
 }
 
 load_db_config() {
@@ -67,16 +80,53 @@ load_db_config() {
   [[ "$DB_PORT" =~ ^[0-9]+$ ]] || fail "puerto de DB inválido."
 }
 
+prune_incomplete_backups() {
+  local dir
+  shopt -s nullglob
+  for dir in "$BACKUP_ROOT"/deploy-*; do
+    [[ -d "$dir" ]] || continue
+    if [[ ! -f "$dir/BACKUP_COMPLETE" ]]; then
+      rm -rf -- "$dir"
+      echo "BACKUP_PRUNE incomplete=${dir##*/}"
+    fi
+  done
+  shopt -u nullglob
+}
+
+prune_complete_backups() {
+  is_positive_bash_decimal "$BACKUP_MAX_COMPLETE" || fail "HACHE_BACKUP_MAX_COMPLETE debe ser un entero decimal positivo."
+
+  local -a complete_dirs=()
+  local marker dir remove_count index
+  while IFS= read -r marker; do
+    [[ -n "$marker" ]] || continue
+    complete_dirs+=("${marker%/BACKUP_COMPLETE}")
+  done < <(
+    find "$BACKUP_ROOT" -mindepth 2 -maxdepth 2 -type f -name BACKUP_COMPLETE -path "$BACKUP_ROOT/deploy-*/BACKUP_COMPLETE" -print 2>/dev/null | sort
+  )
+
+  if ((${#complete_dirs[@]} <= BACKUP_MAX_COMPLETE)); then
+    return 0
+  fi
+
+  remove_count=$((${#complete_dirs[@]} - BACKUP_MAX_COMPLETE))
+  for ((index=0; index<remove_count; index++)); do
+    dir="${complete_dirs[$index]}"
+    rm -rf -- "$dir"
+    echo "BACKUP_PRUNE complete=${dir##*/}"
+  done
+}
+
 create_complete_backup() {
   require_root
   require_command git
   require_command mysqldump
   require_command mktemp
   require_command sha256sum
+  require_command find
   load_db_config
 
-  mkdir -p "$BACKUP_ROOT"
-  chmod 700 "$BACKUP_ROOT"
+  prune_incomplete_backups
 
   local stamp created_at_epoch created_at_utc destination commit
   stamp="$(date -u +%Y%m%d-%H%M%S)"
@@ -125,7 +175,8 @@ EOF
   chmod 600 "$destination/BACKUP_COMPLETE"
 
   LAST_BACKUP_DIR="$destination"
-  echo "BACKUP_OK created_at_epoch=$created_at_epoch commit=$commit backup=${destination##*/}"
+  prune_complete_backups
+  echo "BACKUP_OK created_at_epoch=$created_at_epoch commit=$commit backup=${destination##*/} retained_complete_max=$BACKUP_MAX_COMPLETE"
 }
 
 validate_expected_sha() {
@@ -178,7 +229,11 @@ deploy_sha() {
 
 latest_complete_backup() {
   local marker
-  marker="$(find "$BACKUP_ROOT" -mindepth 2 -maxdepth 2 -type f -name BACKUP_COMPLETE -print 2>/dev/null | sort | tail -n 1)"
+  marker="$(
+    find "$BACKUP_ROOT" -mindepth 2 -maxdepth 2 -type f -name BACKUP_COMPLETE -path "$BACKUP_ROOT/deploy-*/BACKUP_COMPLETE" -print 2>/dev/null |
+      sort |
+      tail -n 1
+  )"
   [[ -n "$marker" ]] || return 1
   printf '%s\n' "${marker%/BACKUP_COMPLETE}"
 }
@@ -196,6 +251,8 @@ RESTORE_RESULT_STATUS="failed"
 RESTORE_RESULT_REASON="preflight_failed"
 RESTORE_PRE_CLEANUP_REASON="none"
 RESTORE_CLEANUP_STATUS="not_applicable"
+RESTORE_BACKUP_SELECTED="false"
+RESTORE_PRODUCTION_BACKUP_USED="false"
 RESTORE_BACKUP_IDENTIFIER=""
 RESTORE_BACKUP_COMMIT=""
 RESTORE_BACKUP_CREATED_AT_EPOCH="0"
@@ -225,6 +282,8 @@ write_restore_report() {
   REASON="$RESTORE_RESULT_REASON" \
   PRE_CLEANUP_REASON="$RESTORE_PRE_CLEANUP_REASON" \
   CLEANUP_STATUS="$RESTORE_CLEANUP_STATUS" \
+  BACKUP_SELECTED="$RESTORE_BACKUP_SELECTED" \
+  PRODUCTION_BACKUP_USED="$RESTORE_PRODUCTION_BACKUP_USED" \
   BACKUP_IDENTIFIER="$RESTORE_BACKUP_IDENTIFIER" \
   BACKUP_COMMIT="$RESTORE_BACKUP_COMMIT" \
   BACKUP_CREATED_AT_EPOCH="$RESTORE_BACKUP_CREATED_AT_EPOCH" \
@@ -235,17 +294,19 @@ write_restore_report() {
   RTO_MET="$RESTORE_RTO_MET" \
   DURATION_SECONDS="$duration" \
   TARGET_DATABASE="$RESTORE_TARGET" \
+  TARGET_CREATED="$RESTORE_TARGET_CREATED" \
   CRITICAL_TABLES_VERIFIED="$RESTORE_CRITICAL_TABLES_VERIFIED" \
   FINANCIAL_GUARDS_VERIFIED="$RESTORE_FINANCIAL_GUARDS_VERIFIED" \
   php -r '
-    $bool=static fn(string $name): bool => getenv($name)==="true";
+    $bool=static fn(string $name): bool => getenv($name)==="true" || getenv($name)==="1";
     $data=[
       "schema_version"=>1,
       "evidence_type"=>"production_restore_drill",
       "generated_at_utc"=>gmdate("c"),
       "result"=>getenv("STATUS")==="passed"?"PASS":"FAIL",
       "reason"=>(string)getenv("REASON"),
-      "production_backup_used"=>true,
+      "production_backup_selected"=>$bool("BACKUP_SELECTED"),
+      "production_backup_used"=>$bool("PRODUCTION_BACKUP_USED"),
       "backup_identifier"=>(string)getenv("BACKUP_IDENTIFIER"),
       "backup_commit"=>(string)getenv("BACKUP_COMMIT"),
       "backup_created_at_epoch"=>(int)getenv("BACKUP_CREATED_AT_EPOCH"),
@@ -255,7 +316,7 @@ write_restore_report() {
       "restore_duration_seconds"=>(int)getenv("DURATION_SECONDS"),
       "rto_seconds"=>(int)getenv("RTO_SECONDS"),
       "rto_met"=>$bool("RTO_MET"),
-      "isolated_target"=>true,
+      "isolated_target"=>$bool("TARGET_CREATED"),
       "target_database"=>(string)getenv("TARGET_DATABASE"),
       "critical_tables_verified"=>$bool("CRITICAL_TABLES_VERIFIED"),
       "financial_guards_verified"=>$bool("FINANCIAL_GUARDS_VERIFIED"),
@@ -328,6 +389,7 @@ restore_drill() {
   trap restore_exit EXIT
 
   backup_dir="$(latest_complete_backup)" || restore_fail "backup_missing" "no existe un backup completo bajo $BACKUP_ROOT."
+  RESTORE_BACKUP_SELECTED="true"
   RESTORE_BACKUP_IDENTIFIER="${backup_dir##*/}"
 
   [[ -f "$backup_dir/BACKUP_COMPLETE" ]] || restore_fail "backup_incomplete" "falta BACKUP_COMPLETE."
@@ -370,6 +432,7 @@ restore_drill() {
   if ! mariadb --protocol=socket --user=root "$RESTORE_TARGET" < "$backup_dir/database.sql"; then
     restore_fail "restore_import_failed" "falló la importación del backup real."
   fi
+  RESTORE_PRODUCTION_BACKUP_USED="true"
 
   table_count="$("${admin[@]}" -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$RESTORE_TARGET' AND TABLE_NAME IN ('pagos','mensualidades','inscripciones','cursos_intensivos','curso_intensivo_alumnos','cierres_mensuales','auditoria_eventos','sharky_outbox');")"
   [[ "$table_count" == "8" ]] || restore_fail "verification_failed" "faltan tablas críticas en el restore."
@@ -404,11 +467,16 @@ Uso:
   deploy-hache-natacion restore-drill <rpo_seconds> <rto_seconds> <run_id>
 
 RPO/RTO no tienen defaults: deben venir de una decisión explícita del owner.
+El helper conserva como máximo 20 backups completos por seguridad operativa;
+este techo no sustituye una política de retención aprobada.
 EOF
 }
 
 main() {
   [[ "$#" -ge 1 ]] || { usage; exit 2; }
+  is_positive_bash_decimal "$BACKUP_MAX_COMPLETE" || fail "HACHE_BACKUP_MAX_COMPLETE debe ser un entero decimal positivo."
+  init_ops_lock
+
   case "$1" in
     backup)
       [[ "$#" -eq 1 ]] || { usage; exit 2; }
