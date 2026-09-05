@@ -51,24 +51,57 @@ try{
     if(!is_string($sql)||trim($sql)==='')throw new RuntimeException('migration');
     $pdo->exec($sql);
 
-    $table=$pdo->query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' LIMIT 1")->fetchColumn();
-    $columns=$pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' ORDER BY ORDINAL_POSITION")->fetchAll(PDO::FETCH_COLUMN);
-    $expectedColumns=['id','metric','value','route_group','build_id','form_factor','created_at_utc'];
-    $valueMeta=$pdo->query("SELECT NUMERIC_PRECISION,NUMERIC_SCALE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' AND COLUMN_NAME='value' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-    $indexes=$pdo->query("SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples'")->fetchAll(PDO::FETCH_COLUMN);
+    $tableMeta=$pdo->query("SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $tableOk=is_array($tableMeta)
+        && strtoupper((string)($tableMeta['ENGINE']??''))==='INNODB'
+        && strtolower((string)($tableMeta['TABLE_COLLATION']??''))==='utf8mb4_unicode_ci';
 
-    $columnsOk=$columns===$expectedColumns;
-    $precisionOk=is_array($valueMeta)&&(int)$valueMeta['NUMERIC_PRECISION']===20&&(int)$valueMeta['NUMERIC_SCALE']===8;
-    $indexesOk=in_array('PRIMARY',$indexes,true)&&in_array('idx_production_rum_window',$indexes,true)&&in_array('idx_production_rum_build',$indexes,true);
-    if(strtoupper((string)$table)!=='INNODB'||!$columnsOk||!$precisionOk||!$indexesOk)throw new RuntimeException('verify');
+    $columnRows=$pdo->query("SELECT COLUMN_NAME,LOWER(COLUMN_TYPE) AS COLUMN_TYPE,IS_NULLABLE,EXTRA,CHARACTER_SET_NAME,COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' ORDER BY ORDINAL_POSITION")->fetchAll(PDO::FETCH_ASSOC);
+    $expectedColumns=[
+        ['COLUMN_NAME'=>'id','COLUMN_TYPE'=>'bigint unsigned','IS_NULLABLE'=>'NO','EXTRA'=>'auto_increment','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
+        ['COLUMN_NAME'=>'metric','COLUMN_TYPE'=>"enum('lcp','inp','cls')",'IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'value','COLUMN_TYPE'=>'decimal(20,8) unsigned','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
+        ['COLUMN_NAME'=>'route_group','COLUMN_TYPE'=>'varchar(64)','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'build_id','COLUMN_TYPE'=>'varchar(64)','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'form_factor','COLUMN_TYPE'=>"enum('mobile','desktop')",'IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>'utf8mb4','COLLATION_NAME'=>'utf8mb4_unicode_ci'],
+        ['COLUMN_NAME'=>'created_at_utc','COLUMN_TYPE'=>'datetime(6)','IS_NULLABLE'=>'NO','EXTRA'=>'','CHARACTER_SET_NAME'=>null,'COLLATION_NAME'=>null],
+    ];
+    $columnsOk=$columnRows===$expectedColumns;
+
+    $indexRows=$pdo->query("SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='production_rum_samples' ORDER BY INDEX_NAME,SEQ_IN_INDEX")->fetchAll(PDO::FETCH_ASSOC);
+    $requiredIndexes=[
+        'PRIMARY'=>['non_unique'=>0,'type'=>'BTREE','columns'=>['id']],
+        'idx_production_rum_build'=>['non_unique'=>1,'type'=>'BTREE','columns'=>['build_id','created_at_utc']],
+        'idx_production_rum_window'=>['non_unique'=>1,'type'=>'BTREE','columns'=>['created_at_utc','metric','route_group','form_factor']],
+    ];
+    $seenIndexes=[];
+    foreach($indexRows as $indexRow){
+        $name=(string)($indexRow['INDEX_NAME']??'');
+        if(!isset($requiredIndexes[$name]))continue;
+        if(!isset($seenIndexes[$name])){
+            $seenIndexes[$name]=[
+                'non_unique'=>(int)($indexRow['NON_UNIQUE']??-1),
+                'type'=>strtoupper((string)($indexRow['INDEX_TYPE']??'')),
+                'columns'=>[],
+            ];
+        }
+        $seenIndexes[$name]['columns'][]=(string)($indexRow['COLUMN_NAME']??'');
+    }
+    $indexesOk=$seenIndexes===$requiredIndexes;
+
+    if(!$tableOk||!$columnsOk||!$indexesOk)throw new RuntimeException('verify');
 
     ops_rum_out(200,[
         'ok'=>true,
         'migration'=>'20260905_production_rum.sql',
         'table'=>'production_rum_samples',
         'engine'=>'InnoDB',
+        'table_collation_verified'=>true,
         'columns_verified'=>true,
+        'column_types_verified'=>true,
+        'nullability_verified'=>true,
         'value_precision_verified'=>true,
+        'enum_contract_verified'=>true,
         'indexes_verified'=>true,
     ]);
 }catch(Throwable $e){
