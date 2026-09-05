@@ -1,0 +1,77 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+
+const collector = await readFile(new URL('../bin/production-readiness-evidence.php', import.meta.url), 'utf8');
+const workflow = await readFile(new URL('../.github/workflows/production-readiness-evidence.yml', import.meta.url), 'utf8');
+const pilot = await readFile(new URL('../docs/production-readiness/PILOT-C.md', import.meta.url), 'utf8');
+const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+
+for (const fragment of [
+  "PHP_SAPI !== 'cli'",
+  "SET SESSION time_zone = '+00:00'",
+  "'pagos'",
+  "'sharky_outbox'",
+  "'provider_delivery_status' => 'NOT EVALUATED'",
+  "'field' => 'NOT EVALUATED'",
+  "'restore' => 'PARTIAL'",
+  "'communication_delivery' => 'PARTIAL'",
+  "'contains_personal_rows' => false",
+  "'contains_message_payloads' => false",
+  "'contains_contact_identifiers' => false",
+  "'contains_credentials' => false",
+]) {
+  assert.ok(collector.includes(fragment), `missing collector guard: ${fragment}`);
+}
+
+for (const forbidden of [
+  'SELECT * FROM alumnos',
+  'payload_ciphertext',
+  'payload_iv',
+  'payload_tag',
+  'contact_hash',
+  'WHATSAPP_ACCESS_TOKEN',
+  'HACHE_RESEND_API_KEY',
+]) {
+  assert.ok(!collector.includes(forbidden), `collector must not expose sensitive field/secret: ${forbidden}`);
+}
+
+assert.match(workflow, /workflow_dispatch:/);
+assert.doesNotMatch(workflow, /^\s{0,4}(push|schedule):/m, 'evidence workflow must remain manual-only');
+for (const fragment of [
+  'production_snapshot',
+  'restore_lab',
+  'php bin/production-readiness-evidence.php',
+  'https://hnatacion.com/',
+  'mariadb:11.8',
+  'hache_pr_restore_source',
+  'hache_pr_restore_target',
+  'HACHE_PR_RESTORE_MARKER_V1',
+  'mariadb-dump',
+  'rm -f evidence/database.sql',
+  'production_backup_used',
+  'RESTORE_REMAINS_PARTIAL',
+  'actions/upload-artifact@v4',
+]) {
+  assert.ok(workflow.includes(fragment), `missing evidence workflow contract: ${fragment}`);
+}
+
+assert.ok(workflow.indexOf('rm -f evidence/database.sql') < workflow.lastIndexOf('Upload restore evidence'), 'raw SQL dump must be removed before artifact upload');
+assert.ok(workflow.includes('path: evidence/restore-lab.json'), 'restore artifact must contain only the minimized report');
+assert.ok(!workflow.includes('cancel-in-progress: true'), 'evidence runs must not cancel one another');
+
+for (const fragment of [
+  'Nivel: C — Crítico',
+  'CUF-C-01',
+  'CUF-C-02',
+  'CUF-C-03',
+  '`NOT EVALUATED`',
+  '`PARTIAL`',
+  'no ejecutar restore sobre la DB de producción',
+  'read-only',
+]) {
+  assert.ok(pilot.includes(fragment), `missing pilot documentation boundary: ${fragment}`);
+}
+
+assert.ok(pkg.scripts?.test?.includes('tests/production-readiness-pilot-regression.mjs'), 'pilot regression must stay in npm test');
+
+console.log('PRODUCTION_READINESS_PILOT_REGRESSION_OK');
