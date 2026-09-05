@@ -53,11 +53,17 @@ function pr_deployed_sha(string $root): ?string
     return preg_match('/^[a-f0-9]{40}$/', $sha) ? $sha : null;
 }
 
-/** @return array{present:bool,status_counts:array<string,int>,latest_sent_day_utc:?string} */
+/** @return array{present:bool,status_counts:array<string,int>,latest_sent_day_stored:?string,sent_at_semantics:string} */
 function pr_sharky_outbox_summary(PDO $pdo): array
 {
+    $semantics = 'sent_at is a timezone-naive DATETIME; day is reported exactly as stored and is not labeled UTC.';
     if (!pr_table_state($pdo, 'sharky_outbox')['exists']) {
-        return ['present' => false, 'status_counts' => [], 'latest_sent_day_utc' => null];
+        return [
+            'present' => false,
+            'status_counts' => [],
+            'latest_sent_day_stored' => null,
+            'sent_at_semantics' => $semantics,
+        ];
     }
 
     $known = ['PENDING', 'SENT', 'DEAD', 'CANCELLED'];
@@ -82,7 +88,8 @@ function pr_sharky_outbox_summary(PDO $pdo): array
     return [
         'present' => true,
         'status_counts' => $counts,
-        'latest_sent_day_utc' => $latest === false || $latest === null || $latest === '' ? null : (string) $latest,
+        'latest_sent_day_stored' => $latest === false || $latest === null || $latest === '' ? null : (string) $latest,
+        'sent_at_semantics' => $semantics,
     ];
 }
 
@@ -109,7 +116,6 @@ try {
             PDO::ATTR_EMULATE_PREPARES => false,
         ]
     );
-    $pdo->exec("SET SESSION time_zone = '+00:00'");
 
     $criticalTables = [
         'pagos',
