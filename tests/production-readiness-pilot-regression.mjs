@@ -58,8 +58,11 @@ for (const fragment of [
   "['127.0.0.1', '::1']",
   "$_SERVER['REQUEST_METHOD']",
   "'POST'",
-  "$_SERVER['HTTP_X_HACHE_OPS']",
-  'production-readiness-evidence-v1',
+  "'/tmp/hache-pr-evidence-token'",
+  "$_SERVER['HTTP_X_HACHE_EVIDENCE_TOKEN']",
+  "time() - 120",
+  "/^[a-f0-9]{64}$/",
+  "hash_equals($expected, $provided)",
   "define('HACHE_PR_INTERNAL_HTTP', true)",
   "'/bin/production-readiness-evidence.php'",
   'Cache-Control: no-store, max-age=0',
@@ -70,16 +73,24 @@ for (const fragment of [
 assert.ok(!internalEndpoint.includes('HTTP_X_FORWARDED_FOR'), 'internal endpoint must not trust forwarded-for');
 assert.ok(!internalEndpoint.includes('HTTP_CF_CONNECTING_IP'), 'internal endpoint must not trust Cloudflare client headers');
 assert.ok(!internalEndpoint.includes('database.local.php'), 'internal endpoint must delegate config handling to collector');
+assert.ok(!internalEndpoint.includes('production-readiness-evidence-v1'), 'endpoint must not use a repository-static authorization token');
 
 assert.match(workflow, /workflow_dispatch:/);
 assert.doesNotMatch(workflow, /^\s{0,4}(push|schedule):/m, 'evidence workflow must remain manual-only');
 for (const fragment of [
   'production_snapshot',
   'restore_lab',
-  'X-Hache-Ops: production-readiness-evidence-v1',
+  'openssl rand -hex 32',
+  '/tmp/hache-pr-evidence-token',
+  'chmod 644 /tmp/hache-pr-evidence-token',
+  'cleanup_token()',
+  'trap cleanup_token EXIT',
+  'rm -f /tmp/hache-pr-evidence-token',
+  'X-Hache-Evidence-Token: $token',
   '--resolve hnatacion.com:443:127.0.0.1',
   'https://hnatacion.com/api/production-readiness-evidence.php',
-  'Verify evidence endpoint is external-404',
+  'Verify evidence endpoint does not expose evidence externally',
+  '[[ "$code" =~ ^4[0-9]{2}$ ]]',
   'EXPECTED_SHA: ${{ github.sha }}',
   'hash_equals($expected,$deployed)',
   'workflow-context.json',
@@ -98,6 +109,7 @@ for (const fragment of [
   assert.ok(workflow.includes(fragment), `missing evidence workflow contract: ${fragment}`);
 }
 
+assert.ok(!workflow.includes('X-Hache-Ops: production-readiness-evidence-v1'), 'workflow must not use the old static evidence guard');
 assert.ok(workflow.indexOf('rm -f evidence/database.sql') < workflow.lastIndexOf('Upload restore evidence'), 'raw SQL dump must be removed before artifact upload');
 assert.ok(workflow.includes('path: evidence/restore-lab.json'), 'restore artifact must contain only the minimized report');
 assert.ok(!workflow.includes('cancel-in-progress: true'), 'evidence runs must not cancel one another');
