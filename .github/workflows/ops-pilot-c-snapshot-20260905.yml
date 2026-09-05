@@ -115,10 +115,24 @@ jobs:
           echo "external_status=$code"
           [[ "$code" =~ ^4[0-9]{2}$ ]]
 
-      - name: Public health smoke
+      - name: Production health smoke through local origin
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
           set -Eeuo pipefail
-          curl --silent --show-error --fail --location --max-time 20 --output /dev/null https://hnatacion.com/
+          code="$(ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "curl --silent --show-error --output /dev/null --write-out '%{http_code}' --resolve hnatacion.com:443:127.0.0.1 https://hnatacion.com/api/health.php")"
+          echo "local_health_status=$code"
+          test "$code" = "200"
 
       - name: Upload minimized production evidence
         uses: actions/upload-artifact@v4
