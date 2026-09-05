@@ -23,7 +23,7 @@ if(!hash_equals('apply-sharky-delivery-status-20260905',trim((string)($_SERVER['
     ops_delivery_out(403,['ok'=>false]);
 }
 
-$root=dirname(__DIR__,2);
+$root=dirname(__DIR__);
 $migration=$root.'/database/migrations/20260905_sharky_delivery_status.sql';
 $expectedSha256='fce763d5533cfef60bce84684aa8ebe82f0090870375beea02afcea43343a33a';
 $actualSha256=is_readable($migration)?hash_file('sha256',$migration):false;
