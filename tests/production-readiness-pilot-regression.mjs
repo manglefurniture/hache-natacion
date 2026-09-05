@@ -12,10 +12,10 @@ for (const fragment of [
   "'sharky_outbox'",
   "'latest_sent_day_stored'",
   "'sent_at_semantics'",
-  "'provider_delivery_status' => 'NOT EVALUATED'",
+  "'provider_delivery_status' => $providerEvidenceState",
   "'field' => 'NOT EVALUATED'",
   "'restore' => 'PARTIAL'",
-  "'communication_delivery' => 'PARTIAL'",
+  "'communication_delivery' => 'PARTIAL — HUMAN REVIEW REQUIRED'",
   "'contains_personal_rows' => false",
   "'contains_message_payloads' => false",
   "'contains_contact_identifiers' => false",
@@ -23,6 +23,16 @@ for (const fragment of [
 ]) {
   assert.ok(collector.includes(fragment), `missing collector guard: ${fragment}`);
 }
+
+for (const fragment of [
+  "'EVIDENCE AVAILABLE — HUMAN REVIEW REQUIRED'",
+  "'NOT EVALUATED'",
+  "deliverySummary['correlated_total'] > 0",
+]) {
+  assert.ok(collector.includes(fragment), `missing communication evidence boundary: ${fragment}`);
+}
+
+assert.ok(!collector.includes("'communication_delivery' => 'PASS'"), 'collector must never auto-PASS communication delivery');
 
 for (const forbidden of [
   'latest_sent_day_utc',
