@@ -45,9 +45,11 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
           mkdir -p evidence
+          chmod 700 evidence
           ssh \
             -p "$DEPLOY_PORT" \
             -i "$HOME/.ssh/id_ed25519" \
@@ -64,10 +66,16 @@ jobs:
             if(($p["ok"]??false)!==true||($p["collector"]??"")!=="hache-natacion-production-readiness-pilot-c"){
               fwrite(STDERR,"invalid production evidence\n"); exit(1);
             }
+            $expected=(string)getenv("EXPECTED_SHA");
+            $deployed=(string)($p["deployed_sha"]??"");
+            if($expected===""||$deployed===""||!hash_equals($expected,$deployed)){
+              fwrite(STDERR,"production SHA does not match workflow SHA\n"); exit(1);
+            }
             foreach(["field","restore","communication_delivery"] as $gate){
               if(!isset($p["gates"][$gate])){fwrite(STDERR,"missing gate $gate\n"); exit(1);}
             }
           '
+          printf '{"workflow_sha":"%s","run_id":"%s","event":"workflow_dispatch"}\n' "$EXPECTED_SHA" "$GITHUB_RUN_ID" > evidence/workflow-context.json
 
       - name: Measure public HTTPS request without response body
         run: |
@@ -163,6 +171,7 @@ jobs:
           {
             "schema_version": 1,
             "result": "PASS_SYNTHETIC_SCHEMA_RESTORE",
+            "workflow_sha": "$GITHUB_SHA",
             "source": "database/schema_hache_monteverde_v1.sql",
             "source_schema_sha256": "$schema_sha",
             "dump_sha256": "$dump_sha",
@@ -182,6 +191,9 @@ jobs:
             $p=json_decode(file_get_contents("evidence/restore-lab.json"),true,512,JSON_THROW_ON_ERROR);
             if(($p["result"]??"")!=="PASS_SYNTHETIC_SCHEMA_RESTORE"||($p["production_backup_used"]??true)!==false||($p["gate_effect"]??"")!=="RESTORE_REMAINS_PARTIAL"){
               fwrite(STDERR,"invalid restore evidence\n"); exit(1);
+            }
+            if(($p["workflow_sha"]??"")!==(string)getenv("GITHUB_SHA")){
+              fwrite(STDERR,"restore evidence SHA mismatch\n"); exit(1);
             }
           '
 
