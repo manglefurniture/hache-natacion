@@ -6,6 +6,7 @@ require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-followup.php';
 require_once __DIR__.'/sharky-groups.php';
+require_once __DIR__.'/sharky-delivery-status.php';
 
 const HACHE_SHARKY_OUTBOX_LEASE_SECONDS=90;
 
@@ -128,9 +129,14 @@ function hache_sharky_outbox_reschedule_owner(PDO $pdo,string $id,string $ownerT
     }catch(Throwable $e){return false;}
 }
 
-function hache_sharky_outbox_mark_sent(PDO $pdo,string $id,string $ownerToken): bool
+function hache_sharky_outbox_mark_sent(PDO $pdo,string $id,string $ownerToken,string $providerMessageId=''): bool
 {
     try{
+        $providerMessageId=trim($providerMessageId);
+        if($providerMessageId!==''&&strlen($providerMessageId)<=191&&hache_sharky_delivery_schema_ready($pdo)){
+            $st=$pdo->prepare("UPDATE sharky_outbox SET status='SENT',sent_at=NOW(),provider_message_id=:pm,lease_until=NULL,owner_token=NULL,last_error=NULL WHERE id=:id AND status='PENDING' AND owner_token=:o");
+            $st->execute([':pm'=>$providerMessageId,':id'=>$id,':o'=>$ownerToken]);return $st->rowCount()===1;
+        }
         $st=$pdo->prepare("UPDATE sharky_outbox SET status='SENT',sent_at=NOW(),lease_until=NULL,owner_token=NULL,last_error=NULL WHERE id=:id AND status='PENDING' AND owner_token=:o");
         $st->execute([':id'=>$id,':o'=>$ownerToken]);return $st->rowCount()===1;
     }catch(Throwable $e){return false;}
@@ -222,9 +228,11 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
                 hache_sharky_outbox_release_owner($pdo,$id,$owner);
                 break;
             }
-            $ok=false;try{$ok=$sender($payload)===true;}catch(Throwable $e){$ok=false;}
+            $sendResult=false;try{$sendResult=$sender($payload);}catch(Throwable $e){$sendResult=false;}
+            $ok=$sendResult===true||(is_array($sendResult)&&($sendResult['ok']??false)===true);
+            $providerMessageId=is_array($sendResult)?trim((string)($sendResult['provider_message_id']??'')):'';
             if($ok){
-                if(hache_sharky_outbox_mark_sent($pdo,$id,$owner)){
+                if(hache_sharky_outbox_mark_sent($pdo,$id,$owner,$providerMessageId)){
                     $stats['sent']++;
                     if(is_array($followupMeta))hache_sharky_followup_after_sent($pdo,$contact,$followupMeta,time());
                     elseif(is_array($followupArm))hache_sharky_followup_after_normal_sent($pdo,$contact,$followupArm,time());
