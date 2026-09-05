@@ -127,7 +127,8 @@ try {
     );
     $st->execute([
         ':metric' => $metric,
-        ':value' => number_format($value, 4, '.', ''),
+        // Preserve substantially more precision than the normative CLS boundary requires.
+        ':value' => sprintf('%.8F', $value),
         ':route_group' => $routeGroup,
         ':build_id' => $buildId,
         ':form_factor' => $formFactor,
