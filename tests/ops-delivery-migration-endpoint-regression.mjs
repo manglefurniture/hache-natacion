@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
-const endpoint = await readFile(new URL('../public/api/ops-apply-sharky-delivery-status.php', import.meta.url), 'utf8');
+const endpoint = await readFile(new URL('../api/ops-apply-sharky-delivery-status.php', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../database/migrations/20260905_sharky_delivery_status.sql', import.meta.url), 'utf8');
 const crypto = await import('node:crypto');
 
@@ -17,6 +17,7 @@ for (const fragment of [
   "20260905_sharky_delivery_status.sql",
   "Cache-Control: no-store",
   "X-Robots-Tag: noindex, nofollow",
+  "$root=dirname(__DIR__)",
 ]) {
   assert.ok(endpoint.includes(fragment), `missing temporary ops endpoint guard: ${fragment}`);
 }
