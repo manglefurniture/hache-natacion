@@ -45,5 +45,28 @@ if (!preg_match('/^[a-f0-9]{64}$/', $expected) || !hash_equals($expected, $provi
     pr_internal_out(404, ['ok' => false]);
 }
 
+$root = dirname(__DIR__);
+require_once $root . '/config/production-rum.php';
+$deployedSha = hache_rum_deployed_sha($root);
+if (!is_string($deployedSha)) {
+    pr_internal_out(500, ['ok' => false]);
+}
+
+ob_start();
 define('HACHE_PR_INTERNAL_HTTP', true);
-require dirname(__DIR__) . '/bin/production-readiness-evidence.php';
+require $root . '/bin/production-readiness-evidence.php';
+$raw = ob_get_clean();
+
+try {
+    $payload = json_decode((string) $raw, true, 512, JSON_THROW_ON_ERROR);
+} catch (Throwable $e) {
+    pr_internal_out(500, ['ok' => false]);
+}
+if (!is_array($payload) || ($payload['ok'] ?? false) !== true) {
+    pr_internal_out(500, ['ok' => false]);
+}
+
+// El endpoint HTTP usa la misma frontera autoritativa que /api/rum-build.php.
+// El collector CLI conserva su resolución Git para diagnósticos fuera de FPM.
+$payload['deployed_sha'] = $deployedSha;
+echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), "\n";
