@@ -30,7 +30,9 @@ $pdo->exec("CREATE TABLE sharky_outbox (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
 $sql=(string)file_get_contents(__DIR__.'/../database/migrations/20260905_sharky_delivery_status.sql');
-$statements=array_values(array_filter(array_map('trim',explode(';',$sql)),static fn(string $statement):bool=>$statement!==''));
+$sqlWithoutLineComments=preg_replace('/^\s*--.*$/m','',$sql);
+delivery_db_expect(is_string($sqlWithoutLineComments),'Unable to normalize delivery migration SQL.');
+$statements=array_values(array_filter(array_map('trim',explode(';',$sqlWithoutLineComments)),static fn(string $statement):bool=>$statement!==''));
 foreach($statements as $statement)$pdo->exec($statement);
 
 delivery_db_expect(hache_sharky_delivery_schema_ready($pdo),'Delivery schema should be ready after migration.');
