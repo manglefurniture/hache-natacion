@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const workflow = await readFile(new URL('../.github/workflows/ops-field-evidence-once.yml', import.meta.url), 'utf8');
+const home = await readFile(new URL('../public/home.php', import.meta.url), 'utf8');
 
 for (const fragment of [
   'workflows: ["Deploy"]',
@@ -31,5 +32,14 @@ for (const fragment of [
 assert.ok(!workflow.includes('path: evidence/\n'), 'workflow must never upload the whole evidence directory');
 assert.ok(!workflow.includes('path: evidence/raw-production-snapshot.json'), 'raw production snapshot must never be uploaded');
 assert.ok(workflow.indexOf('rm -f evidence/raw-production-snapshot.json') < workflow.indexOf('Upload minimized field evidence'), 'raw snapshot must be removed before artifact upload');
+
+assert.ok(
+  home.includes('<script src="/assets/hachi.js?v=20260905-rum1" defer></script>'),
+  'home must cache-bust the hachi bootstrap version that loads production RUM',
+);
+assert.ok(
+  !home.includes('<script src="/assets/hachi.js?v=20260822-seo1" defer></script>'),
+  'home must not retain the pre-RUM hachi asset URL',
+);
 
 console.log('ops field evidence one-shot regression ok');
