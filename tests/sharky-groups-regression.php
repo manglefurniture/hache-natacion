@@ -56,6 +56,7 @@ groups_ok(hache_sharky_groups_prepare_outbound($direct,'')===$direct,'No group i
 
 $webhook=file_get_contents(__DIR__.'/../public/api/whatsapp-orchestrator-lab.php')?:'';
 $worker=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
+$batching=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
 $adminApi=file_get_contents(__DIR__.'/../api/sharky-admin.php')?:'';
 $adminUi=file_get_contents(__DIR__.'/../public/sharky-admin.php')?:'';
 $filterPos=strpos($webhook,'hache_sharky_groups_filter_payload');
@@ -63,6 +64,7 @@ $storePos=strpos($webhook,'hache_sharky_inbox_store');
 groups_ok($filterPos!==false&&$storePos!==false&&$filterPos<$storePos,'Disabled group traffic must be filtered before durable inbox persistence.');
 groups_ok(str_contains($worker,"hache_sharky_outbox_enqueue_raw(\$pdo,\$contact,\$payload"),'Group replies must bypass idle sales-followup arming.');
 groups_ok(str_contains($worker,'hache_sharky_groups_finalize_outbound($payload)'),'Group target must be swapped only at the final Meta send boundary.');
+groups_ok(str_contains($batching,"trim((string)(\$event['group_id']??''))!==''")&&str_contains($batching,'hache_sharky_whatsapp_process_with_delivery_lock'),'Group turns must bypass contact-only debounce batching.');
 groups_ok(str_contains($adminApi,"\$groupConfig['tipo']='checkbox'")&&str_contains($adminApi,'Responder en grupos de WhatsApp'),'Admin API must expose a clear checkbox.');
 groups_ok(str_contains($adminUi,"type=\"checkbox\""),'Sharky backend must render checkbox configuration.');
 
