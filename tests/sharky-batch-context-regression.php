@@ -46,13 +46,47 @@ file_put_contents($queue,json_encode($pending,JSON_UNESCAPED_UNICODE|JSON_UNESCA
 batch_context_ok(!hache_sharky_whatsapp_batch_pending_question($contact),'An expired queued question must not absorb a later discovery tap.');
 @unlink($queue);
 
+// A side question must keep the semantic pass's next-step controls instead of
+// replacing buttons/list with a plain-text-only payload.
+$semanticDecision=hache_sharky_orchestrator_decision(
+    'qualification_background',
+    '¿Cómo aprendiste a nadar?',
+    ['type'=>'buttons','buttons'=>[
+        hache_sharky_orchestrator_button('qualify:formal','Con clases'),
+        hache_sharky_orchestrator_button('qualify:self','Por mi cuenta'),
+    ]]
+);
+$semanticResult=['decision'=>$semanticDecision,'payload'=>hache_sharky_whatsapp_render($contact,$semanticDecision)];
+$textResult=[
+    'decision'=>['kind'=>'side_question','message'=>'El precio depende del programa.','ui'=>[],'action'=>null],
+    'payload'=>hache_sharky_whatsapp_text_payload($contact,'El precio depende del programa.'),
+];
+$merged=hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$textResult);
+batch_context_ok(($merged['decision']['kind']??'')==='side_question','Merged side question must remain identifiable as a side question.');
+batch_context_ok(($merged['decision']['ui']['type']??'')==='buttons','Semantic next-step buttons must survive the text pass.');
+batch_context_ok(str_contains((string)($merged['decision']['message']??''),'El precio depende del programa.')&&str_contains((string)($merged['decision']['message']??''),'¿Cómo aprendiste a nadar?'),'Merged reply must include both the answer and the semantic next-step prompt.');
+
+$handoffDecision=hache_sharky_orchestrator_decision('student_human_takeover','Te dejo con el equipo.',[],['type'=>'human_takeover']);
+$handoffResult=['decision'=>$handoffDecision,'payload'=>hache_sharky_whatsapp_render($contact,$handoffDecision)];
+$handoffMerged=hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$handoffResult);
+batch_context_ok(($handoffMerged['decision']['kind']??'')==='student_human_takeover','A policy decision must supersede semantic controls.');
+
 $source=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:'';
+$dbSource=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:'';
 batch_context_ok(str_contains($source,'hache_sharky_whatsapp_batch_pending_question($contact)'),'Interactive coalescing must require an already-pending question.');
 batch_context_ok(str_contains($source,'$flushAtMs<=0||$flushAtMs<=$nowMs'),'Pending-question detection must reject expired batch queues.');
 batch_context_ok(str_contains($source,'$choice=$choices[array_key_last($choices)]'),'If repeated taps arrive in one burst, only the latest safe discovery choice may be applied.');
 batch_context_ok(str_contains($source,"if(\$latestReferral!==null)\$semantic['referral']=\$latestReferral"),'Coalesced semantic choices must retain the latest ad referral.');
-batch_context_ok(str_contains($source,"'id'=>\$baseId.':text'")&&str_contains($source,'hache_sharky_whatsapp_process_with_delivery_lock($pdo,$textSynthetic,$conversationAnswer,$extraContext)'),'Pending plain text must re-enter the normal guarded WhatsApp processing pipeline after the choice is applied.');
+batch_context_ok(str_contains($source,"'id'=>\$baseId.':text'")&&str_contains($source,'hache_sharky_whatsapp_process_with_delivery_lock($pdo,$textSynthetic,$conversationAnswer,$textContext)'),'Pending plain text must re-enter the normal guarded WhatsApp processing pipeline after the choice is applied.');
+batch_context_ok(str_contains($source,"\$transferredLock=\$extraContext['_delivery_lock']??null")&&str_contains($source,"if(is_resource(\$heldDeliveryLock))\$textContext['_delivery_lock']=\$heldDeliveryLock"),'Coalesced semantic and text passes must transfer one delivery lock instead of reacquiring it.');
+batch_context_ok(str_contains($source,"if(\$plainText!=='')\$semanticContext['defer_delivery_unlock']=true"),'Semantic pass must hold the delivery lock until the queued text pass completes.');
+batch_context_ok(str_contains($source,'hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$textResult)'),'Text side questions must preserve semantic next-step controls.');
 batch_context_ok(!str_contains($source,'hache_sharky_whatsapp_batch_answer_after_choice'),'Coalesced text must not bypass policy guards through the legacy LLM-only side-question helper.');
 batch_context_ok(str_contains($source,"if(\$groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock"),'Group messages must remain outside direct-chat batching.');
+
+$pendingReadPos=strpos($dbSource,"\$pending=\$GLOBALS['hache_sharky_db_state_pending']??null");
+$readyCheckPos=strpos($dbSource,'if(!hache_sharky_db_state_ready($pdo))');
+batch_context_ok($pendingReadPos!==false&&$readyCheckPos!==false&&$pendingReadPos<$readyCheckPos,'Deferred state load must read its own pending write before durable DB reload.');
+batch_context_ok(str_contains($dbSource,"(string)(\$pending['contact']??'')===\$contact")&&str_contains($dbSource,"is_array(\$pending['state']??null)"),'Deferred read-your-writes must be scoped to the same contact and a valid state array.');
 
 fwrite(STDOUT,"SHARKY_BATCH_CONTEXT_OK\n");
