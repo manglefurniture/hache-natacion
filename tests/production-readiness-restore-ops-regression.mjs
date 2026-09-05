@@ -33,6 +33,16 @@ const backupCall = helper.indexOf('create_complete_backup', deployStart);
 const mergeCall = helper.indexOf('git merge --ff-only origin/main', deployStart);
 ok(deployStart >= 0 && backupCall > deployStart && mergeCall > backupCall, 'a complete DB backup must happen before the production fast-forward');
 
+ok(helper.includes('DEPLOY_SHA_FILE="${REPO}/.hache-deployed-sha"'), 'deploy helper must publish a web-readable authoritative SHA marker');
+ok(helper.includes('publish_deployed_sha()'), 'deploy helper must own marker publication');
+ok(helper.includes('chmod 644 "$temp"'), 'deployed SHA marker must be readable by PHP/FPM without opening .git permissions');
+ok(helper.includes('chown root:root "$DEPLOY_SHA_FILE"'), 'deployed SHA marker must remain root-owned');
+const alreadyCurrent = helper.indexOf('if [[ "$local_sha" == "$remote" ]]');
+const alreadyMarker = helper.indexOf('publish_deployed_sha "$local_sha"', alreadyCurrent);
+const deployMarker = helper.indexOf('publish_deployed_sha "$deployed"', mergeCall);
+ok(alreadyCurrent >= 0 && alreadyMarker > alreadyCurrent, 'already-current deploy path must repair/publish the SHA marker');
+ok(mergeCall >= 0 && deployMarker > mergeCall, 'successful fast-forward must publish the verified deployed SHA');
+
 ok(helper.includes('restore-drill <rpo_seconds> <rto_seconds> <run_id>'), 'restore drill must require explicit RPO/RTO inputs');
 ok(!helper.includes('RPO_SECONDS="${RPO_SECONDS:-86400}"') && !helper.includes('RTO_SECONDS="${RTO_SECONDS:-3600}"'), 'project helper must not invent recovery objectives');
 ok(helper.includes('RESTORE_TARGET="hache_restore_${run_id}"'), 'restore target must be unique to the evidence run');

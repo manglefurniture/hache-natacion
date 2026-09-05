@@ -12,6 +12,8 @@ La primera ruta activada es `home`, la página pública principal de Hache Natac
 
 El navegador obtiene primero un `build_id` no identificador desde `/api/rum-build.php`. Ese valor tiene formato `git-<12 hex>` y deriva del SHA realmente desplegado; el collector vuelve a calcularlo y rechaza con `409` una muestra si hubo un deploy entre la carga de la página y el envío. Así no se mezclan releases bajo una etiqueta fija.
 
+El helper root de deploy publica el SHA validado en `.hache-deployed-sha` con lectura pública local (`0644`) y propiedad `root:root`. Ese archivo contiene únicamente el SHA Git y es la frontera autoritativa para PHP/FPM; así RUM no depende de abrir permisos internos de `.git`, que pueden permanecer restrictivos por el `umask` operacional del deploy. La lectura directa de `.git` se conserva solo como compatibilidad de bootstrap cuando el marcador todavía no existe; si existe un marcador inválido o ilegible, la resolución falla cerrada.
+
 Las etiquetas `registration` y `admin_payments` están reservadas en el contrato, pero **no cuentan como cubiertas** hasta que su instrumentación sea activada y observada realmente.
 
 ## Payload permitido

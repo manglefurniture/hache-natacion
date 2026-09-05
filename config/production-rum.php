@@ -4,7 +4,28 @@ declare(strict_types=1);
 
 function hache_rum_deployed_build_id(string $root): ?string
 {
-    $gitDir = rtrim($root, '/') . '/.git';
+    $root = rtrim($root, '/');
+    $marker = $root . '/.hache-deployed-sha';
+
+    // El deploy root publica este marcador como la frontera autoritativa y
+    // web-readable. No dependemos de permisos internos de .git para servir RUM.
+    if (file_exists($marker) || is_link($marker)) {
+        if (is_link($marker) || !is_file($marker) || !is_readable($marker)) {
+            return null;
+        }
+        $markerSha = @file_get_contents($marker);
+        if (!is_string($markerSha)) {
+            return null;
+        }
+        $markerSha = trim($markerSha);
+        if (!preg_match('/^[a-f0-9]{40}$/', $markerSha)) {
+            return null;
+        }
+        return 'git-' . substr($markerSha, 0, 12);
+    }
+
+    // Compatibilidad de bootstrap para instalaciones anteriores al marcador.
+    $gitDir = $root . '/.git';
     if (!is_dir($gitDir)) {
         return null;
     }
