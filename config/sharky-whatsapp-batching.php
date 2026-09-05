@@ -118,10 +118,33 @@ function hache_sharky_whatsapp_batch_unpack(string $text): array
     return ['text'=>implode("\n",$parts),'interactives'=>$interactives];
 }
 
+function hache_sharky_whatsapp_batch_merge_semantic_controls(string $contact,array $semanticResult,array $textResult): array
+{
+    $semanticDecision=is_array($semanticResult['decision']??null)?$semanticResult['decision']:[];
+    $textDecision=is_array($textResult['decision']??null)?$textResult['decision']:[];
+    if(($textDecision['kind']??'')!=='side_question')return $textResult;
+    if(is_array($textDecision['action']??null))return $textResult;
+    $semanticUi=is_array($semanticDecision['ui']??null)?$semanticDecision['ui']:[];
+    if(!in_array(($semanticUi['type']??''),['buttons','list'],true))return $textResult;
+    $textMessage=trim((string)($textDecision['message']??''));
+    $nextMessage=trim((string)($semanticDecision['message']??''));
+    if($textMessage===''||$nextMessage==='')return $textResult;
+
+    $merged=$semanticDecision;
+    $merged['kind']='side_question';
+    $merged['message']=$textMessage."\n\n".$nextMessage;
+    return array_replace($textResult,[
+        'decision'=>$merged,
+        'payload'=>hache_sharky_whatsapp_render($contact,$merged),
+    ]);
+}
+
 function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');
-    $lock=hache_sharky_orchestrator_delivery_lock($contact);
+    $transferredLock=$extraContext['_delivery_lock']??null;
+    unset($extraContext['_delivery_lock']);
+    $lock=is_resource($transferredLock)?$transferredLock:hache_sharky_orchestrator_delivery_lock($contact);
     if(!is_resource($lock))return ['skip'=>true,'code'=>'DELIVERY_LOCK_UNAVAILABLE'];
     try{
         // A human may take the chat while a text is sleeping in the debounce window.
@@ -263,13 +286,23 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
             'timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000)),
         ];
         if($latestReferral!==null)$semantic['referral']=$latestReferral;
-        $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$semantic,$conversationAnswer,$extraContext);
+
+        // When a queued question follows the tap, retain the delivery lock across
+        // both synthetic passes. This avoids recursively flocking the same contact
+        // in the production worker while preserving its deferred-delivery boundary.
+        $semanticContext=$extraContext;
+        if($plainText!=='')$semanticContext['defer_delivery_unlock']=true;
+        $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$semantic,$conversationAnswer,$semanticContext);
         $syntheticId=$semantic['id'];
+        $heldDeliveryLock=$result['_delivery_lock']??null;
 
         // The button establishes the newest commercial context first. The pending
-        // text must then traverse the exact normal text pipeline so student claims,
-        // age/underage rules, takeover and every other policy guard still apply.
-        if($plainText!==''&&($result['skip']??false)!==true&&($result['payload']??null)!==null){
+        // text then traverses the exact normal text pipeline with read-your-writes
+        // deferred state, so student/age/takeover guards still apply.
+        $canProcessText=$plainText!==''&&($result['skip']??false)!==true&&($result['payload']??null)!==null;
+        if($canProcessText){
+            $semanticResult=$result;
+            unset($semanticResult['_delivery_lock']);
             $textSynthetic=[
                 'id'=>$baseId.':text',
                 'from'=>$contact,
@@ -279,8 +312,14 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
                 'timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000)),
             ];
             if($latestReferral!==null)$textSynthetic['referral']=$latestReferral;
-            $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$textSynthetic,$conversationAnswer,$extraContext);
+            $textContext=$extraContext;
+            if(is_resource($heldDeliveryLock))$textContext['_delivery_lock']=$heldDeliveryLock;
+            $textResult=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$textSynthetic,$conversationAnswer,$textContext);
+            $result=hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$textResult);
             $syntheticId=$textSynthetic['id'];
+        }elseif(($extraContext['defer_delivery_unlock']??false)!==true&&is_resource($heldDeliveryLock)){
+            hache_sharky_orchestrator_unlock($heldDeliveryLock);
+            unset($result['_delivery_lock']);
         }
     }else{
         $synthetic=['id'=>$baseId,'from'=>$contact,'type'=>'text','text'=>$plainText,'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];

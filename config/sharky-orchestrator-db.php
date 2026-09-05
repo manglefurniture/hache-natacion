@@ -58,6 +58,17 @@ function hache_sharky_db_state_purge_expired(PDO $pdo,int $limit=100): int
 
 function hache_sharky_db_state_load(PDO $pdo,string $contact): array
 {
+    // Deferred delivery is a transaction-like boundary. A second semantic pass
+    // in the same turn must observe the state written by the first pass without
+    // persisting it before outbox/receipt durability has been secured.
+    $pending=$GLOBALS['hache_sharky_db_state_pending']??null;
+    if(($GLOBALS['hache_sharky_db_state_deferred']??false)===true
+        &&is_array($pending)
+        &&(string)($pending['contact']??'')===$contact
+        &&is_array($pending['state']??null)){
+        return hache_sharky_orchestrator_state($pending['state']);
+    }
+
     if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
     $hash=hache_sharky_orchestrator_contact_hash($contact);
     try{
