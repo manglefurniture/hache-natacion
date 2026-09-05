@@ -72,14 +72,14 @@ No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciale
 `.github/workflows/production-readiness-evidence.yml` permite obtener dos artefactos manuales y auditables:
 
 1. **production snapshot**: ejecuta el collector por el mismo canal SSH del deploy y mide una solicitud HTTPS pública a `https://hnatacion.com/`;
-2. **restore lab**: crea dos DB aisladas en MariaDB de CI, importa el schema real del proyecto, inserta un marker sintético, hace dump y restore, y verifica integridad básica. Es evidencia de restaurabilidad del proyecto, **no** sustituye un restore de un backup real de producción.
+2. **restore lab**: crea dos DB aisladas en MariaDB de CI, importa `database/schema_hache_monteverde_v1.sql` como baseline sintético versionado, inserta un marker, hace dump y restore, y verifica integridad básica. Este drill **no reproduce por sí solo todas las migraciones aplicadas en producción** y no sustituye un restore de un backup real de producción.
 
 ## Estado de los tres gates del criterio de salida P1
 
 | Gate | Estado al introducir este piloto | Evidencia necesaria para cerrarlo |
 | --- | --- | --- |
 | Campo | `NOT EVALUATED` | ventana representativa de RUM/Web Vitals o evidencia de campo equivalente aprobada; una medición HTTP aislada no cuenta como p75 de campo |
-| Restore | `PARTIAL` | restore lab del schema + posteriormente restore aislado de un backup real con RPO/RTO medidos |
+| Restore | `PARTIAL` | restore lab del baseline de schema versionado + posteriormente restore aislado de un backup real con RPO/RTO medidos |
 | Communication status | `PARTIAL` | outbox real aporta `PENDING/SENT/DEAD/CANCELLED`; falta delivery status autoritativo del proveedor |
 
 No se convierte ninguno de esos estados en PASS por el mero hecho de mergear este paquete.
