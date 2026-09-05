@@ -50,10 +50,18 @@ jobs:
           printf 'helper_readable=%s\n' "$([[ -r "$helper" ]] && echo yes || echo no)"
           printf 'helper_executable=%s\n' "$([[ -x "$helper" ]] && echo yes || echo no)"
           if [[ -r "$helper" ]]; then
+            printf 'helper_owner_mode=%s\n' "$(stat -c '%U:%G %a' "$helper")"
             printf 'helper_sha256=%s\n' "$(sha256sum "$helper" | awk '{print $1}')"
             printf 'helper_mentions_dump=%s\n' "$(grep -Eq '(^|[^[:alnum:]_])(mysqldump|mariadb-dump)([^[:alnum:]_]|$)' "$helper" && echo yes || echo no)"
             printf 'helper_mentions_backup=%s\n' "$(grep -Eqi 'backup|snapshot' "$helper" && echo yes || echo no)"
             printf 'helper_mentions_database_local=%s\n' "$(grep -Fq 'database.local.php' "$helper" && echo yes || echo no)"
+            printf '%s\n' 'helper_sanitized_begin'
+            sed -E \
+              -e 's/(([A-Za-z_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z_]*)=).*/\1<redacted>/Ig' \
+              -e 's/(--password(=|[[:space:]])+)[^[:space:]]+/\1<redacted>/Ig' \
+              -e 's/(-p)[^[:space:]]+/\1<redacted>/g' \
+              "$helper"
+            printf '%s\n' 'helper_sanitized_end'
           fi
           for cmd in mariadb mysql mariadb-dump mysqldump sha256sum; do
             if command -v "$cmd" >/dev/null 2>&1; then
@@ -71,21 +79,5 @@ jobs:
           if [[ -d "$root" && -r "$root" ]]; then
             mapfile -t complete_markers < <(find "$root" -mindepth 2 -maxdepth 2 -type f -name BACKUP_COMPLETE -print 2>/dev/null | sort)
             printf 'backup_complete_markers=%s\n' "${#complete_markers[@]}"
-            if ((${#complete_markers[@]})); then
-              latest_marker="${complete_markers[-1]}"
-              latest_dir="${latest_marker%/BACKUP_COMPLETE}"
-              printf 'latest_backup_dir_name=%s\n' "${latest_dir##*/}"
-              printf 'latest_has_manifest=%s\n' "$([[ -f "$latest_dir/backup-manifest.env" ]] && echo yes || echo no)"
-              printf 'latest_has_database_sql=%s\n' "$([[ -s "$latest_dir/database.sql" ]] && echo yes || echo no)"
-              printf 'latest_has_checksums=%s\n' "$([[ -f "$latest_dir/SHA256SUMS" ]] && echo yes || echo no)"
-              if [[ -f "$latest_dir/backup-manifest.env" ]]; then
-                status="$(awk -F= '$1=="backup_status"{print $2; exit}' "$latest_dir/backup-manifest.env")"
-                created="$(awk -F= '$1=="created_at_epoch"{print $2; exit}' "$latest_dir/backup-manifest.env")"
-                dbname="$(awk -F= '$1=="database_name"{print $2; exit}' "$latest_dir/backup-manifest.env")"
-                printf 'latest_manifest_status=%s\n' "${status:-missing}"
-                printf 'latest_manifest_created_at_epoch=%s\n' "${created:-missing}"
-                printf 'latest_manifest_database_name=%s\n' "${dbname:-missing}"
-              fi
-            fi
           fi
           REMOTE
