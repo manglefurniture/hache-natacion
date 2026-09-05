@@ -2,13 +2,15 @@
 
 ## Objetivo
 
-Abrir el gate **Field** del piloto C con evidencia real de usuarios sin convertir una medición aislada ni un deploy en `PASS`. La implementación adopta el patrón P1-04 de Hache Base: primera parte, same-origin, payload minimizado, p75 reproducible y decisión humana.
+Abrir el gate **Field** del piloto C con evidencia real de usuarios sin convertir una medición aislada ni un deploy en `PASS`. La implementación adopta el patrón P1-04 de Hache Base: first-party, same-origin, payload minimizado, p75 reproducible y decisión humana.
 
 El gate continúa **`NOT EVALUATED`** hasta reunir una ventana representativa y revisar cobertura, tamaños de muestra y resultados por factor de forma.
 
 ## Primera activación
 
-La primera ruta activada es `home`, la página pública principal de Hache Natación. El build de evidencia es `pilot-c-field-v1` y durante esta ventana inicial el muestreo es 100% de las cargas elegibles para reunir señal con rapidez en un sitio de tráfico moderado.
+La primera ruta activada es `home`, la página pública principal de Hache Natación. Durante esta ventana inicial el muestreo es 100% de las cargas elegibles para reunir señal con rapidez en un sitio de tráfico moderado.
+
+El navegador obtiene primero un `build_id` no identificador desde `/api/rum-build.php`. Ese valor tiene formato `git-<12 hex>` y deriva del SHA realmente desplegado; el collector vuelve a calcularlo y rechaza con `409` una muestra si hubo un deploy entre la carga de la página y el envío. Así no se mezclan releases bajo una etiqueta fija.
 
 Las etiquetas `registration` y `admin_payments` están reservadas en el contrato, pero **no cuentan como cubiertas** hasta que su instrumentación sea activada y observada realmente.
 
@@ -22,25 +24,24 @@ El navegador puede enviar únicamente:
   "metric": "LCP",
   "value": 1834.12345678,
   "route_group": "home",
-  "build_id": "pilot-c-field-v1",
+  "build_id": "git-0123456789ab",
   "form_factor": "mobile"
 }
 ```
 
 No se envían ni almacenan URL, pathname, query, referrer, IP, User-Agent, cookie, session id, usuario, alumno, cuenta, nombre, email, teléfono, identificador de contacto, fingerprint ni contenido de página/formulario.
 
-El collector rechaza campos desconocidos, cuerpos mayores de 1 KiB, métricas/rutas/builds fuera de allowlist y valores no finitos o fuera de límites defensivos. Los errores no registran el body.
+El collector rechaza campos desconocidos, cuerpos mayores de 1 KiB, métricas/rutas/builds fuera de allowlist, build ids que no coincidan con el release desplegado y valores no finitos o fuera de límites defensivos. Los errores no registran el body.
 
 ## Transporte
 
-`public/assets/field-rum.js` usa `fetch` hacia `/api/rum-web-vitals.php` con:
+`public/assets/field-rum.js` obtiene el build id y envía las métricas con `fetch` same-origin usando:
 
-- `mode: same-origin`;
 - `credentials: omit`;
 - `referrerPolicy: no-referrer`;
 - `cache: no-store`;
 - `redirect: error`;
-- `keepalive: true`.
+- `keepalive: true` para los POST de métricas.
 
 Un fallo de telemetría nunca bloquea ni altera el CUF de la página.
 
@@ -50,7 +51,7 @@ Un fallo de telemetría nunca bloquea ni altera el CUF de la página.
 - **CLS:** session windows de hasta 5 s con gaps menores de 1 s, excluyendo shifts con `hadRecentInput`.
 - **INP:** solo se emite cuando el navegador soporta Event Timing con `interactionId`; conserva las 10 interacciones más lentas y usa el candidato p98 por `floor(interactionCount / 50)`. En navegadores sin soporte no se inventa un valor INP.
 
-Esta implementación es first-party y no afirma ser el paquete `web-vitals`. Si cambia el algoritmo normativo o se adopta dicho paquete, el build/ventana debe revalidarse.
+Esta implementación es first-party y no afirma ser el paquete `web-vitals`. Si cambia el algoritmo normativo o se adopta dicho paquete, la ventana debe revalidarse.
 
 ## Persistencia y retención
 
