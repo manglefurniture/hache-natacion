@@ -22,7 +22,7 @@ function hache_sharky_deterministic_commercial(array $state): ?array
 
 function hache_sharky_deterministic_sede_label(string $sede): string
 {
-    return $sede==='MONTEVERDE'?'Monteverde':'Palapas Protudec';
+    return $sede==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec';
 }
 
 function hache_sharky_deterministic_detect_explicit_sede(string $text): ?string
@@ -128,7 +128,7 @@ function hache_sharky_deterministic_location_message(string $text,array $state):
 {
     $sede=hache_sharky_deterministic_detect_explicit_sede($text);
     if($sede===null){$commercial=hache_sharky_deterministic_commercial($state);$sede=$commercial['sede']??null;}
-    if(!in_array($sede,['MONTEVERDE','PALAPAS'],true))return 'Claro. ¿Necesitas la ubicación de Monteverde o la de Palapas Protudec?';
+    if(!in_array($sede,['MONTEVERDE','PALAPAS'],true))return 'Claro. ¿Necesitas la ubicación de Colegio Monteverde o la de Palapas Protudec?';
     $pdo=hache_sharky_pdo();$business=hache_sharky_business_values($pdo instanceof PDO?$pdo:null);
     $key=$sede==='MONTEVERDE'?'sharky_maps_monteverde':'sharky_maps_palapas';
     $url=trim((string)($business[$key]??''));
