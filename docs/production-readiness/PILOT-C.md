@@ -80,11 +80,11 @@ En producción el usuario SSH de deploy no tiene permiso de lectura sobre `confi
 1. **production snapshot**: usa el mismo canal SSH del deploy para crear el token efímero e invocar por loopback la entrada interna del collector, elimina el token inmediatamente, exige que el SHA desplegado coincida exactamente con el SHA del workflow, comprueba desde Internet que una petición sin el token válido termina en 4xx y mide una solicitud HTTPS pública a `https://hnatacion.com/`;
 2. **restore lab**: crea dos DB aisladas en MariaDB de CI, importa `database/schema_hache_monteverde_v1.sql` como baseline sintético versionado, inserta un marker, hace dump y restore, y verifica integridad básica. Este drill **no reproduce por sí solo todas las migraciones aplicadas en producción** y no sustituye un restore de un backup real de producción.
 
-El 2026-09-05 se ejecutó correctamente el restore lab sintético aislado: marker, tabla `pagos` y los dos triggers de validez de pago fueron verificados tras dump/restore. Este resultado reduce incertidumbre del mecanismo, pero no cambia por sí solo el gate de restore a PASS porque no utilizó un backup real de producción ni midió RPO/RTO del proceso real.
+El 2026-09-05 se ejecutó correctamente el restore lab sintético aislado: marker, tabla `pagos` y los dos triggers de validez de pago fueron verificados tras dump/restore. Este resultado redujo incertidumbre del mecanismo antes del drill real.
 
-### Preparación del restore con backup real
+### Restore con backup real
 
-El 2026-09-05 se hizo un preflight operativo no mutante sobre el host mediante los runs `33984052663`, `33984088882` y `33984134423`. Confirmó que existen los clientes MariaDB y `/var/backups/hache-natacion`, pero **no existía ningún `BACKUP_COMPLETE` bajo ese root**. También confirmó que el helper de deploy instalado en `/usr/local/sbin/deploy-hache-natacion` hacía únicamente el fast-forward/validación del SHA y no generaba backup de DB.
+El 2026-09-05 se hizo un preflight operativo no mutante sobre el host mediante los runs `33984052663`, `33984088882` y `33984134423`. Confirmó que existen los clientes MariaDB y `/var/backups/hache-natacion`, pero en ese momento todavía no existía ningún `BACKUP_COMPLETE` bajo ese root y el helper instalado no generaba backup de DB.
 
 La corrección operativa quedó activada el mismo día: el helper protegido está instalado en `/usr/local/sbin/deploy-hache-natacion`, ya creó backups completos reales y cada fast-forward de producción exige un backup completo previo.
 
@@ -93,10 +93,11 @@ La corrección operativa quedó activada el mismo día: el helper protegido est�
 - el restore rechaza un target preexistente o igual a la DB fuente, valida checksums, restaura con root local de MariaDB, verifica las tablas críticas del piloto, los dos triggers de validez de pago y el índice único de `pagos.folio`, y elimina el target al final;
 - `.github/workflows/production-restore-drill.yml` mantiene el drill manual desde `main` con RPO y RTO explícitos y publica únicamente JSON minimizado; ningún `database.sql` sale del host;
 - el owner aprobó el 2026-09-05 **RPO = 24 horas (`86400` s)**, **RTO = 1 hora (`3600` s)** y **cadencia de backup diaria**;
-- `.github/workflows/production-backup-daily.yml` ejecuta el backup diario a las `09:17 UTC` (`04:17 America/Cancun`) para reducir contención del VPS; los backups previos a deploy se conservan como protección adicional y no sustituyen la cadencia diaria;
-- `.github/workflows/ops-production-restore-evidence-once.yml` ejecuta una sola vez, al entrar esta adopción a `main`, el restore del último backup completo real contra los objetivos aprobados y publica solo el JSON minimizado de evidencia.
+- `.github/workflows/production-backup-daily.yml` ejecuta el backup diario a las `09:17 UTC` (`04:17 America/Cancun`) para reducir contención del VPS; los backups previos a deploy se conservan como protección adicional y no sustituyen la cadencia diaria.
 
-Hasta que el one-shot de restore termine en PASS con `production_backup_used=true`, target aislado verificado, cleanup exitoso y RPO/RTO cumplidos, el gate Restore continúa en `PARTIAL`. La aprobación de objetivos por sí sola no equivale a evidencia de recuperación.
+El run real `33999270733` restauró el backup completo `deploy-20260905-231912-oXrgzo` en `hache_restore_33999270733`. La edad del backup fue `1248` s y el restore duró `3` s: ambos cumplieron ampliamente los objetivos aprobados (`RPO 86400` s, `RTO 3600` s). También verificó tablas críticas, guardas financieras y cleanup del target. La revisión humana y el alcance del PASS están versionados en `RESTORE-REVIEW-20260905.md`.
+
+Por lo anterior, **Restore queda cerrado en PASS**. El dump real permaneció en el VPS y el artifact de Actions contiene únicamente JSON minimizado sin filas personales ni credenciales.
 
 El mismo día se ejecutó el snapshot productivo seguro del run `33945691437` contra `35c305c0c92bf12915612a72b4a563744a0d09b1`. La evidencia minimizada confirmó schema de delivery disponible, 36 estados reales correlacionados (`DELIVERED=10`, `READ=26`, `FAILED=0`), bloqueo externo sin token válido y health local `200`. Tras revisión humana explícita, `Communication status` queda cerrado en PASS; véase `COMMUNICATION-DELIVERY-REVIEW-20260905.md`.
 
@@ -105,10 +106,10 @@ El mismo día se ejecutó el snapshot productivo seguro del run `33945691437` co
 | Gate | Estado | Evidencia necesaria para cerrarlo |
 | --- | --- | --- |
 | Campo | `NOT EVALUATED` | ventana representativa de RUM/Web Vitals o evidencia de campo equivalente aprobada; una medición HTTP aislada no cuenta como p75 de campo |
-| Restore | `PARTIAL` | helper y backups reales activos; RPO 24 h / RTO 1 h / cadencia diaria aprobados; falta que el restore real aislado one-shot demuestre cumplimiento e integridad con evidencia minimizada |
+| Restore | `PASS` | backup real restaurado en target aislado; RPO 24 h y RTO 1 h cumplidos; integridad crítica y cleanup revisados en `RESTORE-REVIEW-20260905.md` |
 | Communication status | `PASS` | evidencia real de Meta correlacionada y revisión humana registradas en `COMMUNICATION-DELIVERY-REVIEW-20260905.md` |
 
-El PASS de Communication status no altera los otros dos gates. Field y Restore se mantienen abiertos hasta tener su evidencia específica.
+Restore y Communication status están cerrados. **Field es el único gate P1 todavía abierto** y se mantiene `NOT EVALUATED` hasta tener su evidencia específica.
 
 ## Política de cambios del piloto
 
