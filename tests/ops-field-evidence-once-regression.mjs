@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const workflow = await readFile(new URL('../.github/workflows/ops-field-evidence-once.yml', import.meta.url), 'utf8');
+const manualEvidenceWorkflow = await readFile(new URL('../.github/workflows/production-readiness-evidence.yml', import.meta.url), 'utf8');
 const home = await readFile(new URL('../public/home.php', import.meta.url), 'utf8');
 
 for (const fragment of [
@@ -42,6 +43,20 @@ for (const fragment of [
 ]) {
   assert.ok(workflow.includes(fragment), `missing one-shot field evidence guard: ${fragment}`);
 }
+
+const productionSnapshotConcurrency = 'group: hache-natacion-production-readiness-production_snapshot';
+assert.ok(
+  workflow.includes(productionSnapshotConcurrency),
+  'automatic field evidence must serialize with manual production_snapshot evidence runs',
+);
+assert.ok(
+  manualEvidenceWorkflow.includes('group: hache-natacion-production-readiness-${{ github.event.inputs.mode }}'),
+  'manual evidence workflow must keep the mode-derived production readiness concurrency contract',
+);
+assert.ok(
+  manualEvidenceWorkflow.includes('/tmp/hache-pr-evidence-token') && workflow.includes('/tmp/hache-pr-evidence-token'),
+  'shared token users must stay covered by the shared concurrency regression',
+);
 
 assert.ok(!workflow.includes('Verify public RUM bootstrap chain'), 'field evidence must not depend on GitHub-hosted runner access through public WAF');
 assert.ok(!workflow.includes('path: evidence/\n'), 'workflow must never upload the whole evidence directory');
