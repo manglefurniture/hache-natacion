@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/../config/sharky-outbox.php';
+
 function outbox_expect(bool $ok,string $message):void
 {
     if(!$ok){fwrite(STDERR,"OUTBOX CONCURRENCY FAIL: $message\n");exit(1);}
@@ -26,5 +28,33 @@ $takeoverPos=strpos($outbox,'hache_sharky_takeover_active($contact)',$renewPos==
 $senderPos=strpos($outbox,'$sender($payload)',$renewPos===false?0:$renewPos);
 outbox_expect($renewPos!==false&&$takeoverPos!==false&&$senderPos!==false&&$renewPos<$takeoverPos&&$takeoverPos<$senderPos,'Ownership renewal, takeover revalidation and sender must run in the fenced order.');
 outbox_expect(str_contains($outbox,'owner_token=NULL'),'Terminal/retry transitions must release outbox ownership.');
+
+// Venue choice hints are a presentation-only outbox decoration. They must not
+// change interactive IDs, routing, state or any other Sharky payload semantics.
+$venuePayload=[
+    'messaging_product'=>'whatsapp',
+    'recipient_type'=>'individual',
+    'to'=>'529900000001',
+    'type'=>'interactive',
+    'interactive'=>[
+        'type'=>'button',
+        'body'=>['text'=>'Tenemos dos sedes en Cancún. ¿Cuál de las dos te queda mejor?'],
+        'action'=>['buttons'=>[
+            ['type'=>'reply','reply'=>['id'=>'sede:monteverde','title'=>'Monteverde']],
+            ['type'=>'reply','reply'=>['id'=>'sede:palapas','title'=>'Palapas']],
+        ]],
+    ],
+];
+$decorated=hache_sharky_outbox_add_venue_hints($venuePayload);
+$body=(string)($decorated['interactive']['body']['text']??'');
+outbox_expect(str_contains($body,'Colegio Monteverde — al inicio de Av. Bonampak'),'Venue choices must explain the Colegio Monteverde reference.');
+outbox_expect(str_contains($body,'Palapas Protudec — a 100 m del Parque de las Palapas'),'Venue choices must explain the Palapas Protudec reference.');
+outbox_expect(array_column(array_column($decorated['interactive']['action']['buttons']??[],'reply'),'id')===['sede:monteverde','sede:palapas'],'Venue decoration must preserve the exact interactive IDs that carry conversation context.');
+outbox_expect((string)($decorated['interactive']['action']['buttons'][0]['reply']['title']??'')==='Colegio Monteverde','Monteverde button must use the customer-facing venue name.');
+outbox_expect((string)($decorated['interactive']['action']['buttons'][1]['reply']['title']??'')==='Palapas Protudec','Palapas button must use the customer-facing venue name.');
+$decoratedTwice=hache_sharky_outbox_add_venue_hints($decorated);
+outbox_expect(substr_count((string)($decoratedTwice['interactive']['body']['text']??''),'Av. Bonampak')===1,'Retry/de-dup paths must not duplicate the venue legend.');
+$textPayload=['type'=>'text','text'=>['body'=>'Hola']];
+outbox_expect(hache_sharky_outbox_add_venue_hints($textPayload)===$textPayload,'Non-venue payloads must remain byte-for-byte equivalent as arrays.');
 
 fwrite(STDOUT,"SHARKY_OUTBOX_CONCURRENCY_OK\n");
