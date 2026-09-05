@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: hache-natacion-ops-field-evidence-once
+  group: hache-natacion-production-readiness-production_snapshot
   cancel-in-progress: false
 
 jobs:
