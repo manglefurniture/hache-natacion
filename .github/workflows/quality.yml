@@ -24,6 +24,8 @@ jobs:
         run: node tests/production-readiness-pilot-regression.mjs
       - name: Production readiness RUM regression
         run: node tests/production-readiness-rum-regression.mjs
+      - name: Ops field evidence one-shot regression
+        run: node tests/ops-field-evidence-once-regression.mjs
 
   delivery-status-mariadb:
     runs-on: ubuntu-latest
