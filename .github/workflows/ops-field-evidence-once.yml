@@ -35,6 +35,34 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
+      - name: Verify public RUM bootstrap chain
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -Eeuo pipefail
+
+          home="$(curl --silent --show-error --fail --location --max-redirs 3 --connect-timeout 10 --max-time 30 https://hnatacion.com/)"
+          grep -Fq '<script src="/assets/hachi.js?v=20260905-rum1" defer></script>' <<<"$home"
+
+          hachi="$(curl --silent --show-error --fail --location --max-redirs 3 --connect-timeout 10 --max-time 30 'https://hnatacion.com/assets/hachi.js?v=20260905-rum1')"
+          grep -Fq "script.src = '/assets/field-rum.js?v=20260905-1'" <<<"$hachi"
+          grep -Fq "script.dataset.routeGroup = 'home'" <<<"$hachi"
+          grep -Fq "script.dataset.sampleRate = '1'" <<<"$hachi"
+
+          rum="$(curl --silent --show-error --fail --location --max-redirs 3 --connect-timeout 10 --max-time 30 'https://hnatacion.com/assets/field-rum.js?v=20260905-1')"
+          grep -Fq "const endpoint = '/api/rum-web-vitals.php'" <<<"$rum"
+          grep -Fq "fetch('/api/rum-build.php'" <<<"$rum"
+
+          build="$(curl --silent --show-error --fail --location --max-redirs 3 --connect-timeout 10 --max-time 30 https://hnatacion.com/api/rum-build.php)"
+          EXPECTED_BUILD="git-${EXPECTED_SHA:0:12}" BUILD_JSON="$build" php -r '
+            $p=json_decode((string)getenv("BUILD_JSON"),true,512,JSON_THROW_ON_ERROR);
+            $expected=(string)getenv("EXPECTED_BUILD");
+            $actual=(string)($p["build_id"]??"");
+            if($expected===""||$actual===""||!hash_equals($expected,$actual)){
+              fwrite(STDERR,"public RUM build id does not match deployed workflow SHA\n"); exit(1);
+            }
+          '
+
       - name: Collect minimized production field snapshot
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}

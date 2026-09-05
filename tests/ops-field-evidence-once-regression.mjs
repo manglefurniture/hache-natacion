@@ -9,6 +9,18 @@ for (const fragment of [
   "github.event.workflow_run.conclusion == 'success'",
   "github.event.workflow_run.head_branch == 'main'",
   'EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}',
+  'Verify public RUM bootstrap chain',
+  'https://hnatacion.com/',
+  "https://hnatacion.com/assets/hachi.js?v=20260905-rum1",
+  "https://hnatacion.com/assets/field-rum.js?v=20260905-1",
+  'https://hnatacion.com/api/rum-build.php',
+  "script.src = '/assets/field-rum.js?v=20260905-1'",
+  "script.dataset.routeGroup = 'home'",
+  "script.dataset.sampleRate = '1'",
+  "const endpoint = '/api/rum-web-vitals.php'",
+  "fetch('/api/rum-build.php'",
+  'EXPECTED_BUILD="git-${EXPECTED_SHA:0:12}"',
+  'public RUM build id does not match deployed workflow SHA',
   'openssl rand -hex 32',
   '/tmp/hache-pr-evidence-token',
   "--resolve hnatacion.com:443:127.0.0.1",
@@ -32,6 +44,7 @@ for (const fragment of [
 assert.ok(!workflow.includes('path: evidence/\n'), 'workflow must never upload the whole evidence directory');
 assert.ok(!workflow.includes('path: evidence/raw-production-snapshot.json'), 'raw production snapshot must never be uploaded');
 assert.ok(workflow.indexOf('rm -f evidence/raw-production-snapshot.json') < workflow.indexOf('Upload minimized field evidence'), 'raw snapshot must be removed before artifact upload');
+assert.ok(!workflow.includes("--request POST https://hnatacion.com/api/rum-web-vitals.php"), 'bootstrap verification must never inject synthetic RUM samples');
 
 assert.ok(
   home.includes('<script src="/assets/hachi.js?v=20260905-rum1" defer></script>'),
