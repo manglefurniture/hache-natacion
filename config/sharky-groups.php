@@ -128,16 +128,31 @@ function hache_sharky_groups_prepare_outbound(array $payload,string $groupId): a
     }
     if($body==='')$body='¿En qué te puedo ayudar?';
 
+    // Keep the participant in `to` while the payload is durable so the existing
+    // outbox ownership/contact fences remain tied to the sender. The final Meta
+    // sender swaps `to` to this group target immediately before the network call.
     $out=[
         'messaging_product'=>'whatsapp',
-        'recipient_type'=>'group',
-        'to'=>$groupId,
+        'recipient_type'=>'individual',
+        'to'=>(string)($payload['to']??''),
         'type'=>'text',
         'text'=>['preview_url'=>false,'body'=>mb_substr($body,0,4000)],
         '_sharky_group'=>true,
+        '_sharky_group_target'=>$groupId,
     ];
     foreach($payload as $key=>$value){
-        if(str_starts_with((string)$key,'_sharky_')&&$key!=='_sharky_group')$out[$key]=$value;
+        if(str_starts_with((string)$key,'_sharky_')&&!in_array($key,['_sharky_group','_sharky_group_target'],true))$out[$key]=$value;
     }
     return $out;
+}
+
+function hache_sharky_groups_finalize_outbound(array $payload): array
+{
+    $groupId=trim((string)($payload['_sharky_group_target']??''));
+    $isGroup=($payload['_sharky_group']??false)===true&&$groupId!=='';
+    unset($payload['_sharky_group'],$payload['_sharky_group_target']);
+    if(!$isGroup)return $payload;
+    $payload['recipient_type']='group';
+    $payload['to']=$groupId;
+    return $payload;
 }
