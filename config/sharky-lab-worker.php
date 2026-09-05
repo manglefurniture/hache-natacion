@@ -9,6 +9,7 @@ require_once __DIR__.'/sharky-draft-parity.php';
 require_once __DIR__.'/sharky-post-pr72.php';
 require_once __DIR__.'/sharky-outbox.php';
 require_once __DIR__.'/sharky-inbox.php';
+require_once __DIR__.'/sharky-groups.php';
 
 function hache_sharky_lab_secret(string $name): string
 {
@@ -28,6 +29,7 @@ function hache_sharky_lab_today(): string
 
 function hache_sharky_lab_send(array $payload): bool
 {
+    unset($payload['_sharky_group']);
     $token=hache_sharky_lab_secret('WHATSAPP_ACCESS_TOKEN');$phoneId=hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID');if($token===''||$phoneId==='')return false;
     $json=json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)return false;
     $ch=curl_init('https://graph.facebook.com/'.rawurlencode(hache_sharky_lab_graph_version()).'/'.rawurlencode($phoneId).'/messages');
@@ -146,6 +148,7 @@ function hache_sharky_lab_complete_without_outbox(PDO $pdo,string $sourceMessage
 function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?int $minAge=null,?int $escalationThreshold=null): bool
 {
     $kind=(string)($event['kind']??'message');$configured=hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID');
+    $groupId=trim((string)($event['group_id']??''));
     if($configured!==''&&($event['phone_number_id']??'')!==''&&!hash_equals($configured,(string)$event['phone_number_id'])){
         $contact=hache_sharky_inbox_contact($event);if($contact!==''&&hache_sharky_lab_claim_early($pdo,$event,$contact,$kind))hache_sharky_orchestrator_mark_processed($pdo,(string)$event['id']);
         return true;
@@ -179,7 +182,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
             $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
             try{
                 if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'audio'))return false;
-                $payload=hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.');
+                $payload=hache_sharky_groups_prepare_outbound(hache_sharky_whatsapp_text_payload($contact,'No pude procesar esa nota de voz. Escríbeme el mensaje y seguimos por aquí.'),$groupId);
                 return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|audio-fallback',$eventId);
             }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
         }
@@ -202,7 +205,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
                 error_log('[sharky-lab] takeover persistence failed before handoff delivery reason='.$reason);
                 return false;
             }
-            $payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_text_payload($contact,$message));
+            $payload=hache_sharky_groups_prepare_outbound(hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_text_payload($contact,$message)),$groupId);
             return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|handoff',$eventId);
         }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
     }
@@ -254,6 +257,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
             if(is_array($out))$out=hache_sharky_outbox_allow_during_takeover($out);
         }
 
+        if(is_array($out))$out=hache_sharky_groups_prepare_outbound($out,$groupId);
         $deliveryPending=hache_sharky_action_delivery_pending_for_message($pdo,$deliverySource);
         if($deliveryPending&&!is_array($out))return false;
         if(is_array($out)){
