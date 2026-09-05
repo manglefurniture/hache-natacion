@@ -32,6 +32,8 @@ jobs:
         run: node tests/ops-field-evidence-once-regression.mjs
       - name: Production real-backup restore ops regression
         run: node tests/production-readiness-restore-ops-regression.mjs
+      - name: Production backup cadence regression
+        run: node tests/production-backup-cadence-regression.mjs
 
   delivery-status-mariadb:
     runs-on: ubuntu-latest

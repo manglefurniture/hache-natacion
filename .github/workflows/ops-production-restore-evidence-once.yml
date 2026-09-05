@@ -1,0 +1,100 @@
+name: Ops Production Restore Evidence Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ops-production-restore-evidence-once.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hache-natacion-production-restore-drill
+  cancel-in-progress: false
+
+jobs:
+  restore-real-backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RPO_SECONDS: '86400'
+      RTO_SECONDS: '3600'
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Restore latest complete production backup into isolated DB
+        id: restore
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p evidence
+          chmod 700 evidence
+
+          set +e
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo /usr/local/sbin/deploy-hache-natacion restore-drill '$RPO_SECONDS' '$RTO_SECONDS' '$GITHUB_RUN_ID'" \
+            > evidence/restore-drill.json
+          rc=$?
+          set -e
+
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          test -s evidence/restore-drill.json
+
+      - name: Validate minimized restore evidence
+        env:
+          HELPER_EXIT_CODE: ${{ steps.restore.outputs.exit_code }}
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            $p=json_decode(file_get_contents("evidence/restore-drill.json"),true,512,JSON_THROW_ON_ERROR);
+            $expectedTarget="hache_restore_".(string)getenv("GITHUB_RUN_ID");
+            $ok=(string)getenv("HELPER_EXIT_CODE")==="0"
+              && ($p["schema_version"]??null)===1
+              && ($p["evidence_type"]??"")==="production_restore_drill"
+              && ($p["result"]??"")==="PASS"
+              && ($p["production_backup_selected"]??false)===true
+              && ($p["production_backup_used"]??false)===true
+              && ($p["isolated_target"]??false)===true
+              && ($p["target_database"]??"")===$expectedTarget
+              && ($p["critical_tables_verified"]??false)===true
+              && ($p["financial_guards_verified"]??false)===true
+              && ($p["cleanup_status"]??"")==="passed"
+              && ($p["rpo_seconds"]??0)===86400
+              && ($p["rto_seconds"]??0)===3600
+              && ($p["rpo_met"]??false)===true
+              && ($p["rto_met"]??false)===true
+              && ($p["contains_personal_rows"]??true)===false
+              && ($p["contains_credentials"]??true)===false;
+            if(!$ok){fwrite(STDERR,"restore evidence did not satisfy approved 24h/1h contract\n");exit(1);}
+          '
+
+      - name: Upload minimized restore evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-readiness-real-restore-${{ github.run_id }}
+          path: evidence/restore-drill.json
+          if-no-files-found: ignore
+          retention-days: 30
