@@ -27,9 +27,16 @@ if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
     pr_internal_out(405, ['ok' => false]);
 }
 
-$guard = trim((string) ($_SERVER['HTTP_X_HACHE_OPS'] ?? ''));
-if (!hash_equals('production-readiness-evidence-v1', $guard)) {
-    pr_internal_out(403, ['ok' => false]);
+$tokenPath = '/tmp/hache-pr-evidence-token';
+$mtime = @filemtime($tokenPath);
+if (!is_int($mtime) || $mtime < time() - 120 || !is_readable($tokenPath)) {
+    pr_internal_out(404, ['ok' => false]);
+}
+
+$expected = trim((string) @file_get_contents($tokenPath));
+$provided = trim((string) ($_SERVER['HTTP_X_HACHE_EVIDENCE_TOKEN'] ?? ''));
+if (!preg_match('/^[a-f0-9]{64}$/', $expected) || !hash_equals($expected, $provided)) {
+    pr_internal_out(404, ['ok' => false]);
 }
 
 define('HACHE_PR_INTERNAL_HTTP', true);
