@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 require_once __DIR__.'/../config/sharky-runtime.php';
 require_once __DIR__.'/../config/sharky-outbox.php';
+require_once __DIR__.'/../config/sharky-groups.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
 function hache_sharky_outbox_meta_send(array $payload): bool
 {
     if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')return false;
+    $payload=hache_sharky_groups_finalize_outbound($payload);
     $token=hache_sharky_orchestrator_secret('WHATSAPP_ACCESS_TOKEN');
     $phoneId=hache_sharky_orchestrator_secret('WHATSAPP_PHONE_NUMBER_ID');
     $version=hache_sharky_orchestrator_secret('WHATSAPP_GRAPH_VERSION');
