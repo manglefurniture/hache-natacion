@@ -1,0 +1,129 @@
+name: Ops Pilot C Snapshot 20260905
+
+on:
+  push:
+    branches:
+      - ops/apply-sharky-delivery-status-20260905
+
+permissions:
+  contents: read
+
+jobs:
+  production-snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Collect secured minimized production snapshot
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          EXPECTED_MAIN_SHA: 35c305c0c92bf12915612a72b4a563744a0d09b1
+        run: |
+          set -Eeuo pipefail
+          mkdir -p evidence
+          chmod 700 evidence
+
+          remote_sha="$(ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "git -c safe.directory=/var/www/hache-natacion -C /var/www/hache-natacion rev-parse HEAD")"
+          test "$remote_sha" = "$EXPECTED_MAIN_SHA"
+
+          token="$(openssl rand -hex 32)"
+          test "${#token}" = "64"
+          printf '%s' "$token" | ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "umask 022; cat > /tmp/hache-pr-evidence-token; chmod 644 /tmp/hache-pr-evidence-token"
+
+          cleanup_token() {
+            ssh \
+              -p "$DEPLOY_PORT" \
+              -i "$HOME/.ssh/id_ed25519" \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "rm -f /tmp/hache-pr-evidence-token" >/dev/null 2>&1 || true
+          }
+          trap cleanup_token EXIT
+
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Evidence-Token: $token' https://hnatacion.com/api/production-readiness-evidence.php" \
+            > evidence/production-snapshot.json
+
+          cleanup_token
+          trap - EXIT
+          unset token
+
+          php -r '
+            $p=json_decode(file_get_contents("evidence/production-snapshot.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($p["ok"]??false)!==true){fwrite(STDERR,"collector failed\n");exit(1);}
+            if(($p["deployed_sha"]??"")!==(string)getenv("EXPECTED_MAIN_SHA")){fwrite(STDERR,"collector SHA mismatch\n");exit(1);}
+            $c=$p["communication"]??[];
+            $d=$c["provider_delivery"]??[];
+            $summary=[
+              "deployed_sha"=>$p["deployed_sha"]??null,
+              "delivery_schema_ready"=>$c["delivery_schema_ready"]??false,
+              "provider_delivery_status"=>$c["provider_delivery_status"]??null,
+              "correlated_total"=>$d["correlated_total"]??0,
+              "provider_status_counts"=>$d["status_counts"]??[],
+              "gates"=>$p["gates"]??[],
+              "privacy"=>$p["privacy"]??[],
+            ];
+            echo json_encode($summary,JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT),"\n";
+          '
+
+      - name: Verify external request cannot obtain evidence
+        run: |
+          set -Eeuo pipefail
+          code="$(curl --silent --show-error --location --max-redirs 3 --output /dev/null --write-out '%{http_code}' --request POST --header 'X-Hache-Evidence-Token: 0000000000000000000000000000000000000000000000000000000000000000' https://hnatacion.com/api/production-readiness-evidence.php)"
+          echo "external_status=$code"
+          [[ "$code" =~ ^4[0-9]{2}$ ]]
+
+      - name: Public health smoke
+        run: |
+          set -Eeuo pipefail
+          curl --silent --show-error --fail --location --max-time 20 --output /dev/null https://hnatacion.com/
+
+      - name: Upload minimized production evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-c-production-snapshot-${{ github.run_id }}
+          path: evidence/production-snapshot.json
+          if-no-files-found: error
+          retention-days: 14
