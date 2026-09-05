@@ -24,6 +24,8 @@ jobs:
         run: node tests/production-readiness-pilot-regression.mjs
       - name: Production readiness RUM regression
         run: node tests/production-readiness-rum-regression.mjs
+      - name: Temporary production RUM migration endpoint regression
+        run: node tests/ops-production-rum-migration-endpoint-regression.mjs
 
   delivery-status-mariadb:
     runs-on: ubuntu-latest
