@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-function hache_rum_deployed_build_id(string $root): ?string
+function hache_rum_deployed_sha(string $root): ?string
 {
     $root = rtrim($root, '/');
     $marker = $root . '/.hache-deployed-sha';
 
     // El deploy root publica este marcador como la frontera autoritativa y
-    // web-readable. No dependemos de permisos internos de .git para servir RUM.
+    // web-readable. No dependemos de permisos internos de .git para RUM/evidencia.
     if (file_exists($marker) || is_link($marker)) {
         if (is_link($marker) || !is_file($marker) || !is_readable($marker)) {
             return null;
@@ -21,7 +21,7 @@ function hache_rum_deployed_build_id(string $root): ?string
         if (!preg_match('/^[a-f0-9]{40}$/', $markerSha)) {
             return null;
         }
-        return 'git-' . substr($markerSha, 0, 12);
+        return $markerSha;
     }
 
     // Compatibilidad de bootstrap para instalaciones anteriores al marcador.
@@ -68,5 +68,11 @@ function hache_rum_deployed_build_id(string $root): ?string
         return null;
     }
 
-    return 'git-' . substr($sha, 0, 12);
+    return $sha;
+}
+
+function hache_rum_deployed_build_id(string $root): ?string
+{
+    $sha = hache_rum_deployed_sha($root);
+    return is_string($sha) ? 'git-' . substr($sha, 0, 12) : null;
 }
