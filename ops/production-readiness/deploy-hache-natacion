@@ -6,6 +6,7 @@ REPO="/var/www/hache-natacion"
 BACKUP_ROOT="/var/backups/hache-natacion"
 RESTORE_EVIDENCE_ROOT="${BACKUP_ROOT}/restore-evidence"
 DB_CONFIG="${REPO}/config/database.local.php"
+DEPLOY_SHA_FILE="${REPO}/.hache-deployed-sha"
 BASH_ARITH_MAX="9223372036854775807"
 
 # Hard operational ceiling, not an RPO/RTO or business retention promise.
@@ -46,6 +47,16 @@ init_ops_lock() {
   chmod 700 "$BACKUP_ROOT"
   exec 9>"$BACKUP_ROOT/.ops.lock"
   flock -x 9
+}
+
+publish_deployed_sha() {
+  local sha="$1" temp
+  validate_expected_sha "$sha"
+  temp="$(mktemp "${REPO}/.hache-deployed-sha.tmp.XXXXXX")"
+  printf '%s\n' "$sha" > "$temp"
+  chmod 644 "$temp"
+  mv -f -- "$temp" "$DEPLOY_SHA_FILE"
+  chown root:root "$DEPLOY_SHA_FILE"
 }
 
 load_db_config() {
@@ -188,6 +199,7 @@ deploy_sha() {
   require_root
   validate_expected_sha "$expected_sha"
   require_command git
+  require_command mktemp
 
   cd "$REPO"
   echo "== Hache Natacion deploy =="
@@ -210,6 +222,7 @@ deploy_sha() {
   base="$(git merge-base HEAD origin/main)"
 
   if [[ "$local_sha" == "$remote" ]]; then
+    publish_deployed_sha "$local_sha"
     echo "Ya esta actualizado: $local_sha"
     exit 0
   fi
@@ -224,6 +237,7 @@ deploy_sha() {
   git merge --ff-only origin/main
   deployed="$(git rev-parse HEAD)"
   [[ "$deployed" == "$expected_sha" ]] || fail "el SHA desplegado no coincide con el SHA aprobado."
+  publish_deployed_sha "$deployed"
   echo "Deploy OK: $deployed"
 }
 
