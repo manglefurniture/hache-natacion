@@ -126,13 +126,14 @@ function hache_sharky_whatsapp_batch_merge_semantic_controls(string $contact,arr
     if(is_array($textDecision['action']??null))return $textResult;
     $semanticUi=is_array($semanticDecision['ui']??null)?$semanticDecision['ui']:[];
     if(!in_array(($semanticUi['type']??''),['buttons','list'],true))return $textResult;
-    $textMessage=trim((string)($textDecision['message']??''));
-    $nextMessage=trim((string)($semanticDecision['message']??''));
+    $textMessage=hache_sharky_whatsapp_display_labels(trim((string)($textDecision['message']??'')));
+    $nextMessage=hache_sharky_whatsapp_display_labels(trim((string)($semanticDecision['message']??'')));
     if($textMessage===''||$nextMessage==='')return $textResult;
 
-    // WhatsApp interactive bodies are capped at 1,024 characters. The semantic
-    // prompt gives meaning to the buttons/list, so reserve its full space first
-    // and trim only the side-question answer when the combined body is too long.
+    // WhatsApp interactive bodies are capped at 1,024 characters. Normalize the
+    // display labels before budgeting because render() applies the same expansion.
+    // The semantic prompt gives meaning to the buttons/list, so reserve its full
+    // space first and trim only the side-question answer when necessary.
     $bodyLimit=1024;$separator="\n\n";
     if(mb_strlen($nextMessage)>$bodyLimit)$nextMessage=mb_substr($nextMessage,0,$bodyLimit);
     $room=$bodyLimit-mb_strlen($nextMessage);
