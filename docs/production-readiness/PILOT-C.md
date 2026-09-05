@@ -64,14 +64,14 @@ Este CUF hace que el proyecto sea apto para el criterio de piloto que exige una 
 - versión PHP;
 - presencia de tablas críticas (sin filas ni valores personales);
 - presencia de tablas/constraints financieros relevantes;
-- agregados de estados de `sharky_outbox` y fecha UTC por día del último `SENT`;
+- agregados de estados de `sharky_outbox` y día almacenado del último `SENT`; `sent_at` es un `DATETIME` sin zona normalizada y por eso el collector **no lo etiqueta como UTC**;
 - estado explícito de los gates `field`, `restore` y `communication_delivery`.
 
 No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciales ni contenido de conversaciones.
 
 `.github/workflows/production-readiness-evidence.yml` permite obtener dos artefactos manuales y auditables:
 
-1. **production snapshot**: ejecuta el collector por el mismo canal SSH del deploy y mide una solicitud HTTPS pública a `https://hnatacion.com/`;
+1. **production snapshot**: ejecuta el collector por el mismo canal SSH del deploy, exige que el SHA desplegado coincida exactamente con el SHA del workflow y mide una solicitud HTTPS pública a `https://hnatacion.com/`;
 2. **restore lab**: crea dos DB aisladas en MariaDB de CI, importa `database/schema_hache_monteverde_v1.sql` como baseline sintético versionado, inserta un marker, hace dump y restore, y verifica integridad básica. Este drill **no reproduce por sí solo todas las migraciones aplicadas en producción** y no sustituye un restore de un backup real de producción.
 
 ## Estado de los tres gates del criterio de salida P1
