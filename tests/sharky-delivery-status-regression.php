@@ -57,9 +57,9 @@ delivery_expect(str_contains($migrateRunner,'20260905_sharky_delivery_status.sql
 foreach([
     "require_once __DIR__.'/sharky-delivery-status.php'",
     "['hache_sharky_lab_send','hache_sharky_outbox_meta_send']",
-    "hache_sharky_delivery_meta_send",
+    'hache_sharky_delivery_meta_send',
     'provider_message_id=:pm',
-    "($sendResult['provider_message_id']??'')",
+    'providerMessageId=is_array($sendResult)',
 ] as $fragment)delivery_expect(str_contains($outbox,$fragment),'Missing outbox delivery correlation contract: '.$fragment);
 
 $signaturePos=strpos($webhook,'hash_equals($expectedSignature,$signature)');
