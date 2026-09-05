@@ -35,6 +35,7 @@ if ($method === 'GET') {
     $groupConfig=hache_sharky_groups_config_row();
     $groupConfig['valor']=hache_sharky_groups_enabled($pdo)?'1':'0';
     $groupConfig['tipo']='checkbox';
+    $groupConfig['etiqueta']='Responder en grupos de WhatsApp';
     $config[]=$groupConfig;
 
     $metrics = hache_sharky_metrics(7);
