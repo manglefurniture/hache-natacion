@@ -5,11 +5,10 @@
   if (!script) return;
 
   const routeGroup = String(script.dataset.routeGroup || '').trim();
-  const buildId = String(script.dataset.buildId || '').trim();
   const sampleRate = Number(script.dataset.sampleRate || '1');
   const allowedRoutes = new Set(['home', 'registration', 'admin_payments']);
 
-  if (!allowedRoutes.has(routeGroup) || buildId !== 'pilot-c-field-v1') return;
+  if (!allowedRoutes.has(routeGroup)) return;
   if (!Number.isFinite(sampleRate) || sampleRate < 0 || sampleRate > 1) return;
   if (Math.random() >= sampleRate) return;
   if (!('PerformanceObserver' in window)) return;
@@ -17,6 +16,19 @@
   const formFactor = window.innerWidth < 768 ? 'mobile' : 'desktop';
   const endpoint = '/api/rum-web-vitals.php';
   const sent = new Set();
+  const buildIdPromise = fetch('/api/rum-build.php', {
+    method: 'GET',
+    mode: 'same-origin',
+    credentials: 'omit',
+    cache: 'no-store',
+    redirect: 'error',
+    referrerPolicy: 'no-referrer',
+  }).then(async (response) => {
+    if (!response.ok) return null;
+    const data = await response.json();
+    const buildId = String(data?.build_id || '');
+    return /^git-[a-f0-9]{12}$/.test(buildId) ? buildId : null;
+  }).catch(() => null);
 
   function validMetricValue(metric, value) {
     if (!Number.isFinite(value) || value < 0) return false;
@@ -28,30 +40,33 @@
     if (sent.has(metric) || !validMetricValue(metric, value)) return;
     sent.add(metric);
 
-    const payload = {
-      schema_version: 1,
-      metric,
-      value,
-      route_group: routeGroup,
-      build_id: buildId,
-      form_factor: formFactor,
-    };
+    void buildIdPromise.then((buildId) => {
+      if (!buildId) return;
+      const payload = {
+        schema_version: 1,
+        metric,
+        value,
+        route_group: routeGroup,
+        build_id: buildId,
+        form_factor: formFactor,
+      };
 
-    try {
-      void fetch(endpoint, {
-        method: 'POST',
-        mode: 'same-origin',
-        credentials: 'omit',
-        cache: 'no-store',
-        redirect: 'error',
-        referrerPolicy: 'no-referrer',
-        keepalive: true,
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    } catch {
-      // RUM must never affect the page CUF.
-    }
+      try {
+        void fetch(endpoint, {
+          method: 'POST',
+          mode: 'same-origin',
+          credentials: 'omit',
+          cache: 'no-store',
+          redirect: 'error',
+          referrerPolicy: 'no-referrer',
+          keepalive: true,
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      } catch {
+        // RUM must never affect the page CUF.
+      }
+    }).catch(() => {});
   }
 
   // LCP: keep the last buffered candidate and freeze it at first interaction or page hide.
