@@ -67,8 +67,12 @@ for (const fragment of [
   "time() - 120",
   "/^[a-f0-9]{64}$/",
   "hash_equals($expected, $provided)",
+  "'/config/production-rum.php'",
+  'hache_rum_deployed_sha($root)',
+  'ob_start()',
   "define('HACHE_PR_INTERNAL_HTTP', true)",
   "'/bin/production-readiness-evidence.php'",
+  "$payload['deployed_sha'] = $deployedSha",
   'Cache-Control: no-store, max-age=0',
   'X-Robots-Tag: noindex, nofollow',
 ]) {
@@ -77,6 +81,7 @@ for (const fragment of [
 assert.ok(!internalEndpoint.includes('HTTP_X_FORWARDED_FOR'), 'internal endpoint must not trust forwarded-for');
 assert.ok(!internalEndpoint.includes('HTTP_CF_CONNECTING_IP'), 'internal endpoint must not trust Cloudflare client headers');
 assert.ok(!internalEndpoint.includes('database.local.php'), 'internal endpoint must delegate config handling to collector');
+assert.ok(!internalEndpoint.includes('rev-parse HEAD'), 'internal HTTP evidence endpoint must use the deployed marker rather than Git metadata');
 assert.ok(!internalEndpoint.includes('production-readiness-evidence-v1'), 'endpoint must not use a repository-static authorization token');
 
 assert.match(workflow, /workflow_dispatch:/);
