@@ -15,7 +15,7 @@ for (const fragment of [
   "'provider_delivery_status' => $providerEvidenceState",
   "'field' => 'NOT EVALUATED'",
   "'restore' => 'PARTIAL'",
-  "'communication_delivery' => 'PARTIAL — HUMAN REVIEW REQUIRED'",
+  "'communication_delivery' => 'PARTIAL'",
   "'contains_personal_rows' => false",
   "'contains_message_payloads' => false",
   "'contains_contact_identifiers' => false",
