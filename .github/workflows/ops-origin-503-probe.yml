@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Probe deployed SHA marker without secrets
+      - name: Diagnose RUM build endpoint without secrets
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -47,21 +47,19 @@ jobs:
           set -Eeuo pipefail
           root=/var/www/hache-natacion
           marker="$root/.hache-deployed-sha"
-          expected='fabd85959725ad1ea80dffeff109ae8ef6f86f5b'
+          expected='b241f8b851a3c5561b154de033ceb2e10df01959'
 
-          printf 'home_status=%s\n' "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --resolve hnatacion.com:443:127.0.0.1 https://hnatacion.com/ || true)"
-          printf 'health_status=%s\n' "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --resolve hnatacion.com:443:127.0.0.1 https://hnatacion.com/api/health.php || true)"
+          printf 'marker_stat=%s\n' "$(stat -c '%U:%G %a %F' "$marker" 2>/dev/null || echo missing)"
+          actual="$(tr -d '\r\n' < "$marker" 2>/dev/null || true)"
+          [[ "$actual" == "$expected" ]] && echo 'marker_matches_current=yes' || echo 'marker_matches_current=no'
 
-          if [[ -e "$marker" ]]; then
-            printf 'marker_stat=%s\n' "$(stat -c '%U:%G %a %F' "$marker" 2>/dev/null || echo stat_denied)"
-            printf 'marker_readable=%s\n' "$([[ -r "$marker" ]] && echo yes || echo no)"
-            actual="$(tr -d '\r\n' < "$marker" 2>/dev/null || true)"
-            if [[ "$actual" == "$expected" ]]; then
-              echo 'marker_matches_expected=yes'
-            else
-              echo 'marker_matches_expected=no'
-            fi
-          else
-            echo 'marker_exists=no'
-          fi
+          php -r 'require "/var/www/hache-natacion/config/production-rum.php"; $v=hache_rum_deployed_build_id("/var/www/hache-natacion"); echo "cli_build=".($v??"null")."\n";'
+          printf 'php_cli_version=%s\n' "$(php -r 'echo PHP_VERSION;' 2>/dev/null || true)"
+          printf 'fpm_workers='; ps -eo user,group,comm,args | awk '/php-fpm: pool/ {printf "%s:%s ",$1,$2} END{print ""}'
+
+          body="$(mktemp)"
+          code="$(curl --silent --show-error --output "$body" --write-out '%{http_code}' --resolve hnatacion.com:443:127.0.0.1 https://hnatacion.com/api/rum-build.php || true)"
+          printf 'rum_build_status=%s\n' "$code"
+          printf 'rum_build_body='; tr '\n\r' '  ' < "$body" | head -c 300; printf '\n'
+          rm -f "$body"
           REMOTE
