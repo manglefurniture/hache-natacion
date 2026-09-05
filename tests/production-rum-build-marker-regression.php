@@ -33,11 +33,19 @@ try {
     chmod($root . '/.git/refs/heads/main', 0000);
 
     rum_marker_assert(
+        hache_rum_deployed_sha($root) === $markerSha,
+        'readable marker must expose the full authoritative deployed SHA even when loose git ref is unreadable'
+    );
+    rum_marker_assert(
         hache_rum_deployed_build_id($root) === 'git-' . substr($markerSha, 0, 12),
         'readable marker must win even when loose git ref is unreadable'
     );
 
     file_put_contents($root . '/.hache-deployed-sha', "invalid\n");
+    rum_marker_assert(
+        hache_rum_deployed_sha($root) === null,
+        'malformed present marker must fail closed for full SHA resolution'
+    );
     rum_marker_assert(
         hache_rum_deployed_build_id($root) === null,
         'malformed present marker must fail closed instead of falling back to git'
@@ -45,8 +53,13 @@ try {
 
     unlink($root . '/.hache-deployed-sha');
     chmod($root . '/.git/refs/heads/main', 0644);
+    $legacySha = str_repeat('b', 40);
     rum_marker_assert(
-        hache_rum_deployed_build_id($root) === 'git-' . substr(str_repeat('b', 40), 0, 12),
+        hache_rum_deployed_sha($root) === $legacySha,
+        'legacy git fallback must resolve the full SHA when marker is absent'
+    );
+    rum_marker_assert(
+        hache_rum_deployed_build_id($root) === 'git-' . substr($legacySha, 0, 12),
         'legacy git fallback must remain available when marker is absent'
     );
 
