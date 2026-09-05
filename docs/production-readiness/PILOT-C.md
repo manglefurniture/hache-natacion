@@ -54,7 +54,7 @@ Por esa razón una clasificación B sería insuficiente para el proyecto complet
 - **Correlación de proveedor:** cuando `20260905_sharky_delivery_status.sql` está aplicado, el outbox conserva únicamente el `provider_message_id` devuelto por Meta y los webhooks firmados persisten `SENT`, `DELIVERED`, `READ` o `FAILED` en `sharky_delivery_status`.
 - **Privacidad:** la tabla de delivery no conserva teléfono, `recipient_id`, payload, conversación ni hash de contacto.
 - **Orden:** eventos duplicados/fuera de orden no regresan un estado cuyo `provider_event_at_utc` sea posterior; el timestamp se deriva del Unix epoch del proveedor.
-- **Límite:** la existencia del pipeline no es evidencia de producción. El gate sigue `PARTIAL` hasta aplicar la migración, observar eventos reales correlacionados y revisar el artefacto del collector.
+- **Límite:** la migración de delivery ya está aplicada y el schema fue verificado en producción. El gate sigue `PARTIAL` hasta observar eventos reales correlacionados y revisar el artefacto del collector.
 - **Recovery:** reintento fenced del mismo outbox; nunca generar una segunda intención para resolver un resultado ambiguo.
 
 Este CUF hace que el proyecto sea apto para el criterio de piloto que exige una comunicación aplicable, pero el gate no se cierra hasta tener evidencia real del estado requerido.
@@ -78,13 +78,15 @@ No emite nombres, teléfonos, correos, payloads, hashes de contacto, credenciale
 1. **production snapshot**: ejecuta el collector por el mismo canal SSH del deploy, exige que el SHA desplegado coincida exactamente con el SHA del workflow y mide una solicitud HTTPS pública a `https://hnatacion.com/`;
 2. **restore lab**: crea dos DB aisladas en MariaDB de CI, importa `database/schema_hache_monteverde_v1.sql` como baseline sintético versionado, inserta un marker, hace dump y restore, y verifica integridad básica. Este drill **no reproduce por sí solo todas las migraciones aplicadas en producción** y no sustituye un restore de un backup real de producción.
 
+El 2026-09-05 se ejecutó correctamente el restore lab sintético aislado: marker, tabla `pagos` y los dos triggers de validez de pago fueron verificados tras dump/restore. Este resultado reduce incertidumbre del mecanismo, pero no cambia por sí solo el gate de restore a PASS porque no utilizó un backup real de producción ni midió RPO/RTO del proceso real.
+
 ## Estado de los tres gates del criterio de salida P1
 
 | Gate | Estado | Evidencia necesaria para cerrarlo |
 | --- | --- | --- |
 | Campo | `NOT EVALUATED` | ventana representativa de RUM/Web Vitals o evidencia de campo equivalente aprobada; una medición HTTP aislada no cuenta como p75 de campo |
-| Restore | `PARTIAL` | restore lab del baseline de schema versionado + posteriormente restore aislado de un backup real con RPO/RTO medidos |
-| Communication status | `PARTIAL` | pipeline durable implementado; falta aplicar la migración en producción, conservar uno o más status webhooks reales correlacionados y revisar la evidencia del snapshot |
+| Restore | `PARTIAL` | restore lab sintético del baseline ya ejecutado y verificado; falta restore aislado de un backup real con RPO/RTO medidos |
+| Communication status | `PARTIAL` | pipeline durable implementado y migración/schema de delivery aplicados en producción; faltan uno o más status webhooks reales correlacionados y la revisión del snapshot |
 
 No se convierte ninguno de esos estados en PASS por el mero hecho de mergear este paquete.
 
