@@ -190,6 +190,22 @@ function hache_sharky_whatsapp_historical_venue_reselection(array $state,array $
     return [$state,hache_sharky_whatsapp_commercial_next_action($state,'Perfecto, cambiamos a '.$label.'.')];
 }
 
+/**
+ * Historical venue navigation is only accepted after the same minimum-age policy
+ * used by the normal commercial pipeline. The helper is side-effect free so the
+ * remembered venue remains untouched when the age gate rejects the tap.
+ *
+ * @return array{0:array,1:array,2:string}|null
+ */
+function hache_sharky_whatsapp_guarded_historical_venue_reselection(array $state,array $event,int $minAge): ?array
+{
+    $venueReselection=hache_sharky_whatsapp_historical_venue_reselection($state,$event);
+    if($venueReselection===null)return null;
+    $ageRejection=hache_sharky_whatsapp_underage_gate($state,$event,$minAge);
+    if(is_array($ageRejection))return [$ageRejection[0],$ageRejection[1],'PROSPECT_AGE_REJECTED'];
+    return [$venueReselection[0],$venueReselection[1],'VENUE_RESELECTED'];
+}
+
 function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
     $contact=(string)($event['from']??'');
@@ -249,20 +265,20 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
                     'payload'=>hache_sharky_whatsapp_render($contact,$decision),
                     'action_result'=>null,
                 ];
-            }elseif(($venueReselection=hache_sharky_whatsapp_historical_venue_reselection($deferredState,$event))!==null){
+            }elseif(($venueReselection=hache_sharky_whatsapp_guarded_historical_venue_reselection($deferredState,$event,(int)($extraContext['min_age']??12)))!==null){
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
                 if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
                     hache_sharky_orchestrator_unlock($lock);
                     return ['skip'=>true,'code'=>'DUPLICATE'];
                 }
-                [$state,$decision]=$venueReselection;
+                [$state,$decision,$resultCode]=$venueReselection;
                 $state['updated_at']=$now;
                 $state['last_user_text']=trim((string)($event['text']??''));
                 hache_sharky_db_state_save($pdo,$contact,$state);
                 hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
                 $result=[
                     'skip'=>false,
-                    'code'=>'VENUE_RESELECTED',
+                    'code'=>$resultCode,
                     'state'=>$state,
                     'decision'=>$decision,
                     'payload'=>hache_sharky_whatsapp_render($contact,$decision),
