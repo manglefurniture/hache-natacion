@@ -1,0 +1,496 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+REPO="/var/www/hache-natacion"
+BACKUP_ROOT="/var/backups/hache-natacion"
+RESTORE_EVIDENCE_ROOT="${BACKUP_ROOT}/restore-evidence"
+DB_CONFIG="${REPO}/config/database.local.php"
+BASH_ARITH_MAX="9223372036854775807"
+
+# Hard operational ceiling, not an RPO/RTO or business retention promise.
+# It prevents unbounded disk/PII growth until the owner defines a stricter policy.
+BACKUP_MAX_COMPLETE="${HACHE_BACKUP_MAX_COMPLETE:-20}"
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+require_root() {
+  [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "este helper debe ejecutarse como root mediante sudo."
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "falta el comando requerido: $1"
+}
+
+is_bash_decimal() {
+  local value="$1" value_len max_len
+  [[ "$value" =~ ^(0|[1-9][0-9]*)$ ]] || return 1
+  value_len=${#value}
+  max_len=${#BASH_ARITH_MAX}
+  (( value_len < max_len )) && return 0
+  (( value_len > max_len )) && return 1
+  [[ "$value" == "$BASH_ARITH_MAX" || "$value" < "$BASH_ARITH_MAX" ]]
+}
+
+is_positive_bash_decimal() {
+  is_bash_decimal "$1" && [[ "$1" != "0" ]]
+}
+
+init_ops_lock() {
+  require_root
+  require_command flock
+  mkdir -p "$BACKUP_ROOT"
+  chmod 700 "$BACKUP_ROOT"
+  exec 9>"$BACKUP_ROOT/.ops.lock"
+  flock -x 9
+}
+
+load_db_config() {
+  [[ -r "$DB_CONFIG" ]] || fail "configuración local de DB no legible por root."
+  require_command php
+  require_command base64
+
+  local encoded
+  if ! encoded="$(php -r '
+    $cfg=require $argv[1];
+    if(!is_array($cfg)){fwrite(STDERR,"invalid db config\n");exit(2);}
+    foreach(["host","dbname","user","password"] as $key){
+      if(!array_key_exists($key,$cfg)){fwrite(STDERR,"incomplete db config\n");exit(2);}
+      echo base64_encode((string)$cfg[$key]),"\n";
+    }
+    echo base64_encode((string)($cfg["port"]??"3306")),"\n";
+  ' "$DB_CONFIG")"; then
+    fail "no se pudo cargar la configuración local de DB."
+  fi
+
+  local -a lines=()
+  mapfile -t lines <<<"$encoded"
+  [[ "${#lines[@]}" -eq 5 ]] || fail "formato inesperado de configuración de DB."
+
+  DB_HOST="$(printf '%s' "${lines[0]}" | base64 --decode)"
+  DB_NAME="$(printf '%s' "${lines[1]}" | base64 --decode)"
+  DB_USER="$(printf '%s' "${lines[2]}" | base64 --decode)"
+  DB_PASSWORD="$(printf '%s' "${lines[3]}" | base64 --decode)"
+  DB_PORT="$(printf '%s' "${lines[4]}" | base64 --decode)"
+
+  [[ -n "$DB_HOST" && -n "$DB_NAME" && -n "$DB_USER" && -n "$DB_PASSWORD" ]] || fail "configuración de DB incompleta."
+  [[ "$DB_PORT" =~ ^[0-9]+$ ]] || fail "puerto de DB inválido."
+}
+
+prune_incomplete_backups() {
+  local dir
+  shopt -s nullglob
+  for dir in "$BACKUP_ROOT"/deploy-*; do
+    [[ -d "$dir" ]] || continue
+    if [[ ! -f "$dir/BACKUP_COMPLETE" ]]; then
+      rm -rf -- "$dir"
+      echo "BACKUP_PRUNE incomplete=${dir##*/}"
+    fi
+  done
+  shopt -u nullglob
+}
+
+prune_complete_backups() {
+  is_positive_bash_decimal "$BACKUP_MAX_COMPLETE" || fail "HACHE_BACKUP_MAX_COMPLETE debe ser un entero decimal positivo."
+
+  local -a complete_dirs=()
+  local marker dir remove_count index
+  while IFS= read -r marker; do
+    [[ -n "$marker" ]] || continue
+    complete_dirs+=("${marker%/BACKUP_COMPLETE}")
+  done < <(
+    find "$BACKUP_ROOT" -mindepth 2 -maxdepth 2 -type f -name BACKUP_COMPLETE -path "$BACKUP_ROOT/deploy-*/BACKUP_COMPLETE" -print 2>/dev/null | sort
+  )
+
+  if ((${#complete_dirs[@]} <= BACKUP_MAX_COMPLETE)); then
+    return 0
+  fi
+
+  remove_count=$((${#complete_dirs[@]} - BACKUP_MAX_COMPLETE))
+  for ((index=0; index<remove_count; index++)); do
+    dir="${complete_dirs[$index]}"
+    rm -rf -- "$dir"
+    echo "BACKUP_PRUNE complete=${dir##*/}"
+  done
+}
+
+create_complete_backup() {
+  require_root
+  require_command git
+  require_command mysqldump
+  require_command mktemp
+  require_command sha256sum
+  require_command find
+  load_db_config
+
+  prune_incomplete_backups
+
+  local stamp created_at_epoch created_at_utc destination commit
+  stamp="$(date -u +%Y%m%d-%H%M%S)"
+  created_at_epoch="$(date -u +%s)"
+  created_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  destination="$(mktemp -d "${BACKUP_ROOT%/}/deploy-${stamp}-XXXXXX")"
+  chmod 700 "$destination"
+
+  cd "$REPO"
+  commit="$(git rev-parse HEAD)"
+  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || fail "no se pudo resolver el commit del backup."
+  printf '%s\n' "$commit" > "$destination/commit.txt"
+  git status --porcelain=v1 > "$destination/git-status.txt"
+
+  export MYSQL_PWD="$DB_PASSWORD"
+  if ! mysqldump \
+    --host="$DB_HOST" \
+    --port="$DB_PORT" \
+    --user="$DB_USER" \
+    --single-transaction \
+    --routines --triggers --events \
+    --default-character-set=utf8mb4 \
+    --hex-blob \
+    "$DB_NAME" > "$destination/database.sql"; then
+    unset MYSQL_PWD
+    echo "BACKUP_FAILED destination=$destination phase=database_dump" >&2
+    exit 1
+  fi
+  unset MYSQL_PWD
+
+  [[ -s "$destination/database.sql" ]] || fail "el dump de DB quedó vacío."
+  (
+    cd "$destination"
+    sha256sum commit.txt database.sql > SHA256SUMS
+  )
+
+  cat > "$destination/backup-manifest.env" <<EOF
+backup_status=complete
+created_at_epoch=$created_at_epoch
+created_at_utc=$created_at_utc
+database_name=$DB_NAME
+commit=$commit
+EOF
+  chmod 600 "$destination/backup-manifest.env"
+  : > "$destination/BACKUP_COMPLETE"
+  chmod 600 "$destination/BACKUP_COMPLETE"
+
+  LAST_BACKUP_DIR="$destination"
+  prune_complete_backups
+  echo "BACKUP_OK created_at_epoch=$created_at_epoch commit=$commit backup=${destination##*/} retained_complete_max=$BACKUP_MAX_COMPLETE"
+}
+
+validate_expected_sha() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "se requiere un SHA Git completo de 40 caracteres."
+}
+
+deploy_sha() {
+  local expected_sha="$1" remote local_sha base deployed
+  require_root
+  validate_expected_sha "$expected_sha"
+  require_command git
+
+  cd "$REPO"
+  echo "== Hache Natacion deploy =="
+  echo "SHA aprobado: $expected_sha"
+
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    fail "el repo tiene cambios locales rastreados."
+  fi
+
+  git fetch origin main
+  remote="$(git rev-parse origin/main)"
+  if [[ "$remote" != "$expected_sha" ]]; then
+    echo "Deploy omitido: origin/main ya apunta a otro commit."
+    echo "Esperado: $expected_sha"
+    echo "Actual:   $remote"
+    exit 0
+  fi
+
+  local_sha="$(git rev-parse HEAD)"
+  base="$(git merge-base HEAD origin/main)"
+
+  if [[ "$local_sha" == "$remote" ]]; then
+    echo "Ya esta actualizado: $local_sha"
+    exit 0
+  fi
+  [[ "$local_sha" == "$base" ]] || fail "main local y origin/main han divergido."
+
+  # Contrato Level C: ningún fast-forward real ocurre sin un backup completo
+  # de la DB productiva. El marcador BACKUP_COMPLETE se crea al final.
+  create_complete_backup
+  [[ -n "${LAST_BACKUP_DIR:-}" && -f "$LAST_BACKUP_DIR/BACKUP_COMPLETE" ]] || fail "backup pre-deploy incompleto."
+
+  cd "$REPO"
+  git merge --ff-only origin/main
+  deployed="$(git rev-parse HEAD)"
+  [[ "$deployed" == "$expected_sha" ]] || fail "el SHA desplegado no coincide con el SHA aprobado."
+  echo "Deploy OK: $deployed"
+}
+
+latest_complete_backup() {
+  local marker
+  marker="$(
+    find "$BACKUP_ROOT" -mindepth 2 -maxdepth 2 -type f -name BACKUP_COMPLETE -path "$BACKUP_ROOT/deploy-*/BACKUP_COMPLETE" -print 2>/dev/null |
+      sort |
+      tail -n 1
+  )"
+  [[ -n "$marker" ]] || return 1
+  printf '%s\n' "${marker%/BACKUP_COMPLETE}"
+}
+
+checksum_manifest_complete() {
+  local dir="$1" sums="$1/SHA256SUMS"
+  grep -Eq '^[[:xdigit:]]{64}[[:space:]][ *]commit\.txt$' "$sums" &&
+    grep -Eq '^[[:xdigit:]]{64}[[:space:]][ *]database\.sql$' "$sums"
+}
+
+RESTORE_TARGET_CREATED=0
+RESTORE_TARGET=""
+RESTORE_REPORT_FILE=""
+RESTORE_RESULT_STATUS="failed"
+RESTORE_RESULT_REASON="preflight_failed"
+RESTORE_PRE_CLEANUP_REASON="none"
+RESTORE_CLEANUP_STATUS="not_applicable"
+RESTORE_BACKUP_SELECTED="false"
+RESTORE_PRODUCTION_BACKUP_USED="false"
+RESTORE_BACKUP_IDENTIFIER=""
+RESTORE_BACKUP_COMMIT=""
+RESTORE_BACKUP_CREATED_AT_EPOCH="0"
+RESTORE_BACKUP_AGE_SECONDS="0"
+RESTORE_RPO_SECONDS="0"
+RESTORE_RTO_SECONDS="0"
+RESTORE_RPO_MET="false"
+RESTORE_RTO_MET="false"
+RESTORE_START_EPOCH="0"
+RESTORE_MEASUREMENT_END_EPOCH="0"
+RESTORE_CRITICAL_TABLES_VERIFIED="false"
+RESTORE_FINANCIAL_GUARDS_VERIFIED="false"
+
+write_restore_report() {
+  local end_epoch duration
+  end_epoch="$(date -u +%s)"
+  if [[ "$RESTORE_MEASUREMENT_END_EPOCH" != "0" ]]; then
+    duration=$(( RESTORE_MEASUREMENT_END_EPOCH - RESTORE_START_EPOCH ))
+  else
+    duration=$(( end_epoch - RESTORE_START_EPOCH ))
+  fi
+
+  mkdir -p "$RESTORE_EVIDENCE_ROOT"
+  chmod 700 "$RESTORE_EVIDENCE_ROOT"
+
+  STATUS="$RESTORE_RESULT_STATUS" \
+  REASON="$RESTORE_RESULT_REASON" \
+  PRE_CLEANUP_REASON="$RESTORE_PRE_CLEANUP_REASON" \
+  CLEANUP_STATUS="$RESTORE_CLEANUP_STATUS" \
+  BACKUP_SELECTED="$RESTORE_BACKUP_SELECTED" \
+  PRODUCTION_BACKUP_USED="$RESTORE_PRODUCTION_BACKUP_USED" \
+  BACKUP_IDENTIFIER="$RESTORE_BACKUP_IDENTIFIER" \
+  BACKUP_COMMIT="$RESTORE_BACKUP_COMMIT" \
+  BACKUP_CREATED_AT_EPOCH="$RESTORE_BACKUP_CREATED_AT_EPOCH" \
+  BACKUP_AGE_SECONDS="$RESTORE_BACKUP_AGE_SECONDS" \
+  RPO_SECONDS="$RESTORE_RPO_SECONDS" \
+  RTO_SECONDS="$RESTORE_RTO_SECONDS" \
+  RPO_MET="$RESTORE_RPO_MET" \
+  RTO_MET="$RESTORE_RTO_MET" \
+  DURATION_SECONDS="$duration" \
+  TARGET_DATABASE="$RESTORE_TARGET" \
+  TARGET_CREATED="$RESTORE_TARGET_CREATED" \
+  CRITICAL_TABLES_VERIFIED="$RESTORE_CRITICAL_TABLES_VERIFIED" \
+  FINANCIAL_GUARDS_VERIFIED="$RESTORE_FINANCIAL_GUARDS_VERIFIED" \
+  php -r '
+    $bool=static fn(string $name): bool => getenv($name)==="true" || getenv($name)==="1";
+    $data=[
+      "schema_version"=>1,
+      "evidence_type"=>"production_restore_drill",
+      "generated_at_utc"=>gmdate("c"),
+      "result"=>getenv("STATUS")==="passed"?"PASS":"FAIL",
+      "reason"=>(string)getenv("REASON"),
+      "production_backup_selected"=>$bool("BACKUP_SELECTED"),
+      "production_backup_used"=>$bool("PRODUCTION_BACKUP_USED"),
+      "backup_identifier"=>(string)getenv("BACKUP_IDENTIFIER"),
+      "backup_commit"=>(string)getenv("BACKUP_COMMIT"),
+      "backup_created_at_epoch"=>(int)getenv("BACKUP_CREATED_AT_EPOCH"),
+      "backup_age_seconds"=>(int)getenv("BACKUP_AGE_SECONDS"),
+      "rpo_seconds"=>(int)getenv("RPO_SECONDS"),
+      "rpo_met"=>$bool("RPO_MET"),
+      "restore_duration_seconds"=>(int)getenv("DURATION_SECONDS"),
+      "rto_seconds"=>(int)getenv("RTO_SECONDS"),
+      "rto_met"=>$bool("RTO_MET"),
+      "isolated_target"=>$bool("TARGET_CREATED"),
+      "target_database"=>(string)getenv("TARGET_DATABASE"),
+      "critical_tables_verified"=>$bool("CRITICAL_TABLES_VERIFIED"),
+      "financial_guards_verified"=>$bool("FINANCIAL_GUARDS_VERIFIED"),
+      "cleanup_status"=>(string)getenv("CLEANUP_STATUS"),
+      "pre_cleanup_reason"=>(string)getenv("PRE_CLEANUP_REASON"),
+      "contains_personal_rows"=>false,
+      "contains_credentials"=>false,
+    ];
+    file_put_contents($argv[1],json_encode($data,JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR)."\n");
+  ' "$RESTORE_REPORT_FILE"
+  chmod 600 "$RESTORE_REPORT_FILE"
+  cat "$RESTORE_REPORT_FILE"
+}
+
+restore_exit() {
+  local rc=$? cleanup_failed=0
+  trap - EXIT
+
+  if [[ "$RESTORE_TARGET_CREATED" == "1" ]]; then
+    if mariadb --protocol=socket --user=root \
+      -e "DROP DATABASE IF EXISTS \`$RESTORE_TARGET\`;" >/dev/null 2>&1; then
+      RESTORE_CLEANUP_STATUS="passed"
+    else
+      RESTORE_CLEANUP_STATUS="failed"
+      cleanup_failed=1
+    fi
+  fi
+
+  if [[ "$cleanup_failed" == "1" ]]; then
+    RESTORE_PRE_CLEANUP_REASON="$RESTORE_RESULT_REASON"
+    RESTORE_RESULT_STATUS="failed"
+    RESTORE_RESULT_REASON="cleanup_failed"
+    rc=1
+  elif [[ "$rc" -ne 0 && "$RESTORE_RESULT_STATUS" == "passed" ]]; then
+    RESTORE_RESULT_STATUS="failed"
+    RESTORE_RESULT_REASON="unexpected_failure"
+  fi
+
+  write_restore_report || rc=1
+  exit "$rc"
+}
+
+restore_fail() {
+  RESTORE_RESULT_STATUS="failed"
+  RESTORE_RESULT_REASON="$1"
+  echo "RESTORE_DRILL_FAIL reason=$1 $2" >&2
+  exit "${3:-1}"
+}
+
+restore_drill() {
+  local rpo="$1" rto="$2" run_id="$3"
+  local backup_dir manifest_status source_db created_at now existing table_count trigger_count folio_unique_count
+  local -a admin=(mariadb --protocol=socket --user=root --batch --skip-column-names)
+
+  require_root
+  require_command php
+  require_command mariadb
+  require_command sha256sum
+  require_command find
+
+  is_positive_bash_decimal "$rpo" || fail "RPO_SECONDS debe ser un entero decimal positivo explícito."
+  is_positive_bash_decimal "$rto" || fail "RTO_SECONDS debe ser un entero decimal positivo explícito."
+  [[ "$run_id" =~ ^[1-9][0-9]{0,19}$ ]] || fail "run_id inválido."
+
+  RESTORE_RPO_SECONDS="$rpo"
+  RESTORE_RTO_SECONDS="$rto"
+  RESTORE_TARGET="hache_restore_${run_id}"
+  RESTORE_REPORT_FILE="${RESTORE_EVIDENCE_ROOT}/restore-drill-${run_id}.json"
+  RESTORE_START_EPOCH="$(date -u +%s)"
+  trap restore_exit EXIT
+
+  backup_dir="$(latest_complete_backup)" || restore_fail "backup_missing" "no existe un backup completo bajo $BACKUP_ROOT."
+  RESTORE_BACKUP_SELECTED="true"
+  RESTORE_BACKUP_IDENTIFIER="${backup_dir##*/}"
+
+  [[ -f "$backup_dir/BACKUP_COMPLETE" ]] || restore_fail "backup_incomplete" "falta BACKUP_COMPLETE."
+  [[ -f "$backup_dir/backup-manifest.env" ]] || restore_fail "backup_manifest_missing" "falta backup-manifest.env."
+  [[ -s "$backup_dir/database.sql" ]] || restore_fail "database_sql_missing" "database.sql está ausente o vacío."
+  [[ -f "$backup_dir/SHA256SUMS" ]] || restore_fail "checksums_missing" "falta SHA256SUMS."
+  checksum_manifest_complete "$backup_dir" || restore_fail "checksum_manifest_incomplete" "SHA256SUMS no cubre commit.txt y database.sql."
+  if ! (cd "$backup_dir" && sha256sum --check --strict SHA256SUMS >/dev/null 2>&1); then
+    restore_fail "checksum_failed" "falló la validación de checksums."
+  fi
+
+  manifest_status="$(awk -F= '$1=="backup_status"{print $2; exit}' "$backup_dir/backup-manifest.env")"
+  source_db="$(awk -F= '$1=="database_name"{print $2; exit}' "$backup_dir/backup-manifest.env")"
+  created_at="$(awk -F= '$1=="created_at_epoch"{print $2; exit}' "$backup_dir/backup-manifest.env")"
+  RESTORE_BACKUP_COMMIT="$(tr -d '\r\n' < "$backup_dir/commit.txt")"
+
+  [[ "$manifest_status" == "complete" ]] || restore_fail "backup_manifest_incomplete" "manifest no está complete."
+  [[ "$source_db" =~ ^[A-Za-z0-9_]+$ ]] || restore_fail "backup_manifest_invalid" "database_name inválido."
+  is_bash_decimal "$created_at" || restore_fail "backup_manifest_invalid" "created_at_epoch inválido."
+  [[ "$RESTORE_BACKUP_COMMIT" =~ ^[0-9a-f]{40}$ ]] || restore_fail "backup_manifest_invalid" "commit inválido."
+  [[ "$RESTORE_TARGET" != "$source_db" ]] || restore_fail "source_target_match" "target coincide con DB fuente." 2
+
+  now="$(date -u +%s)"
+  (( created_at <= now )) || restore_fail "backup_future_timestamp" "timestamp del backup está en el futuro."
+  RESTORE_BACKUP_CREATED_AT_EPOCH="$created_at"
+  RESTORE_BACKUP_AGE_SECONDS=$(( now - created_at ))
+  if (( RESTORE_BACKUP_AGE_SECONDS <= RESTORE_RPO_SECONDS )); then RESTORE_RPO_MET="true"; fi
+
+  if ! "${admin[@]}" -e 'SELECT 1' >/dev/null 2>&1; then
+    restore_fail "isolated_admin_unavailable" "root local de MariaDB no está disponible para el target aislado."
+  fi
+  existing="$("${admin[@]}" -e "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$RESTORE_TARGET';")"
+  [[ -z "$existing" ]] || restore_fail "target_preexisting" "el target aislado ya existe; se rehúsa modificarlo." 2
+
+  if ! "${admin[@]}" -e "CREATE DATABASE \`$RESTORE_TARGET\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"; then
+    restore_fail "target_create_failed" "no se pudo crear el target aislado."
+  fi
+  RESTORE_TARGET_CREATED=1
+
+  if ! mariadb --protocol=socket --user=root "$RESTORE_TARGET" < "$backup_dir/database.sql"; then
+    restore_fail "restore_import_failed" "falló la importación del backup real."
+  fi
+  RESTORE_PRODUCTION_BACKUP_USED="true"
+
+  table_count="$("${admin[@]}" -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$RESTORE_TARGET' AND TABLE_NAME IN ('pagos','mensualidades','inscripciones','cursos_intensivos','curso_intensivo_alumnos','cierres_mensuales','auditoria_eventos','sharky_outbox');")"
+  [[ "$table_count" == "8" ]] || restore_fail "verification_failed" "faltan tablas críticas en el restore."
+  RESTORE_CRITICAL_TABLES_VERIFIED="true"
+
+  trigger_count="$("${admin[@]}" -e "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='$RESTORE_TARGET' AND TRIGGER_NAME IN ('trg_un_pago_valido_insert','trg_un_pago_valido_update');")"
+  folio_unique_count="$("${admin[@]}" -e "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$RESTORE_TARGET' AND TABLE_NAME='pagos' AND COLUMN_NAME='folio' AND NON_UNIQUE=0;")"
+  [[ "$trigger_count" == "2" && "$folio_unique_count" -ge 1 ]] || restore_fail "verification_failed" "guardas financieras incompletas en el restore."
+  RESTORE_FINANCIAL_GUARDS_VERIFIED="true"
+
+  mariadb --protocol=socket --user=root "$RESTORE_TARGET" \
+    -e 'SELECT COUNT(*) FROM pagos; SELECT COUNT(*) FROM mensualidades; SELECT COUNT(*) FROM inscripciones; SELECT COUNT(*) FROM curso_intensivo_alumnos;' \
+    >/dev/null
+
+  RESTORE_MEASUREMENT_END_EPOCH="$(date -u +%s)"
+  local duration=$(( RESTORE_MEASUREMENT_END_EPOCH - RESTORE_START_EPOCH ))
+  if (( duration <= RESTORE_RTO_SECONDS )); then RESTORE_RTO_MET="true"; fi
+
+  if [[ "$RESTORE_RPO_MET" != "true" || "$RESTORE_RTO_MET" != "true" ]]; then
+    restore_fail "recovery_objective_missed" "el drill terminó, pero no cumplió el RPO/RTO aprobado."
+  fi
+
+  RESTORE_RESULT_STATUS="passed"
+  RESTORE_RESULT_REASON="verified"
+}
+
+usage() {
+  cat >&2 <<'EOF'
+Uso:
+  deploy-hache-natacion <sha40>
+  deploy-hache-natacion backup
+  deploy-hache-natacion restore-drill <rpo_seconds> <rto_seconds> <run_id>
+
+RPO/RTO no tienen defaults: deben venir de una decisión explícita del owner.
+El helper conserva como máximo 20 backups completos por seguridad operativa;
+este techo no sustituye una política de retención aprobada.
+EOF
+}
+
+main() {
+  [[ "$#" -ge 1 ]] || { usage; exit 2; }
+  is_positive_bash_decimal "$BACKUP_MAX_COMPLETE" || fail "HACHE_BACKUP_MAX_COMPLETE debe ser un entero decimal positivo."
+  init_ops_lock
+
+  case "$1" in
+    backup)
+      [[ "$#" -eq 1 ]] || { usage; exit 2; }
+      create_complete_backup
+      ;;
+    restore-drill)
+      [[ "$#" -eq 4 ]] || { usage; exit 2; }
+      restore_drill "$2" "$3" "$4"
+      ;;
+    *)
+      [[ "$#" -eq 1 ]] || { usage; exit 2; }
+      deploy_sha "$1"
+      ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,125 @@
+name: Production Restore Drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      rpo_seconds:
+        description: Approved RPO in seconds (explicit, no default)
+        required: true
+        type: string
+      rto_seconds:
+        description: Approved RTO in seconds (explicit, no default)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hache-natacion-production-restore-drill
+  cancel-in-progress: false
+
+jobs:
+  restore-real-backup:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate explicit recovery objectives
+        env:
+          RPO_SECONDS: ${{ github.event.inputs.rpo_seconds }}
+          RTO_SECONDS: ${{ github.event.inputs.rto_seconds }}
+        run: |
+          set -Eeuo pipefail
+          max=9223372036854775807
+          valid_positive_decimal() {
+            local value="$1"
+            [[ "$value" =~ ^[1-9][0-9]*$ ]] || return 1
+            ((${#value} < ${#max})) && return 0
+            ((${#value} > ${#max})) && return 1
+            [[ "$value" == "$max" || "$value" < "$max" ]]
+          }
+          valid_positive_decimal "$RPO_SECONDS"
+          valid_positive_decimal "$RTO_SECONDS"
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Restore latest complete production backup into isolated DB
+        id: restore
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          RPO_SECONDS: ${{ github.event.inputs.rpo_seconds }}
+          RTO_SECONDS: ${{ github.event.inputs.rto_seconds }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p evidence
+          chmod 700 evidence
+
+          set +e
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo /usr/local/sbin/deploy-hache-natacion restore-drill '$RPO_SECONDS' '$RTO_SECONDS' '$GITHUB_RUN_ID'" \
+            > evidence/restore-drill.json
+          rc=$?
+          set -e
+
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          test -s evidence/restore-drill.json
+
+      - name: Validate minimized restore evidence
+        env:
+          HELPER_EXIT_CODE: ${{ steps.restore.outputs.exit_code }}
+          RPO_SECONDS: ${{ github.event.inputs.rpo_seconds }}
+          RTO_SECONDS: ${{ github.event.inputs.rto_seconds }}
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            $p=json_decode(file_get_contents("evidence/restore-drill.json"),true,512,JSON_THROW_ON_ERROR);
+            $run=(string)getenv("GITHUB_RUN_ID");
+            $expectedTarget="hache_restore_".$run;
+            $ok=(string)getenv("HELPER_EXIT_CODE")==="0"
+              && ($p["schema_version"]??null)===1
+              && ($p["evidence_type"]??"")==="production_restore_drill"
+              && ($p["result"]??"")==="PASS"
+              && ($p["production_backup_used"]??false)===true
+              && ($p["isolated_target"]??false)===true
+              && ($p["target_database"]??"")===$expectedTarget
+              && ($p["critical_tables_verified"]??false)===true
+              && ($p["financial_guards_verified"]??false)===true
+              && ($p["cleanup_status"]??"")==="passed"
+              && ($p["rpo_seconds"]??0)===(int)getenv("RPO_SECONDS")
+              && ($p["rto_seconds"]??0)===(int)getenv("RTO_SECONDS")
+              && ($p["rpo_met"]??false)===true
+              && ($p["rto_met"]??false)===true
+              && ($p["contains_personal_rows"]??true)===false
+              && ($p["contains_credentials"]??true)===false;
+            if(!$ok){fwrite(STDERR,"restore evidence did not satisfy the approved contract\n");exit(1);}
+          '
+
+      - name: Upload minimized restore evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-readiness-real-restore-${{ github.run_id }}
+          path: evidence/restore-drill.json
+          if-no-files-found: ignore
+          retention-days: 30
