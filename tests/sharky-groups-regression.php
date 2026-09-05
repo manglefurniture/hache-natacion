@@ -67,7 +67,7 @@ $storePos=strpos($webhook,'hache_sharky_inbox_store');
 groups_ok($filterPos!==false&&$storePos!==false&&$filterPos<$storePos,'Disabled group traffic must be filtered before durable inbox persistence.');
 groups_ok(str_contains($worker,"hache_sharky_outbox_enqueue_raw(\$pdo,\$contact,\$payload"),'Group replies must bypass idle sales-followup arming.');
 groups_ok(str_contains($worker,'hache_sharky_groups_finalize_outbound($payload)'),'Group target must be swapped only at the final Meta send boundary.');
-groups_ok(str_contains($batching,"trim((string)(\$event['group_id']??''))!==''")&&str_contains($batching,'hache_sharky_whatsapp_process_with_delivery_lock'),'Group turns must bypass contact-only debounce batching.');
+groups_ok(str_contains($batching,"if(\$groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock")&&str_contains($batching,'hache_sharky_whatsapp_process_with_delivery_lock'),'Group turns must bypass contact-only debounce batching.');
 groups_ok(str_contains($outbox,"'_sharky_group'")&&str_contains($outbox,'hache_sharky_groups_enabled($pdo)')&&str_contains($outbox,'GROUPS_DISABLED'),'Queued group replies must be cancelled if the admin toggle is off before send or retry.');
 groups_ok(str_contains($inboxWorker,"\$groupId!==''&&!hache_sharky_groups_enabled(\$pdo)")&&str_contains($inboxWorker,"hache_sharky_metric_increment('messages_skipped_group')"),'Recovered group inbox events must be consumed without Sharky processing after groups are disabled.');
 groups_ok(str_contains($outboxWorker,'hache_sharky_groups_finalize_outbound($payload)'),'Background outbox retries must finalize the durable group target before Meta send.');
