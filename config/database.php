@@ -39,7 +39,6 @@ if (str_starts_with($uri, '/api/')) {
         '/api/alumno-por-whatsapp.php',
         '/api/sharky.php',
         '/api/whatsapp-webhook.php',
-        '/api/ops-apply-sharky-delivery-status.php',
     ];
     if (!in_array($uri, $publicApi, true)) {
         require_once __DIR__ . '/auth.php';
@@ -75,7 +74,6 @@ if (str_starts_with($uri, '/api/')) {
         '/api/auditoria.php',
         '/api/sharky.php',
         '/api/whatsapp-webhook.php',
-        '/api/ops-apply-sharky-delivery-status.php',
     ];
     if (!in_array($method, ['GET','HEAD','OPTIONS'], true) && !in_array($uri, $skipAudit, true)) {
         $auditConfig = $config;
