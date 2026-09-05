@@ -36,6 +36,6 @@ $source=file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php')?:''
 batch_context_ok(str_contains($source,'hache_sharky_whatsapp_batch_pending_question($contact)'),'Interactive coalescing must require an already-pending question.');
 batch_context_ok(str_contains($source,'$choice=$choices[array_key_last($choices)]'),'If repeated taps arrive in one burst, only the latest safe discovery choice may be applied.');
 batch_context_ok(str_contains($source,'hache_sharky_whatsapp_batch_answer_after_choice'),'The pending question must be answered after applying the selected discovery context.');
-batch_context_ok(str_contains($source,"if($groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock"),'Group messages must remain outside direct-chat batching.');
+batch_context_ok(str_contains($source,"if(\$groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock"),'Group messages must remain outside direct-chat batching.');
 
 fwrite(STDOUT,"SHARKY_BATCH_CONTEXT_OK\n");
