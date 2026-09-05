@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Probe origin and service status without secrets
+      - name: Probe origin and RUM git metadata without secrets
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -45,16 +45,11 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST" \
             'bash -s' <<'REMOTE'
           set -Eeuo pipefail
+          root=/var/www/hache-natacion
+          gitdir="$root/.git"
 
           printf 'nginx_active=%s\n' "$(systemctl is-active nginx 2>/dev/null || true)"
-          for unit in php8.4-fpm php8.3-fpm php8.2-fpm; do
-            state="$(systemctl is-active "$unit" 2>/dev/null || true)"
-            [[ -n "$state" ]] && printf '%s_active=%s\n' "$unit" "$state"
-          done
-
-          printf 'listen_443=%s\n' "$(ss -ltn 2>/dev/null | awk '$4 ~ /:443$/ {found=1} END{print found?"yes":"no"}')"
-          printf 'listen_80=%s\n' "$(ss -ltn 2>/dev/null | awk '$4 ~ /:80$/ {found=1} END{print found?"yes":"no"}')"
-          printf 'php_socket_count=%s\n' "$(find /run/php -maxdepth 1 -type s 2>/dev/null | wc -l | tr -d ' ')"
+          printf 'php8.4-fpm_active=%s\n' "$(systemctl is-active php8.4-fpm 2>/dev/null || true)"
 
           probe() {
             local label="$1" url="$2" code
@@ -64,11 +59,32 @@ jobs:
               "$url" || true)"
             printf '%s_status=%s\n' "$label" "${code:-curl_error}"
           }
-
           probe home https://hnatacion.com/
-          probe hachi https://hnatacion.com/assets/hachi.js?v=20260905-rum1
           probe rum_build https://hnatacion.com/api/rum-build.php
           probe health https://hnatacion.com/api/health.php
 
-          printf 'repo_head=%s\n' "$(git -C /var/www/hache-natacion rev-parse HEAD 2>/dev/null || echo unavailable)"
+          stat_safe() {
+            local label="$1" path="$2"
+            if [[ -e "$path" ]]; then
+              printf '%s_stat=%s\n' "$label" "$(stat -c '%U:%G %a %F' "$path" 2>/dev/null || echo stat_denied)"
+              printf '%s_readable=%s\n' "$label" "$([[ -r "$path" ]] && echo yes || echo no)"
+              printf '%s_traversable=%s\n' "$label" "$([[ -d "$path" && -x "$path" ]] && echo yes || echo no)"
+            else
+              printf '%s_exists=no\n' "$label"
+            fi
+          }
+
+          stat_safe repo "$root"
+          stat_safe gitdir "$gitdir"
+          stat_safe git_head "$gitdir/HEAD"
+          stat_safe refs "$gitdir/refs"
+          stat_safe refs_heads "$gitdir/refs/heads"
+          stat_safe main_ref "$gitdir/refs/heads/main"
+          stat_safe packed_refs "$gitdir/packed-refs"
+
+          if command -v namei >/dev/null 2>&1; then
+            printf 'head_path_components_begin\n'
+            namei -l "$gitdir/HEAD" 2>/dev/null | sed -E 's/[[:space:]]+/ /g' || true
+            printf 'head_path_components_end\n'
+          fi
           REMOTE
