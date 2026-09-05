@@ -58,7 +58,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd /var/www/hache-natacion && php bin/production-readiness-evidence.php" \
+            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Ops: production-readiness-evidence-v1' https://hnatacion.com/api/production-readiness-evidence.php" \
             > evidence/production-snapshot.json
 
           php -r '
@@ -76,6 +76,12 @@ jobs:
             }
           '
           printf '{"workflow_sha":"%s","run_id":"%s","event":"workflow_dispatch"}\n' "$EXPECTED_SHA" "$GITHUB_RUN_ID" > evidence/workflow-context.json
+
+      - name: Verify evidence endpoint is external-404
+        run: |
+          set -Eeuo pipefail
+          code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --request POST --header 'X-Hache-Ops: production-readiness-evidence-v1' https://hnatacion.com/api/production-readiness-evidence.php)"
+          test "$code" = "404"
 
       - name: Measure public HTTPS request without response body
         run: |
