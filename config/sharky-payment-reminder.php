@@ -14,13 +14,25 @@ const HACHE_SHARKY_PAYMENT_REMINDER_START_HOUR = 8;
 const HACHE_SHARKY_PAYMENT_REMINDER_END_HOUR = 22;
 const HACHE_SHARKY_PAYMENT_PROOF_KIND = 'payment_proof_candidate';
 
+function hache_sharky_payment_reminder_registration_phone(string $contact): string
+{
+    $digits = preg_replace('/\D+/', '', $contact) ?: '';
+    // Meta todavía puede entregar números mexicanos históricos como 521...,
+    // mientras el registro los persiste en su E.164 actual 52...
+    if (strlen($digits) === 13 && str_starts_with($digits, '521')) $digits = '52'.substr($digits, 3);
+    return $digits === '' ? '' : '+'.$digits;
+}
+
 /**
  * Extrae únicamente imágenes/documentos entrantes para poder cancelar un
  * recordatorio pendiente. No descarga el archivo y no lo envía a OpenAI.
+ * Si hay un phone_number_id configurado, la evidencia de otros números de la
+ * misma app se descarta antes de persistirla.
  */
-function hache_sharky_payment_reminder_extract_proof_events(array $payload): array
+function hache_sharky_payment_reminder_extract_proof_events(array $payload, string $expectedPhoneId = ''): array
 {
     $out = [];
+    $expectedPhoneId = trim($expectedPhoneId);
     foreach (($payload['entry'] ?? []) as $entry) {
         if (!is_array($entry)) continue;
         foreach (($entry['changes'] ?? []) as $change) {
@@ -28,6 +40,7 @@ function hache_sharky_payment_reminder_extract_proof_events(array $payload): arr
             $value = $change['value'] ?? null;
             if (!is_array($value)) continue;
             $phoneId = trim((string)($value['metadata']['phone_number_id'] ?? ''));
+            if ($expectedPhoneId !== '' && ($phoneId === '' || !hash_equals($expectedPhoneId, $phoneId))) continue;
             foreach (($value['messages'] ?? []) as $message) {
                 if (!is_array($message)) continue;
                 $type = strtolower(trim((string)($message['type'] ?? '')));
@@ -36,7 +49,7 @@ function hache_sharky_payment_reminder_extract_proof_events(array $payload): arr
                 $from = preg_replace('/\D+/', '', (string)($message['from'] ?? '')) ?: '';
                 $mediaId = trim((string)($message[$type]['id'] ?? ''));
                 if ($id === '' || $from === '' || $mediaId === '') continue;
-                $event = [
+                $out[] = [
                     'id'=>$id,
                     'from'=>$from,
                     'type'=>$type,
@@ -47,7 +60,6 @@ function hache_sharky_payment_reminder_extract_proof_events(array $payload): arr
                     'phone_number_id'=>$phoneId,
                     'timestamp_ms'=>((int)($message['timestamp'] ?? time())) * 1000,
                 ];
-                $out[] = $event;
             }
         }
     }
@@ -72,8 +84,8 @@ function hache_sharky_payment_reminder_is_registration_payload(array $payload): 
 /** @return array{student_id:string,course_id:string}|null */
 function hache_sharky_payment_reminder_registration_candidate(PDO $pdo, string $contact): ?array
 {
-    $digits = preg_replace('/\D+/', '', $contact) ?: '';
-    if ($digits === '') return null;
+    $phone = hache_sharky_payment_reminder_registration_phone($contact);
+    if ($phone === '') return null;
     try {
         $st = $pdo->prepare(
             "SELECT a.id AS student_id, cia.curso_intensivo_id AS course_id
@@ -82,7 +94,7 @@ function hache_sharky_payment_reminder_registration_candidate(PDO $pdo, string $
              WHERE a.whatsapp=:w AND a.estado_administrativo='PENDIENTE'
              LIMIT 1"
         );
-        $st->execute([':w' => '+'.$digits]);
+        $st->execute([':w' => $phone]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
         if (!$row) return null;
         $studentId = trim((string)($row['student_id'] ?? ''));
@@ -98,7 +110,7 @@ function hache_sharky_payment_reminder_prepare_registration_outbound(
     PDO $pdo,
     string $contact,
     array $payload,
-    string $dedupeSeed,
+    string $_dedupeSeed,
     ?int $now = null
 ): array {
     if (is_array($payload['_sharky_payment_reminder_arm'] ?? null)
