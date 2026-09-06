@@ -11,6 +11,8 @@ on:
         description: Approved RTO in seconds (explicit, no default)
         required: true
         type: string
+  schedule:
+    - cron: '17 10 1 * *'
 
 permissions:
   contents: read
@@ -24,11 +26,11 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      RPO_SECONDS: ${{ github.event_name == 'schedule' && '86400' || github.event.inputs.rpo_seconds }}
+      RTO_SECONDS: ${{ github.event_name == 'schedule' && '3600' || github.event.inputs.rto_seconds }}
     steps:
-      - name: Validate explicit recovery objectives
-        env:
-          RPO_SECONDS: ${{ github.event.inputs.rpo_seconds }}
-          RTO_SECONDS: ${{ github.event.inputs.rto_seconds }}
+      - name: Validate recovery objectives and scheduled contract
         run: |
           set -Eeuo pipefail
           max=9223372036854775807
@@ -41,6 +43,11 @@ jobs:
           }
           valid_positive_decimal "$RPO_SECONDS"
           valid_positive_decimal "$RTO_SECONDS"
+
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            [[ "$RPO_SECONDS" == "86400" ]]
+            [[ "$RTO_SECONDS" == "3600" ]]
+          fi
 
       - name: Configure SSH
         env:
@@ -61,8 +68,6 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          RPO_SECONDS: ${{ github.event.inputs.rpo_seconds }}
-          RTO_SECONDS: ${{ github.event.inputs.rto_seconds }}
         run: |
           set -Eeuo pipefail
           mkdir -p evidence
@@ -88,8 +93,6 @@ jobs:
       - name: Validate minimized restore evidence
         env:
           HELPER_EXIT_CODE: ${{ steps.restore.outputs.exit_code }}
-          RPO_SECONDS: ${{ github.event.inputs.rpo_seconds }}
-          RTO_SECONDS: ${{ github.event.inputs.rto_seconds }}
         run: |
           set -Eeuo pipefail
           php -r '
@@ -100,6 +103,7 @@ jobs:
               && ($p["schema_version"]??null)===1
               && ($p["evidence_type"]??"")==="production_restore_drill"
               && ($p["result"]??"")==="PASS"
+              && ($p["production_backup_selected"]??false)===true
               && ($p["production_backup_used"]??false)===true
               && ($p["isolated_target"]??false)===true
               && ($p["target_database"]??"")===$expectedTarget
@@ -119,7 +123,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: production-readiness-real-restore-${{ github.run_id }}
+          name: production-readiness-real-restore-${{ github.run_id }}-${{ github.run_attempt }}
           path: evidence/restore-drill.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 90
