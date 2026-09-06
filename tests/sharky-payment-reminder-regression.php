@@ -38,6 +38,27 @@ payment_reminder_expect(
     'Group traffic must never arm an individual payment reminder.'
 );
 
+$incoming = [
+    'entry'=>[[
+        'changes'=>[[
+            'value'=>[
+                'metadata'=>['phone_number_id'=>'phone-1'],
+                'messages'=>[
+                    ['id'=>'wamid.image','from'=>'529981473867','timestamp'=>'1788735700','type'=>'image','image'=>['id'=>'media-image']],
+                    ['id'=>'wamid.document','from'=>'529981473867','timestamp'=>'1788735800','type'=>'document','document'=>['id'=>'media-document','filename'=>'comprobante.pdf']],
+                    ['id'=>'wamid.text','from'=>'529981473867','timestamp'=>'1788735900','type'=>'text','text'=>['body'=>'hola']],
+                ],
+            ],
+        ]],
+    ]],
+];
+$proofEvents = hache_sharky_payment_reminder_extract_proof_events($incoming);
+payment_reminder_expect(count($proofEvents)===2, 'Only image/document proof candidates must be extracted.');
+payment_reminder_expect(array_column($proofEvents,'type')===['image','document'], 'Proof candidates must preserve their media type.');
+payment_reminder_expect(array_unique(array_column($proofEvents,'kind'))===[HACHE_SHARKY_PAYMENT_PROOF_KIND], 'Proof candidates must use a dedicated durable kind.');
+payment_reminder_expect(($proofEvents[0]['media_id']??'')==='media-image'&&($proofEvents[1]['media_id']??'')==='media-document', 'Proof extraction must retain only the Meta media identifier.');
+payment_reminder_expect(!isset($proofEvents[1]['filename']), 'Proof extraction must not persist filenames or other unnecessary document metadata.');
+
 $meta = [
     'token'=>'abc123',
     'student_id'=>'student-1',
@@ -66,11 +87,15 @@ payment_reminder_expect(
 );
 
 $source = file_get_contents(__DIR__.'/../config/sharky-payment-reminder.php') ?: '';
-payment_reminder_expect(str_contains($source, "message_type IN ('image','document')"), 'Image/PDF proof must cancel the reminder before send.');
+payment_reminder_expect(str_contains($source, 'HACHE_SHARKY_PAYMENT_PROOF_KIND'), 'Proof media must have a durable dedicated receipt kind.');
+payment_reminder_expect(str_contains($source, 'message_type=:t'), 'Proof lookup must use the durable receipt kind instead of the generic message type.');
+payment_reminder_expect(str_contains($source, 'PAYMENT_PROOF_STATE_UNAVAILABLE'), 'Proof-state uncertainty must fail closed instead of sending a possibly wrong reminder.');
+payment_reminder_expect(str_contains($source, 'PAYMENT_REMINDER_STATE_UNAVAILABLE'), 'Registration/payment-state uncertainty must fail closed.');
 payment_reminder_expect(str_contains($source, "tipo='INTENSIVO' AND estado='VALIDO'"), 'A valid recorded intensive payment must cancel the reminder.');
 payment_reminder_expect(str_contains($source, "estado_administrativo='PENDIENTE'"), 'Resolved registrations must not receive the reminder.');
 payment_reminder_expect(str_contains($source, 'HACHE_SHARKY_PAYMENT_REMINDER_DELAY_SECONDS = 3600'), 'The payment-proof delay must remain 60 minutes.');
 payment_reminder_expect(str_contains($source, 'HACHE_SHARKY_PAYMENT_REMINDER_MAX_AGE_SECONDS = 86400'), 'Stale reminders must expire instead of sending days later.');
+payment_reminder_expect(!str_contains($source, 'curl_'), 'Payment-proof detection must not download media from Meta.');
 
 $outbox = file_get_contents(__DIR__.'/../config/sharky-outbox.php') ?: '';
 payment_reminder_expect(str_contains($outbox, "require_once __DIR__.'/sharky-payment-reminder.php'"), 'Outbox must load the payment-reminder policy.');
@@ -81,9 +106,19 @@ payment_reminder_expect(str_contains($outbox, "!is_array(\$payload['_sharky_paym
 $gatePos = strpos($outbox, 'hache_sharky_payment_reminder_validate_before_send');
 $sendPos = strpos($outbox, '$sendResult=false;');
 payment_reminder_expect($gatePos !== false && $sendPos !== false && $gatePos < $sendPos, 'Payment/proof state must be revalidated immediately before delivery.');
-$sentPos = strpos($outbox, 'hache_sharky_outbox_mark_sent');
-$schedulePos = strpos($outbox, 'hache_sharky_payment_reminder_after_registration_sent');
-payment_reminder_expect($sentPos !== false && $schedulePos !== false && $sentPos < $schedulePos, 'The +60 minute reminder may only be scheduled after the registration message is durably marked sent.');
+$sentCallPos = strpos($outbox, 'if(hache_sharky_outbox_mark_sent', $gatePos === false ? 0 : $gatePos);
+$schedulePos = strpos($outbox, 'hache_sharky_payment_reminder_after_registration_sent', $sentCallPos === false ? 0 : $sentCallPos);
+payment_reminder_expect($sentCallPos !== false && $schedulePos !== false && $sentCallPos < $schedulePos, 'The +60 minute reminder may only be scheduled after the registration message is durably marked sent.');
 payment_reminder_expect(str_contains($source, "'payment-proof-reminder|'.\$token"), 'Reminder scheduling must be idempotent so only one reminder is queued.');
+
+$webhook = file_get_contents(__DIR__.'/../public/api/whatsapp-orchestrator-lab.php') ?: '';
+$extractPos = strpos($webhook, 'hache_sharky_payment_reminder_extract_proof_events');
+$persistPos = strpos($webhook, 'hache_sharky_inbox_store');
+payment_reminder_expect($extractPos !== false && $persistPos !== false && $extractPos < $persistPos, 'Proof candidates must be normalized before durable inbox persistence.');
+payment_reminder_expect(str_contains($webhook, "\$event['kind']='group_media'"), 'Group media must not cancel an individual payment reminder.');
+$markMediaPos = strpos($webhook, 'Unable to finalize inbound media event');
+$ackPos = strpos($webhook, 'http_response_code(200)');
+payment_reminder_expect($markMediaPos !== false && $ackPos !== false && $markMediaPos < $ackPos, 'Proof media must be durably finalized before webhook ACK.');
+payment_reminder_expect(str_contains($webhook, "['image','document']"), 'Image/document events must be excluded from conversational AI processing.');
 
 echo "OK sharky payment reminder regression\n";
