@@ -45,7 +45,28 @@ function hache_sharky_whatsapp_batch_question_like(string $text): bool
     $text=trim($text);if($text==='')return false;
     if(str_contains($text,'?')||str_contains($text,'¿'))return true;
     $t=hache_sharky_orchestrator_normalize($text);
-    return preg_match('/^(?:cuanto|como|donde|cuando|que\b|cual\b|aceptan|puedo|tienen|hay\b|precio\b|precios\b|costo\b|costos\b|horario\b|horarios\b|ubicacion\b)/u',$t)===1;
+    $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
+    // En WhatsApp es muy común preguntar sin signos y con muletillas como
+    // “Y qué…”, “Oye…” u “Otra cosa…”. Quitarlas evita que una duda informativa
+    // caiga por error en el validador estricto del paso controlado activo.
+    $t=preg_replace('/^(?:(?:y|oye|oiga|ademas|tambien|ah|otra\s+cosa)\s+)+/u','',$t)??$t;
+    return preg_match('/^(?:cuanto|como|donde|cuando|que\b|cual\b|aceptan|puedo|tienen|hay\b|precio\b|precios\b|costo\b|costos\b|pago\b|pagos\b|mensual\b|mensualidad\b|horario\b|horarios\b|ubicacion\b|equipo\b|equipos\b|equipamiento\b|gorro\b|gorra\b|goggles\b|lentes\b|aletas\b|traje\b|duracion\b|dura\b|dias\b|fecha\b|fechas\b|requisito\b|requisitos\b|reposicion\b|reposiciones\b)/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_batch_question_text(string $text): string
+{
+    $text=trim($text);
+    if($text==='')return $text;
+    // Respuestas operativas válidas tienen prioridad sobre la heurística de
+    // “pregunta sin signos”. No debemos convertir `Pago el 50%` ni
+    // `Horario matutino` en preguntas porque sus parsers son deliberadamente
+    // estrictos y esas frases ejecutan/continúan otro camino controlado.
+    if(function_exists('hache_sharky_whatsapp_payment_choice')&&hache_sharky_whatsapp_payment_choice($text)!==null)return $text;
+    if(function_exists('hache_sharky_whatsapp_daypart')&&hache_sharky_whatsapp_daypart($text,'')!==null)return $text;
+    if(!hache_sharky_whatsapp_batch_question_like($text))return $text;
+    if(str_contains($text,'?')||str_contains($text,'¿'))return $text;
+    $text=rtrim($text," \t\n\r\0\x0B.!;:,");
+    return $text===''?'':$text.'?';
 }
 
 /**
@@ -127,6 +148,11 @@ function hache_sharky_whatsapp_batch_merge_semantic_controls(string $contact,arr
     $semanticUi=is_array($semanticDecision['ui']??null)?$semanticDecision['ui']:[];
     if(!in_array(($semanticUi['type']??''),['buttons','list'],true))return $textResult;
     $textMessage=hache_sharky_whatsapp_display_labels(trim((string)($textDecision['message']??'')));
+    // El adaptador agrega esta cola genérica para conservar el flujo. Si vamos a
+    // reanudarlo inmediatamente con sus controles reales, se elimina para no decir
+    // “cuando quieras” y acto seguido volver a preguntar el paso pendiente.
+    $textMessage=preg_replace('/\s*Cuando quieras, seguimos donde lo dejamos\.\s*$/u','',$textMessage)??$textMessage;
+    $textMessage=trim($textMessage);
     $nextMessage=hache_sharky_whatsapp_display_labels(trim((string)($semanticDecision['message']??'')));
     if($textMessage===''||$nextMessage==='')return $textResult;
 
@@ -152,6 +178,36 @@ function hache_sharky_whatsapp_batch_merge_semantic_controls(string $contact,arr
         'decision'=>$merged,
         'payload'=>hache_sharky_whatsapp_render($contact,$merged),
     ]);
+}
+
+function hache_sharky_whatsapp_batch_resume_qualification_controls(PDO $pdo,string $contact,array $result,array $extraContext=[]): array
+{
+    $decision=is_array($result['decision']??null)?$result['decision']:[];
+    if(($decision['kind']??'')!=='side_question')return $result;
+    $state=is_array($result['state']??null)?$result['state']:[];
+    $flow=is_array($state['flow']??null)?$state['flow']:[];
+    if(($flow['name']??'')!=='qualify_prospect')return $result;
+    $step=(string)($flow['step']??'');
+    if($step==='')return $result;
+
+    $resume=hache_sharky_whatsapp_qualification_input(
+        $pdo,
+        $state,
+        ['text'=>'','interactive_id'=>''],
+        (int)($extraContext['now']??time()),
+        (int)($extraContext['min_age']??12)
+    );
+    if(!is_array($resume)||!is_array($resume[1]??null))return $result;
+    $resumeState=is_array($resume[0]??null)?$resume[0]:[];
+    $resumeFlow=is_array($resumeState['flow']??null)?$resumeState['flow']:[];
+    // Un “resume” nunca puede avanzar ni mutar el flujo. Si algún paso futuro
+    // cambiara ese contrato, fallamos cerrado y dejamos la respuesta lateral sola.
+    if(($resumeFlow['name']??'')!=='qualify_prospect'||(string)($resumeFlow['step']??'')!==$step)return $result;
+    return hache_sharky_whatsapp_batch_merge_semantic_controls(
+        $contact,
+        ['decision'=>$resume[1]],
+        $result
+    );
 }
 
 /**
@@ -358,6 +414,7 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
     if($latestReferral===null&&is_array($event['referral']??null))$latestReferral=$event['referral'];
     $baseId='batch:'.hash('sha256',implode('|',$ids));$unpacked=hache_sharky_whatsapp_batch_unpack((string)($batch['text']??''));
     $plainText=trim((string)$unpacked['text']);$choices=is_array($unpacked['interactives']??null)?$unpacked['interactives']:[];
+    $questionText=hache_sharky_whatsapp_batch_question_text($plainText);
 
     if($choices){
         // Multiple taps on the same stale prompt can arrive in one debounce window.
@@ -393,7 +450,7 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
                 'id'=>$baseId.':text',
                 'from'=>$contact,
                 'type'=>'text',
-                'text'=>$plainText,
+                'text'=>$questionText,
                 'interactive_id'=>'',
                 'timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000)),
             ];
@@ -408,9 +465,10 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
             unset($result['_delivery_lock']);
         }
     }else{
-        $synthetic=['id'=>$baseId,'from'=>$contact,'type'=>'text','text'=>$plainText,'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];
+        $synthetic=['id'=>$baseId,'from'=>$contact,'type'=>'text','text'=>$questionText,'interactive_id'=>'','timestamp_ms'=>(int)($event['timestamp_ms']??floor(microtime(true)*1000))];
         if($latestReferral!==null)$synthetic['referral']=$latestReferral;
         $result=hache_sharky_whatsapp_process_with_delivery_lock($pdo,$synthetic,$conversationAnswer,$extraContext);
+        $result=hache_sharky_whatsapp_batch_resume_qualification_controls($pdo,$contact,$result,$extraContext);
         $syntheticId=$synthetic['id'];
     }
 
