@@ -50,7 +50,7 @@ if(!$groupsEnabled&&$groupCount>0){
 $events=array_merge(
     hache_sharky_whatsapp_extract($payload),
     hache_sharky_draft_extract_audio_events($payload),
-    hache_sharky_payment_reminder_extract_proof_events($payload)
+    hache_sharky_payment_reminder_extract_proof_events($payload,hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID'))
 );
 $events=hache_sharky_groups_decorate_events($events,$payload);
 foreach($events as &$event){
