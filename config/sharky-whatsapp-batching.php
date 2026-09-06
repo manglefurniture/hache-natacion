@@ -56,7 +56,14 @@ function hache_sharky_whatsapp_batch_question_like(string $text): bool
 function hache_sharky_whatsapp_batch_question_text(string $text): string
 {
     $text=trim($text);
-    if($text===''||!hache_sharky_whatsapp_batch_question_like($text))return $text;
+    if($text==='')return $text;
+    // Respuestas operativas válidas tienen prioridad sobre la heurística de
+    // “pregunta sin signos”. No debemos convertir `Pago el 50%` ni
+    // `Horario matutino` en preguntas porque sus parsers son deliberadamente
+    // estrictos y esas frases ejecutan/continúan otro camino controlado.
+    if(function_exists('hache_sharky_whatsapp_payment_choice')&&hache_sharky_whatsapp_payment_choice($text)!==null)return $text;
+    if(function_exists('hache_sharky_whatsapp_daypart')&&hache_sharky_whatsapp_daypart($text,'')!==null)return $text;
+    if(!hache_sharky_whatsapp_batch_question_like($text))return $text;
     if(str_contains($text,'?')||str_contains($text,'¿'))return $text;
     $text=rtrim($text," \t\n\r\0\x0B.!;:,");
     return $text===''?'':$text.'?';
