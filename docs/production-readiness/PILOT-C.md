@@ -105,11 +105,11 @@ El mismo día se ejecutó el snapshot productivo seguro del run `33945691437` co
 
 | Gate | Estado | Evidencia necesaria para cerrarlo |
 | --- | --- | --- |
-| Campo | `NOT EVALUATED` | ventana representativa de RUM/Web Vitals o evidencia de campo equivalente aprobada; una medición HTTP aislada no cuenta como p75 de campo |
+| Campo | `PASS` | revisión humana de RUM real de `home`, desktop/mobile, build `5cc3316b22a9c76134a34deb3fdabc2f8fe74805`; alcance y evidencia en `FIELD-REVIEW-20260906.md` |
 | Restore | `PASS` | backup real restaurado en target aislado; RPO 24 h y RTO 1 h cumplidos; integridad crítica y cleanup revisados en `RESTORE-REVIEW-20260905.md` |
 | Communication status | `PASS` | evidencia real de Meta correlacionada y revisión humana registradas en `COMMUNICATION-DELIVERY-REVIEW-20260905.md` |
 
-Restore y Communication status están cerrados. **Field es el único gate P1 todavía abierto** y se mantiene `NOT EVALUATED` hasta tener su evidencia específica.
+**Piloto real Nivel C completo: criterio de salida P1 cerrado el 2026-09-06.** Communication status, Restore y Field están en `PASS`. La aprobación humana de Field queda registrada en `FIELD-REVIEW-20260906.md`, limitada a la cobertura real de `home` en desktop/mobile; no acredita rutas no instrumentadas.
 
 ## Política de cambios del piloto
 
