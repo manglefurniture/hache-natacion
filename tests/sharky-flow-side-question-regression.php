@@ -19,6 +19,13 @@ sideq_ok(str_ends_with(hache_sharky_whatsapp_batch_question_text($equipment),'?'
 sideq_ok(hache_sharky_whatsapp_batch_question_text('Palapas Protudec')==='Palapas Protudec','A valid venue answer must not be rewritten as a question.');
 sideq_ok(!hache_sharky_whatsapp_batch_question_like('Desde cero'),'A guided-flow answer must not be mistaken for a side question.');
 
+$paymentChoice='Pago el 50%';
+$daypartChoice='Horario matutino';
+sideq_ok(hache_sharky_whatsapp_batch_question_text($paymentChoice)===$paymentChoice,'A valid payment choice must not be rewritten as a question.');
+sideq_ok(hache_sharky_whatsapp_payment_choice(hache_sharky_whatsapp_batch_question_text($paymentChoice))!==null,'The preserved payment choice must still reach the existing payment parser.');
+sideq_ok(hache_sharky_whatsapp_batch_question_text($daypartChoice)===$daypartChoice,'A valid daypart choice must not be rewritten as a question.');
+sideq_ok(hache_sharky_whatsapp_daypart(hache_sharky_whatsapp_batch_question_text($daypartChoice),'')==='morning','The preserved daypart choice must still reach the existing daypart parser.');
+
 $now=1788732000;
 $state=hache_sharky_orchestrator_state(null,$now);
 $state['identity']=array_replace($state['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
