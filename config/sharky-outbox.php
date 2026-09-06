@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-followup.php';
+require_once __DIR__.'/sharky-payment-reminder.php';
 require_once __DIR__.'/sharky-groups.php';
 require_once __DIR__.'/sharky-delivery-status.php';
 
@@ -145,7 +146,8 @@ function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload
 
 function hache_sharky_outbox_enqueue(PDO $pdo,string $contact,array $payload,string $dedupeSeed): bool
 {
-    if(!is_array($payload['_sharky_followup']??null))$payload=hache_sharky_followup_prepare_normal_outbound($pdo,$contact,$payload,$dedupeSeed);
+    if(!is_array($payload['_sharky_payment_reminder']??null))$payload=hache_sharky_payment_reminder_prepare_registration_outbound($pdo,$contact,$payload,$dedupeSeed);
+    if(!is_array($payload['_sharky_followup']??null)&&!is_array($payload['_sharky_payment_reminder_arm']??null))$payload=hache_sharky_followup_prepare_normal_outbound($pdo,$contact,$payload,$dedupeSeed);
     return hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,$dedupeSeed,time());
 }
 
@@ -267,6 +269,8 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
         $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
         $followupArm=is_array($payload['_sharky_followup_arm']??null)?$payload['_sharky_followup_arm']:null;unset($payload['_sharky_followup_arm']);
         $followupMeta=is_array($payload['_sharky_followup']??null)?$payload['_sharky_followup']:null;unset($payload['_sharky_followup']);
+        $paymentReminderArm=is_array($payload['_sharky_payment_reminder_arm']??null)?$payload['_sharky_payment_reminder_arm']:null;unset($payload['_sharky_payment_reminder_arm']);
+        $paymentReminderMeta=is_array($payload['_sharky_payment_reminder']??null)?$payload['_sharky_payment_reminder']:null;unset($payload['_sharky_payment_reminder']);
         $contact=preg_replace('/\D+/','',(string)($payload['to']??''))?:'';
         if($contact===''||!hash_equals((string)($row['contact_hash']??''),hache_sharky_orchestrator_contact_hash($contact))){
             if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,7,'INVALID_CONTACT'))$stats['dead']++;
@@ -302,6 +306,19 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
                     continue;
                 }
             }
+            if(is_array($paymentReminderMeta)){
+                $gate=hache_sharky_payment_reminder_validate_before_send($pdo,$contact,$paymentReminderMeta,time());
+                if(($gate['ok']??false)!==true){
+                    $reason=(string)($gate['reason']??'PAYMENT_REMINDER_CANCELLED');$reschedule=(int)($gate['reschedule_at']??0);
+                    if($reschedule>0){
+                        if(hache_sharky_outbox_reschedule_owner($pdo,$id,$owner,$reschedule,$reason))continue;
+                        if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'PAYMENT_REMINDER_RESCHEDULE_FAILED'))$stats['failed']++;
+                        continue;
+                    }
+                    if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,$reason))$stats['cancelled']++;
+                    continue;
+                }
+            }
             if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
                 hache_sharky_outbox_release_owner($pdo,$id,$owner);break;
             }
@@ -313,6 +330,7 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
                     $stats['sent']++;
                     if(is_array($followupMeta))hache_sharky_followup_after_sent($pdo,$contact,$followupMeta,time());
                     elseif(is_array($followupArm))hache_sharky_followup_after_normal_sent($pdo,$contact,$followupArm,time());
+                    if(is_array($paymentReminderArm))hache_sharky_payment_reminder_after_registration_sent($pdo,$contact,$paymentReminderArm,time());
                 }else error_log('[sharky-outbox] sender succeeded but sent marker failed');
             }else{
                 if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count']))$stats['failed']++;
