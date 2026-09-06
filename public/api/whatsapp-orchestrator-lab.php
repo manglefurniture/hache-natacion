@@ -80,8 +80,8 @@ $business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($bu
 // A manual echo wins over every automatic send in the same webhook. Persist/process
 // echoes first, then normal messages. Payment-proof media was already finalized
 // above and is deliberately excluded from conversational processing.
-$processableEvents=array_values(array_filter($events,static fn(array $event):bool=>!in_array((string)($event['type']??''),['image','document'],true)));
-$processing=array_merge($echoes,$processableEvents);
+$events=array_values(array_filter($events,static fn(array $event):bool=>!in_array((string)($event['type']??''),['image','document'],true)));
+$processing=array_merge($echoes,$events);
 usort($processing,static function(array $a,array $b):int{
     $ak=($a['kind']??'')==='echo'?0:1;$bk=($b['kind']??'')==='echo'?0:1;
     if($ak!==$bk)return $ak<=>$bk;
