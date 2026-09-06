@@ -7,6 +7,7 @@ const workflow = await readFile(new URL('../.github/workflows/production-readine
 const quality = await readFile(new URL('../.github/workflows/quality.yml', import.meta.url), 'utf8');
 const pilot = await readFile(new URL('../docs/production-readiness/PILOT-C.md', import.meta.url), 'utf8');
 const communicationReview = await readFile(new URL('../docs/production-readiness/COMMUNICATION-DELIVERY-REVIEW-20260905.md', import.meta.url), 'utf8');
+const fieldReview = await readFile(new URL('../docs/production-readiness/FIELD-REVIEW-20260906.md', import.meta.url), 'utf8');
 const restoreReview = await readFile(new URL('../docs/production-readiness/RESTORE-REVIEW-20260905.md', import.meta.url), 'utf8');
 
 for (const fragment of [
@@ -184,5 +185,25 @@ for (const fragment of [
 
 assert.ok(!restoreReview.includes('contains_personal_rows = true'), 'restore review must not claim personal rows are exported');
 assert.ok(!restoreReview.includes('contains_credentials = true'), 'restore review must not claim credentials are exported');
+
+for (const fragment of [
+  '**Field: PASS**',
+  'instrucción de cierre P1 del 2026-09-06',
+  '5cc3316b22a9c76134a34deb3fdabc2f8fe74805',
+  '33999557068',
+  '9995688004',
+  '634 mediciones; 616 del build evaluado y 18 de builds anteriores',
+  '| desktop | CLS | 27 | 0.00255711 | ≤ 0.1 | PASS |',
+  '| desktop | INP | 21 | 48 ms | ≤ 200 ms | PASS |',
+  '| desktop | LCP | 25 | 740 ms | ≤ 2500 ms | PASS |',
+  '| mobile | CLS | 244 | 0 | ≤ 0.1 | PASS |',
+  '| mobile | INP | 78 | 80 ms | ≤ 200 ms | PASS |',
+  '| mobile | LCP | 221 | 1156 ms | ≤ 2500 ms | PASS |',
+  'exclusivamente `home` en desktop/mobile',
+  '`registration` y `admin_payments` no cuentan como cubiertas',
+  'El collector conserva `NOT EVALUATED` / `HUMAN_REVIEW_REQUIRED`',
+]) {
+  assert.ok(fieldReview.includes(fragment), `missing reviewed Field evidence: ${fragment}`);
+}
 
 console.log('PRODUCTION_READINESS_PILOT_REGRESSION_OK');
