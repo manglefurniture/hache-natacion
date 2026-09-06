@@ -47,22 +47,41 @@ if(!$groupsEnabled&&$groupCount>0){
     for($i=0;$i<$groupCount;$i++)hache_sharky_metric_increment('messages_skipped_group');
 }
 
-$events=array_merge(hache_sharky_whatsapp_extract($payload),hache_sharky_draft_extract_audio_events($payload));
+$events=array_merge(
+    hache_sharky_whatsapp_extract($payload),
+    hache_sharky_draft_extract_audio_events($payload),
+    hache_sharky_payment_reminder_extract_proof_events($payload)
+);
 $events=hache_sharky_groups_decorate_events($events,$payload);
-foreach($events as &$event)$event['kind']='message';unset($event);
+foreach($events as &$event){
+    if(!isset($event['kind']))$event['kind']='message';
+    // Una imagen de un grupo no puede cancelar el recordatorio de una conversación individual.
+    if(($event['kind']??'')===HACHE_SHARKY_PAYMENT_PROOF_KIND&&trim((string)($event['group_id']??''))!=='')$event['kind']='group_media';
+}
+unset($event);
 $echoes=hache_sharky_whatsapp_extract_echoes($payload);foreach($echoes as &$echo)$echo['kind']='echo';unset($echo);
 $durable=array_merge($events,$echoes);usort($durable,static fn(array $a,array $b):int=>(int)($a['timestamp_ms']??0)<=>(int)($b['timestamp_ms']??0));
 
 // P0 durability: persist every supported normalized inbound message/echo before returning 200.
 foreach($durable as $event)if(!hache_sharky_inbox_store($pdo,$event))sharky_lab_json(503,['ok'=>false,'error'=>'Unable to persist inbound event']);
 
+// Imágenes/documentos quedan como evidencia durable cifrada, pero no se envían a
+// OpenAI ni generan una respuesta automática. El recordatorio los consulta por
+// contact_hash + kind justo antes de enviarse.
+foreach($events as $event){
+    if(!in_array((string)($event['type']??''),['image','document'],true))continue;
+    if(!hache_sharky_orchestrator_mark_processed($pdo,(string)($event['id']??'')))sharky_lab_json(503,['ok'=>false,'error'=>'Unable to finalize inbound media event']);
+}
+
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);
 
 $business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
 
 // A manual echo wins over every automatic send in the same webhook. Persist/process
-// echoes first, then normal messages. Only after that may leftovers in the outbox run.
-$processing=array_merge($echoes,$events);
+// echoes first, then normal messages. Payment-proof media was already finalized
+// above and is deliberately excluded from conversational processing.
+$processableEvents=array_values(array_filter($events,static fn(array $event):bool=>!in_array((string)($event['type']??''),['image','document'],true)));
+$processing=array_merge($echoes,$processableEvents);
 usort($processing,static function(array $a,array $b):int{
     $ak=($a['kind']??'')==='echo'?0:1;$bk=($b['kind']??'')==='echo'?0:1;
     if($ak!==$bk)return $ak<=>$bk;
