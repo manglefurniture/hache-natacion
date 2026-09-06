@@ -169,7 +169,8 @@ for (const fragment of [
 assert.ok(!hachi.includes("script.dataset.buildId"), 'home bootstrap must not pin a stale build id');
 
 for (const fragment of [
-  'El gate continúa **`NOT EVALUATED`**',
+  'El gate queda **`PASS`** por revisión humana',
+  'FIELD-REVIEW-20260906.md',
   'primera ruta activada es `home`',
   '`git-<12 hex>`',
   'no se mezclan releases bajo una etiqueta fija',

@@ -4,7 +4,7 @@
 
 Abrir el gate **Field** del piloto C con evidencia real de usuarios sin convertir una medición aislada ni un deploy en `PASS`. La implementación adopta el patrón P1-04 de Hache Base: first-party, same-origin, payload minimizado, p75 reproducible y decisión humana.
 
-El gate continúa **`NOT EVALUATED`** hasta reunir una ventana representativa y revisar cobertura, tamaños de muestra y resultados por factor de forma.
+El gate queda **`PASS`** por revisión humana del 2026-09-06, documentada en `FIELD-REVIEW-20260906.md`, para la cobertura real de `home` en desktop/mobile. El collector conserva `NOT EVALUATED` + `HUMAN_REVIEW_REQUIRED`: el PASS es una decisión humana versionada.
 
 ## Primera activación
 
