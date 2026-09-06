@@ -4,14 +4,55 @@ declare(strict_types=1);
 
 /**
  * Recordatorio único de comprobante de pago para registros intensivos creados
- * por Sharky. Reutiliza el outbox cifrado/durable: no crea PII ni estado nuevo
- * en texto plano y valida de nuevo justo antes de enviar.
+ * por Sharky. Reutiliza el inbox/outbox cifrado y no descarga ni almacena los
+ * bytes del comprobante: solo conserva el evento durable que Meta ya entregó.
  */
 const HACHE_SHARKY_PAYMENT_REMINDER_DELAY_SECONDS = 3600;
 const HACHE_SHARKY_PAYMENT_REMINDER_MAX_AGE_SECONDS = 86400;
 const HACHE_SHARKY_PAYMENT_REMINDER_TIMEZONE = 'America/Cancun';
 const HACHE_SHARKY_PAYMENT_REMINDER_START_HOUR = 8;
 const HACHE_SHARKY_PAYMENT_REMINDER_END_HOUR = 22;
+const HACHE_SHARKY_PAYMENT_PROOF_KIND = 'payment_proof_candidate';
+
+/**
+ * Extrae únicamente imágenes/documentos entrantes para poder cancelar un
+ * recordatorio pendiente. No descarga el archivo y no lo envía a OpenAI.
+ */
+function hache_sharky_payment_reminder_extract_proof_events(array $payload): array
+{
+    $out = [];
+    foreach (($payload['entry'] ?? []) as $entry) {
+        if (!is_array($entry)) continue;
+        foreach (($entry['changes'] ?? []) as $change) {
+            if (!is_array($change)) continue;
+            $value = $change['value'] ?? null;
+            if (!is_array($value)) continue;
+            $phoneId = trim((string)($value['metadata']['phone_number_id'] ?? ''));
+            foreach (($value['messages'] ?? []) as $message) {
+                if (!is_array($message)) continue;
+                $type = strtolower(trim((string)($message['type'] ?? '')));
+                if (!in_array($type, ['image','document'], true)) continue;
+                $id = trim((string)($message['id'] ?? ''));
+                $from = preg_replace('/\D+/', '', (string)($message['from'] ?? '')) ?: '';
+                $mediaId = trim((string)($message[$type]['id'] ?? ''));
+                if ($id === '' || $from === '' || $mediaId === '') continue;
+                $event = [
+                    'id'=>$id,
+                    'from'=>$from,
+                    'type'=>$type,
+                    'kind'=>HACHE_SHARKY_PAYMENT_PROOF_KIND,
+                    'text'=>'',
+                    'media_id'=>$mediaId,
+                    'interactive_id'=>'',
+                    'phone_number_id'=>$phoneId,
+                    'timestamp_ms'=>((int)($message['timestamp'] ?? time())) * 1000,
+                ];
+                $out[] = $event;
+            }
+        }
+    }
+    return $out;
+}
 
 function hache_sharky_payment_reminder_payload_body(array $payload): string
 {
@@ -67,12 +108,13 @@ function hache_sharky_payment_reminder_prepare_registration_outbound(
     $candidate = hache_sharky_payment_reminder_registration_candidate($pdo, $contact);
     if (!is_array($candidate)) return $payload;
     $now ??= time();
+    // El token es estable por inscripción. Incluso si el mensaje de alta se
+    // recupera/reintenta, INSERT IGNORE del outbox no puede crear dos avisos.
     $token = substr(hash('sha256', implode('|', [
         'payment-proof-reminder-v1',
         hache_sharky_orchestrator_contact_hash($contact),
         $candidate['student_id'],
         $candidate['course_id'],
-        $dedupeSeed,
     ])), 0, 40);
     $payload['_sharky_payment_reminder_arm'] = [
         'token' => $token,
@@ -142,7 +184,7 @@ function hache_sharky_payment_reminder_after_registration_sent(PDO $pdo, string 
     }
 }
 
-function hache_sharky_payment_reminder_registration_pending(PDO $pdo, string $studentId, string $courseId): bool
+function hache_sharky_payment_reminder_registration_pending(PDO $pdo, string $studentId, string $courseId): ?bool
 {
     try {
         $st = $pdo->prepare(
@@ -155,11 +197,12 @@ function hache_sharky_payment_reminder_registration_pending(PDO $pdo, string $st
         $st->execute([':a'=>$studentId, ':c'=>$courseId]);
         return (bool)$st->fetchColumn();
     } catch (Throwable $e) {
-        return false;
+        error_log('[sharky-payment-reminder] registration state unavailable');
+        return null;
     }
 }
 
-function hache_sharky_payment_reminder_payment_confirmed(PDO $pdo, string $studentId, string $courseId): bool
+function hache_sharky_payment_reminder_payment_confirmed(PDO $pdo, string $studentId, string $courseId): ?bool
 {
     try {
         $st = $pdo->prepare(
@@ -170,28 +213,31 @@ function hache_sharky_payment_reminder_payment_confirmed(PDO $pdo, string $stude
         $st->execute([':a'=>$studentId, ':c'=>$courseId]);
         return (bool)$st->fetchColumn();
     } catch (Throwable $e) {
-        return false;
+        error_log('[sharky-payment-reminder] payment state unavailable');
+        return null;
     }
 }
 
-function hache_sharky_payment_reminder_proof_received(PDO $pdo, string $contact, int $watchFrom): bool
+function hache_sharky_payment_reminder_proof_received(PDO $pdo, string $contact, int $watchFrom): ?bool
 {
-    if ($watchFrom <= 0) return false;
+    if ($watchFrom <= 0) return null;
     try {
         $st = $pdo->prepare(
             "SELECT 1 FROM sharky_message_receipts
              WHERE contact_hash=:c
-               AND message_type IN ('image','document')
+               AND message_type=:t
                AND received_at>=FROM_UNIXTIME(:w)
              LIMIT 1"
         );
         $st->execute([
             ':c'=>hache_sharky_orchestrator_contact_hash($contact),
+            ':t'=>HACHE_SHARKY_PAYMENT_PROOF_KIND,
             ':w'=>$watchFrom,
         ]);
         return (bool)$st->fetchColumn();
     } catch (Throwable $e) {
-        return false;
+        error_log('[sharky-payment-reminder] proof state unavailable');
+        return null;
     }
 }
 
@@ -210,15 +256,19 @@ function hache_sharky_payment_reminder_validate_before_send(PDO $pdo, string $co
     if ($now > $registrationSentAt + HACHE_SHARKY_PAYMENT_REMINDER_MAX_AGE_SECONDS) {
         return ['ok'=>false, 'reason'=>'PAYMENT_REMINDER_EXPIRED'];
     }
-    if (!hache_sharky_payment_reminder_registration_pending($pdo, $studentId, $courseId)) {
-        return ['ok'=>false, 'reason'=>'REGISTRATION_RESOLVED'];
-    }
-    if (hache_sharky_payment_reminder_payment_confirmed($pdo, $studentId, $courseId)) {
-        return ['ok'=>false, 'reason'=>'PAYMENT_ALREADY_CONFIRMED'];
-    }
-    if (hache_sharky_payment_reminder_proof_received($pdo, $contact, $watchFrom)) {
-        return ['ok'=>false, 'reason'=>'PAYMENT_PROOF_RECEIVED'];
-    }
+
+    $pending = hache_sharky_payment_reminder_registration_pending($pdo, $studentId, $courseId);
+    if ($pending === null) return ['ok'=>false, 'reason'=>'PAYMENT_REMINDER_STATE_UNAVAILABLE'];
+    if (!$pending) return ['ok'=>false, 'reason'=>'REGISTRATION_RESOLVED'];
+
+    $paid = hache_sharky_payment_reminder_payment_confirmed($pdo, $studentId, $courseId);
+    if ($paid === null) return ['ok'=>false, 'reason'=>'PAYMENT_REMINDER_STATE_UNAVAILABLE'];
+    if ($paid) return ['ok'=>false, 'reason'=>'PAYMENT_ALREADY_CONFIRMED'];
+
+    $proof = hache_sharky_payment_reminder_proof_received($pdo, $contact, $watchFrom);
+    if ($proof === null) return ['ok'=>false, 'reason'=>'PAYMENT_PROOF_STATE_UNAVAILABLE'];
+    if ($proof) return ['ok'=>false, 'reason'=>'PAYMENT_PROOF_RECEIVED'];
+
     if (!hache_sharky_payment_reminder_send_allowed_now($now)) {
         return [
             'ok'=>false,
