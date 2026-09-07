@@ -90,6 +90,7 @@ commerce_hard_expect(str_contains($runtime,'$networkAttempted = false')&&str_con
 commerce_hard_expect(str_contains($runtime,'$mtime <= $now - 900'),'Commerce provisioning backoff must remain 15 minutes.');
 commerce_hard_expect(str_contains($runtime,'hache_sharky_commerce_payment_binding_matches'),'Commerce processor must validate bound payment selectors before acting.');
 commerce_hard_expect(str_contains($runtime,"'payment_method_stale'"),'Stale payment selectors must fail closed with an explicit decision.');
+commerce_hard_expect(str_contains($runtime,"return trim((string)(\$event['interactive_id'] ?? '')) !== '' ? null : false;"),'Only explicit legacy fallback buttons may bypass the new registration binding; unbound Flow replies must fail closed.');
 
 $worker=file_get_contents(__DIR__.'/../bin/sharky-inbox-dispatch.php')?:'';
 $candidatePos=strpos($worker,'hache_sharky_commerce_event_candidate($event)');
@@ -97,11 +98,25 @@ $commercePos=strpos($worker,'hache_sharky_commerce_process_event($pdo,$event',$c
 $normalPos=strpos($worker,'hache_sharky_lab_process_event($pdo,$event',$candidatePos===false?0:$candidatePos);
 commerce_hard_expect($candidatePos!==false&&$commercePos!==false&&$normalPos!==false&&$candidatePos<$commercePos&&$commercePos<$normalPos,'Recovered commerce events must re-enter the commerce lane before normal Sharky processing.');
 
+$groups=file_get_contents(__DIR__.'/../config/sharky-groups.php')?:'';
+$finalStart=strpos($groups,'function hache_sharky_groups_finalize_outbound');
+$upgradePos=strpos($groups,'hache_sharky_commerce_upgrade_direct_payload($payload)',$finalStart===false?0:$finalStart);
+$preparePos=strpos($groups,'hache_sharky_commerce_prepare_payload($payload)',$upgradePos===false?0:$upgradePos);
+$finalizePos=strpos($groups,'hache_sharky_commerce_finalize_payload($payload)',$preparePos===false?0:$preparePos);
+commerce_hard_expect($finalStart!==false&&$upgradePos!==false&&$preparePos!==false&&$finalizePos!==false&&$finalStart<$upgradePos&&$upgradePos<$preparePos&&$preparePos<$finalizePos,'Late registration-success upgrade must bind the first payment selector before its final network cleanup.');
+
+$paymentReminder=file_get_contents(__DIR__.'/../config/sharky-payment-reminder.php')?:'';
+$mpPayloadPos=strpos($paymentReminder,'hache_sharky_mp_followup_payload');
+$mpPreparePos=strpos($paymentReminder,'hache_sharky_commerce_prepare_payload($payload)',$mpPayloadPos===false?0:$mpPayloadPos);
+$mpMetaPos=strpos($paymentReminder,"\$payload['_sharky_payment_reminder'] = \$reminderMeta",$mpPreparePos===false?0:$mpPreparePos);
+commerce_hard_expect($mpPayloadPos!==false&&$mpPreparePos!==false&&$mpMetaPos!==false&&$mpPayloadPos<$mpPreparePos&&$mpPreparePos<$mpMetaPos,'The delayed 15-minute Mercado Pago recovery selector must be bound before its encrypted outbox metadata is attached.');
+
 $webhook=file_get_contents(__DIR__.'/../public/api/whatsapp-orchestrator-lab.php')?:'';
 commerce_hard_expect(str_contains($webhook,'hache_sharky_commerce_flows_prime_throttled'),'Realtime webhook must use throttled commerce Flow provisioning.');
 commerce_hard_expect(!str_contains($webhook,'hache_sharky_commerce_flows_prime($payload'),'Realtime webhook must not call the unthrottled commerce provisioner directly.');
 $ackPos=strpos($webhook,'http_response_code(200)');
+$dispatchPos=strpos($webhook,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_lab_send',20)");
 $primePos=strpos($webhook,'hache_sharky_commerce_flows_prime_throttled');
-commerce_hard_expect($ackPos!==false&&$primePos!==false&&$ackPos<$primePos,'Commerce provisioning must remain strictly after webhook ACK.');
+commerce_hard_expect($ackPos!==false&&$dispatchPos!==false&&$primePos!==false&&$ackPos<$dispatchPos&&$dispatchPos<$primePos,'Commerce provisioning must run only after ACK, current-turn processing and current outbox dispatch.');
 
 echo "OK sharky commerce hardening regression\n";
