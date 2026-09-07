@@ -22,7 +22,8 @@
             "name": "card_proof_form",
             "children": [
               {"type": "TextHeading", "text": "Tarjeta · Mercado Pago"},
-              {"type": "TextBody", "text": "Total con tarjeta: ${data.amount_label}"},
+              {"type": "TextCaption", "text": "Total con tarjeta"},
+              {"type": "TextBody", "text": "${data.amount_label}"},
               {"type": "TextCaption", "text": "${data.surcharge_label}"},
               {"type": "TextBody", "text": "La transferencia SPEI sigue disponible sin recargo si prefieres cambiar de método."},
               {"type": "EmbeddedLink", "text": "Abrir Mercado Pago", "on-click-action": {"name": "open_url", "url": "${data.payment_url}"}},
