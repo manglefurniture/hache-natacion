@@ -59,7 +59,7 @@ $textPayload=['type'=>'text','text'=>['body'=>'Hola']];
 outbox_expect(hache_sharky_outbox_add_venue_hints($textPayload)===$textPayload,'Non-venue payloads must remain byte-for-byte equivalent as arrays.');
 
 // The intensive-registration offer is the commercial close. Improve only its
-// presentation while preserving the existing controlled-flow IDs and adding
+// presentation, preserve the affirmative path, use a dedicated pause ID and add
 // the already-supported human takeover route.
 $salesPayload=[
     'messaging_product'=>'whatsapp',
@@ -82,9 +82,10 @@ $salesReplies=array_column($salesClose['interactive']['action']['buttons']??[],'
 outbox_expect(str_contains($salesBody,'curso intensivo en Palapas Protudec'),'Sales close must keep the already-selected program and venue visible.');
 outbox_expect(str_contains($salesBody,'apartar tu lugar ahora mismo'),'Sales close must use a clear reservation-oriented CTA.');
 outbox_expect(str_contains($salesBody,'¿Cómo quieres continuar?'),'Sales close must invite one explicit next decision.');
-outbox_expect(array_column($salesReplies,'id')===['flow:yes','action:human','flow:no'],'Sales close must preserve yes/no flow routing and expose the established human handoff route.');
+outbox_expect(array_column($salesReplies,'id')===['flow:yes','action:human','flow:pause'],'Sales close must separate pause semantics from the generic flow:no route.');
 outbox_expect(array_column($salesReplies,'title')===['Apartar mi lugar','Hablar con un profe','Ahora no'],'Sales close must use the agreed customer-facing labels.');
 outbox_expect(!in_array('flow:cancel',array_column($salesReplies,'id'),true),'Sales close must not show duplicate No/Cancelar exits.');
+outbox_expect(!in_array('flow:no',array_column($salesReplies,'id'),true),'Sales close “Ahora no” must not reuse the generic flow:no identifier.');
 outbox_expect(mb_strlen($salesBody)<=1024,'Sales close body must stay inside WhatsApp interactive-body limits.');
 foreach($salesReplies as $reply)outbox_expect(mb_strlen((string)($reply['title']??''))<=20,'Sales close button titles must stay inside WhatsApp reply-title limits.');
 outbox_expect(hache_sharky_outbox_add_sales_close($salesClose)===$salesClose,'Sales close decoration must be idempotent on retries.');
