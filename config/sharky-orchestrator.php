@@ -330,49 +330,60 @@ function hache_sharky_orchestrator_parse_date(string $text, string $today): ?str
     return null;
 }
 
-function hache_sharky_orchestrator_parse_birthdate(string $text): ?string
+function hache_sharky_orchestrator_parse_birthdate(string $text, ?string $today=null): ?string
 {
     $t=hache_sharky_orchestrator_normalize($text);
     $t=preg_replace('/\s+/u',' ',trim($t))??'';
     if($t==='')return null;
 
-    $year=$month=$day=null;
+    $base=null;
+    if(is_string($today)&&$today!==''){
+        $candidate=DateTimeImmutable::createFromFormat('!Y-m-d',$today);
+        if($candidate&&$candidate->format('Y-m-d')===$today)$base=$candidate;
+    }
+    $base??=new DateTimeImmutable('today');
+    $maxYear=(int)$base->format('Y');
+    $minYear=$maxYear-120;
+    $valid=static function(int $year,int $month,int $day) use($base,$minYear,$maxYear): ?string {
+        if($year<$minYear||$year>$maxYear)return null;
+        $birth=sprintf('%04d-%02d-%02d',$year,$month,$day);
+        $d=DateTimeImmutable::createFromFormat('!Y-m-d',$birth);
+        if(!$d||$d->format('Y-m-d')!==$birth||$d>$base)return null;
+        return $birth;
+    };
+
     if(preg_match('/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/u',$t,$m)){
-        $year=(int)$m[1];$month=(int)$m[2];$day=(int)$m[3];
-    }elseif(preg_match('/\b(\d{1,2})[\/\.\-\s](\d{1,2})[\/\.\-\s](\d{4})\b/u',$t,$m)){
-        $day=(int)$m[1];$month=(int)$m[2];$year=(int)$m[3];
-    }elseif(preg_match('/\b(\d{8})\b/u',$t,$m)){
-        $digits=$m[1];$firstFour=(int)substr($digits,0,4);
-        if($firstFour>=1900&&$firstFour<=2100){
-            $year=$firstFour;$month=(int)substr($digits,4,2);$day=(int)substr($digits,6,2);
-        }else{
-            $day=(int)substr($digits,0,2);$month=(int)substr($digits,2,2);$year=(int)substr($digits,4,4);
-        }
-    }else{
-        $months=[
-            'enero'=>1,'ene'=>1,
-            'febrero'=>2,'feb'=>2,
-            'marzo'=>3,'mar'=>3,
-            'abril'=>4,'abr'=>4,
-            'mayo'=>5,'may'=>5,
-            'junio'=>6,'jun'=>6,
-            'julio'=>7,'jul'=>7,
-            'agosto'=>8,'ago'=>8,
-            'septiembre'=>9,'setiembre'=>9,'sept'=>9,'sep'=>9,'set'=>9,
-            'octubre'=>10,'oct'=>10,
-            'noviembre'=>11,'nov'=>11,
-            'diciembre'=>12,'dic'=>12,
-        ];
-        $monthPattern=implode('|',array_map('preg_quote',array_keys($months)));
-        if(preg_match('/\b(\d{1,2})\s+(?:de\s+)?('.$monthPattern.')\.?\s+(?:de\s+)?(\d{4})\b/u',$t,$m)){
-            $day=(int)$m[1];$month=$months[$m[2]]??null;$year=(int)$m[3];
-        }
+        return $valid((int)$m[1],(int)$m[2],(int)$m[3]);
+    }
+    if(preg_match('/\b(\d{1,2})[\/\.\-\s](\d{1,2})[\/\.\-\s](\d{4})\b/u',$t,$m)){
+        return $valid((int)$m[3],(int)$m[2],(int)$m[1]);
+    }
+    if(preg_match('/\b(\d{8})\b/u',$t,$m)){
+        $digits=$m[1];
+        $dayFirst=$valid((int)substr($digits,4,4),(int)substr($digits,2,2),(int)substr($digits,0,2));
+        if($dayFirst!==null)return $dayFirst;
+        return $valid((int)substr($digits,0,4),(int)substr($digits,4,2),(int)substr($digits,6,2));
     }
 
-    if(!is_int($day)||!is_int($month)||!is_int($year))return null;
-    $birth=sprintf('%04d-%02d-%02d',$year,$month,$day);
-    $d=DateTimeImmutable::createFromFormat('!Y-m-d',$birth);
-    return $d&&$d->format('Y-m-d')===$birth?$birth:null;
+    $months=[
+        'enero'=>1,'ene'=>1,
+        'febrero'=>2,'feb'=>2,
+        'marzo'=>3,'mar'=>3,
+        'abril'=>4,'abr'=>4,
+        'mayo'=>5,'may'=>5,
+        'junio'=>6,'jun'=>6,
+        'julio'=>7,'jul'=>7,
+        'agosto'=>8,'ago'=>8,
+        'septiembre'=>9,'setiembre'=>9,'sept'=>9,'sep'=>9,'set'=>9,
+        'octubre'=>10,'oct'=>10,
+        'noviembre'=>11,'nov'=>11,
+        'diciembre'=>12,'dic'=>12,
+    ];
+    $monthPattern=implode('|',array_map('preg_quote',array_keys($months)));
+    if(preg_match('/\b(\d{1,2})\s+(?:de\s+)?('.$monthPattern.')\.?\s+(?:de\s+)?(\d{4})\b/u',$t,$m)){
+        return $valid((int)$m[3],(int)($months[$m[2]]??0),(int)$m[1]);
+    }
+    return null;
 }
 
 function hache_sharky_orchestrator_expire_flow(array $state, int $now): array
@@ -615,11 +626,12 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
             return [$state, hache_sharky_orchestrator_decision('registration_birthdate','Por seguridad y para validar la edad mínima, dime la fecha de nacimiento. Puedes escribirla como te resulte más cómodo, por ejemplo 07/02/1984, 07021984 o 7 de febrero de 1984.')];
         }
         if ($step === 'birthdate') {
-            $birth=hache_sharky_orchestrator_parse_birthdate($text);
+            $todayString=(string)($context['today']??date('Y-m-d'));
+            $birth=hache_sharky_orchestrator_parse_birthdate($text,$todayString);
             if($birth===null) return [$state,hache_sharky_orchestrator_decision('registration_birthdate_invalid','No pude reconocer esa fecha. Escríbela con día, mes y año, por ejemplo 07/02/1984, 07021984 o 7 de febrero de 1984.')];
             $d=DateTimeImmutable::createFromFormat('!Y-m-d',$birth);
             if(!$d||$d->format('Y-m-d')!==$birth) return [$state,hache_sharky_orchestrator_decision('registration_birthdate_invalid','La fecha de nacimiento no es válida.')];
-            $today=new DateTimeImmutable((string)($context['today']??date('Y-m-d')));
+            $today=new DateTimeImmutable($todayString);
             $age=$d->diff($today)->y;
             $minAge=max(1,(int)($context['min_age']??12));
             if($d>$today||$age<$minAge) {
