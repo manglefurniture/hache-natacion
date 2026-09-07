@@ -62,9 +62,32 @@ flow_eq($events[0]['interactive_id']??null,'flow:birthdate','Flow reply has a de
 flow_eq($events[0]['waba_id']??null,'9988776655','signed webhook WABA id is retained for Flow lifecycle');
 flow_eq($events[0]['phone_number_id']??null,'12345','phone number id is retained');
 
+$birthState=hache_sharky_orchestrator_flow(
+    hache_sharky_orchestrator_state(null,1788756300),
+    'register_intensive','birthdate',[
+        'name'=>'Persona Prueba','sede_clave'=>'PALAPAS','fecha_inicio'=>'2026-09-14',
+        'course_id'=>'course-x','schedule_id'=>'schedule-x',
+    ],1788756300
+);
+$flowContinue=hache_sharky_orchestrate($birthState,$events[0],[
+    'now'=>1788756301,'today'=>$today,'min_age'=>12,
+]);
+flow_eq($flowContinue['decision']['kind']??null,'registration_confirm','DatePicker reply advances the existing controlled registration');
+flow_eq($flowContinue['state']['flow']['data']['birthdate']??null,'1983-03-08','DatePicker date is persisted in canonical ISO form');
+flow_ok(str_contains((string)($flowContinue['decision']['message']??''),'08/03/1983'),'confirmation echoes the DatePicker date for verification');
+
 $badPayload=$payload;
 $badPayload['entry'][0]['changes'][0]['value']['messages'][0]['interactive']['nfm_reply']['response_json']='{"birthdate":"no-es-fecha"}';
 flow_eq(hache_sharky_whatsapp_birthdate_flow_extract_events($badPayload,$today),[],'malformed nfm_reply never enters free-text pipeline');
+
+$typedEvent=['id'=>'typed.del','from'=>'529981234567','type'=>'text','text'=>'8 de marzo del 1983','interactive_id'=>''];
+$typedCompat=hache_sharky_whatsapp_birthdate_text_compat($typedEvent);
+flow_eq($typedCompat['text']??null,'8 de marzo de 1983','exact screenshot-style del date is normalized narrowly');
+$typedContinue=hache_sharky_orchestrate($birthState,array_replace($typedCompat,['id'=>'typed.del']),[
+    'now'=>1788756302,'today'=>$today,'min_age'=>12,
+]);
+flow_eq($typedContinue['decision']['kind']??null,'registration_confirm','typed del date remains a working fallback when user ignores selector');
+flow_eq($typedContinue['state']['flow']['data']['birthdate']??null,'1983-03-08','typed del fallback normalizes to same canonical date');
 
 putenv('WHATSAPP_BIRTHDATE_FLOW_ID=123456789012345');
 $birthPrompt=[
