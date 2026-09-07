@@ -104,5 +104,9 @@ if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky
 // processed and its durable outbox dispatched, so a slow/unavailable Graph API
 // can only affect future Flow UX, never starve the message that triggered it.
 hache_sharky_whatsapp_birthdate_flow_prime($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
-hache_sharky_commerce_flows_prime_throttled($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
+// Compatibility invariant: hache_sharky_commerce_flows_prime semantics now live
+// in the versioned v2 provisioner below; legacy commerce v1 is intentionally not invoked.
+// Commerce v2 carries display-only fixes. Provision it separately so already-
+// published v1 resources are never silently reused after a JSON correction.
+hache_sharky_commerce_flow_v2_prime_throttled($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
 exit;
