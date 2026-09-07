@@ -87,7 +87,7 @@ function hache_sharky_commerce_flow_v2_inject(string $runtimeEnv,string $flowId)
 function hache_sharky_commerce_flow_v2_mask_legacy_runtime(string $runtimeEnv): void
 {
     if($runtimeEnv==='')return;
-    $sentinel='__HACHE_COMMERCE_V2_PENDING__';
+    $sentinel='__HACHE_COMMERCE_PENDING__';
     putenv($runtimeEnv.'='.$sentinel);
     $_ENV[$runtimeEnv]=$sentinel;
 }
