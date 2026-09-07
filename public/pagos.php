@@ -75,6 +75,7 @@ function formatearTipo(tipo){return ({INSCRIPCION:'Inscripción',MENSUALIDAD:'Me
 function formatearMetodo(metodo){return ({EFECTIVO:'Efectivo',TRANSFERENCIA:'Transferencia',MERCADO_PAGO:'Mercado Pago'})[metodo]||metodo||'';}
 function money(value){return Number(value||0).toLocaleString('es-MX',{style:'currency',currency:'MXN'});}
 function fechaCorta(value){if(!value)return '';const d=new Date(value+'T12:00:00');return Number.isNaN(d.getTime())?value:d.toLocaleDateString('es-MX');}
+function cursoSolicitado(){return query.get('curso_intensivo_id')||query.get('curso_id')||'';}
 
 async function cargarPagos(){
     pagosBody.innerHTML='<tr><td colspan="7" class="empty">Cargando pagos...</td></tr>';
@@ -95,23 +96,29 @@ async function cargarAlumnos(){
     }catch(error){console.error(error);alumnoSelect.innerHTML='<option value="">No se pudieron cargar los alumnos</option>';}
 }
 
+async function leerCatalogoIntensivos(url){
+    const response=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json'}});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    let data;
+    try{data=await response.json();}catch(parseError){throw new Error('Respuesta inválida del catálogo de cursos');}
+    if(!data||data.ok!==true||!Array.isArray(data.cursos))throw new Error(data?.error||'Respuesta incompleta del catálogo de cursos');
+    return data.cursos;
+}
+
 async function cargarCursosIntensivosAlumno(preseleccionar=''){
     intensiveCourses=[];cursoSelect.innerHTML='<option value="">Seleccionar curso...</option>';cursoHelp.className='help';cursoHelp.textContent='Se muestran también cursos históricos del alumno. El pago quedará vinculado al curso que selecciones.';
     if(tipoSelect.value!=='INTENSIVO'||!alumnoSelect.value)return;
     cursoSelect.disabled=true;
     try{
         const params=new URLSearchParams({accion:'CURSOS_INTENSIVOS',alumno_id:alumnoSelect.value});
-        let response;
         try{
-            response=await fetch('/api/pagos.php?'+params.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});
+            intensiveCourses=await leerCatalogoIntensivos('/api/pagos.php?'+params.toString());
         }catch(primaryError){
             const legacyParams=new URLSearchParams({alumno_id:alumnoSelect.value});
-            response=await fetch('/api/alumno-intensivos-pago.php?'+legacyParams.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});
+            intensiveCourses=await leerCatalogoIntensivos('/api/alumno-intensivos-pago.php?'+legacyParams.toString());
         }
-        const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'No se pudieron cargar los cursos intensivos');
-        intensiveCourses=data.cursos||[];
         intensiveCourses.forEach(curso=>{const option=document.createElement('option');option.value=curso.id;option.dataset.price=curso.precio??'';option.dataset.historico=curso.historico?'1':'0';option.disabled=curso.pagado===true;option.textContent=fechaCorta(curso.fecha_inicio)+' · '+(curso.historico?'HISTÓRICO':curso.estado)+(curso.pagado?' · PAGADO':'')+' · '+money(curso.precio);cursoSelect.appendChild(option);});
-        const wanted=preseleccionar||query.get('curso_intensivo_id')||'';
+        const wanted=preseleccionar||cursoSolicitado();
         if(wanted&&[...cursoSelect.options].some(o=>o.value===wanted&&!o.disabled))cursoSelect.value=wanted;
         else{
             const unpaid=intensiveCourses.filter(c=>c.pagado!==true);
@@ -133,6 +140,7 @@ function actualizarCursoSeleccionado(){
         cursoHelp.className='help';
         cursoHelp.textContent='El pago quedará vinculado al curso intensivo seleccionado.';
     }
+    document.dispatchEvent(new CustomEvent('hache:intensivo-seleccionado',{detail:{cursoId:cursoSelect.value||''}}));
 }
 
 async function actualizarTipo(preseleccionarCurso=''){
@@ -148,7 +156,7 @@ function abrirModal(){ocultarMensaje(formMessage);formPago.reset();cursoGroup.cl
 function cerrarModal(){modal.style.display='none';}
 
 async function aplicarPreset(){
-    const alumno=query.get('alumno_id')||'';const tipo=(query.get('tipo')||'').toUpperCase();const curso=query.get('curso_intensivo_id')||'';
+    const alumno=query.get('alumno_id')||'';const tipo=(query.get('tipo')||'').toUpperCase();const curso=cursoSolicitado();
     if(!alumno&&!tipo&&!curso)return;
     abrirModal();
     if(alumno&&[...alumnoSelect.options].some(o=>o.value===alumno))alumnoSelect.value=alumno;
