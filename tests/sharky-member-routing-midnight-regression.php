@@ -38,9 +38,9 @@ $workerGeneric=strpos($worker,'hache_sharky_lab_process_event($pdo,$event',$work
 sharky_midnight_expect($workerMember!==false&&$workerGeneric!==false&&$workerMember<$workerGeneric,'Inbox recovery must preserve the same member lane before generic processing.');
 
 $maintenancePos=strpos($worker,'hache_sharky_takeover_midnight_tick()');
-$enabledPos=strpos($worker,"$enabled=static fn():bool");
+$enabledPos=strpos($worker,'$enabled=static fn():bool');
 sharky_midnight_expect($maintenancePos!==false&&$enabledPos!==false&&$maintenancePos<$enabledPos,'Midnight cleanup must run even when Sharky is temporarily disabled.');
-sharky_midnight_expect(str_contains($maintenance,"$activatedDate<$today"),'Daily cleanup must release only takeovers from an earlier local calendar day.');
+sharky_midnight_expect(str_contains($maintenance,'$activatedDate<$today'),'Daily cleanup must release only takeovers from an earlier local calendar day.');
 sharky_midnight_expect(str_contains($maintenance,'takeovers_midnight_released'),'Daily release count must be observable in Sharky metrics.');
 
 fwrite(STDOUT,"SHARKY_MEMBER_ROUTING_MIDNIGHT_OK\n");
