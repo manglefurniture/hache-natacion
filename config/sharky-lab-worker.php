@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-runtime.php';
 require_once __DIR__.'/sharky-whatsapp-batching.php';
+require_once __DIR__.'/sharky-brain-shadow-runtime.php';
 require_once __DIR__.'/sharky-whatsapp-echoes.php';
 require_once __DIR__.'/sharky-draft-parity.php';
 require_once __DIR__.'/sharky-post-pr72.php';
@@ -213,6 +214,15 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
     }
 
+    // True shadow mode: capture the durable state before the existing live
+    // pipeline runs. This extra read is observation-only and is never reused by
+    // routing/business logic, so a Brain disagreement cannot alter behaviour.
+    $brainBeforeState=null;
+    try{$brainBeforeState=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){
+        hache_sharky_metric_increment('brain_shadow_error');
+        error_log('[sharky-brain-shadow] unable to load pre-turn state');
+    }
+
     $deliveryLock=null;
     hache_sharky_db_state_defer_begin();
     try{
@@ -227,6 +237,10 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $deferredState=hache_sharky_db_state_defer_take();
     }catch(Throwable $e){hache_sharky_db_state_defer_cancel();hache_sharky_lab_release_delivery_lock($deliveryLock);throw $e;}
     if($result['skip']??false){hache_sharky_lab_release_delivery_lock($deliveryLock);return false;}
+
+    if(is_array($brainBeforeState)&&is_array($result['state']??null)){
+        hache_sharky_brain_shadow_observe($brainBeforeState,$result['state'],$event,$result,$groupId==='');
+    }
 
     try{
         $decision=is_array($result['decision']??null)?$result['decision']:[];$action=is_array($decision['action']??null)?$decision['action']:null;
