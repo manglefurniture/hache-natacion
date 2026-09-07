@@ -32,7 +32,8 @@
             "name": "enrollment_form",
             "children": [
               {"type": "TextHeading", "text": "Inscripción al intensivo"},
-              {"type": "TextBody", "text": "Sede fija: ${data.venue_label}"},
+              {"type": "TextCaption", "text": "Sede fija"},
+              {"type": "TextBody", "text": "${data.venue_label}"},
               {"type": "TextCaption", "text": "Si necesitas otra sede, cancela y regresa al chat."},
               {"type": "TextInput", "name": "full_name", "label": "Nombre completo", "required": true},
               {"type": "DatePicker", "name": "birthdate", "label": "Fecha de nacimiento", "helper-text": "Selecciona día, mes y año", "min-date": "${data.min_birthdate}", "max-date": "${data.max_birthdate}", "required": true},
@@ -106,9 +107,12 @@
                 "cases": {
                   "submit": [
                     {"type": "TextHeading", "text": "Revisa tu inscripción"},
-                    {"type": "TextBody", "text": "Sede: ${data.venue_label}"},
-                    {"type": "TextBody", "text": "Nombre: ${data.full_name}"},
-                    {"type": "TextBody", "text": "Nacimiento: ${data.birthdate}"},
+                    {"type": "TextCaption", "text": "Sede"},
+                    {"type": "TextBody", "text": "${data.venue_label}"},
+                    {"type": "TextCaption", "text": "Nombre"},
+                    {"type": "TextBody", "text": "${data.full_name}"},
+                    {"type": "TextCaption", "text": "Nacimiento"},
+                    {"type": "TextBody", "text": "${data.birthdate}"},
                     {"type": "TextCaption", "text": "Al volver al chat, Sharky validará fecha de inicio y horario antes de registrar."}
                   ],
                   "cancel": [
