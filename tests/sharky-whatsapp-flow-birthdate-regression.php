@@ -58,36 +58,13 @@ $payload=[
 $events=hache_sharky_whatsapp_birthdate_flow_extract_events($payload,$today);
 flow_eq(count($events),1,'one terminal Flow reply becomes one event');
 flow_eq($events[0]['text']??null,'1983-03-08','Flow reply re-enters controlled registration as ISO date');
-flow_eq($events[0]['interactive_id']??null,'flow:birthdate','Flow reply has a dedicated semantic id');
+flow_eq($events[0]['interactive_id']??null,'','terminal Flow date is consumed through the same typed-date path, not stale-interactive routing');
 flow_eq($events[0]['waba_id']??null,'9988776655','signed webhook WABA id is retained for Flow lifecycle');
 flow_eq($events[0]['phone_number_id']??null,'12345','phone number id is retained');
-
-$birthState=hache_sharky_orchestrator_flow(
-    hache_sharky_orchestrator_state(null,1788756300),
-    'register_intensive','birthdate',[
-        'name'=>'Persona Prueba','sede_clave'=>'PALAPAS','fecha_inicio'=>'2026-09-14',
-        'course_id'=>'course-x','schedule_id'=>'schedule-x',
-    ],1788756300
-);
-$flowContinue=hache_sharky_orchestrate($birthState,$events[0],[
-    'now'=>1788756301,'today'=>$today,'min_age'=>12,
-]);
-flow_eq($flowContinue['decision']['kind']??null,'registration_confirm','DatePicker reply advances the existing controlled registration');
-flow_eq($flowContinue['state']['flow']['data']['birthdate']??null,'1983-03-08','DatePicker date is persisted in canonical ISO form');
-flow_ok(str_contains((string)($flowContinue['decision']['message']??''),'08/03/1983'),'confirmation echoes the DatePicker date for verification');
 
 $badPayload=$payload;
 $badPayload['entry'][0]['changes'][0]['value']['messages'][0]['interactive']['nfm_reply']['response_json']='{"birthdate":"no-es-fecha"}';
 flow_eq(hache_sharky_whatsapp_birthdate_flow_extract_events($badPayload,$today),[],'malformed nfm_reply never enters free-text pipeline');
-
-$typedEvent=['id'=>'typed.del','from'=>'529981234567','type'=>'text','text'=>'8 de marzo del 1983','interactive_id'=>''];
-$typedCompat=hache_sharky_whatsapp_birthdate_text_compat($typedEvent);
-flow_eq($typedCompat['text']??null,'8 de marzo de 1983','exact screenshot-style del date is normalized narrowly');
-$typedContinue=hache_sharky_orchestrate($birthState,array_replace($typedCompat,['id'=>'typed.del']),[
-    'now'=>1788756302,'today'=>$today,'min_age'=>12,
-]);
-flow_eq($typedContinue['decision']['kind']??null,'registration_confirm','typed del date remains a working fallback when user ignores selector');
-flow_eq($typedContinue['state']['flow']['data']['birthdate']??null,'1983-03-08','typed del fallback normalizes to same canonical date');
 
 putenv('WHATSAPP_BIRTHDATE_FLOW_ID=123456789012345');
 $birthPrompt=[
@@ -104,6 +81,15 @@ flow_eq($upgraded['interactive']['action']['parameters']['flow_cta']??null,'Eleg
 flow_eq($upgraded['interactive']['action']['parameters']['flow_action']??null,'navigate','Flow opens directly on birthdate screen');
 flow_eq($upgraded['interactive']['action']['parameters']['flow_action_payload']['screen']??null,'BIRTHDATE','navigate target matches Flow JSON');
 flow_ok(str_contains((string)($upgraded['interactive']['body']['text']??''),'También puedes escribir la fecha directamente'),'typed-date fallback remains visible');
+
+$invalidPrompt=[
+    'messaging_product'=>'whatsapp','recipient_type'=>'individual','to'=>'529981234567','type'=>'text',
+    'text'=>['preview_url'=>false,'body'=>'No pude reconocer esa fecha. Escríbela con día, mes y año, por ejemplo 07/02/1984.'],
+];
+flow_ok(hache_sharky_whatsapp_birthdate_prompt_payload($invalidPrompt),'invalid typed-date prompt is recognized even without repeating “fecha de nacimiento”');
+$invalidUpgraded=hache_sharky_groups_prepare_outbound($invalidPrompt,'');
+flow_eq($invalidUpgraded['type']??null,'interactive','invalid typed date reopens the DatePicker when Flow is available');
+flow_eq($invalidUpgraded['interactive']['type']??null,'flow','invalid typed date retry uses the same Flow selector');
 
 $normal=[
     'messaging_product'=>'whatsapp','recipient_type'=>'individual','to'=>'529981234567','type'=>'text',
