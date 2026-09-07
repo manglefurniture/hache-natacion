@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
+require_once __DIR__.'/../config/intensivos-estado.php';
 $config=require __DIR__.'/../config/database.php';
 
 function hache_intensive_payment_courses_out(array $data,int $status=200): never
@@ -55,10 +56,11 @@ try{
     );
     $st->execute([':a'=>$studentId,':s'=>$siteId]);
     $courses=$st->fetchAll(PDO::FETCH_ASSOC);
+    $today=intensivo_hoy_operativo()->format('Y-m-d');
 
     foreach($courses as &$course){
         $course['pagado']=(int)$course['pagado']===1;
-        $course['historico']=(string)$course['fecha_fin']<date('Y-m-d');
+        $course['historico']=(string)$course['fecha_fin']<$today;
     }
     unset($course);
 
