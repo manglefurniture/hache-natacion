@@ -9,8 +9,9 @@ declare(strict_types=1);
  * call OpenAI, touch payments or execute business actions. It receives the
  * durable before/after state plus explicit signals from the live pipeline and
  * returns the next-best-action that SHOULD win according to one precedence
- * table. During shadow mode Quality compares this recommendation against the
- * existing production behaviour before the Brain is allowed to route live.
+ * table. During shadow mode the live observer and Quality compare this
+ * recommendation against existing production behaviour before the Brain is
+ * allowed to route live.
  */
 
 const HACHE_SHARKY_BRAIN_VERSION = '3.0-shadow-v1';
@@ -125,8 +126,12 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
     if (($signals['family_age_unavailable'] ?? false) === true) {
         return $select('close_age_scope', 'baby_or_maternal_swim_out_of_scope', 'deterministic');
     }
-    if (($signals['pause_requested'] ?? false) === true) {
-        return $select('pause_commercial_intent', 'user_requested_pause', 'deterministic');
+    // Recognition of the words/button "Ahora no" is intentionally not enough.
+    // The caller must supply the exact live eligibility decision (active flow or
+    // commercially-ready prospect), otherwise stale/first-contact pauses remain
+    // ordinary conversation just as they do in production today.
+    if (($signals['pause_eligible'] ?? false) === true) {
+        return $select('pause_commercial_intent', 'user_requested_eligible_pause', 'deterministic');
     }
     if (($signals['policy_handoff_required'] ?? false) === true) {
         return $select('handoff_policy_exception', 'business_policy_requires_human', 'human');
