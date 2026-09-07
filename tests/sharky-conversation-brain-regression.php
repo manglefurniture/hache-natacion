@@ -36,9 +36,11 @@ function brain_state(string $identity='unknown',?string $program=null,?string $v
     return $state;
 }
 
-brain_eq(HACHE_SHARKY_BRAIN_VERSION,'3.0-shadow-v1','Brain version must be explicit and stable for shadow comparisons.');
+brain_eq(HACHE_SHARKY_BRAIN_VERSION,'3.0-shadow-v2','Brain version must identify the protected-precedence policy.');
+brain_eq(HACHE_SHARKY_BRAIN_DIAG_COHORT,'v2','Readiness must use the post-fix v2 diagnostic cohort.');
 brain_eq(hache_sharky_brain_precedence()[0],'wait_for_human','Human takeover must be the highest-priority Brain policy.');
 brain_eq(hache_sharky_brain_precedence()[1],'handoff_known_student','Known-student policy must win before commercial automation.');
+brain_ok(array_search('preserve_deterministic_decision',hache_sharky_brain_precedence(),true)<array_search('answer_side_question',hache_sharky_brain_precedence(),true),'Protected deterministic decisions must outrank side-question heuristics.');
 
 $ready=brain_state('prospect','intensive','PALAPAS');
 $snapshot=hache_sharky_brain_snapshot($ready);
@@ -80,8 +82,6 @@ $decision=hache_sharky_brain_next_best_action($ready,$ready,['text'=>'Ahora no']
 ]);
 brain_eq($decision['action'],'pause_commercial_intent','An eligible supported pause must be deterministic and must not open a new commercial action.');
 
-// Raw recognition alone is not enough: first-contact/stale pause requests do not
-// satisfy the live pause guard and therefore must keep normal identity routing.
 $decision=hache_sharky_brain_next_best_action($unknown,$unknown,['text'=>'Ahora no'],[
     'decision_kind'=>'conversation','pause_requested'=>true,'pause_eligible'=>false,
 ]);
@@ -90,8 +90,13 @@ brain_eq($decision['action'],'ask_identity','Ineligible pause recognition must n
 $decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'¿Cuánto cuesta?'],[
     'side_question'=>true,'decision_kind'=>'conversation',
 ]);
-brain_eq($decision['action'],'answer_side_question','A side question must temporarily outrank the active controlled flow.');
+brain_eq($decision['action'],'answer_side_question','A conversational side question must temporarily outrank the active controlled flow.');
 brain_eq($decision['route'],'conversation','Side questions are answered conversationally while preserving state.');
+
+$decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'¿Cuánto cuesta?'],[
+    'side_question'=>true,'decision_kind'=>'registration_confirm',
+]);
+brain_eq($decision['action'],'preserve_deterministic_decision','A side-question heuristic must never override an already-selected protected decision.');
 
 $decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'Sí'],['decision_kind'=>'conversation']);
 brain_eq($decision['action'],'continue_controlled_flow','An active controlled flow must remain authoritative.');
@@ -125,7 +130,6 @@ brain_eq($decision['action'],'answer_user','A normal informational question with
 brain_ok(hache_sharky_brain_shadow_matches('answer_user',$decision),'Shadow comparator must report exact policy matches.');
 brain_ok(!hache_sharky_brain_shadow_matches('show_commercial_menu',$decision),'Shadow comparator must expose policy divergences.');
 
-// Protected decisions that return before the adapter must also be comparable.
 $earlyHandoff=hache_sharky_brain_shadow_evaluate($ready,$ready,['text'=>'Excepción'],[
     'decision'=>['kind'=>'early_policy_handoff','action'=>['type'=>'human_takeover']],
 ]);
@@ -139,43 +143,60 @@ $silentTakeover=hache_sharky_brain_shadow_evaluate($ready,$ready,['text'=>'Hola'
 brain_eq($silentTakeover['live_action'],'wait_for_human','Active manual takeover must be represented in shadow diagnostics.');
 brain_eq($silentTakeover['brain']['action']??null,'wait_for_human','Brain must remain silent while a human owns the chat.');
 
-// Diagnostic keys are bounded enumerations, never user text or state values.
-brain_eq(hache_sharky_brain_diag_metric_key('answer_user','continue_discovery'),'brain_mm_13_12','Mismatch metric key must use stable numeric action codes.');
-brain_eq(hache_sharky_brain_diag_metric_key('anything-unexpected','answer_user'),'brain_mm_00_13','Unknown actions must collapse into the protected unknown bucket.');
+$realSideQuestion=hache_sharky_brain_shadow_evaluate($flow,$flow,['text'=>'¿Cuánto cuesta?'],[
+    'decision'=>['kind'=>'side_question'],
+]);
+brain_eq($realSideQuestion['live_action'],'answer_side_question','Live side-question decisions must retain their explicit diagnostic action.');
+brain_eq($realSideQuestion['brain']['action']??null,'answer_side_question','Confirmed live side questions must remain conversational after the protected-precedence fix.');
+brain_ok(($realSideQuestion['match']??false)===true,'Protected precedence must not regress legitimate side-question handling.');
+
+brain_eq(hache_sharky_brain_diag_observed_metric_key(),'brain_diag_v2_observed','The corrected cohort must use a fresh observation counter.');
+brain_eq(hache_sharky_brain_diag_metric_key('answer_user','continue_discovery'),'brain_v2_mm_13_12','Mismatch metric key must be versioned and use stable numeric action codes.');
+brain_eq(hache_sharky_brain_diag_metric_key('anything-unexpected','answer_user'),'brain_v2_mm_00_13','Unknown actions must collapse into the protected unknown bucket.');
 
 $candidate=hache_sharky_brain_diag_report([['date'=>'2026-09-07','counters'=>[
-    'brain_diag_observed'=>60,
-    'brain_mm_13_12'=>4,
+    'brain_diag_v2_observed'=>60,
+    'brain_v2_mm_13_12'=>4,
 ]]]);
-brain_eq($candidate['observed'],60,'Diagnostic report must count the post-diagnostic cohort only.');
-brain_eq($candidate['mismatches'],4,'Diagnostic report must aggregate categorized mismatches.');
+brain_eq($candidate['cohort'],'v2','Diagnostic report must expose the active corrected cohort.');
+brain_eq($candidate['observed'],60,'Diagnostic report must count only the corrected v2 cohort.');
+brain_eq($candidate['mismatches'],4,'Diagnostic report must aggregate categorized v2 mismatches.');
 brain_eq($candidate['matches'],56,'Diagnostic report must derive matches from observed minus mismatches.');
 brain_eq($candidate['agreement_pct'],93.3,'Diagnostic report must calculate agreement percentage.');
 brain_eq($candidate['blocking_mismatches'],0,'Low-risk discovery mismatch must not be marked protected.');
 brain_eq($candidate['status'],'candidate','A mature clean cohort may become a Phase 2B candidate without auto-activating routing.');
 brain_ok($candidate['routing_live']===false,'Diagnostic readiness must never activate live Brain routing.');
 
-$blocking=hache_sharky_brain_diag_report([['counters'=>[
-    'brain_diag_observed'=>60,
-    'brain_mm_07_13'=>1,
+$legacyIgnored=hache_sharky_brain_diag_report([['counters'=>[
+    'brain_diag_observed'=>236,
+    'brain_mm_08_06'=>1,
+    'brain_diag_v2_observed'=>12,
 ]]]);
-brain_eq($blocking['blocking_mismatches'],1,'A controlled-flow divergence must block live candidacy.');
-brain_eq($blocking['status'],'review_blocking','Protected divergences must require review.');
+brain_eq($legacyIgnored['observed'],12,'Reviewed v1 observations must not contaminate the corrected v2 readiness cohort.');
+brain_eq($legacyIgnored['blocking_mismatches'],0,'Reviewed v1 protected mismatch must not remain in the v2 activation gate.');
+brain_eq($legacyIgnored['status'],'collecting','A fresh corrected cohort must collect its own evidence.');
 
-$collecting=hache_sharky_brain_diag_report([['counters'=>['brain_diag_observed'=>12]]]);
-brain_eq($collecting['status'],'collecting','Small cohorts must remain in evidence collection.');
-brain_eq($collecting['remaining_observations'],38,'Readiness must show how many observations remain.');
+$blocking=hache_sharky_brain_diag_report([['counters'=>[
+    'brain_diag_v2_observed'=>60,
+    'brain_v2_mm_07_13'=>1,
+]]]);
+brain_eq($blocking['blocking_mismatches'],1,'A new controlled-flow divergence must block live candidacy.');
+brain_eq($blocking['status'],'review_blocking','Protected divergences in v2 must require review.');
 
-$errored=hache_sharky_brain_diag_report([['counters'=>['brain_diag_observed'=>60,'brain_diag_error'=>1]]]);
-brain_eq($errored['status'],'review_errors','Any observer error must block readiness.');
+$collecting=hache_sharky_brain_diag_report([['counters'=>['brain_diag_v2_observed'=>12]]]);
+brain_eq($collecting['status'],'collecting','Small corrected cohorts must remain in evidence collection.');
+brain_eq($collecting['remaining_observations'],38,'Readiness must show how many corrected observations remain.');
+
+$errored=hache_sharky_brain_diag_report([['counters'=>['brain_diag_v2_observed'=>60,'brain_diag_error'=>1]]]);
+brain_eq($errored['status'],'review_errors','Any observer/pre-state error must still block v2 readiness.');
 
 $shadowSource=(string)file_get_contents(__DIR__.'/../config/sharky-brain-shadow-runtime.php');
-brain_ok(str_contains($shadowSource,"hache_sharky_metric_increment('brain_diag_observed')"),'Live shadow observer must start the diagnostic observation cohort.');
-brain_ok(str_contains($shadowSource,'hache_sharky_brain_diag_metric_key($live,$brainAction)'),'Live mismatches must be classified by bounded action pair.');
-brain_ok(!str_contains($shadowSource,"hache_sharky_metric_increment('brain_diag_match')"),'Diagnostic matches are derived, avoiding redundant counters.');
+brain_ok(str_contains($shadowSource,'hache_sharky_brain_diag_observed_metric_key()'),'Live shadow observer must write to the corrected diagnostic cohort.');
+brain_ok(str_contains($shadowSource,'hache_sharky_brain_diag_metric_key($live,$brainAction)'),'Live mismatches must be classified by bounded v2 action pair.');
+brain_ok(str_contains($shadowSource,"['commercial_next_action','conversation_identity_prompt','side_question']"),'Confirmed side-question decisions must be normalized as conversational policy.');
 
 $workerSource=(string)file_get_contents(__DIR__.'/../config/sharky-lab-worker.php');
-brain_ok(preg_match("/brain_shadow_error'\);\s*hache_sharky_metric_increment\('brain_diag_error'\);\s*error_log\('\[sharky-brain-shadow\] unable to load pre-turn state'/s",$workerSource)===1,'Pre-turn state load failures must block diagnostic readiness too.');
+brain_ok(preg_match("/brain_shadow_error'\);\s*hache_sharky_metric_increment\('brain_diag_error'\);\s*error_log\('\[sharky-brain-shadow\] unable to load pre-turn state'/s",$workerSource)===1,'Pre-turn state load failures must keep blocking diagnostic readiness across cohort versions.');
 brain_ok(str_contains($workerSource,"'kind'=>'early_policy_handoff'")&&str_contains($workerSource,"'kind'=>'silent_human_takeover'"),'Protected early-return branches must feed the read-only shadow observer.');
 
 fwrite(STDOUT,"SHARKY_CONVERSATION_BRAIN_OK\n");
