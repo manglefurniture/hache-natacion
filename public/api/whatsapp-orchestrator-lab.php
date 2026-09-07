@@ -78,12 +78,6 @@ foreach($events as $event){
 
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);
 
-// Flow creation/list/upload is deliberately after Meta's ACK. The birthdate
-// provisioner already has its own backoff. Commerce adds per-key 15-minute
-// backoff and allows at most one unresolved Graph provisioning attempt per webhook.
-hache_sharky_whatsapp_birthdate_flow_prime($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
-hache_sharky_commerce_flows_prime_throttled($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
-
 $business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
 
 // A manual echo wins over every automatic send in the same webhook. Persist/process
@@ -105,4 +99,10 @@ foreach($processing as $event){
     hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
 }
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
+
+// Resource management is deliberately last. The current turn has already been
+// processed and its durable outbox dispatched, so a slow/unavailable Graph API
+// can only affect future Flow UX, never starve the message that triggered it.
+hache_sharky_whatsapp_birthdate_flow_prime($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
+hache_sharky_commerce_flows_prime_throttled($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
 exit;
