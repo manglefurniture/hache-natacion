@@ -27,11 +27,7 @@ Transferencia y tarjeta pueden solicitar una foto del comprobante mediante `Phot
 
 Sharky reutiliza la configuración activa de la aplicación Tienda Natación en el mismo VPS. No se copian Access Tokens ni Webhook Secrets al repositorio o al estado conversacional.
 
-Ruta por defecto de la aplicación de tienda:
-
-`/var/www/tienda.hnatacion.com/app`
-
-Puede sobreescribirse con `HACHE_TIENDA_ROOT`.
+`HACHE_TIENDA_ROOT` es un override opcional. Si queda vacío, Sharky busca ubicaciones de despliegue conocidas y solo acepta como raíz una carpeta que tenga simultáneamente `.env`, `src/PaymentCredentialCipher.php` y `src/PaymentGatewayConfig.php`. Si no encuentra una instalación válida, la opción de tarjeta falla de forma segura y conserva SPEI/efectivo.
 
 La tarjeta usa Preferences API con `external_reference` opaco de Sharky. El total aplica el recargo configurado antes de crear la preferencia.
 
@@ -50,7 +46,9 @@ El mecanismo reutiliza el outbox/recordatorio cifrado existente:
 
 ## Provisioning de WhatsApp Flows
 
-Los Flows son estáticos y se aprovisionan de forma idempotente después de responder `200` al webhook. Pueden fijarse IDs ya publicados mediante:
+Los Flows son estáticos y se aprovisionan de forma idempotente después de responder `200` al webhook y después de procesar/despachar el turno actual. Los intentos fallidos quedan limitados por un backoff de 15 minutos y cada webhook permite como máximo un intento de red para un Flow todavía no resuelto.
+
+Pueden fijarse IDs ya publicados mediante:
 
 - `WHATSAPP_ENROLLMENT_FLOW_ID`
 - `WHATSAPP_PAYMENT_METHOD_FLOW_ID`
