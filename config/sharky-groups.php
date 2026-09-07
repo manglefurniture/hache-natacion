@@ -161,6 +161,10 @@ function hache_sharky_groups_finalize_outbound(array $payload): array
     unset($payload['_sharky_group'],$payload['_sharky_group_target']);
     if(!$isGroup){
         $payload=hache_sharky_commerce_upgrade_direct_payload($payload);
+        // The registration-success upgrade is intentionally late, after durable
+        // state commit. Apply the same binding/reminder preparation here so the
+        // first payment selector cannot escape without its student/course fence.
+        $payload=hache_sharky_commerce_prepare_payload($payload);
         return hache_sharky_commerce_finalize_payload($payload);
     }
     // WhatsApp Flows are never emitted into group chats.
