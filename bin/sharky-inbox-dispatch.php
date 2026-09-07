@@ -5,11 +5,22 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/sharky-runtime.php';
 require_once __DIR__.'/../config/sharky-inbox.php';
 require_once __DIR__.'/../config/sharky-lab-worker.php';
+require_once __DIR__.'/../config/sharky-member-routing.php';
+require_once __DIR__.'/../config/sharky-takeover-maintenance.php';
 require_once __DIR__.'/../config/sharky-groups.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
 try{
+    // The existing inbox timer already runs every minute. Reuse that durable
+    // cadence for the midnight takeover reset instead of introducing a second
+    // systemd timer that could drift out of deployment/configuration parity.
+    $takeoverMaintenance=hache_sharky_takeover_midnight_tick();
+    if(($takeoverMaintenance['ok']??false)!==true)throw new RuntimeException('Takeover midnight maintenance failed');
+    if((int)($takeoverMaintenance['released']??0)>0){
+        fwrite(STDOUT,json_encode(['takeover_midnight'=>$takeoverMaintenance],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
+    }
+
     $enabled=static fn():bool=>hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1';
     if(!$enabled()){
         fwrite(STDOUT,"{\"disabled\":true,\"worker\":\"inbox\"}\n");exit(0);
@@ -29,12 +40,15 @@ try{
             hache_sharky_metric_increment('messages_skipped_group');
             return hache_sharky_orchestrator_mark_processed($pdo,$messageId);
         }
-        // Recovery must preserve the same semantic lane used by the realtime
-        // webhook. Otherwise an encrypted nfm_reply could be replayed as an empty
-        // ordinary message and marked processed without its commerce action.
+        // Recovery must preserve the same semantic lanes used by the realtime
+        // webhook. Otherwise a registered-student turn can be replayed through
+        // the legacy known-student handoff shortcut minutes after member-ops
+        // already completed it.
         if(hache_sharky_commerce_event_candidate($event)){
             return hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
         }
+        $member=hache_sharky_member_route_event($pdo,$event,$business);
+        if($member!==null)return $member;
         return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$threshold);
     };
     // Recovery is intentionally bounded: realtime webhook processing does the
