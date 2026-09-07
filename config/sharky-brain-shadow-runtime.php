@@ -26,16 +26,62 @@ function hache_sharky_brain_shadow_live_action(array $beforeState,array $afterSt
     if(($after['flow_name']??null)!==null)return 'continue_controlled_flow';
     if($kind==='commercial_next_action')return 'show_commercial_menu';
     if($kind==='conversation_identity_prompt')return 'ask_identity';
-    if($kind==='conversation'){
-        if(($after['identity_kind']??'unknown')==='prospect'&&($after['commercial_ready']??false)!==true){
-            // Live can answer an informational turn while discovery is incomplete;
-            // keep that distinction visible as a useful shadow mismatch instead of
-            // pretending the live response advanced qualification.
-            return 'answer_user';
-        }
-        return 'answer_user';
-    }
+    if($kind==='conversation')return 'answer_user';
     return 'preserve_deterministic_decision';
+}
+
+/**
+ * Pure comparison used by both production observation and regression tests.
+ * No metrics, logs, persistence, OpenAI calls or outbound side effects occur.
+ *
+ * @return array{live_action:string,brain:array<string,mixed>,match:bool,signals:array<string,mixed>,decision_kind:string}
+ */
+function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState,array $event,array $result,bool $directChat=true): array
+{
+    $decision=is_array($result['decision']??null)?$result['decision']:[];
+    $decisionKind=trim((string)($decision['kind']??''));
+    $decisionAction=is_array($decision['action']??null)?$decision['action']:[];
+    $knownStudent=in_array($decisionKind,['student_human_takeover','existing_student_intensive_handoff'],true);
+    $rawPause=function_exists('hache_sharky_whatsapp_now_not_request')
+        &&hache_sharky_whatsapp_now_not_request($event);
+    $eligiblePause=$rawPause
+        &&function_exists('hache_sharky_whatsapp_pause_eligible')
+        &&hache_sharky_whatsapp_pause_eligible($beforeState,$event);
+    $sideQuestion=$decisionKind==='side_question'
+        ||(function_exists('hache_sharky_whatsapp_is_side_question')&&hache_sharky_whatsapp_is_side_question($beforeState,$event));
+
+    // Adapter-owned presentation decisions are compared as high-level Brain
+    // policy rather than being hidden behind preserve_deterministic_decision.
+    $brainDecisionKind=in_array($decisionKind,['commercial_next_action','conversation_identity_prompt'],true)
+        ?'conversation':($decisionKind!==''?$decisionKind:'conversation');
+
+    $signals=[
+        'decision_kind'=>$brainDecisionKind,
+        'direct_chat'=>$directChat,
+        'human_takeover_active'=>$decisionKind==='silent_human_takeover',
+        'known_student'=>$knownStudent,
+        'family_age_unavailable'=>$decisionKind==='family_age_scope_unavailable',
+        'pause_requested'=>$rawPause,
+        // P2 guard: this is the exact live eligibility predicate, not merely
+        // recognition of the words/button title "Ahora no".
+        'pause_eligible'=>$eligiblePause,
+        'policy_handoff_required'=>(($decisionAction['type']??'')==='human_takeover'&&!$knownStudent),
+        'side_question'=>$sideQuestion,
+        'low_information'=>function_exists('hache_sharky_whatsapp_low_information_reengagement')
+            &&hache_sharky_whatsapp_low_information_reengagement((string)($event['text']??'')),
+        'turn_discovery_only'=>function_exists('hache_sharky_whatsapp_turn_is_discovery_only')
+            &&hache_sharky_whatsapp_turn_is_discovery_only((string)($event['text']??'')),
+    ];
+
+    $brain=hache_sharky_brain_next_best_action($beforeState,$afterState,$event,$signals);
+    $live=hache_sharky_brain_shadow_live_action($beforeState,$afterState,$result);
+    return [
+        'live_action'=>$live,
+        'brain'=>$brain,
+        'match'=>hache_sharky_brain_shadow_matches($live,$brain),
+        'signals'=>$signals,
+        'decision_kind'=>$decisionKind,
+    ];
 }
 
 /**
@@ -48,44 +94,11 @@ function hache_sharky_brain_shadow_live_action(array $beforeState,array $afterSt
 function hache_sharky_brain_shadow_observe(array $beforeState,array $afterState,array $event,array $result,bool $directChat=true): void
 {
     try{
-        $decision=is_array($result['decision']??null)?$result['decision']:[];
-        $decisionKind=trim((string)($decision['kind']??''));
-        $decisionAction=is_array($decision['action']??null)?$decision['action']:[];
-        $knownStudent=in_array($decisionKind,['student_human_takeover','existing_student_intensive_handoff'],true);
-        $rawPause=function_exists('hache_sharky_whatsapp_now_not_request')
-            &&hache_sharky_whatsapp_now_not_request($event);
-        $eligiblePause=$rawPause
-            &&function_exists('hache_sharky_whatsapp_pause_eligible')
-            &&hache_sharky_whatsapp_pause_eligible($beforeState,$event);
-        $sideQuestion=$decisionKind==='side_question'
-            ||(function_exists('hache_sharky_whatsapp_is_side_question')&&hache_sharky_whatsapp_is_side_question($beforeState,$event));
-
-        // Adapter-owned presentation decisions are compared as high-level Brain
-        // policy rather than being hidden behind preserve_deterministic_decision.
-        $brainDecisionKind=in_array($decisionKind,['commercial_next_action','conversation_identity_prompt'],true)
-            ?'conversation':($decisionKind!==''?$decisionKind:'conversation');
-
-        $signals=[
-            'decision_kind'=>$brainDecisionKind,
-            'direct_chat'=>$directChat,
-            'human_takeover_active'=>$decisionKind==='silent_human_takeover',
-            'known_student'=>$knownStudent,
-            'family_age_unavailable'=>$decisionKind==='family_age_scope_unavailable',
-            'pause_requested'=>$rawPause,
-            // P2 guard: this is the exact live eligibility predicate, not merely
-            // recognition of the words/button title "Ahora no".
-            'pause_eligible'=>$eligiblePause,
-            'policy_handoff_required'=>(($decisionAction['type']??'')==='human_takeover'&&!$knownStudent),
-            'side_question'=>$sideQuestion,
-            'low_information'=>function_exists('hache_sharky_whatsapp_low_information_reengagement')
-                &&hache_sharky_whatsapp_low_information_reengagement((string)($event['text']??'')),
-            'turn_discovery_only'=>function_exists('hache_sharky_whatsapp_turn_is_discovery_only')
-                &&hache_sharky_whatsapp_turn_is_discovery_only((string)($event['text']??'')),
-        ];
-
-        $brain=hache_sharky_brain_next_best_action($beforeState,$afterState,$event,$signals);
-        $live=hache_sharky_brain_shadow_live_action($beforeState,$afterState,$result);
-        $match=hache_sharky_brain_shadow_matches($live,$brain);
+        $evaluation=hache_sharky_brain_shadow_evaluate($beforeState,$afterState,$event,$result,$directChat);
+        $brain=is_array($evaluation['brain']??null)?$evaluation['brain']:[];
+        $live=(string)($evaluation['live_action']??'unknown');
+        $match=($evaluation['match']??false)===true;
+        $decisionKind=(string)($evaluation['decision_kind']??'');
 
         if(function_exists('hache_sharky_metric_increment')){
             hache_sharky_metric_increment('brain_shadow_observed');
