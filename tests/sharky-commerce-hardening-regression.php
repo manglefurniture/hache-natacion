@@ -6,6 +6,7 @@ putenv('SHARKY_CONTACT_HASH_KEY='.str_repeat('k',64));
 
 require_once __DIR__.'/../config/sharky-whatsapp-adapter.php';
 require_once __DIR__.'/../config/sharky-commerce-runtime.php';
+require_once __DIR__.'/../config/sharky-groups.php';
 
 function commerce_hard_expect(bool $ok,string $message): void
 {
@@ -85,6 +86,39 @@ commerce_hard_expect(!hache_sharky_commerce_retry_allowed('enrollment',$now+899)
 commerce_hard_expect(hache_sharky_commerce_retry_allowed('enrollment',$now+901),'Commerce Flow key must become eligible after throttle window.');
 hache_sharky_commerce_clear_retry('enrollment');
 
+// Only the native intensive course/date list may be upgraded to the enrollment Flow.
+$courseList=[
+    'messaging_product'=>'whatsapp','recipient_type'=>'individual','to'=>'529981473867','type'=>'interactive',
+    'interactive'=>['type'=>'list','body'=>['text'=>'Elige fecha'],'action'=>['sections'=>[['rows'=>[
+        ['id'=>'course:course-pal-1','title'=>'14/09/2026'],
+        ['id'=>'course:course-pal-2','title'=>'21/09/2026'],
+    ]]]]],
+];
+commerce_hard_expect(hache_sharky_groups_direct_commerce_upgrade_allowed($courseList),'Native course:* list must remain eligible for enrollment Flow upgrade.');
+$sideList=$courseList;
+$sideList['interactive']['action']['sections'][0]['rows'][0]['id']='sede:PALAPAS';
+commerce_hard_expect(!hache_sharky_groups_direct_commerce_upgrade_allowed($sideList),'A side-question/menu list must never be converted into the enrollment Flow.');
+$mixedList=$courseList;
+$mixedList['interactive']['action']['sections'][0]['rows'][]=['id'=>'menu:prices','title'=>'Precios'];
+commerce_hard_expect(!hache_sharky_groups_direct_commerce_upgrade_allowed($mixedList),'Mixed lists must fail closed instead of partially masquerading as a course list.');
+$emptyList=$courseList;
+$emptyList['interactive']['action']['sections'][0]['rows']=[];
+commerce_hard_expect(!hache_sharky_groups_direct_commerce_upgrade_allowed($emptyList),'Empty lists must not trigger enrollment Flow upgrade.');
+
+// Tienda Natación root detection is structural, not a blind absolute-path assumption.
+$tmpRoot=sys_get_temp_dir().'/hache-sharky-store-root-'.bin2hex(random_bytes(4));
+@mkdir($tmpRoot.'/src',0700,true);
+file_put_contents($tmpRoot.'/.env',"DB_HOST=127.0.0.1\nDB_DATABASE=hache_tienda\n");
+file_put_contents($tmpRoot.'/src/PaymentCredentialCipher.php',"<?php\n");
+file_put_contents($tmpRoot.'/src/PaymentGatewayConfig.php',"<?php\n");
+commerce_hard_expect(hache_sharky_mp_store_root_valid($tmpRoot),'A store root with .env plus both gateway classes must be accepted.');
+@unlink($tmpRoot.'/src/PaymentGatewayConfig.php');
+commerce_hard_expect(!hache_sharky_mp_store_root_valid($tmpRoot),'A partial Tienda checkout tree must be rejected.');
+@unlink($tmpRoot.'/src/PaymentCredentialCipher.php');
+@unlink($tmpRoot.'/.env');
+@rmdir($tmpRoot.'/src');
+@rmdir($tmpRoot);
+
 $runtime=file_get_contents(__DIR__.'/../config/sharky-commerce-runtime.php')?:'';
 commerce_hard_expect(str_contains($runtime,'$networkAttempted = false')&&str_contains($runtime,'$networkAttempted = true'),'Post-ACK provisioning must bound Graph work to one unresolved key per webhook.');
 commerce_hard_expect(str_contains($runtime,'$mtime <= $now - 900'),'Commerce provisioning backoff must remain 15 minutes.');
@@ -104,6 +138,11 @@ $upgradePos=strpos($groups,'hache_sharky_commerce_upgrade_direct_payload($payloa
 $preparePos=strpos($groups,'hache_sharky_commerce_prepare_payload($payload)',$upgradePos===false?0:$upgradePos);
 $finalizePos=strpos($groups,'hache_sharky_commerce_finalize_payload($payload)',$preparePos===false?0:$preparePos);
 commerce_hard_expect($finalStart!==false&&$upgradePos!==false&&$preparePos!==false&&$finalizePos!==false&&$finalStart<$upgradePos&&$upgradePos<$preparePos&&$preparePos<$finalizePos,'Late registration-success upgrade must bind the first payment selector before its final network cleanup.');
+commerce_hard_expect(str_contains($groups,"str_starts_with(\$id,'course:')"),'Enrollment upgrade gate must remain scoped to native course:* list rows.');
+
+$mpRuntime=file_get_contents(__DIR__.'/../config/sharky-mercadopago.php')?:'';
+commerce_hard_expect(str_contains($mpRuntime,'function hache_sharky_mp_store_root_valid'),'Mercado Pago bridge must validate a Tienda root structurally.');
+commerce_hard_expect(str_contains($mpRuntime,"'/var/www/tienda.hnatacion.com'")&&str_contains($mpRuntime,"'/var/www/tienda-natacion'"),'Tienda autodetection must support domain-root and repo-style production layouts.');
 
 $paymentReminder=file_get_contents(__DIR__.'/../config/sharky-payment-reminder.php')?:'';
 $mpPayloadPos=strpos($paymentReminder,'hache_sharky_mp_followup_payload');
