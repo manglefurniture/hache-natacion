@@ -6,6 +6,7 @@ require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-mercadopago.php';
 
 const HACHE_SHARKY_MEMBER_EVIDENCE_KIND = 'member_absence_evidence';
+const HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND = 'member_payment_proof';
 const HACHE_SHARKY_MEMBER_TIMEZONE = 'America/Cancun';
 
 function hache_sharky_member_phone(string $contact): ?string
@@ -80,8 +81,6 @@ function hache_sharky_member_intent(string $text,string $interactiveId=''): ?str
 
     $t=hache_sharky_member_normalize($text);if($t==='')return null;
     if(preg_match('/^(?:hola|buenos dias|buenas tardes|buenas noches|hey|que tal|holi)[!. ]*$/u',$t)===1)return 'greeting';
-    // A professor saying “cancela mi clase” is an operation, not a question
-    // about whether the class is cancelled. This must win over class_today.
     if(preg_match('/\b(?:cancelar|cancela|cancelo|suspender|suspende)\b.{0,35}\b(?:mi clase|clase|turno|sesion)\b/u',$t)===1)return 'teacher_cancel';
     if(preg_match('/\b(?:hay|tengo|tenemos|habra|se dara|se mantiene|cancelaron|cancelada|cancelo|suspendieron)\b.{0,45}\b(?:clase|clases|sesion|turno)\b/u',$t)===1
         ||preg_match('/\b(?:clase|clases|sesion|turno)\b.{0,45}\b(?:hoy|cancelada|cancelaron|suspendida)\b/u',$t)===1)return 'class_today';
@@ -127,9 +126,6 @@ function hache_sharky_member_student_context(PDO $pdo,string $contact,?string $t
     $intensiveSql="SELECT cia.curso_intensivo_id course_id,cia.horario_id,cia.reposiciones_justificadas,cia.reposiciones_cancelacion,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,h.hora_inicio,h.hora_fin FROM curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id JOIN horarios h ON h.id=cia.horario_id ";
     $st=$pdo->prepare($intensiveSql."WHERE cia.alumno_id=:a AND :hoy BETWEEN ci.fecha_inicio AND ci.fecha_fin AND ci.estado NOT IN ('CANCELADO','FINALIZADO','TERMINADO') ORDER BY ci.fecha_inicio DESC LIMIT 1");
     $st->execute([':a'=>$studentId,':hoy'=>$today]);$intensive=$st->fetch(PDO::FETCH_ASSOC)?:null;
-    // An intensive registration exists before its first class. If the student has
-    // no regular plan, keep treating that person as an intensive student so they
-    // can check payment, start date and course context before day one.
     if(!$intensive&&empty($student['plan_actual_id'])){
         $st=$pdo->prepare($intensiveSql."WHERE cia.alumno_id=:a AND ci.fecha_inicio>:hoy AND ci.estado NOT IN ('CANCELADO','FINALIZADO','TERMINADO') ORDER BY ci.fecha_inicio ASC LIMIT 1");
         $st->execute([':a'=>$studentId,':hoy'=>$today]);$intensive=$st->fetch(PDO::FETCH_ASSOC)?:null;
@@ -157,35 +153,47 @@ function hache_sharky_member_student_context(PDO $pdo,string $contact,?string $t
     return ['found'=>true,'identity'=>$identity,'student'=>$student,'program'=>$program,'intensive'=>$intensive,'schedule_id'=>$scheduleId,'session_today'=>$session,'payment'=>$payment,'repos_available'=>$repos,'today'=>$today];
 }
 
+function hache_sharky_member_first_name(array $ctx): string
+{
+    $name=trim((string)($ctx['identity']['name']??''));
+    return $name!==''?(preg_split('/\s+/u',$name)[0]??$name):'';
+}
+
+function hache_sharky_member_date_label(string $date): string
+{
+    $d=DateTimeImmutable::createFromFormat('!Y-m-d',$date);if(!$d)return $date;
+    $months=[1=>'enero',2=>'febrero',3=>'marzo',4=>'abril',5=>'mayo',6=>'junio',7=>'julio',8=>'agosto',9=>'septiembre',10=>'octubre',11=>'noviembre',12=>'diciembre'];
+    return (int)$d->format('j').' de '.($months[(int)$d->format('n')]??$d->format('m'));
+}
+
 function hache_sharky_member_student_greeting(array $ctx): string
 {
-    $name=trim((string)($ctx['identity']['name']??''));$first=$name!==''?(preg_split('/\s+/u',$name)[0]??$name):'tú';
+    $first=hache_sharky_member_first_name($ctx);if($first==='')$first='hola';
     $program=($ctx['program']??'regular')==='intensive'?'tu curso intensivo':'tus clases';
-    $message='¡Hola, '.$first.'! 👋 Ya te identifiqué como alumno de Hache Natación. Puedo ayudarte con '.$program.', pagos, ausencias y reposiciones.';
-    $payment=$ctx['payment']??null;if(is_array($payment)&&($payment['pending']??false)===true)$message.=' Veo además un pago pendiente de $'.number_format((float)$payment['due'],2,'.',',').' MXN.';
-    return $message;
+    return '¡Hola, '.$first.'! 👋 Qué gusto verte. Puedo ayudarte con '.$program.', pagos, ausencias y reposiciones.';
 }
 
 function hache_sharky_member_class_message(array $ctx): string
 {
-    $name=trim((string)($ctx['identity']['name']??''));$first=$name!==''?(preg_split('/\s+/u',$name)[0]??$name):'';
-    $prefix=$first!==''?$first.', ':'';$session=$ctx['session_today']??null;
+    $first=hache_sharky_member_first_name($ctx);$prefix=$first!==''?$first.', ':'';$session=$ctx['session_today']??null;
+    $time='';if(is_array($ctx['intensive']??null))$time=substr((string)$ctx['intensive']['hora_inicio'],0,5);else $time=substr((string)($ctx['student']['regular_inicio']??''),0,5);
     if(($ctx['program']??'regular')==='intensive'&&is_array($ctx['intensive']??null)){
-        $today=(string)($ctx['today']??'');$ci=$ctx['intensive'];if($today<(string)$ci['fecha_inicio']||$today>(string)$ci['fecha_fin'])return $prefix.'hoy no corresponde a una fecha activa de tu curso intensivo.';
+        $today=(string)($ctx['today']??'');$ci=$ctx['intensive'];
+        if($today<(string)$ci['fecha_inicio'])return $prefix.'tu curso intensivo todavía no empieza. Comienza el '.hache_sharky_member_date_label((string)$ci['fecha_inicio']).($time!==''?' a las '.$time:'').'. 😊';
+        if($today>(string)$ci['fecha_fin'])return $prefix.'tu curso intensivo ya terminó. Si quieres, puedo ayudarte a revisar cómo seguir nadando. 😊';
     }
     if(is_array($session)&&strtoupper((string)($session['estado']??''))==='CANCELADA'){
-        $reason=trim((string)($session['motivo_cancelacion']??''));return $prefix.'tu clase de hoy está cancelada.'.($reason!==''?' Motivo: '.$reason.'.':'');
+        $reason=trim((string)($session['motivo_cancelacion']??''));
+        return $prefix.'hoy no tendremos la clase'.($time!==''?' de las '.$time:'').' 😕.'.($reason!==''?' Se canceló por '.$reason.'.':' Si necesitas ayuda con algo más, aquí estoy.');
     }
-    $time='';if(is_array($ctx['intensive']??null))$time=substr((string)$ctx['intensive']['hora_inicio'],0,5);else $time=substr((string)($ctx['student']['regular_inicio']??''),0,5);
-    if(is_array($session))return $prefix.'tu clase de hoy'.($time!==''?' a las '.$time:'').' sigue programada. ✅';
-    return $prefix.'por ahora no hay una cancelación registrada para tu horario de hoy'.($time!==''?' ('.$time.')':'').'. Si administración o tu profe cambia el estado, Sharky lo tomará del backend.';
+    return 'Sí'.($first!==''?', '.$first:'').' 😊 Tu clase de hoy'.($time!==''?' a las '.$time:'').' sigue programada. Si hubiera algún cambio, te aviso por aquí.';
 }
 
 function hache_sharky_member_payment_message(array $ctx): string
 {
-    $payment=$ctx['payment']??null;if(!is_array($payment)||($payment['pending']??false)!==true)return 'Estás al corriente: no encuentro pagos pendientes en tu inscripción activa. ✅';
+    $payment=$ctx['payment']??null;if(!is_array($payment)||($payment['pending']??false)!==true)return 'Todo bien 😊 No tienes pagos pendientes en este momento.';
     $due=(float)($payment['due']??0);$label=($payment['kind']??'')==='intensive'?'de tu curso intensivo':'de tu mensualidad';
-    return 'Tienes pendiente $'.number_format($due,2,'.',',').' MXN '.$label.'. Puedo ayudarte a completar el pago desde aquí.';
+    return 'Tienes pendiente $'.number_format($due,2,'.',',').' MXN '.$label.'. Si quieres, puedes pagarlo desde aquí.';
 }
 
 function hache_sharky_member_teacher_sessions(PDO $pdo,string $teacherId,string $from,string $to): array
@@ -243,7 +251,25 @@ function hache_sharky_member_parse_date(string $text,string $today): ?string
 function hache_sharky_member_extract_media_events(PDO $pdo,array $payload): array
 {
     $out=[];
-    foreach(($payload['entry']??[]) as $entry)foreach(($entry['changes']??[]) as $change){$value=$change['value']??null;if(!is_array($value))continue;$phoneId=trim((string)($value['metadata']['phone_number_id']??''));foreach(($value['messages']??[]) as $m){if(!is_array($m))continue;$type=(string)($m['type']??'');if(!in_array($type,['image','document'],true))continue;$from=preg_replace('/\D+/','',(string)($m['from']??''))?:'';$id=trim((string)($m['id']??''));if($from===''||$id==='')continue;try{$state=hache_sharky_db_state_load($pdo,$from);}catch(Throwable $e){continue;}$flow=hache_sharky_member_flow($state);if(($flow['name']??'')!=='absence'||($flow['step']??'')!=='evidence')continue;$media=is_array($m[$type]??null)?$m[$type]:[];$mediaId=trim((string)($media['id']??''));if($mediaId==='')continue;$out[]=['id'=>$id,'from'=>$from,'type'=>$type,'kind'=>HACHE_SHARKY_MEMBER_EVIDENCE_KIND,'text'=>'','interactive_id'=>'','phone_number_id'=>$phoneId,'timestamp_ms'=>((int)($m['timestamp']??time()))*1000,'media_id'=>$mediaId,'filename'=>$type==='document'?mb_substr(trim((string)($media['filename']??'')),0,255):null];}}
+    foreach(($payload['entry']??[]) as $entry)foreach(($entry['changes']??[]) as $change){
+        $value=$change['value']??null;if(!is_array($value))continue;$phoneId=trim((string)($value['metadata']['phone_number_id']??''));
+        foreach(($value['messages']??[]) as $m){
+            if(!is_array($m))continue;$type=(string)($m['type']??'');if(!in_array($type,['image','document'],true))continue;
+            $from=preg_replace('/\D+/','',(string)($m['from']??''))?:'';$id=trim((string)($m['id']??''));if($from===''||$id==='')continue;
+            try{$state=hache_sharky_db_state_load($pdo,$from);}catch(Throwable $e){continue;}$flow=hache_sharky_member_flow($state);if(!is_array($flow))continue;
+            $kind=null;$memberPayment=null;
+            if(($flow['name']??'')==='absence'&&($flow['step']??'')==='evidence')$kind=HACHE_SHARKY_MEMBER_EVIDENCE_KIND;
+            elseif(($flow['name']??'')==='member_payment_transfer'&&($flow['step']??'')==='evidence'){
+                $kind=HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND;
+                $memberPayment=['student_id'=>(string)($flow['student_id']??''),'kind'=>(string)($flow['kind']??''),'resource_id'=>(string)($flow['resource_id']??''),'amount'=>(float)($flow['amount']??0)];
+            }
+            if($kind===null)continue;
+            $media=is_array($m[$type]??null)?$m[$type]:[];$mediaId=trim((string)($media['id']??''));if($mediaId==='')continue;
+            $event=['id'=>$id,'from'=>$from,'type'=>$type,'kind'=>$kind,'text'=>'','interactive_id'=>'','phone_number_id'=>$phoneId,'timestamp_ms'=>((int)($m['timestamp']??time()))*1000,'media_id'=>$mediaId,'filename'=>$type==='document'?mb_substr(trim((string)($media['filename']??'')),0,255):null];
+            if(is_array($memberPayment))$event['member_payment']=$memberPayment;
+            $out[]=$event;
+        }
+    }
     return $out;
 }
 
@@ -259,7 +285,6 @@ function hache_sharky_member_queue(PDO $pdo,string $contact,array $event,array $
     return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|member|'.$suffix,$eventId,[],$deferred);
 }
 
-/** Returns null when the event belongs to the existing Sharky path. */
 function hache_sharky_member_process_event(PDO $pdo,array $event,array $business=[]): ?bool
 {
     $groupId=trim((string)($event['group_id']??''));if($groupId!=='')return null;
@@ -280,27 +305,32 @@ function hache_sharky_member_process_event(PDO $pdo,array $event,array $business
 
         if(($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['teacher_agenda','teacher_cancel','teacher_cancel_select','greeting','member:tc_confirm','member:tc_abort'],true))){
             $teacherId=(string)$teacher['teacher_id'];$name=(string)$teacher['name'];
-            if($id==='member:tc_abort'){$state=hache_sharky_member_set_flow($state,null,$now);return hache_sharky_member_queue($pdo,$contact,$event,$state,hache_sharky_whatsapp_text_payload($contact,'Cancelación descartada. No hice cambios.'),'teacher-abort');}
-            if(is_array($flow)&&($flow['name']??'')==='teacher_cancel'&&($flow['step']??'')==='reason'&&$id===''&&$text!==''){$reason=preg_replace('/\s+/u',' ',trim($text))??'';if($reason===''||mb_strlen($reason)>500){$payload=hache_sharky_whatsapp_text_payload($contact,'Necesito un motivo breve de hasta 500 caracteres.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-reason-invalid');}$flow['reason']=$reason;$flow['step']='confirm';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'Voy a cancelar esa clase. Esto afectará a los alumnos del turno. ¿Confirmas?',[['id'=>'member:tc_confirm','title'=>'Sí, cancelar'],['id'=>'member:tc_abort','title'=>'No']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-confirm');}
+            if($id==='member:tc_abort'){$state=hache_sharky_member_set_flow($state,null,$now);return hache_sharky_member_queue($pdo,$contact,$event,$state,hache_sharky_whatsapp_text_payload($contact,'Listo, no hice ningún cambio.'),'teacher-abort');}
+            if(is_array($flow)&&($flow['name']??'')==='teacher_cancel'&&($flow['step']??'')==='reason'&&$id===''&&$text!==''){$reason=preg_replace('/\s+/u',' ',trim($text))??'';if($reason===''||mb_strlen($reason)>500){$payload=hache_sharky_whatsapp_text_payload($contact,'Necesito un motivo breve de hasta 500 caracteres.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-reason-invalid');}$flow['reason']=$reason;$flow['step']='confirm';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'Voy a cancelar esa clase y avisaremos a los alumnos del turno. ¿Confirmas?',[['id'=>'member:tc_confirm','title'=>'Sí, cancelar'],['id'=>'member:tc_abort','title'=>'No']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-confirm');}
             if($id==='member:tc_confirm'&&is_array($flow)&&($flow['name']??'')==='teacher_cancel'&&($flow['step']??'')==='confirm'){$action=['type'=>'cancel_teacher_session','teacher_id'=>$teacherId,'session_id'=>(string)($flow['session_id']??''),'reason'=>(string)($flow['reason']??''),'requires_revalidation'=>true];$result=hache_sharky_member_execute_teacher_cancel($pdo,$contact,$action,(string)$event['id'].'|'.(string)($flow['session_id']??''));$state=hache_sharky_member_set_flow($state,null,$now);$payload=hache_sharky_whatsapp_text_payload($contact,(string)($result['message']??'No pude completar la cancelación.'));return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-cancel-execute');}
-            if(str_starts_with($id,'member:tc:')){$sessionId=substr($id,10);$sessions=hache_sharky_member_teacher_sessions($pdo,$teacherId,$today,(new DateTimeImmutable($today))->modify('+7 days')->format('Y-m-d'));$match=null;foreach($sessions as $s)if((string)$s['session_id']===$sessionId&&(int)($s['cerrada']??0)===0){$match=$s;break;}if(!$match){$payload=hache_sharky_whatsapp_text_payload($contact,'Esa clase ya no está disponible entre tus turnos activos.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-scope-miss');}$state=hache_sharky_member_set_flow($state,['name'=>'teacher_cancel','step'=>'reason','teacher_id'=>$teacherId,'session_id'=>$sessionId],$now);$payload=hache_sharky_whatsapp_text_payload($contact,'Indícame el motivo de la cancelación (por ejemplo: tormenta eléctrica, incidencia de alberca o indisposición).');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-reason');}
+            if(str_starts_with($id,'member:tc:')){$sessionId=substr($id,10);$sessions=hache_sharky_member_teacher_sessions($pdo,$teacherId,$today,(new DateTimeImmutable($today))->modify('+7 days')->format('Y-m-d'));$match=null;foreach($sessions as $s)if((string)$s['session_id']===$sessionId&&(int)($s['cerrada']??0)===0){$match=$s;break;}if(!$match){$payload=hache_sharky_whatsapp_text_payload($contact,'Esa clase ya no está disponible entre tus turnos activos.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-scope-miss');}$state=hache_sharky_member_set_flow($state,['name'=>'teacher_cancel','step'=>'reason','teacher_id'=>$teacherId,'session_id'=>$sessionId],$now);$payload=hache_sharky_whatsapp_text_payload($contact,'Cuéntame brevemente el motivo de la cancelación.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-reason');}
             $to=(new DateTimeImmutable($today))->modify('+7 days')->format('Y-m-d');$sessions=hache_sharky_member_teacher_sessions($pdo,$teacherId,$today,$to);
-            if($intent==='teacher_cancel'){$rows=[];foreach($sessions as $s){if((string)$s['estado']==='CANCELADA'||(int)($s['cerrada']??0)===1)continue;$rows[]=['id'=>'member:tc:'.(string)$s['session_id'],'title'=>date('d/m',strtotime((string)$s['fecha'])).' '.substr((string)$s['hora_inicio'],0,5),'description'=>(string)$s['sede_nombre'].' · '.substr((string)$s['hora_inicio'],0,5).'–'.substr((string)$s['hora_fin'],0,5)];}$payload=$rows?hache_sharky_member_list($contact,'Elige únicamente la clase que quieres cancelar. Sharky solo muestra turnos que tienes asignados.','Elegir clase',$rows):hache_sharky_whatsapp_text_payload($contact,'No encuentro clases activas asignadas a ti en los próximos 7 días.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-cancel-list');}
-            $todayRows=array_values(array_filter($sessions,static fn(array $s):bool=>(string)$s['fecha']===$today));$lines=[];foreach($todayRows as $s)$lines[]=substr((string)$s['hora_inicio'],0,5).' · '.(string)$s['sede_nombre'].' · '.((string)$s['estado']==='CANCELADA'?'CANCELADA':((int)($s['cerrada']??0)===1?'cerrada':'programada'));$body='Hola, '.(preg_split('/\s+/u',$name)[0]??$name).' 👋 Te reconozco como profe de Hache Natación.'.($lines?"\n\nHoy tienes:\n• ".implode("\n• ",$lines):' Hoy no encuentro sesiones asignadas a ti.');$payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:teacher_agenda','title'=>'Mi agenda'],['id'=>'member:teacher_cancel','title'=>'Cancelar clase']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-home');
+            if($intent==='teacher_cancel'){$rows=[];foreach($sessions as $s){if((string)$s['estado']==='CANCELADA'||(int)($s['cerrada']??0)===1)continue;$rows[]=['id'=>'member:tc:'.(string)$s['session_id'],'title'=>date('d/m',strtotime((string)$s['fecha'])).' '.substr((string)$s['hora_inicio'],0,5),'description'=>(string)$s['sede_nombre'].' · '.substr((string)$s['hora_inicio'],0,5).'–'.substr((string)$s['hora_fin'],0,5)];}$payload=$rows?hache_sharky_member_list($contact,'¿Qué clase quieres cancelar? Solo te muestro tus turnos asignados.','Elegir clase',$rows):hache_sharky_whatsapp_text_payload($contact,'No encuentro clases activas asignadas a ti en los próximos 7 días.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-cancel-list');}
+            $todayRows=array_values(array_filter($sessions,static fn(array $s):bool=>(string)$s['fecha']===$today));$lines=[];foreach($todayRows as $s)$lines[]=substr((string)$s['hora_inicio'],0,5).' · '.(string)$s['sede_nombre'].' · '.((string)$s['estado']==='CANCELADA'?'CANCELADA':((int)($s['cerrada']??0)===1?'cerrada':'programada'));$body='¡Hola, '.(preg_split('/\s+/u',$name)[0]??$name).'! 👋'.($lines?"\n\nHoy tienes:\n• ".implode("\n• ",$lines):' Hoy no encuentro sesiones asignadas a ti.');$payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:teacher_agenda','title'=>'Mi agenda'],['id'=>'member:teacher_cancel','title'=>'Cancelar clase']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-home');
         }
 
         if(($student['found']??false)===true){$studentId=(string)$student['identity']['student_id'];
-            if($id==='member:absence_abort'){$state=hache_sharky_member_set_flow($state,null,$now);return hache_sharky_member_queue($pdo,$contact,$event,$state,hache_sharky_whatsapp_text_payload($contact,'Listo, no registré ninguna ausencia.'),'absence-abort');}
-            if($isEvidence&&is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='evidence'){$flow['evidence']=['id'=>(string)$event['id'],'media_id'=>(string)($event['media_id']??''),'type'=>(string)$event['type'],'filename'=>$event['filename']??null];$flow['step']='confirm';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'Evidencia recibida. ¿Confirmo la ausencia del '.date('d/m/Y',strtotime((string)$flow['date'])).'?',[['id'=>'member:absence_confirm','title'=>'Confirmar'],['id'=>'member:absence_abort','title'=>'Cancelar']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-evidence');}
-            if($id==='member:absence_add_evidence'&&is_array($flow)&&($flow['name']??'')==='absence'){$flow['step']='evidence';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_whatsapp_text_payload($contact,'Adjunta ahora una imagen o documento como evidencia. Solo guardaré la referencia segura del archivo vinculada a esta ausencia.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-await-evidence');}
-            if($id==='member:absence_no_evidence'&&is_array($flow)&&($flow['name']??'')==='absence'){$flow['step']='confirm';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'¿Confirmo la ausencia del '.date('d/m/Y',strtotime((string)$flow['date'])).'?',[['id'=>'member:absence_confirm','title'=>'Confirmar'],['id'=>'member:absence_abort','title'=>'Cancelar']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-no-evidence');}
-            if($id==='member:absence_confirm'&&is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='confirm'){$action=['type'=>'create_absence','student_id'=>$studentId,'date_from'=>(string)$flow['date'],'date_to'=>(string)$flow['date'],'reason'=>(string)$flow['reason'],'requires_revalidation'=>true];$result=hache_sharky_execute_action($pdo,$contact,$action,(string)$event['id'].'|absence|'.$studentId,['today'=>$today]);$absenceId=trim((string)($result['result']['absence_id']??''));if(($result['ok']??false)===true&&$absenceId!==''&&is_array($flow['evidence']??null))hache_sharky_member_store_evidence($pdo,$absenceId,$studentId,$flow['evidence']);$state=hache_sharky_member_set_flow($state,null,$now);$payload=hache_sharky_whatsapp_text_payload($contact,(string)($result['message']??'No pude registrar la ausencia.'));return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-execute');}
-            if(is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='reason'&&$id===''&&$text!==''){$reason=preg_replace('/\s+/u',' ',trim($text))??'';if($reason===''||mb_strlen($reason)>500){$payload=hache_sharky_whatsapp_text_payload($contact,'Escribe un motivo breve, de hasta 500 caracteres.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-reason-invalid');}$flow['reason']=$reason;$flow['step']='evidence_choice';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'Motivo registrado. La evidencia es opcional.',[['id'=>'member:absence_add_evidence','title'=>'Agregar evidencia'],['id'=>'member:absence_no_evidence','title'=>'Sin evidencia']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-evidence-choice');}
-            if(is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='date'){$selected=null;if(str_starts_with($id,'member:absence_date:')){$token=substr($id,20);if($token==='today')$selected=$today;elseif($token==='tomorrow')$selected=(new DateTimeImmutable($today))->modify('+1 day')->format('Y-m-d');}if($selected===null)$selected=hache_sharky_member_parse_date($text,$today);if($selected===null||$selected<$today){$payload=hache_sharky_whatsapp_text_payload($contact,'No pude ubicar esa fecha. Escríbela como DD/MM o YYYY-MM-DD y debe ser hoy o futura.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-date-invalid');}$flow['date']=$selected;$flow['step']='reason';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_whatsapp_text_payload($contact,'Perfecto. ¿Cuál es el motivo de la ausencia?');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-reason-prompt');}
-            if($intent==='absence'){$state=hache_sharky_member_set_flow($state,['name'=>'absence','step'=>'date','student_id'=>$studentId],$now);$payload=hache_sharky_member_buttons($contact,'¿Para qué fecha quieres reportar la ausencia?',[['id'=>'member:absence_date:today','title'=>'Hoy'],['id'=>'member:absence_date:tomorrow','title'=>'Mañana']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-start');}
+            if($id==='member:absence_abort'){$state=hache_sharky_member_set_flow($state,null,$now);return hache_sharky_member_queue($pdo,$contact,$event,$state,hache_sharky_whatsapp_text_payload($contact,'Listo, no registré la ausencia.'),'absence-abort');}
+            if($isEvidence&&is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='evidence'){
+                $date=(string)($flow['date']??'');if($date===''||hache_sharky_member_parse_date($date,$today)!==$date){$state=hache_sharky_member_set_flow($state,null,$now);return hache_sharky_member_queue($pdo,$contact,$event,$state,hache_sharky_whatsapp_text_payload($contact,'Perdí la fecha de esa ausencia. Prefiero no registrar nada mal: vuelve a tocar “Reportar ausencia” y lo hacemos de nuevo.'),'absence-date-lost');}
+                $flow['evidence']=['id'=>(string)$event['id'],'media_id'=>(string)($event['media_id']??''),'type'=>(string)$event['type'],'filename'=>$event['filename']??null];$flow['step']='confirm';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'Gracias, ya recibí el justificante 😊 ¿Confirmo tu ausencia para el '.date('d/m/Y',strtotime($date)).'?',[['id'=>'member:absence_confirm','title'=>'Confirmar'],['id'=>'member:absence_abort','title'=>'Cancelar']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-evidence');
+            }
+            if($id==='member:absence_add_evidence'&&is_array($flow)&&($flow['name']??'')==='absence'){$flow['step']='evidence';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_whatsapp_text_payload($contact,'Envíame aquí una foto o documento del justificante. Quedará vinculado a esta ausencia. 😊');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-await-evidence');}
+            if($id==='member:absence_no_evidence'&&is_array($flow)&&($flow['name']??'')==='absence'){$flow['step']='confirm';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'¿Confirmo tu ausencia para el '.date('d/m/Y',strtotime((string)$flow['date'])).'?',[['id'=>'member:absence_confirm','title'=>'Confirmar'],['id'=>'member:absence_abort','title'=>'Cancelar']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-no-evidence');}
+            if($id==='member:absence_confirm'&&is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='confirm'){
+                $date=(string)($flow['date']??'');$action=['type'=>'create_absence','student_id'=>$studentId,'date_from'=>$date,'date_to'=>$date,'reason'=>(string)$flow['reason'],'requires_revalidation'=>true];$result=hache_sharky_execute_action($pdo,$contact,$action,(string)$event['id'].'|absence|'.$studentId,['today'=>$today]);$absenceId=trim((string)($result['result']['absence_id']??''));if(($result['ok']??false)===true&&$absenceId!==''&&is_array($flow['evidence']??null))hache_sharky_member_store_evidence($pdo,$absenceId,$studentId,$flow['evidence']);$state=hache_sharky_member_set_flow($state,null,$now);$first=hache_sharky_member_first_name($student);$message=($result['ok']??false)===true?'Listo'.($first!==''?', '.$first:'').' 😊 Ya quedó registrada tu ausencia para '.hache_sharky_member_date_label($date).'.':(string)($result['message']??'No pude registrar la ausencia.');$payload=hache_sharky_whatsapp_text_payload($contact,$message);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-execute');
+            }
+            if(is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='reason'&&$id===''&&$text!==''){$reason=preg_replace('/\s+/u',' ',trim($text))??'';if($reason===''||mb_strlen($reason)>500){$payload=hache_sharky_whatsapp_text_payload($contact,'Cuéntame el motivo en una frase breve, por favor.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-reason-invalid');}$flow['reason']=$reason;$flow['step']='evidence_choice';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_member_buttons($contact,'Gracias. Si quieres, puedes adjuntar algún justificante; es opcional.',[['id'=>'member:absence_add_evidence','title'=>'Adjuntar evidencia'],['id'=>'member:absence_no_evidence','title'=>'Sin evidencia']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-evidence-choice');}
+            if(is_array($flow)&&($flow['name']??'')==='absence'&&($flow['step']??'')==='date'){$selected=null;if(str_starts_with($id,'member:absence_date:')){$token=substr($id,20);if($token==='today')$selected=$today;elseif($token==='tomorrow')$selected=(new DateTimeImmutable($today))->modify('+1 day')->format('Y-m-d');}if($selected===null)$selected=hache_sharky_member_parse_date($text,$today);if($selected===null||$selected<$today){$payload=hache_sharky_whatsapp_text_payload($contact,'No pude ubicar esa fecha. Puedes escribirla como DD/MM o YYYY-MM-DD.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-date-invalid');}$flow['date']=$selected;$flow['step']='reason';$state=hache_sharky_member_set_flow($state,$flow,$now);$payload=hache_sharky_whatsapp_text_payload($contact,'Perfecto 😊 ¿Cuál es el motivo?');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-reason-prompt');}
+            if($intent==='absence'){$state=hache_sharky_member_set_flow($state,['name'=>'absence','step'=>'date','student_id'=>$studentId],$now);$payload=hache_sharky_member_buttons($contact,'Claro 😊 ¿Para qué fecha quieres avisar tu ausencia?',[['id'=>'member:absence_date:today','title'=>'Hoy'],['id'=>'member:absence_date:tomorrow','title'=>'Mañana']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'absence-start');}
             if($intent==='class_today'){$payload=hache_sharky_whatsapp_text_payload($contact,hache_sharky_member_class_message($student));return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'class-today');}
-            if($intent==='repos'){$count=(int)($student['repos_available']??0);$payload=hache_sharky_whatsapp_text_payload($contact,$count>0?'Tienes '.$count.' reposición'.($count===1?'':'es').' disponible'.($count===1?'':'s').' según tu inscripción actual.':'No encuentro reposiciones disponibles en tu inscripción actual.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'repos');}
-            if($intent==='payments'){$body=hache_sharky_member_payment_message($student);$payment=$student['payment']??null;$payload=is_array($payment)&&($payment['pending']??false)===true?hache_sharky_member_buttons($contact,$body,[['id'=>'member:pay','title'=>'Pagar ahora']]):hache_sharky_whatsapp_text_payload($contact,$body);if($id==='member:pay'&&is_array($payment)&&($payment['pending']??false)===true){$payload=hache_sharky_whatsapp_text_payload($contact,$body.' El cobro conservará el mismo esquema seguro de Hache; por ahora te dejo el importe confirmado antes de abrir el checkout.');}return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'payments');}
+            if($intent==='repos'){$count=(int)($student['repos_available']??0);$payload=hache_sharky_whatsapp_text_payload($contact,$count>0?'Tienes '.$count.' reposición'.($count===1?'':'es').' disponible'.($count===1?'':'s').' 😊':'Por ahora no tienes reposiciones disponibles.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'repos');}
+            if($intent==='payments'){$body=hache_sharky_member_payment_message($student);$payment=$student['payment']??null;$payload=is_array($payment)&&($payment['pending']??false)===true?hache_sharky_member_buttons($contact,$body,[['id'=>'member:pay','title'=>'Pagar ahora']]):hache_sharky_whatsapp_text_payload($contact,$body);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'payments');}
             if($intent==='greeting'){$payload=hache_sharky_member_buttons($contact,hache_sharky_member_student_greeting($student),[['id'=>'member:class_today','title'=>'Mi clase hoy'],['id'=>'member:payments','title'=>'Pagos'],['id'=>'member:absence','title'=>'Reportar ausencia']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-home');}
         }
         hache_sharky_db_state_defer_cancel();return null;
