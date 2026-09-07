@@ -6,6 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/sharky-runtime.php';
 require_once __DIR__.'/../config/sharky-groups.php';
+require_once __DIR__.'/../config/sharky-brain-diagnostics.php';
 
 $me = auth_require(['ADMIN']);
 
@@ -45,7 +46,16 @@ if ($method === 'GET') {
             $totals[$key] = (int) ($totals[$key] ?? 0) + (int) $value;
         }
     }
-    sharky_admin_out(['ok'=>true, 'admin'=>true, 'configuracion'=>$config, 'takeovers'=>hache_sharky_takeover_list(), 'metrics'=>$metrics, 'totals'=>$totals]);
+    $brainShadow=hache_sharky_brain_diag_report($metrics);
+    sharky_admin_out([
+        'ok'=>true,
+        'admin'=>true,
+        'configuracion'=>$config,
+        'takeovers'=>hache_sharky_takeover_list(),
+        'metrics'=>$metrics,
+        'totals'=>$totals,
+        'brain_shadow'=>$brainShadow,
+    ]);
 }
 
 if ($method !== 'POST') sharky_admin_out(['ok'=>false, 'error'=>'Método no permitido'], 405);
