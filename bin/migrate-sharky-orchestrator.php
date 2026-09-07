@@ -30,6 +30,30 @@ function hache_sharky_migration_ensure_constraints(PDO $pdo): void
     }
 }
 
+function hache_sharky_migration_verify_member_schema(PDO $pdo): void
+{
+    $tables=['profesores','profesor_horarios','profesor_cancelaciones','sharky_ausencia_evidencias','sharky_member_payment_intents'];
+    $marks=implode(',',array_fill(0,count($tables),'?'));
+    $st=$pdo->prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ($marks)");
+    $st->execute($tables);
+    $present=array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN));
+    $missing=array_values(array_diff($tables,$present));
+    if($missing)throw new RuntimeException('Member schema verification failed; missing tables: '.implode(',',$missing));
+
+    $requiredUnique=[
+        ['table'=>'profesores','index'=>'uq_profesores_whatsapp'],
+        ['table'=>'profesor_horarios','index'=>'uq_profesor_horario'],
+        ['table'=>'profesor_cancelaciones','index'=>'uq_profesor_cancelacion_sesion'],
+        ['table'=>'sharky_ausencia_evidencias','index'=>'uq_sharky_ausencia_evidencia_message'],
+        ['table'=>'sharky_member_payment_intents','index'=>'uq_sharky_member_payment_external'],
+    ];
+    $check=$pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=:t AND index_name=:i AND non_unique=0");
+    foreach($requiredUnique as $spec){
+        $check->execute([':t'=>$spec['table'],':i'=>$spec['index']]);
+        if((int)$check->fetchColumn()<1)throw new RuntimeException('Member schema verification failed; missing unique index '.$spec['table'].'.'.$spec['index']);
+    }
+}
+
 $root=dirname(__DIR__);
 $migrations=[
     $root.'/database/migrations/20260902_sharky_orchestrator.sql',
@@ -62,6 +86,7 @@ try{
         if(($schema['ok']??false)!==true){
             throw new RuntimeException('Schema verification failed: '.json_encode($schema,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
         }
+        hache_sharky_migration_verify_member_schema($pdo);
         fwrite(STDOUT,"SHARKY_MIGRATION_OK\n");
     }finally{
         try{$pdo->query("SELECT RELEASE_LOCK('hache_sharky_orchestrator_migration')");}catch(Throwable $e){}
