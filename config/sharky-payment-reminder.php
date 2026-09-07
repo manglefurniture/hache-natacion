@@ -212,7 +212,14 @@ function hache_sharky_payment_reminder_after_registration_sent(PDO $pdo, string 
         $payload = function_exists('hache_sharky_mp_followup_payload')
             ? hache_sharky_mp_followup_payload($contact, $reminderMeta, $business)
             : hache_sharky_payment_reminder_payload($contact, $reminderMeta);
-        unset($payload['_sharky_payment_session']);
+        // The recovery selector is itself a payment-method UI. Bind it before
+        // encrypting the delayed outbox row so an old 15-minute prompt can never
+        // act on a later pending registration for the same phone number.
+        if (function_exists('hache_sharky_commerce_prepare_payload')) {
+            $payload = hache_sharky_commerce_prepare_payload($payload);
+        } else {
+            unset($payload['_sharky_payment_session']);
+        }
         $payload['_sharky_payment_reminder'] = $reminderMeta;
         if (!hache_sharky_outbox_enqueue_raw($pdo, $contact, $payload, 'mp-card-followup|'.$token, $due)) {
             error_log('[sharky-payment-reminder] Mercado Pago followup schedule failed');
