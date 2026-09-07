@@ -27,7 +27,7 @@ function hache_sharky_member_payment_partial_message(array $payment): string
 {
     $paid=number_format((float)($payment['paid']??0),2,'.',',');
     $due=number_format((float)($payment['due']??0),2,'.',',');
-    return 'Tu curso ya tiene un pago parcial registrado de $'.$paid.' MXN y quedan $'.$due.' MXN pendientes. Para no crear un segundo pago incompatible con el registro del intensivo, Sharky no abrirá otro cobro automático. El equipo puede ayudarte a completar ese saldo por este mismo chat.';
+    return 'Ya tienes $'.$paid.' MXN registrados en tu curso y quedan $'.$due.' MXN pendientes. 😊 Para completar ese saldo, escríbenos por aquí y te ayudamos sin crear un cobro duplicado.';
 }
 
 function hache_sharky_member_payment_pending_from_context(array $ctx): ?array
@@ -78,9 +78,6 @@ function hache_sharky_member_payment_reconcile_intent(PDO $pdo,array $intent): a
         $studentId=(string)$row['alumno_id'];$base=(float)$row['base_amount'];$kind=(string)$row['payment_kind'];$marker='Sharky MP '.$external;
         $st=$pdo->prepare("SELECT id FROM pagos WHERE alumno_id=:a AND estado='VALIDO' AND observacion=:o LIMIT 1");$st->execute([':a'=>$studentId,':o'=>$marker]);$existing=$st->fetchColumn();
         if(!$existing){
-            // A checkout is offered only when an intensive has no valid payment,
-            // but revalidate inside the reconciliation transaction as a final
-            // guard against an administrative payment racing with MP approval.
             if($kind==='INTENSIVO'&&!empty($row['intensivo_id'])){
                 $guard=$pdo->prepare("SELECT id FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE");
                 $guard->execute([':a'=>$studentId,':i'=>$row['intensivo_id']]);
@@ -99,25 +96,99 @@ function hache_sharky_member_payment_reconcile_student(PDO $pdo,string $studentI
     try{$st=$pdo->prepare("SELECT * FROM sharky_member_payment_intents WHERE alumno_id=:a AND status='PENDING' AND created_at>=DATE_SUB(NOW(),INTERVAL 7 DAY) ORDER BY created_at DESC LIMIT 5");$st->execute([':a'=>$studentId]);$count=0;foreach($st->fetchAll(PDO::FETCH_ASSOC) as $intent){$result=hache_sharky_member_payment_reconcile_intent($pdo,$intent);if(($result['state']??'')==='approved')$count++;}return $count;}catch(Throwable $e){return 0;}
 }
 
-function hache_sharky_member_payment_queue_owned(PDO $pdo,string $contact,array $event,string $body,string $suffix): bool
+function hache_sharky_member_payment_queue_payload_owned(PDO $pdo,string $contact,array $event,array $payload,string $suffix,?array $state=null): bool
 {
     $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
     try{
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'interactive')))return false;
-        $payload=hache_sharky_whatsapp_text_payload($contact,$body);
-        return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,(string)$event['id'].'|'.$suffix,(string)$event['id']);
+        $deferred=[];
+        if(is_array($state)){
+            hache_sharky_db_state_defer_begin();
+            hache_sharky_db_state_save($pdo,$contact,$state,86400);
+            $deferred=hache_sharky_db_state_defer_take();
+        }
+        return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,(string)$event['id'].'|'.$suffix,(string)$event['id'],[],$deferred);
     }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
 }
 
+function hache_sharky_member_payment_queue_owned(PDO $pdo,string $contact,array $event,string $body,string $suffix,?array $state=null): bool
+{
+    return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_whatsapp_text_payload($contact,$body),$suffix,$state);
+}
+
+function hache_sharky_member_payment_method_payload(string $contact,float $pct): array
+{
+    $pctLabel=rtrim(rtrim(number_format(max(0.0,min(30.0,$pct)),2,'.',''),'0'),'.');
+    return hache_sharky_member_buttons($contact,
+        "¿Cómo prefieres pagar? 😊\n\nEfectivo es nuestra opción preferencial. Transferencia SPEI no tiene recargo y tarjeta se procesa por Mercado Pago (+{$pctLabel}%).",
+        [
+            ['id'=>'member:pay:cash','title'=>'Efectivo'],
+            ['id'=>'member:pay:transfer','title'=>'Transferencia SPEI'],
+            ['id'=>'member:pay:card','title'=>'Tarjeta'],
+        ]
+    );
+}
+
+function hache_sharky_member_payment_transfer_payload(string $contact,array $pending,array $business): array
+{
+    $institution=trim((string)($business['sharky_pago_institucion']??''));
+    $beneficiary=trim((string)($business['sharky_pago_beneficiario']??''));
+    $clabe=preg_replace('/\D+/','',(string)($business['sharky_pago_clabe']??''))?:'';
+    $amount='$'.number_format((float)$pending['base'],2,'.',',').' MXN';
+    $lines=['Perfecto 😊 Puedes hacer una transferencia SPEI por '.$amount.'.'];
+    if($institution!=='')$lines[]='Institución: '.$institution;
+    if($beneficiary!=='')$lines[]='Beneficiario: '.$beneficiary;
+    if(strlen($clabe)===18){$lines[]='CLABE:';$lines[]=$clabe;}
+    if($institution===''||$beneficiary===''||strlen($clabe)!==18)$lines[]='Si no ves todos los datos bancarios, avísame y te paso con el equipo.';
+    $lines[]='';
+    $lines[]='Cuando la hagas, envíame por aquí la foto o el comprobante. Lo dejaremos pendiente de verificación; no se marcará como pagado solo por recibir la imagen.';
+    return hache_sharky_whatsapp_text_payload($contact,implode("\n",$lines));
+}
+
+function hache_sharky_member_payment_cash_payload(string $contact,array $pending): array
+{
+    $amount='$'.number_format((float)$pending['base'],2,'.',',').' MXN';
+    return hache_sharky_whatsapp_text_payload($contact,'Perfecto 😊 Puedes cubrir '.$amount.' en efectivo con tu profe. Es nuestra opción preferencial y no tiene recargo.');
+}
+
+function hache_sharky_member_payment_card_payload(string $contact,array $pending,array $business): array
+{
+    $checkout=hache_sharky_member_payment_create_preference($pending,$business);
+    if(($checkout['ok']??false)!==true)return ['ok'=>false,'payload'=>hache_sharky_whatsapp_text_payload($contact,'No pude abrir Mercado Pago en este momento. No se hizo ningún cargo. Puedes elegir efectivo o transferencia SPEI y te ayudo por aquí.')];
+    $base=number_format((float)$checkout['base'],2,'.',',');$charged=number_format((float)$checkout['charged'],2,'.',',');$pct=(float)$checkout['surcharge_pct'];
+    $pctLabel=rtrim(rtrim(number_format($pct,2,'.',''),'0'),'.');
+    $body='Tu saldo es de $'.$base.' MXN. Con tarjeta serían $'.$charged.' MXN'.($pct>0?' (incluye '.$pctLabel.'% de procesamiento)':'').".\n\nPuedes pagar aquí:\n".(string)$checkout['url']."\n\nCuando Mercado Pago lo confirme, tu pago se actualizará automáticamente. 😊";
+    return ['ok'=>true,'checkout'=>$checkout,'payload'=>hache_sharky_whatsapp_text_payload($contact,$body)];
+}
+
+function hache_sharky_member_payment_current_state(PDO $pdo,string $contact): array
+{
+    try{return hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return [];}
+}
+
 /**
- * On a generic payment query this reconciles already-created intents. A partial
- * intensive balance is answered here (without a checkout button), while normal
- * zero-paid balances continue to member-ops. `member:pay` owns the checkout turn.
+ * Registered-student payments are intentionally split in two steps: first show
+ * the real balance, then let the student choose cash/transfer/card. Cash is the
+ * preferred option. Transfer proof remains pending verification and never marks
+ * a payment valid by itself.
  */
 function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $business): ?bool
 {
-    if(trim((string)($event['group_id']??''))!=='')return null;$contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';if($contact==='')return null;$id=strtolower(trim((string)($event['interactive_id']??'')));$intent=hache_sharky_member_intent((string)($event['text']??''),$id);
+    if(trim((string)($event['group_id']??''))!=='')return null;
+    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';if($contact==='')return null;
+    $id=strtolower(trim((string)($event['interactive_id']??'')));
+    $intent=hache_sharky_member_intent((string)($event['text']??''),$id);
     $identity=hache_sharky_business_identity_by_whatsapp($pdo,$contact);if(($identity['found']??false)!==true)return null;$studentId=(string)$identity['student_id'];
+
+    if((string)($event['kind']??'')===HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND){
+        $state=hache_sharky_member_payment_current_state($pdo,$contact);$flow=hache_sharky_member_flow($state);
+        $meta=is_array($event['member_payment']??null)?$event['member_payment']:[];
+        if(!is_array($flow)||($flow['name']??'')!=='member_payment_transfer'||($flow['step']??'')!=='evidence'||(string)($flow['student_id']??'')!==$studentId)return null;
+        if($meta&&((string)($meta['student_id']??'')!==$studentId||(string)($meta['resource_id']??'')!==(string)($flow['resource_id']??'')))return null;
+        $state=hache_sharky_member_set_flow($state,null,time());
+        return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,'Gracias, ya recibí tu comprobante 😊 Queda pendiente de verificación. Te avisamos por aquí si necesitamos algo más.','member-payment-transfer-proof',$state);
+    }
+
     $ctx=null;
     if($intent==='payments'){
         hache_sharky_member_payment_reconcile_student($pdo,$studentId);
@@ -127,20 +198,43 @@ function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $
             return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,hache_sharky_member_payment_partial_message($payment),'member-payment-partial');
         }
     }
-    if($id!=='member:pay')return null;
+
+    $method=null;
+    if($id==='member:pay:cash')$method='cash';
+    elseif($id==='member:pay:transfer')$method='transfer';
+    elseif($id==='member:pay:card')$method='card';
+    elseif($id!=='member:pay')return null;
+
     $ctx??=hache_sharky_member_student_context($pdo,$contact);$payment=$ctx['payment']??null;$pending=hache_sharky_member_payment_pending_from_context($ctx);
-    $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
-    try{
-        if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'interactive')))return false;
-        if(!$pending){
-            $body=is_array($payment)&&hache_sharky_member_payment_partial_intensive($payment)
-                ?hache_sharky_member_payment_partial_message($payment)
-                :'Ya no encuentro un saldo pendiente en tu inscripción activa. ✅';
-            $payload=hache_sharky_whatsapp_text_payload($contact,$body);return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,(string)$event['id'].'|member-payment-clear',(string)$event['id']);
-        }
-        if(!hache_sharky_member_payments_schema_ready($pdo)){$payload=hache_sharky_whatsapp_text_payload($contact,'El checkout está temporalmente fuera de servicio. No hice ningún cargo; el equipo puede ayudarte por este chat.');return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,(string)$event['id'].'|member-payment-schema',(string)$event['id']);}
-        $external=hache_sharky_member_payment_external($studentId,(string)$pending['kind'],(string)$pending['resource_id']);$existing=['external_reference'=>$external];$reconciled=hache_sharky_member_payment_reconcile_intent($pdo,$existing);if(($reconciled['state']??'')==='approved'){$fresh=hache_sharky_member_student_context($pdo,$contact);$payload=hache_sharky_whatsapp_text_payload($contact,'Tu pago ya aparece aprobado. '.hache_sharky_member_payment_message($fresh));return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,(string)$event['id'].'|member-payment-approved',(string)$event['id']);}
-        $checkout=hache_sharky_member_payment_create_preference($pending,$business);if(($checkout['ok']??false)!==true||!hache_sharky_member_payment_store_intent($pdo,$pending,$checkout)){$payload=hache_sharky_whatsapp_text_payload($contact,'No pude abrir un checkout seguro en este momento. No se realizó ningún cargo. Intenta de nuevo más tarde o pide apoyo al equipo.');return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,(string)$event['id'].'|member-payment-unavailable',(string)$event['id']);}
-        $base=number_format((float)$checkout['base'],2,'.',',');$charged=number_format((float)$checkout['charged'],2,'.',',');$pct=(float)$checkout['surcharge_pct'];$body='Saldo a cubrir: $'.$base.' MXN. Pago con tarjeta: $'.$charged.' MXN'.($pct>0?' (incluye '.$pct.'% de procesamiento)':'').".\n\nAbre este enlace seguro de Mercado Pago:\n".(string)$checkout['url']."\n\nCuando Mercado Pago lo apruebe, Sharky reconciliará el pago con tu registro.";$payload=hache_sharky_whatsapp_text_payload($contact,$body);return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,(string)$event['id'].'|member-payment-checkout',(string)$event['id']);
-    }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
+    if(!$pending){
+        $body=is_array($payment)&&hache_sharky_member_payment_partial_intensive($payment)
+            ?hache_sharky_member_payment_partial_message($payment)
+            :'Todo bien 😊 Ya no encuentro un saldo pendiente en tu inscripción actual.';
+        return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,$body,'member-payment-clear');
+    }
+
+    if($id==='member:pay'){
+        $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
+        return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method');
+    }
+
+    if($method==='cash'){
+        $state=hache_sharky_member_payment_current_state($pdo,$contact);$state=hache_sharky_member_set_flow($state,null,time());
+        return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_cash_payload($contact,$pending),'member-payment-cash',$state);
+    }
+
+    if($method==='transfer'){
+        $state=hache_sharky_member_payment_current_state($pdo,$contact);
+        $state=hache_sharky_member_set_flow($state,[
+            'name'=>'member_payment_transfer','step'=>'evidence','student_id'=>$studentId,
+            'kind'=>(string)$pending['kind'],'resource_id'=>(string)$pending['resource_id'],'amount'=>(float)$pending['base'],
+        ],time());
+        return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_transfer_payload($contact,$pending,$business),'member-payment-transfer',$state);
+    }
+
+    if(!hache_sharky_member_payments_schema_ready($pdo))return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,'No pude abrir Mercado Pago en este momento. Puedes elegir efectivo o transferencia SPEI y te ayudo por aquí.','member-payment-schema');
+    $card=hache_sharky_member_payment_card_payload($contact,$pending,$business);
+    if(($card['ok']??false)!==true)return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,$card['payload'],'member-payment-unavailable');
+    if(!hache_sharky_member_payment_store_intent($pdo,$pending,$card['checkout']))return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,'No pude dejar listo el pago con tarjeta. No se hizo ningún cargo. Puedes elegir efectivo o transferencia SPEI.','member-payment-store-failed');
+    return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,$card['payload'],'member-payment-checkout');
 }
