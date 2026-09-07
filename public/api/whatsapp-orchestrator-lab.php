@@ -64,13 +64,28 @@ if(!$groupsEnabled&&$groupCount>0){
     for($i=0;$i<$groupCount;$i++)hache_sharky_metric_increment('messages_skipped_group');
 }
 
+// The generic payment-proof extractor intentionally sees every image/document.
+// When an absence flow is waiting for evidence, that same Meta message must have
+// exactly one durable receipt, owned by member-ops; otherwise the generic media
+// copy would mark the shared message ID processed before the absence flow claims it.
+$memberEvidenceEvents=hache_sharky_member_extract_media_events($pdo,$payload);
+$memberEvidenceIds=[];
+foreach($memberEvidenceEvents as $memberEvidenceEvent){
+    $memberEvidenceId=trim((string)($memberEvidenceEvent['id']??''));
+    if($memberEvidenceId!=='')$memberEvidenceIds[$memberEvidenceId]=true;
+}
+$paymentProofEvents=hache_sharky_payment_reminder_extract_proof_events($payload,hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID'));
+if($memberEvidenceIds){
+    $paymentProofEvents=array_values(array_filter($paymentProofEvents,static fn(array $event):bool=>!isset($memberEvidenceIds[(string)($event['id']??'')])));
+}
+
 $events=array_merge(
     hache_sharky_whatsapp_extract($payload),
-    hache_sharky_member_extract_media_events($pdo,$payload),
+    $memberEvidenceEvents,
     hache_sharky_commerce_flow_extract_events($payload),
     hache_sharky_whatsapp_birthdate_flow_extract_events($payload,hache_sharky_lab_today()),
     hache_sharky_draft_extract_audio_events($payload),
-    hache_sharky_payment_reminder_extract_proof_events($payload,hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID'))
+    $paymentProofEvents
 );
 $events=hache_sharky_groups_decorate_events($events,$payload);
 foreach($events as &$event){
