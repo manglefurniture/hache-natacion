@@ -100,8 +100,15 @@ async function cargarCursosIntensivosAlumno(preseleccionar=''){
     if(tipoSelect.value!=='INTENSIVO'||!alumnoSelect.value)return;
     cursoSelect.disabled=true;
     try{
-        const params=new URLSearchParams({alumno_id:alumnoSelect.value});
-        const response=await fetch('/api/alumno-intensivos-pago.php?'+params.toString(),{headers:{Accept:'application/json'}});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'No se pudieron cargar los cursos intensivos');
+        const params=new URLSearchParams({accion:'CURSOS_INTENSIVOS',alumno_id:alumnoSelect.value});
+        let response;
+        try{
+            response=await fetch('/api/pagos.php?'+params.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});
+        }catch(primaryError){
+            const legacyParams=new URLSearchParams({alumno_id:alumnoSelect.value});
+            response=await fetch('/api/alumno-intensivos-pago.php?'+legacyParams.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});
+        }
+        const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'No se pudieron cargar los cursos intensivos');
         intensiveCourses=data.cursos||[];
         intensiveCourses.forEach(curso=>{const option=document.createElement('option');option.value=curso.id;option.dataset.price=curso.precio??'';option.dataset.historico=curso.historico?'1':'0';option.disabled=curso.pagado===true;option.textContent=fechaCorta(curso.fecha_inicio)+' · '+(curso.historico?'HISTÓRICO':curso.estado)+(curso.pagado?' · PAGADO':'')+' · '+money(curso.precio);cursoSelect.appendChild(option);});
         const wanted=preseleccionar||query.get('curso_intensivo_id')||'';
@@ -111,7 +118,7 @@ async function cargarCursosIntensivosAlumno(preseleccionar=''){
             if(unpaid.length===1)cursoSelect.value=unpaid[0].id;
         }
         actualizarCursoSeleccionado();
-    }catch(error){cursoHelp.className='help history-help';cursoHelp.textContent=error.message||'No se pudieron cargar los cursos del alumno';}
+    }catch(error){cursoHelp.className='help history-help';cursoHelp.textContent='No se pudieron cargar los cursos. Recarga la página y vuelve a intentarlo.';console.error(error);}
     finally{cursoSelect.disabled=false;}
 }
 
