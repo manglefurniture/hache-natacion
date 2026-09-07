@@ -33,9 +33,6 @@ function hache_sharky_member_payment_partial_message(array $payment): string
 function hache_sharky_member_payment_pending_from_context(array $ctx): ?array
 {
     $payment=$ctx['payment']??null;if(!is_array($payment)||($payment['pending']??false)!==true||(float)($payment['due']??0)<=0)return null;
-    // Intensivos mantienen el invariante histórico de un único pago válido por
-    // alumno/curso. Si ya existe un abono parcial, no se crea otro checkout que
-    // después no pueda reconciliarse contra `pagos`.
     if(hache_sharky_member_payment_partial_intensive($payment))return null;
     $studentId=trim((string)($ctx['identity']['student_id']??''));if($studentId==='')return null;
     if(($payment['kind']??'')==='monthly'){
@@ -166,12 +163,6 @@ function hache_sharky_member_payment_current_state(PDO $pdo,string $contact): ar
     try{return hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return [];}
 }
 
-/**
- * Registered-student payments are intentionally split in two steps: first show
- * the real balance, then let the student choose cash/transfer/card. Cash is the
- * preferred option. Transfer proof remains pending verification and never marks
- * a payment valid by itself.
- */
 function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $business): ?bool
 {
     if(trim((string)($event['group_id']??''))!=='')return null;
@@ -180,11 +171,11 @@ function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $
     $intent=hache_sharky_member_intent((string)($event['text']??''),$id);
     $identity=hache_sharky_business_identity_by_whatsapp($pdo,$contact);if(($identity['found']??false)!==true)return null;$studentId=(string)$identity['student_id'];
 
-    if((string)($event['kind']??'')===HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND){
+    if(is_array($event['member_payment']??null)){
         $state=hache_sharky_member_payment_current_state($pdo,$contact);$flow=hache_sharky_member_flow($state);
-        $meta=is_array($event['member_payment']??null)?$event['member_payment']:[];
+        $meta=$event['member_payment'];
         if(!is_array($flow)||($flow['name']??'')!=='member_payment_transfer'||($flow['step']??'')!=='evidence'||(string)($flow['student_id']??'')!==$studentId)return null;
-        if($meta&&((string)($meta['student_id']??'')!==$studentId||(string)($meta['resource_id']??'')!==(string)($flow['resource_id']??'')))return null;
+        if((string)($meta['student_id']??'')!==$studentId||(string)($meta['resource_id']??'')!==(string)($flow['resource_id']??''))return null;
         $state=hache_sharky_member_set_flow($state,null,time());
         return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,'Gracias, ya recibí tu comprobante 😊 Queda pendiente de verificación. Te avisamos por aquí si necesitamos algo más.','member-payment-transfer-proof',$state);
     }
