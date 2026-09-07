@@ -49,6 +49,7 @@ if(!$groupsEnabled&&$groupCount>0){
 
 $events=array_merge(
     hache_sharky_whatsapp_extract($payload),
+    hache_sharky_whatsapp_birthdate_flow_extract_events($payload,hache_sharky_lab_today()),
     hache_sharky_draft_extract_audio_events($payload),
     hache_sharky_payment_reminder_extract_proof_events($payload,hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID'))
 );
@@ -74,6 +75,11 @@ foreach($events as $event){
 }
 
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);
+
+// Flow creation/list/upload is deliberately after Meta's ACK. The helper is
+// idempotent and fail-soft; if management permission is unavailable, typed dates
+// continue to work and retries are throttled for 15 minutes.
+hache_sharky_whatsapp_birthdate_flow_prime($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
 
 $business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
 
