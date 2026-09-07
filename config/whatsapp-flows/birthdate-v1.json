@@ -1,0 +1,43 @@
+{
+  "version": "7.0",
+  "screens": [
+    {
+      "id": "BIRTHDATE",
+      "title": "Fecha de nacimiento",
+      "terminal": true,
+      "success": true,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "birthdate_form",
+            "children": [
+              {
+                "type": "TextBody",
+                "text": "Selecciona tu fecha de nacimiento."
+              },
+              {
+                "type": "DatePicker",
+                "name": "birthdate",
+                "label": "Fecha de nacimiento",
+                "helper-text": "Selecciona día, mes y año",
+                "required": true
+              },
+              {
+                "type": "Footer",
+                "label": "Usar esta fecha",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "birthdate": "${form.birthdate}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
