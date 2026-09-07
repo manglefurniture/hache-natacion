@@ -13,6 +13,70 @@ function hache_sharky_whatsapp_student_claim_requires_handoff(array $state,array
     )==='student_claim';
 }
 
+function hache_sharky_whatsapp_family_age_scope_request(array $event): bool
+{
+    if(trim((string)($event['interactive_id']??''))!=='')return false;
+    $t=hache_sharky_orchestrator_normalize((string)($event['text']??''));
+    if($t==='')return false;
+    return preg_match('/\b(?:bebes?|bebe|matronatacion|maternatacion|recien\s+nacid[oa]s?|ninos?|ninas?)\b/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_family_age_scope_message(int $minAge=12): string
+{
+    $minAge=max(1,$minAge);
+    return 'Gracias por preguntar 😊. Por ahora no manejamos matronatación ni clases para bebés o menores de '.$minAge.' años.'
+        ."\n\n".'Nuestras clases son a partir de los '.$minAge.' años. Si más adelante buscas clases para ti o para alguien de esa edad en adelante, con gusto te orientamos.';
+}
+
+function hache_sharky_whatsapp_mark_followup_paused(array $state,int $now,string $reason): array
+{
+    if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+    $existing=is_array($state['commercial_context']['_idle_followup']??null)?$state['commercial_context']['_idle_followup']:[];
+    $state['commercial_context']['_idle_followup']=array_replace([
+        'status'=>'idle','token'=>null,'user_turn_at'=>0,'sent_count'=>0,'next_stage'=>null,
+        'first_due_at'=>null,'first_sent_at'=>null,'second_due_at'=>null,'completed_at'=>null,
+    ],$existing,[
+        'status'=>'completed_optout','token'=>null,'user_turn_at'=>$now,'next_stage'=>null,
+        'first_due_at'=>null,'second_due_at'=>null,'completed_at'=>$now,'pause_reason'=>$reason,
+    ]);
+    return $state;
+}
+
+function hache_sharky_whatsapp_now_not_request(array $event): bool
+{
+    $id=strtolower(trim((string)($event['interactive_id']??'')));
+    if($id==='flow:no')return true;
+    if($id!=='')return false;
+    $t=hache_sharky_orchestrator_normalize((string)($event['text']??''));
+    return preg_match('/^(?:ahora\s+no|por\s+ahora\s+no|no\s+por\s+ahora|todavia\s+no|aun\s+no)[.! ]*$/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_strip_repeated_greeting_body(string $body): string
+{
+    $body=trim($body);if($body==='')return $body;
+    $clean=preg_replace('/^\s*[¡!¿?]*\s*(?:hola(?:\s+(?:buenos?\s+d[ií]as|buenas?\s+tardes|buenas?\s+noches))?|buenas(?:\s+(?:tardes|noches))?)\s*[!¡.,🙂😊👋🦈]*\s*(?:\R+|\s+)/iu','',$body,1);
+    $clean=trim((string)$clean);
+    return $clean!==''?$clean:$body;
+}
+
+function hache_sharky_whatsapp_strip_repeated_greeting_result(array $result,bool $conversationWasUnderway): array
+{
+    if(!$conversationWasUnderway)return $result;
+    $decision=is_array($result['decision']??null)?$result['decision']:[];
+    if(in_array(($decision['kind']??''),['conversation_identity_prompt','student_human_takeover'],true))return $result;
+    $payload=is_array($result['payload']??null)?$result['payload']:null;
+    if(!is_array($payload))return $result;
+    if(($payload['type']??'')==='text'){
+        $body=(string)($payload['text']['body']??'');$clean=hache_sharky_whatsapp_strip_repeated_greeting_body($body);
+        if($clean!==$body)$payload['text']['body']=$clean;
+    }elseif(($payload['type']??'')==='interactive'){
+        $body=(string)($payload['interactive']['body']['text']??'');$clean=hache_sharky_whatsapp_strip_repeated_greeting_body($body);
+        if($clean!==$body)$payload['interactive']['body']['text']=$clean;
+    }
+    $result['payload']=$payload;
+    return $result;
+}
+
 function hache_sharky_whatsapp_deferred_close_request(string $text): bool
 {
     if(str_contains($text,'?')||str_contains($text,'¿'))return false;
@@ -269,6 +333,8 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
     unset($extraContext['_delivery_lock']);
     $lock=is_resource($transferredLock)?$transferredLock:hache_sharky_orchestrator_delivery_lock($contact);
     if(!is_resource($lock))return ['skip'=>true,'code'=>'DELIVERY_LOCK_UNAVAILABLE'];
+    $now=(int)($extraContext['now']??time());
+    $conversationWasUnderway=false;
     try{
         // A human may take the chat while a text is sleeping in the debounce window.
         // Revalidate only after acquiring the same delivery lock used by takeover/outbox.
@@ -294,9 +360,44 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
             // Keep identity verification intact for future reactivation, but do not
             // enter it from WhatsApp while this direct-handoff policy is active.
             $state=hache_sharky_db_state_load($pdo,$contact);
-            $now=(int)($extraContext['now']??time());
+            $conversationWasUnderway=trim((string)($state['last_user_text']??''))!==''||($state['assistant_presentation_queued']??false)===true;
             $deferredState=hache_sharky_orchestrator_expire_flow($state,$now);
-            if(hache_sharky_whatsapp_deferred_close_eligible($deferredState,$event)){
+            $directChat=trim((string)($event['group_id']??''))==='';
+            $knownIdentity=$directChat?hache_sharky_business_identity_by_whatsapp($pdo,$contact):['found'=>false];
+            if(($knownIdentity['found']??false)===true){
+                $hash=hache_sharky_orchestrator_contact_hash($contact);
+                if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                    hache_sharky_orchestrator_unlock($lock);
+                    return ['skip'=>true,'code'=>'DUPLICATE'];
+                }
+                $state=hache_sharky_orchestrator_apply_identity($deferredState,$knownIdentity);
+                $state=hache_sharky_orchestrator_clear_flow($state);
+                $state['updated_at']=$now;$state['last_user_text']=trim((string)($event['text']??''));
+                $ref=hache_sharky_orchestrator_referral($event,$now);if($ref)$state=hache_sharky_orchestrator_capture_referral($state,$ref);
+                $decision=hache_sharky_orchestrator_decision(
+                    'student_human_takeover',
+                    '¡Hola! 😊 Veo que este número ya está registrado como alumno de Hache Natación. Para darte atención con tu expediente y evitar confusiones, te dejo con una persona del equipo por este mismo chat.',
+                    [],
+                    ['type'=>'human_takeover']
+                );
+                hache_sharky_db_state_save($pdo,$contact,$state);
+                hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                $result=['skip'=>false,'code'=>'STUDENT_HUMAN_TAKEOVER','state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>['ok'=>true,'code'=>'HANDOFF']];
+            }elseif($directChat&&hache_sharky_whatsapp_family_age_scope_request($event)){
+                $hash=hache_sharky_orchestrator_contact_hash($contact);
+                if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                    hache_sharky_orchestrator_unlock($lock);
+                    return ['skip'=>true,'code'=>'DUPLICATE'];
+                }
+                $state=hache_sharky_orchestrator_clear_flow($deferredState);
+                $state['updated_at']=$now;$state['last_user_text']=trim((string)($event['text']??''));
+                $state=hache_sharky_whatsapp_mark_followup_paused($state,$now,'age_scope_unavailable');
+                $ref=hache_sharky_orchestrator_referral($event,$now);if($ref)$state=hache_sharky_orchestrator_capture_referral($state,$ref);
+                $decision=hache_sharky_orchestrator_decision('family_age_scope_unavailable',hache_sharky_whatsapp_family_age_scope_message((int)($extraContext['min_age']??12)));
+                hache_sharky_db_state_save($pdo,$contact,$state);
+                hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                $result=['skip'=>false,'code'=>'FAMILY_AGE_SCOPE_UNAVAILABLE','state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+            }elseif(hache_sharky_whatsapp_deferred_close_eligible($deferredState,$event)){
                 $state=$deferredState;
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
                 if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
@@ -367,6 +468,17 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
                 $result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
             }
         }
+
+        $decision=is_array($result['decision']??null)?$result['decision']:[];
+        if(hache_sharky_whatsapp_now_not_request($event)&&($decision['kind']??'')==='flow_cancelled'){
+            $state=is_array($result['state']??null)?$result['state']:[];
+            $state['updated_at']=$now;$state['last_user_text']=trim((string)($event['text']??''));
+            $state=hache_sharky_whatsapp_mark_followup_paused($state,$now,'user_now_not');
+            $decision=hache_sharky_orchestrator_decision('flow_paused','Perfecto 😊 Lo dejamos en pausa. Cuando quieras retomarlo, seguimos desde aquí.');
+            hache_sharky_db_state_save($pdo,$contact,$state);
+            $result['state']=$state;$result['decision']=$decision;$result['payload']=hache_sharky_whatsapp_render($contact,$decision);
+        }
+        $result=hache_sharky_whatsapp_strip_repeated_greeting_result($result,$conversationWasUnderway);
     }catch(Throwable $e){
         hache_sharky_orchestrator_unlock($lock);
         throw $e;
