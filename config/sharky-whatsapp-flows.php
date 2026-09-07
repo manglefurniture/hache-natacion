@@ -53,6 +53,11 @@ function hache_sharky_whatsapp_birthdate_flow_response_date(string $responseJson
  * Normalizes terminal WhatsApp Flow replies into the same event contract used by
  * typed birthdates. Unknown/malformed nfm_reply payloads fail closed and remain
  * invisible to the conversational pipeline.
+ *
+ * The selected date intentionally carries an empty interactive_id: once Meta has
+ * validated and returned the terminal Flow payload, the registration pipeline
+ * should consume it exactly like a typed ISO birthdate. This also keeps stale
+ * button protection strict for every actual reply-button/list action.
  */
 function hache_sharky_whatsapp_birthdate_flow_extract_events(array $payload,?string $today=null): array
 {
@@ -74,7 +79,7 @@ function hache_sharky_whatsapp_birthdate_flow_extract_events(array $payload,?str
                 if($id===''||$from==='')continue;
                 $event=[
                     'id'=>$id,'from'=>$from,'type'=>'interactive','text'=>$birthdate,
-                    'interactive_id'=>'flow:birthdate','phone_number_id'=>$phoneId,
+                    'interactive_id'=>'','phone_number_id'=>$phoneId,
                     'timestamp_ms'=>((int)($message['timestamp']??time()))*1000,
                 ];
                 if($waba!=='')$event['waba_id']=$waba;
