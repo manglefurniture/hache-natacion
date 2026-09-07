@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-commerce-flows.php';
 
 /**
