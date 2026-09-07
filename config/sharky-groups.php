@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-whatsapp-flow-runtime.php';
+require_once __DIR__.'/sharky-commerce-flows.php';
 
 const HACHE_SHARKY_GROUPS_KEY = 'sharky_grupos_habilitado';
 
@@ -105,7 +106,10 @@ function hache_sharky_groups_decorate_events(array $events,array $payload): arra
 function hache_sharky_groups_prepare_outbound(array $payload,string $groupId): array
 {
     $groupId=trim($groupId);
-    if($groupId==='')return hache_sharky_whatsapp_birthdate_flow_upgrade_cached($payload);
+    if($groupId===''){
+        $payload=hache_sharky_whatsapp_birthdate_flow_upgrade_cached($payload);
+        return hache_sharky_commerce_upgrade_direct_payload($payload);
+    }
 
     $body='';
     if(($payload['type']??'')==='text'){
