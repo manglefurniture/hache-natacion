@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require __DIR__.'/../config/sharky-whatsapp-batching.php';
 require __DIR__.'/../config/sharky-conversation-brain.php';
+require __DIR__.'/../config/sharky-brain-shadow-runtime.php';
 
 function lab_ok(bool $condition,string $message): void
 {
@@ -26,8 +27,6 @@ $contact='529900001234';
 // Matrix lab: 128 multi-turn policy traces.
 // 2 programs × 2 venues × 4 age states × paused/not paused ×
 // side-question/not × low-information/not = 128 traces.
-// Each trace starts from unknown identity, crosses into prospect mode, completes
-// commercial context, then verifies the Brain recommendation on reengagement.
 // -------------------------------------------------------------------------
 $programs=['intensive'=>'Intensivo','regular'=>'Regulares'];
 $venues=['PALAPAS'=>'Palapas Protudec','MONTEVERDE'=>'Colegio Monteverde'];
@@ -63,8 +62,6 @@ foreach($programs as $program=>$programText){
                         ]);
                         lab_eq($brain['action'],'continue_controlled_flow','Trace '.$scenarioCount.': controlled qualification must remain authoritative.');
 
-                        // Exercise the same deterministic parsers used by WhatsApp before
-                        // storing the explicit program and venue choices in durable state.
                         $parsedProgram=hache_sharky_orchestrator_program_choice($programText);
                         lab_eq($parsedProgram,$program,'Trace '.$scenarioCount.': program parser must recognize '.$programText.'.');
                         $venueInteractive=$venue==='PALAPAS'?'sede:palapas':'sede:monteverde';
@@ -98,8 +95,6 @@ foreach($programs as $program=>$programText){
                         $eventText=$sideQuestion?'¿Qué equipo necesito?':($lowInformation?'Hola':'¿Qué horarios tienen?');
                         $evaluationState=$state;
                         if($sideQuestion){
-                            // A side question may interrupt a controlled flow. The Brain
-                            // must answer it without throwing away the flow.
                             $evaluationState=hache_sharky_orchestrator_flow(
                                 $evaluationState,
                                 $program==='intensive'?'register_intensive':'qualify_prospect',
@@ -128,15 +123,32 @@ foreach($programs as $program=>$programText){
 }
 
 // -------------------------------------------------------------------------
-// Cross-feature live-contract scenarios. These call the current production
-// helpers so the shadow Brain cannot silently drift away from live semantics.
+// Cross-feature live-contract scenarios.
 // -------------------------------------------------------------------------
 
-// New pause ID is unambiguous.
+// New pause ID is unambiguous, but the Brain only pauses when the current live
+// eligibility guard says a pause is meaningful for this conversation.
 $scenarioCount++;
-lab_ok(hache_sharky_whatsapp_now_not_request(['text'=>'Ahora no','interactive_id'=>'flow:pause']),'flow:pause must be recognized as the new explicit pause action.');
-$brain=hache_sharky_brain_next_best_action([],[],['text'=>'Ahora no','interactive_id'=>'flow:pause'],['pause_requested'=>true]);
-lab_eq($brain['action'],'pause_commercial_intent','Brain must map flow:pause to commercial pause.');
+$eligiblePauseState=hache_sharky_orchestrator_state(null,$now+4900);
+$eligiblePauseState['identity']=array_replace($eligiblePauseState['identity'],['kind'=>'prospect','verified'=>true]);
+$eligiblePauseState['commercial_context']['program']='intensive';
+$eligiblePauseState['commercial_context']['sede_clave']='PALAPAS';
+$pauseEvent=['text'=>'Ahora no','interactive_id'=>'flow:pause'];
+lab_ok(hache_sharky_whatsapp_now_not_request($pauseEvent),'flow:pause must be recognized as the new explicit pause action.');
+lab_ok(hache_sharky_whatsapp_pause_eligible($eligiblePauseState,$pauseEvent),'Commercially-ready prospect must satisfy the live pause guard.');
+$brain=hache_sharky_brain_next_best_action($eligiblePauseState,$eligiblePauseState,$pauseEvent,[
+    'pause_requested'=>true,'pause_eligible'=>true,
+]);
+lab_eq($brain['action'],'pause_commercial_intent','Brain must map an eligible flow:pause to commercial pause.');
+
+// First-contact/stale pause recognition is deliberately ineligible.
+$scenarioCount++;
+$unknownPauseState=hache_sharky_orchestrator_state(null,$now+4901);
+lab_ok(!hache_sharky_whatsapp_pause_eligible($unknownPauseState,$pauseEvent),'First-contact pause button must not pass the live eligibility guard.');
+$brain=hache_sharky_brain_next_best_action($unknownPauseState,$unknownPauseState,$pauseEvent,[
+    'decision_kind'=>'conversation','pause_requested'=>true,'pause_eligible'=>false,
+]);
+lab_eq($brain['action'],'ask_identity','Ineligible pause must remain normal identity routing.');
 
 // Historic already-sent button remains compatible only because its visible title says Ahora no.
 $scenarioCount++;
@@ -152,13 +164,13 @@ $scenarioCount++;
 $absenceState=hache_sharky_orchestrator_state(null,$now+5000);
 $absenceState['identity']=array_replace($absenceState['identity'],['kind'=>'student','verified'=>true,'student_id'=>'stu-lab']);
 $absenceState=hache_sharky_orchestrator_flow($absenceState,'absence','offer',[],$now+5000);
-$absenceResult=hache_sharky_orchestrate($absenceState,[
-    'id'=>'lab.absence.no','from'=>$contact,'text'=>'No','interactive_id'=>'flow:no',
-],['now'=>$now+5001,'today'=>$today]);
+$absenceEvent=['id'=>'lab.absence.no','from'=>$contact,'text'=>'No','interactive_id'=>'flow:no'];
+$absenceResult=hache_sharky_orchestrate($absenceState,$absenceEvent,['now'=>$now+5001,'today'=>$today]);
 lab_eq($absenceResult['decision']['kind']??null,'flow_cancelled','flow:no inside absence must keep cancellation semantics.');
-$brain=hache_sharky_brain_next_best_action($absenceState,$absenceResult['state'],['text'=>'No','interactive_id'=>'flow:no'],[
+$brain=hache_sharky_brain_next_best_action($absenceState,$absenceResult['state'],$absenceEvent,[
     'decision_kind'=>(string)($absenceResult['decision']['kind']??''),
-    'pause_requested'=>hache_sharky_whatsapp_now_not_request(['text'=>'No','interactive_id'=>'flow:no']),
+    'pause_requested'=>hache_sharky_whatsapp_now_not_request($absenceEvent),
+    'pause_eligible'=>hache_sharky_whatsapp_pause_eligible($absenceState,$absenceEvent),
 ]);
 lab_eq($brain['action'],'preserve_deterministic_decision','Brain must preserve the normal No/cancel result instead of pausing.');
 
@@ -236,5 +248,31 @@ lab_ok(hache_sharky_brain_commercial_ready($adult),'Program + venue must be enou
 $adult['commercial_context']['age']=59;
 lab_eq(hache_sharky_brain_snapshot($adult)['age'],59,'Volunteered age must remain available when present.');
 
-lab_ok($scenarioCount>=140,'Conversation Lab must protect at least 140 traces/cross-feature scenarios.');
+// Production-shadow evaluator: unknown “Ahora no” must match the live identity
+// prompt rather than produce a false pause mismatch.
+$scenarioCount++;
+$identityResult=[
+    'state'=>$unknownPauseState,
+    'decision'=>['kind'=>'conversation_identity_prompt','action'=>null],
+];
+$shadow=hache_sharky_brain_shadow_evaluate($unknownPauseState,$unknownPauseState,$pauseEvent,$identityResult,true);
+lab_ok(($shadow['signals']['pause_requested']??false)===true,'Shadow must still record raw pause recognition.');
+lab_ok(($shadow['signals']['pause_eligible']??true)===false,'Shadow must use the live pause eligibility guard.');
+lab_eq($shadow['live_action'],'ask_identity','Live mapping for first-contact pause must remain identity prompt.');
+lab_eq($shadow['brain']['action']??null,'ask_identity','Brain must agree with live first-contact pause handling.');
+lab_ok(($shadow['match']??false)===true,'First-contact pause must be a shadow match, not drift noise.');
+
+// Eligible live pause should also compare cleanly.
+$scenarioCount++;
+$pausedResult=[
+    'state'=>$eligiblePauseState,
+    'decision'=>['kind'=>'flow_paused','action'=>null],
+];
+$shadow=hache_sharky_brain_shadow_evaluate($eligiblePauseState,$eligiblePauseState,$pauseEvent,$pausedResult,true);
+lab_ok(($shadow['signals']['pause_eligible']??false)===true,'Eligible commercial pause must be visible to live shadow.');
+lab_eq($shadow['live_action'],'pause_commercial_intent','Live pause mapping must use Brain action vocabulary.');
+lab_eq($shadow['brain']['action']??null,'pause_commercial_intent','Brain must agree with eligible live pause handling.');
+lab_ok(($shadow['match']??false)===true,'Eligible pause must compare as a shadow match.');
+
+lab_ok($scenarioCount>=142,'Conversation Lab must protect at least 142 traces/cross-feature scenarios.');
 fwrite(STDOUT,"SHARKY_CONVERSATION_LAB_OK scenarios=$scenarioCount\n");
