@@ -62,7 +62,7 @@ assert.ok(paymentCore.includes('Este alumno ya pagó este curso intensivo'), 'De
 assert.ok(paymentCore.includes('function hache_pago_resolver_intensivo'));
 assert.match(paymentCore, /ci\.id=:curso AND ci\.sede_id=:sede\s*\n\s*LIMIT 1 FOR UPDATE/);
 assert.match(paymentCore, /ci\.estado IN \('PROGRAMADO','EN_CURSO'\)[\s\S]{0,180}ORDER BY ci\.fecha_inicio DESC LIMIT 1 FOR UPDATE/);
-assert.ok(paymentCore.includes('Corrección histórica administrativa'));
+assert.ok(paymentCore.includes('hache_admin_historical_note'));
 assert.ok(paymentCore.includes('pago_intensivo_historico'));
 assert.ok(paymentCore.includes("hache_admin_history($pdo,$alumnoId,'PAGO'"));
 
