@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require __DIR__.'/../config/sharky-conversation-brain.php';
+require __DIR__.'/../config/sharky-brain-diagnostics.php';
 
 function brain_ok(bool $condition,string $message): void
 {
@@ -122,5 +123,40 @@ brain_eq($decision['action'],'answer_user','A normal informational question with
 
 brain_ok(hache_sharky_brain_shadow_matches('answer_user',$decision),'Shadow comparator must report exact policy matches.');
 brain_ok(!hache_sharky_brain_shadow_matches('show_commercial_menu',$decision),'Shadow comparator must expose policy divergences.');
+
+// Diagnostic keys are bounded enumerations, never user text or state values.
+brain_eq(hache_sharky_brain_diag_metric_key('answer_user','continue_discovery'),'brain_mm_13_12','Mismatch metric key must use stable numeric action codes.');
+brain_eq(hache_sharky_brain_diag_metric_key('anything-unexpected','answer_user'),'brain_mm_00_13','Unknown actions must collapse into the protected unknown bucket.');
+
+$candidate=hache_sharky_brain_diag_report([['date'=>'2026-09-07','counters'=>[
+    'brain_diag_observed'=>60,
+    'brain_mm_13_12'=>4,
+]]]);
+brain_eq($candidate['observed'],60,'Diagnostic report must count the post-diagnostic cohort only.');
+brain_eq($candidate['mismatches'],4,'Diagnostic report must aggregate categorized mismatches.');
+brain_eq($candidate['matches'],56,'Diagnostic report must derive matches from observed minus mismatches.');
+brain_eq($candidate['agreement_pct'],93.3,'Diagnostic report must calculate agreement percentage.');
+brain_eq($candidate['blocking_mismatches'],0,'Low-risk discovery mismatch must not be marked protected.');
+brain_eq($candidate['status'],'candidate','A mature clean cohort may become a Phase 2B candidate without auto-activating routing.');
+brain_ok($candidate['routing_live']===false,'Diagnostic readiness must never activate live Brain routing.');
+
+$blocking=hache_sharky_brain_diag_report([['counters'=>[
+    'brain_diag_observed'=>60,
+    'brain_mm_07_13'=>1,
+]]]);
+brain_eq($blocking['blocking_mismatches'],1,'A controlled-flow divergence must block live candidacy.');
+brain_eq($blocking['status'],'review_blocking','Protected divergences must require review.');
+
+$collecting=hache_sharky_brain_diag_report([['counters'=>['brain_diag_observed'=>12]]]);
+brain_eq($collecting['status'],'collecting','Small cohorts must remain in evidence collection.');
+brain_eq($collecting['remaining_observations'],38,'Readiness must show how many observations remain.');
+
+$errored=hache_sharky_brain_diag_report([['counters'=>['brain_diag_observed'=>60,'brain_diag_error'=>1]]]);
+brain_eq($errored['status'],'review_errors','Any observer error must block readiness.');
+
+$shadowSource=(string)file_get_contents(__DIR__.'/../config/sharky-brain-shadow-runtime.php');
+brain_ok(str_contains($shadowSource,"hache_sharky_metric_increment('brain_diag_observed')"),'Live shadow observer must start the diagnostic observation cohort.');
+brain_ok(str_contains($shadowSource,'hache_sharky_brain_diag_metric_key($live,$brainAction)'),'Live mismatches must be classified by bounded action pair.');
+brain_ok(!str_contains($shadowSource,"hache_sharky_metric_increment('brain_diag_match')"),'Diagnostic matches are derived, avoiding redundant counters.');
 
 fwrite(STDOUT,"SHARKY_CONVERSATION_BRAIN_OK\n");
