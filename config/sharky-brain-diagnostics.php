@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 const HACHE_SHARKY_BRAIN_DIAG_MIN_OBS = 50;
 const HACHE_SHARKY_BRAIN_DIAG_MIN_AGREEMENT = 90.0;
+const HACHE_SHARKY_BRAIN_DIAG_COHORT = 'v2';
 
 /** @return array<string,array{code:string,label:string,blocking:bool}> */
 function hache_sharky_brain_diag_actions(): array
@@ -44,16 +45,26 @@ function hache_sharky_brain_diag_action_by_code(string $code): array
     return hache_sharky_brain_diag_action('unknown');
 }
 
+function hache_sharky_brain_diag_observed_metric_key(): string
+{
+    return 'brain_diag_'.HACHE_SHARKY_BRAIN_DIAG_COHORT.'_observed';
+}
+
 function hache_sharky_brain_diag_metric_key(string $liveAction,string $brainAction): string
 {
     $live=hache_sharky_brain_diag_action($liveAction);
     $brain=hache_sharky_brain_diag_action($brainAction);
-    return 'brain_mm_'.$live['code'].'_'.$brain['code'];
+    return 'brain_'.HACHE_SHARKY_BRAIN_DIAG_COHORT.'_mm_'.$live['code'].'_'.$brain['code'];
 }
 
 /**
- * Build an aggregate report from the same privacy-safe daily metric counters
- * already used by the Sharky admin panel. No conversation content is needed.
+ * Build an aggregate report from privacy-safe daily metric counters.
+ *
+ * The v2 cohort starts after the protected-precedence correction. Old v1
+ * mismatches remain in historical metrics but do not poison readiness for the
+ * corrected policy. Observer/pre-state errors remain conservative and continue
+ * using the shared brain_diag_error counter, so any new instrumentation failure
+ * still blocks Fase 2B.
  *
  * @param list<array{date?:string,counters?:array<string,int>}> $metrics
  * @return array<string,mixed>
@@ -63,13 +74,15 @@ function hache_sharky_brain_diag_report(array $metrics,int $minObservations=HACH
     $minObservations=max(1,$minObservations);
     $minAgreement=max(0.0,min(100.0,$minAgreement));
     $observed=0;$errors=0;$pairCounts=[];
+    $observedKey=hache_sharky_brain_diag_observed_metric_key();
+    $pairPattern='/^brain_'.preg_quote(HACHE_SHARKY_BRAIN_DIAG_COHORT,'/').'_mm_(\d{2})_(\d{2})$/';
 
     foreach($metrics as $day){
         $counters=is_array($day['counters']??null)?$day['counters']:[];
-        $observed+=(int)($counters['brain_diag_observed']??0);
+        $observed+=(int)($counters[$observedKey]??0);
         $errors+=(int)($counters['brain_diag_error']??0);
         foreach($counters as $key=>$value){
-            if(!is_string($key)||preg_match('/^brain_mm_(\d{2})_(\d{2})$/',$key,$m)!==1)continue;
+            if(!is_string($key)||preg_match($pairPattern,$key,$m)!==1)continue;
             $pairCounts[$m[1].'_'.$m[2]]=(int)($pairCounts[$m[1].'_'.$m[2]]??0)+(int)$value;
         }
     }
@@ -91,7 +104,6 @@ function hache_sharky_brain_diag_report(array $metrics,int $minObservations=HACH
     }
     usort($pairs,static fn(array $a,array $b):int=>($b['count']<=>$a['count'])?:strcmp((string)$a['live'],(string)$b['live']));
 
-    // Each successful observation contributes exactly one match OR one mismatch.
     $matches=max(0,$observed-$mismatches);
     $agreement=$observed>0?round(($matches/$observed)*100,1):0.0;
 
@@ -103,6 +115,7 @@ function hache_sharky_brain_diag_report(array $metrics,int $minObservations=HACH
 
     return [
         'status'=>$status,'status_label'=>$label,
+        'cohort'=>HACHE_SHARKY_BRAIN_DIAG_COHORT,
         'observed'=>$observed,'matches'=>$matches,'mismatches'=>$mismatches,'errors'=>$errors,
         'agreement_pct'=>$agreement,'blocking_mismatches'=>$blockingMismatches,
         'minimum_observations'=>$minObservations,'minimum_agreement_pct'=>$minAgreement,
