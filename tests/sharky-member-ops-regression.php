@@ -99,7 +99,7 @@ member_ok(str_contains($payments,"tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 F
 member_ok(str_contains($payments,"'name'=>'member_payment_transfer','step'=>'evidence'"),'SPEI choice must arm a bounded member-owned proof flow.');
 member_ok(str_contains($payments,"is_array(\$event['member_payment']??null)"),'Transfer proof must be consumed by the registered-student payment processor.');
 $memberOps=(string)file_get_contents($root.'/config/sharky-member-ops.php');
-member_ok(str_contains($memberOps,"'member_payment'=\$memberPayment"),'Member media extraction must bind transfer proof to the exact student payment context.');
+member_ok(str_contains($memberOps,"['member_payment']=\$memberPayment"),'Member media extraction must bind transfer proof to the exact student payment context.');
 member_ok(!str_contains($memberOps,'Sharky lo tomará del backend'),'Member copy must not expose backend internals.');
 $api=(string)file_get_contents($root.'/api/profesores.php');
 member_ok(str_contains($api,"auth_require(['ADMIN'])"),'Only administrators may register or assign professors.');
