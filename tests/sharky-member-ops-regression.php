@@ -35,6 +35,14 @@ member_eq($externalMonthly,$externalMonthlyAgain,'Payment external references mu
 member_ok($externalMonthly!==$externalIntensive,'Monthly and intensive payments need separate external references.');
 member_ok(!str_contains($externalMonthly,'student-1'),'External references must not leak student identifiers.');
 
+$partialPayment=['kind'=>'intensive','course_id'=>'course-1','price'=>1200.0,'paid'=>400.0,'due'=>800.0,'pending'=>true];
+member_ok(hache_sharky_member_payment_partial_intensive($partialPayment),'An intensive with a valid partial payment must be detected.');
+$partialContext=['identity'=>['student_id'=>'student-1'],'payment'=>$partialPayment];
+member_eq(hache_sharky_member_payment_pending_from_context($partialContext),null,'A residual intensive balance must never create a second checkout.');
+member_ok(str_contains(hache_sharky_member_payment_partial_message($partialPayment),'$800.00'),'Partial-payment answer must preserve the real remaining balance.');
+$zeroPaidContext=['identity'=>['student_id'=>'student-1'],'payment'=>['kind'=>'intensive','course_id'=>'course-1','price'=>1200.0,'paid'=>0.0,'due'=>1200.0,'pending'=>true]];
+member_ok(is_array(hache_sharky_member_payment_pending_from_context($zeroPaidContext)),'A zero-paid intensive may still open its first valid checkout.');
+
 $root=dirname(__DIR__);
 $memberMigration=(string)file_get_contents($root.'/database/migrations/20260907_sharky_member_ops.sql');
 member_ok(str_contains($memberMigration,'CREATE TABLE IF NOT EXISTS profesores'),'Professor registry migration is required.');
@@ -44,9 +52,13 @@ $paymentMigration=(string)file_get_contents($root.'/database/migrations/20260907
 member_ok(str_contains($paymentMigration,'sharky_member_payment_intents'),'Registered-student checkout needs durable payment intents.');
 
 $webhook=(string)file_get_contents($root.'/public/api/whatsapp-orchestrator-lab.php');
-member_ok(str_contains($webhook,'hache_sharky_member_extract_media_events($pdo,$payload)'),'Webhook must extract evidence only for an active absence evidence step.');
+member_ok(str_contains($webhook,'$memberEvidenceEvents=hache_sharky_member_extract_media_events($pdo,$payload)'),'Webhook must extract absence evidence before generic proof media.');
+member_ok(str_contains($webhook,'$memberEvidenceIds[$memberEvidenceId]=true'),'Absence evidence must reserve its Meta message receipt.');
+member_ok(str_contains($webhook,'!isset($memberEvidenceIds[(string)($event[\'id\']??\'\')])'),'Generic proof events must be deduplicated against absence evidence IDs.');
 member_ok(str_contains($webhook,'hache_sharky_member_payment_process_event'),'Payment self-service must run before generic Sharky routing.');
 member_ok(str_contains($webhook,'sharky_member_should_handle'),'Member operations must be explicitly gated before claiming an inbox event.');
+$payments=(string)file_get_contents($root.'/config/sharky-member-payments.php');
+member_ok(str_contains($payments,"tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE"),'MP reconciliation must revalidate the one-valid-intensive-payment invariant inside the transaction.');
 $api=(string)file_get_contents($root.'/api/profesores.php');
 member_ok(str_contains($api,"auth_require(['ADMIN'])"),'Only administrators may register or assign professors.');
 member_ok(str_contains($api,"accion:'")===false,'Professor API must not contain UI-side action literals.');
