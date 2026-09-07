@@ -34,6 +34,16 @@ assert.match(intensivo, /Escribe el motivo de la corrección histórica/);
 assert.match(intensivo, /hache_admin_historical_overlap/);
 assert.match(intensivo, /hache_admin_history\(\$pdo,\$alumnoId,'INTENSIVO'/);
 assert.match(intensivo, /if\(\$historica\)exit;/, 'Una corrección histórica no debe disparar el correo de nueva inscripción.');
+assert.match(
+  intensivo,
+  /if\(\$historica\)[\s\S]{0,500}WHERE a\.id=:id AND a\.sede_id=:s LIMIT 1 FOR UPDATE/,
+  'La importación histórica de ADMIN debe poder recuperar un alumno de la sede aunque hoy esté en BAJA.'
+);
+assert.match(
+  intensivo,
+  /intensivo=1 AND \(activo=1 OR :hist=1\)/,
+  'Una corrección histórica debe poder conservar un horario intensivo que hoy ya esté inactivo.'
+);
 assert.match(historical, /INSERT INTO historial/);
 assert.match(historical, /Corrección histórica administrativa/);
 assert.match(intensivoUi, /Corrección histórica de ADMIN/);
