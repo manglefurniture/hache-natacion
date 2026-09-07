@@ -24,6 +24,42 @@ function hache_sharky_member_routing_handoff_requested(string $text): bool
     return false;
 }
 
+function hache_sharky_member_closure_text(string $text): bool
+{
+    if(str_contains($text,'?')||str_contains($text,'¿'))return false;
+    $t=hache_sharky_member_normalize($text);
+    $t=preg_replace('/[^\p{L}\p{N}\s]+/u',' ',$t)??$t;
+    $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
+    if($t==='')return false;
+    return preg_match('/^(?:(?:ok|okay|okey|vale|perfecto|listo|sale)\s+)?(?:muchas\s+)?gracias(?:\s+(?:sharky|por\s+todo|por\s+la\s+ayuda))?$/u',$t)===1;
+}
+
+function hache_sharky_member_pending_registration(array $student): bool
+{
+    return strtoupper(trim((string)($student['student']['estado_administrativo']??'')))==='PENDIENTE';
+}
+
+function hache_sharky_member_pending_schedule_problem(string $text): bool
+{
+    $t=hache_sharky_member_normalize($text);
+    if($t==='')return false;
+    return preg_match('/\b(?:horario|horarios|temprano|madrugar|levantarme|levantarse|asistir|asistencia|faltar|faltado|no\s+he\s+podido\s+ir)\b/u',$t)===1;
+}
+
+function hache_sharky_member_pending_message(array $student,string $text,string $intent=''): string
+{
+    $first=function_exists('hache_sharky_member_first_name')?hache_sharky_member_first_name($student):'';
+    $name=$first!==''?', '.$first:'';
+
+    if($intent==='greeting'){
+        return '¡Hola'.$name.'! 😊 Veo que tu inscripción todavía está pendiente. Si quieres retomarla, puedo ayudarte a revisar el pago o las opciones que tengas disponibles.';
+    }
+    if(hache_sharky_member_pending_schedule_problem($text)){
+        return 'Entiendo'.$name.' 😊. Si ese horario se te está complicando, podemos revisar qué opciones tienes para retomar tu inscripción. Cuéntame qué horario te funcionaría mejor y te oriento con lo que haya disponible.';
+    }
+    return 'Claro'.$name.' 😊. Tu inscripción todavía está pendiente. Cuéntame qué necesitas y te ayudo a revisar cómo retomarla.';
+}
+
 function hache_sharky_member_deterministic_event(PDO $pdo,array $event,array $state): bool
 {
     $kind=(string)($event['kind']??'');
@@ -58,10 +94,6 @@ function hache_sharky_member_supported_event(PDO $pdo,array $event): bool
     $student=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
     if(($student['found']??false)!==true)return false;
 
-    // An explicit request for a person (or another existing safety/commercial
-    // handoff rule) keeps using the controlled takeover path. Everything else
-    // from a known student stays with Sharky instead of falling into the legacy
-    // "known student = human" shortcut.
     if(hache_sharky_member_routing_handoff_requested((string)($event['text']??'')))return false;
 
     return trim((string)($event['type']??''))!=='';
@@ -85,7 +117,22 @@ function hache_sharky_member_student_fallback(PDO $pdo,array $event): bool
         $state=hache_sharky_db_state_load($pdo,$contact);
         $identity=$student['identity']??null;
         if(is_array($identity)&&function_exists('hache_sharky_orchestrator_apply_identity'))$state=hache_sharky_orchestrator_apply_identity($state,$identity);
+        $text=trim((string)($event['text']??''));
+        $intent=(string)(hache_sharky_member_intent($text,(string)($event['interactive_id']??''))??'');
         $first=function_exists('hache_sharky_member_first_name')?hache_sharky_member_first_name($student):'';
+
+        if(hache_sharky_member_closure_text($text)){
+            $body='¡Con gusto'.($first!==''?', '.$first:'').'! 😊';
+            $payload=hache_sharky_whatsapp_text_payload($contact,$body);
+            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-close');
+        }
+
+        if(hache_sharky_member_pending_registration($student)){
+            $body=hache_sharky_member_pending_message($student,$text,$intent);
+            $payload=hache_sharky_whatsapp_text_payload($contact,$body);
+            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
+        }
+
         $body='Claro'.($first!==''?', '.$first:'').' 😊 Dime qué necesitas. Puedo ayudarte con tus clases, pagos, ausencias y reposiciones; si es otra cosa, escríbemela con confianza.';
         $payload=hache_sharky_member_buttons($contact,$body,[
             ['id'=>'member:class_today','title'=>'Mi clase hoy'],
@@ -121,13 +168,26 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if(!hache_sharky_member_supported_event($pdo,$event))return null;
 
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return null;}
+    $text=(string)($event['text']??'');
+    $interactiveId=(string)($event['interactive_id']??'');
+    $intent=(string)(hache_sharky_member_intent($text,$interactiveId)??'');
+
+    // A record in alumnos is identity, not proof of an active enrolment. People
+    // created by the intensive checkout remain PENDIENTE until staff validates
+    // the payment. They may still review/complete payment, but must not receive
+    // active-student class/absence/reposition controls meanwhile.
+    $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
+    $teacherIntent=($teacher['found']??false)===true&&in_array($intent,['teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true);
+    if(!$teacherIntent){
+        $student=hache_sharky_member_student_context($pdo,$contact);
+        if(($student['found']??false)===true&&hache_sharky_member_pending_registration($student)&&$intent!=='payments'){
+            return hache_sharky_member_student_fallback($pdo,$event);
+        }
+    }
+
     if(hache_sharky_member_deterministic_event($pdo,$event,$state)){
         return hache_sharky_member_process_event($pdo,$event,$business);
     }
 
-    // Member-ops intentionally handles only deterministic operations. A known
-    // student with another benign question must stay with Sharky rather than be
-    // auto-handed to a person by the old batching policy. Route it directly to
-    // the fallback so the same inbox receipt is claimed exactly once.
     return hache_sharky_member_student_fallback($pdo,$event);
 }
