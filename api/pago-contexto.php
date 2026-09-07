@@ -29,7 +29,7 @@ try{
     if($me['rol']==='ADMIN')regla_promover_planes_programados_sede($pdo,$sedeId);
 
     $alumnoId=trim((string)($_GET['alumno_id']??''));
-    $cursoId=trim((string)($_GET['curso_id']??''));
+    $cursoId=trim((string)($_GET['curso_intensivo_id']??($_GET['curso_id']??'')));
     $mes=(int)($_GET['mes']??date('n'));$anio=(int)($_GET['anio']??date('Y'));
     if($alumnoId==='')pago_contexto_out(['ok'=>false,'error'=>'alumno_id es obligatorio'],422);
     if($mes<1||$mes>12||$anio<2000||$anio>2100)pago_contexto_out(['ok'=>false,'error'=>'Periodo inválido'],422);
@@ -71,14 +71,21 @@ try{
         EXISTS(SELECT 1 FROM pagos pg WHERE pg.alumno_id=cia.alumno_id AND pg.intensivo_id=ci.id AND pg.tipo='INTENSIVO' AND pg.estado='VALIDO') AS pagado
         FROM curso_intensivo_alumnos cia
         INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
-        WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=:hoy";
-    $intensivoParams=[':a'=>$alumnoId,':s'=>$sedeId,':hoy'=>$hoyIntensivo];
-    if($cursoId!==''){$intensivoSql.=" AND ci.id=:c";$intensivoParams[':c']=$cursoId;}
+        WHERE cia.alumno_id=:a AND ci.sede_id=:s";
+    $intensivoParams=[':a'=>$alumnoId,':s'=>$sedeId];
+    if($cursoId!==''){
+        $intensivoSql.=" AND ci.id=:c";
+        $intensivoParams[':c']=$cursoId;
+    }else{
+        $intensivoSql.=" AND ci.fecha_fin>=:hoy";
+        $intensivoParams[':hoy']=$hoyIntensivo;
+    }
     $intensivoSql.=" ORDER BY ci.fecha_inicio DESC LIMIT 1";
     $st=$pdo->prepare($intensivoSql);$st->execute($intensivoParams);$intensivo=$st->fetch()?:null;
     if($intensivo){
         $intensivo['estado']=intensivo_estado_por_fechas((string)$intensivo['fecha_inicio'],(string)$intensivo['fecha_fin']);
         $intensivo['pagado']=(int)($intensivo['pagado']??0)===1;
+        $intensivo['historico']=(string)$intensivo['fecha_fin']<$hoyIntensivo;
     }
 
     $inscripcionPermitida=true;$proximaInscripcion=null;
@@ -97,7 +104,8 @@ try{
     pago_contexto_out([
         'ok'=>true,'periodo'=>$periodo,'alumno'=>$alumno,'plan_periodo'=>$planPeriodo,'planes'=>$planes,
         'ultima_inscripcion'=>$ultimaInscripcion,'inscripcion_permitida'=>$inscripcionPermitida,'proxima_inscripcion'=>$proximaInscripcion,
-        'mensualidad_periodo'=>$mensualidadPeriodo,'mensualidades_pendientes'=>$pendientes,'intensivo_activo'=>$intensivo,
+        'mensualidad_periodo'=>$mensualidadPeriodo,'mensualidades_pendientes'=>$pendientes,
+        'intensivo_activo'=>$intensivo,'intensivo_seleccionado'=>$cursoId!==''?$intensivo:null,
     ]);
 }catch(Throwable $e){
     error_log('pago-contexto: '.$e->getMessage());
