@@ -35,7 +35,8 @@ assert.match(intensivo, /hache_admin_historical_overlap/);
 assert.match(intensivo, /hache_admin_history\(\$pdo,\$alumnoId,'INTENSIVO'/);
 assert.match(intensivo, /if\(\$historica\)exit;/, 'Una corrección histórica no debe disparar el correo de nueva inscripción.');
 assert.match(intensivo,/if\(\$historica\)[\s\S]{0,500}WHERE a\.id=:id AND a\.sede_id=:s LIMIT 1 FOR UPDATE/,'La importación histórica de ADMIN debe poder recuperar un alumno de la sede aunque hoy esté en BAJA.');
-assert.match(intensivo,/intensivo=1 AND \(activo=1 OR :hist=1\)/,'Una corrección histórica debe poder conservar un horario intensivo que hoy ya esté inactivo.');
+assert.match(intensivo,/SELECT id,hora_inicio,hora_fin FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND intensivo=1/,'La corrección histórica debe respetar la misma integridad de horarios activos que exige la base.');
+assert.doesNotMatch(intensivo,/activo=1 OR :hist=1/,'El carril histórico no debe intentar saltarse el trigger de horarios activos.');
 assert.match(historical, /INSERT INTO historial/);
 assert.match(historical, /Corrección histórica administrativa/);
 assert.match(intensivoUi, /Corrección histórica de ADMIN/);
@@ -55,6 +56,7 @@ assert.match(alta, /if\(!\$abierta&&!\$historica\)/,'La ventana normal debe segu
 assert.match(alta, /\$estadoInicial=\(\$historica&&is_array\(\$curso\)/,'Un alta histórica terminada debe tener un estado actual seguro en vez de fingir una inscripción vigente.');
 assert.match(alta, /hache_admin_history\(\$pdo,\$id,'INTENSIVO'/);
 assert.match(alta, /if\(\$historica\)out\(\$respuesta,201\);/,'Una alta histórica no debe ejecutar el notificador de nueva inscripción.');
+assert.match(alta,/SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND intensivo=1/,'Crear un alumno histórico también debe respetar horarios activos.');
 
 assert.match(gestion, /password_verify\(\$password,\$hash\)/);
 assert.match(gestion, /periodos_cerrados_alumno/);
