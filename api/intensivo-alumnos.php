@@ -62,7 +62,7 @@ try {
             $stmt=$pdo->prepare("SELECT a.*,s.clave AS sede_clave,s.nombre AS sede_nombre FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id WHERE a.id=:id AND a.sede_id=:s AND a.estado_administrativo<>'BAJA' LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$alumnoNotificacion=$stmt->fetch();if(!$alumnoNotificacion){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El alumno no pertenece a la sede del curso o está dado de baja']);exit;}
         }
 
-        $stmt=$pdo->prepare("SELECT id,hora_inicio,hora_fin,activo FROM horarios WHERE id=:id AND sede_id=:s AND intensivo=1 AND (activo=1 OR :hist=1) LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$horarioId,':s'=>$sedeId,':hist'=>$historica?1:0]);$horarioNotificacion=$stmt->fetch();if(!$horarioNotificacion){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El horario no pertenece a la sede del curso']);exit;}
+        $stmt=$pdo->prepare("SELECT id,hora_inicio,hora_fin FROM horarios WHERE id=:id AND sede_id=:s AND intensivo=1 AND (activo=1 OR :hist=1) LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$horarioId,':s'=>$sedeId,':hist'=>$historica?1:0]);$horarioNotificacion=$stmt->fetch();if(!$horarioNotificacion){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El horario no pertenece a la sede del curso']);exit;}
         $stmt=$pdo->prepare("SELECT id FROM curso_intensivo_alumnos WHERE curso_intensivo_id=:c AND alumno_id=:a LIMIT 1 FOR UPDATE");$stmt->execute([':c'=>$cursoId,':a'=>$alumnoId]);if($stmt->fetch()){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El alumno ya está inscrito en este curso intensivo']);exit;}
 
         if($historica){
