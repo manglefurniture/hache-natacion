@@ -32,7 +32,7 @@
             "name": "enrollment_form",
             "children": [
               {"type": "TextHeading", "text": "Inscripción al intensivo"},
-              {"type": "TextCaption", "text": "Sede fija"},
+              {"type": "TextCaption", "text": "Sede fija:"},
               {"type": "TextBody", "text": "${data.venue_label}"},
               {"type": "TextCaption", "text": "Si necesitas otra sede, cancela y regresa al chat."},
               {"type": "TextInput", "name": "full_name", "label": "Nombre completo", "required": true},
