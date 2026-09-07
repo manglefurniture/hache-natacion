@@ -18,7 +18,10 @@ function hache_sharky_whatsapp_family_age_scope_request(array $event): bool
     if(trim((string)($event['interactive_id']??''))!=='')return false;
     $t=hache_sharky_orchestrator_normalize((string)($event['text']??''));
     if($t==='')return false;
-    return preg_match('/\b(?:bebes?|bebe|matronatacion|maternatacion|recien\s+nacid[oa]s?|ninos?|ninas?)\b/u',$t)===1;
+    // This shortcut is intentionally limited to unmistakable baby/matronatación
+    // requests. Older children may be eligible from age 12 and must continue
+    // through the normal explicit-age policy instead of being rejected here.
+    return preg_match('/\b(?:bebes?|bebe|matronatacion|maternatacion|recien\s+nacid[oa]s?)\b/u',$t)===1;
 }
 
 function hache_sharky_whatsapp_family_age_scope_message(int $minAge=12): string
@@ -49,6 +52,12 @@ function hache_sharky_whatsapp_now_not_request(array $event): bool
     if($id!=='')return false;
     $t=hache_sharky_orchestrator_normalize((string)($event['text']??''));
     return preg_match('/^(?:ahora\s+no|por\s+ahora\s+no|no\s+por\s+ahora|todavia\s+no|aun\s+no)[.! ]*$/u',$t)===1;
+}
+
+function hache_sharky_whatsapp_pause_eligible(array $state,array $event): bool
+{
+    if(!hache_sharky_whatsapp_now_not_request($event))return false;
+    return is_array($state['flow']??null)||hache_sharky_whatsapp_commercial_ready($state);
 }
 
 function hache_sharky_whatsapp_strip_repeated_greeting_body(string $body): string
@@ -397,6 +406,22 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
                 hache_sharky_db_state_save($pdo,$contact,$state);
                 hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
                 $result=['skip'=>false,'code'=>'FAMILY_AGE_SCOPE_UNAVAILABLE','state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+            }elseif($directChat&&hache_sharky_whatsapp_pause_eligible($deferredState,$event)){
+                $hash=hache_sharky_orchestrator_contact_hash($contact);
+                if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                    hache_sharky_orchestrator_unlock($lock);
+                    return ['skip'=>true,'code'=>'DUPLICATE'];
+                }
+                // Pause before the orchestrator can reinterpret typed “Ahora no” as
+                // ordinary conversation and repeat the pending commercial offer.
+                $state=hache_sharky_orchestrator_clear_flow($deferredState);
+                $state['updated_at']=$now;$state['last_user_text']=trim((string)($event['text']??''));
+                $state=hache_sharky_whatsapp_mark_followup_paused($state,$now,'user_now_not');
+                $ref=hache_sharky_orchestrator_referral($event,$now);if($ref)$state=hache_sharky_orchestrator_capture_referral($state,$ref);
+                $decision=hache_sharky_orchestrator_decision('flow_paused','Perfecto 😊 Lo dejamos en pausa. Cuando quieras retomarlo, seguimos desde aquí.');
+                hache_sharky_db_state_save($pdo,$contact,$state);
+                hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                $result=['skip'=>false,'code'=>'FLOW_PAUSED','state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
             }elseif(hache_sharky_whatsapp_deferred_close_eligible($deferredState,$event)){
                 $state=$deferredState;
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
@@ -469,6 +494,8 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
             }
         }
 
+        // Safety net for any future controlled-flow path that still returns the
+        // legacy cancellation decision for an explicit “Ahora no”.
         $decision=is_array($result['decision']??null)?$result['decision']:[];
         if(hache_sharky_whatsapp_now_not_request($event)&&($decision['kind']??'')==='flow_cancelled'){
             $state=is_array($result['state']??null)?$result['state']:[];
