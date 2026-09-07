@@ -24,6 +24,21 @@ function hache_sharky_member_routing_handoff_requested(string $text): bool
     return false;
 }
 
+function hache_sharky_member_deterministic_event(PDO $pdo,array $event,array $state): bool
+{
+    $kind=(string)($event['kind']??'');
+    if(in_array($kind,[HACHE_SHARKY_MEMBER_EVIDENCE_KIND,HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND],true))return true;
+
+    $flow=hache_sharky_member_flow($state);$flowName=(string)($flow['name']??'');
+    if(in_array($flowName,['absence','teacher_cancel'],true))return true;
+
+    $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
+    $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,(string)($event['from']??''));
+    if(($teacher['found']??false)===true&&in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
+
+    return in_array($intent,['greeting','class_today','payments','absence','repos','member:absence_no_evidence','member:absence_add_evidence','member:absence_confirm','member:absence_abort','absence_date'],true);
+}
+
 function hache_sharky_member_supported_event(PDO $pdo,array $event): bool
 {
     if(!hache_sharky_member_routing_ready($pdo))return false;
@@ -38,18 +53,7 @@ function hache_sharky_member_supported_event(PDO $pdo,array $event): bool
     if($messageId!==''&&function_exists('hache_sharky_inbox_handoff_pending')&&hache_sharky_inbox_handoff_pending($pdo,$messageId))return false;
 
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return false;}
-    $flow=hache_sharky_member_flow($state);$flowName=(string)($flow['name']??'');
-    $kind=(string)($event['kind']??'');
-
-    if(in_array($kind,[HACHE_SHARKY_MEMBER_EVIDENCE_KIND,HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND],true))return true;
-    if(in_array($flowName,['absence','member_payment_transfer','teacher_cancel'],true))return true;
-
-    $text=trim((string)($event['text']??''));
-    $interactiveId=(string)($event['interactive_id']??'');
-    $intent=hache_sharky_member_intent($text,$interactiveId);
-
-    $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
-    if(($teacher['found']??false)===true&&in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
+    if(hache_sharky_member_deterministic_event($pdo,$event,$state))return true;
 
     $student=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
     if(($student['found']??false)!==true)return false;
@@ -58,9 +62,7 @@ function hache_sharky_member_supported_event(PDO $pdo,array $event): bool
     // handoff rule) keeps using the controlled takeover path. Everything else
     // from a known student stays with Sharky instead of falling into the legacy
     // "known student = human" shortcut.
-    if(hache_sharky_member_routing_handoff_requested($text))return false;
-
-    if(in_array($intent,['greeting','class_today','payments','absence','repos','member:absence_no_evidence','member:absence_add_evidence','member:absence_confirm','member:absence_abort','absence_date'],true))return true;
+    if(hache_sharky_member_routing_handoff_requested((string)($event['text']??'')))return false;
 
     return trim((string)($event['type']??''))!=='';
 }
@@ -118,11 +120,14 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if($paymentResult!==null)return $paymentResult;
     if(!hache_sharky_member_supported_event($pdo,$event))return null;
 
-    $result=hache_sharky_member_process_event($pdo,$event,$business);
-    if($result!==null)return $result;
+    try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return null;}
+    if(hache_sharky_member_deterministic_event($pdo,$event,$state)){
+        return hache_sharky_member_process_event($pdo,$event,$business);
+    }
 
     // Member-ops intentionally handles only deterministic operations. A known
     // student with another benign question must stay with Sharky rather than be
-    // auto-handed to a person by the old batching policy.
+    // auto-handed to a person by the old batching policy. Route it directly to
+    // the fallback so the same inbox receipt is claimed exactly once.
     return hache_sharky_member_student_fallback($pdo,$event);
 }
