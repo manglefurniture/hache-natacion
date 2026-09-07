@@ -1,0 +1,53 @@
+{
+  "version": "7.0",
+  "screens": [
+    {
+      "id": "CARD_PROOF",
+      "title": "Pago con tarjeta",
+      "terminal": true,
+      "data": {
+        "payment_url": {"type": "string", "__example__": "https://www.mercadopago.com.mx/checkout/v1/redirect"},
+        "amount_label": {"type": "string", "__example__": "$1,260 MXN"},
+        "surcharge_label": {"type": "string", "__example__": "+5% de procesamiento"},
+        "student_id": {"type": "string", "__example__": "student-id"},
+        "course_id": {"type": "string", "__example__": "course-id"},
+        "external_reference": {"type": "string", "__example__": "sharky:reference"},
+        "preference_id": {"type": "string", "__example__": "preference-id"}
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "card_proof_form",
+            "children": [
+              {"type": "TextHeading", "text": "Tarjeta · Mercado Pago"},
+              {"type": "TextBody", "text": "Total con tarjeta: ${data.amount_label}"},
+              {"type": "TextCaption", "text": "${data.surcharge_label}"},
+              {"type": "TextBody", "text": "La transferencia SPEI sigue disponible sin recargo si prefieres cambiar de método."},
+              {"type": "EmbeddedLink", "text": "Abrir Mercado Pago", "on-click-action": {"name": "open_url", "url": "${data.payment_url}"}},
+              {"type": "TextCaption", "text": "Después del pago, vuelve aquí y sube una captura del comprobante."},
+              {"type": "PhotoPicker", "name": "proof", "label": "Comprobante de pago", "description": "Captura del pago realizado en Mercado Pago", "photo-source": "camera_gallery", "min-uploaded-photos": 1, "max-uploaded-photos": 1},
+              {
+                "type": "Footer",
+                "label": "Enviar comprobante",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "flow_kind": "payment_proof",
+                    "method": "card",
+                    "student_id": "${data.student_id}",
+                    "course_id": "${data.course_id}",
+                    "external_reference": "${data.external_reference}",
+                    "preference_id": "${data.preference_id}",
+                    "media": "${form.proof}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

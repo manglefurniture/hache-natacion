@@ -40,6 +40,9 @@ function hache_sharky_whatsapp_flows_decorate_events(array $events,array $payloa
 function hache_sharky_whatsapp_birthdate_flow_response_date(string $responseJson,?string $today=null): ?string
 {
     $data=json_decode($responseJson,true);if(!is_array($data))return null;
+    // Multi-field enrollment/payment Flows carry their own typed contract and
+    // must never be duplicated as the legacy one-field birthdate event.
+    if(trim((string)($data['flow_kind']??''))!=='')return null;
     $birthdate=trim((string)($data['birthdate']??''));if($birthdate==='')return null;
     if(function_exists('hache_sharky_orchestrator_parse_birthdate')){
         return hache_sharky_orchestrator_parse_birthdate($birthdate,$today);

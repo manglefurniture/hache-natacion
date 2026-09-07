@@ -1,0 +1,51 @@
+{
+  "version": "7.0",
+  "screens": [
+    {
+      "id": "TRANSFER_PROOF",
+      "title": "Transferencia SPEI",
+      "terminal": true,
+      "data": {
+        "institution": {"type": "string", "__example__": "Mercado Pago W"},
+        "beneficiary": {"type": "string", "__example__": "Heidy Garcia Liranza"},
+        "clabe": {"type": "string", "__example__": "123456789012345678"},
+        "amount_label": {"type": "string", "__example__": "$1,200 MXN"},
+        "student_id": {"type": "string", "__example__": "student-id"},
+        "course_id": {"type": "string", "__example__": "course-id"}
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "transfer_proof_form",
+            "children": [
+              {"type": "TextHeading", "text": "Transferencia recomendada"},
+              {"type": "TextBody", "text": "Importe: ${data.amount_label}"},
+              {"type": "TextBody", "text": "Institución: ${data.institution}"},
+              {"type": "TextBody", "text": "Beneficiario: ${data.beneficiary}"},
+              {"type": "TextSubheading", "text": "CLABE SPEI"},
+              {"type": "TextBody", "text": "${data.clabe}"},
+              {"type": "TextCaption", "text": "Realiza la transferencia y sube aquí una captura del comprobante."},
+              {"type": "PhotoPicker", "name": "proof", "label": "Comprobante de pago", "description": "Captura o foto del comprobante SPEI", "photo-source": "camera_gallery", "min-uploaded-photos": 1, "max-uploaded-photos": 1},
+              {
+                "type": "Footer",
+                "label": "Enviar comprobante",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "flow_kind": "payment_proof",
+                    "method": "transfer",
+                    "student_id": "${data.student_id}",
+                    "course_id": "${data.course_id}",
+                    "media": "${form.proof}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
