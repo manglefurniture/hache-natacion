@@ -6,7 +6,7 @@ require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-mercadopago.php';
 
 const HACHE_SHARKY_MEMBER_EVIDENCE_KIND = 'member_absence_evidence';
-const HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND = 'member_payment_proof';
+const HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND = HACHE_SHARKY_MEMBER_EVIDENCE_KIND;
 const HACHE_SHARKY_MEMBER_TIMEZONE = 'America/Cancun';
 
 function hache_sharky_member_phone(string $contact): ?string
