@@ -17,6 +17,7 @@ function sharky_lab_json(int $status,array $body): never
 
 function sharky_member_should_handle(PDO $pdo,array $event): bool
 {
+    if(!hache_sharky_member_schema_ready($pdo)||!hache_sharky_member_payments_schema_ready($pdo))return false;
     if(trim((string)($event['group_id']??''))!=='')return false;
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';if($contact==='')return false;
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return false;}
@@ -48,6 +49,10 @@ $payload=json_decode($raw,true);if(!is_array($payload))sharky_lab_json(400,['ok'
 
 $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)sharky_lab_json(503,['ok'=>false,'error'=>'Database unavailable']);
 if(!hache_sharky_orchestrator_store_ready($pdo))sharky_lab_json(503,['ok'=>false,'error'=>'Sharky migration incomplete']);
+// The code may deploy before the additive member migrations are executed. Keep
+// the new routes completely dormant until every required table exists so the
+// current production behavior remains unchanged during that controlled window.
+$memberOpsReady=hache_sharky_member_schema_ready($pdo)&&hache_sharky_member_payments_schema_ready($pdo);
 
 // Delivery/read evidence is accepted only after the Meta signature above. The
 // optional schema keeps deploy-before-migration backward compatible; once it is
@@ -68,7 +73,7 @@ if(!$groupsEnabled&&$groupCount>0){
 // When an absence flow is waiting for evidence, that same Meta message must have
 // exactly one durable receipt, owned by member-ops; otherwise the generic media
 // copy would mark the shared message ID processed before the absence flow claims it.
-$memberEvidenceEvents=hache_sharky_member_extract_media_events($pdo,$payload);
+$memberEvidenceEvents=$memberOpsReady?hache_sharky_member_extract_media_events($pdo,$payload):[];
 $memberEvidenceIds=[];
 foreach($memberEvidenceEvents as $memberEvidenceEvent){
     $memberEvidenceId=trim((string)($memberEvidenceEvent['id']??''));
@@ -129,11 +134,13 @@ foreach($processing as $event){
         hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
         continue;
     }
-    $memberPayment=hache_sharky_member_payment_process_event($pdo,$event,$business);
-    if($memberPayment!==null)continue;
-    if(sharky_member_should_handle($pdo,$event)){
-        hache_sharky_member_process_event($pdo,$event,$business);
-        continue;
+    if($memberOpsReady){
+        $memberPayment=hache_sharky_member_payment_process_event($pdo,$event,$business);
+        if($memberPayment!==null)continue;
+        if(sharky_member_should_handle($pdo,$event)){
+            hache_sharky_member_process_event($pdo,$event,$business);
+            continue;
+        }
     }
     hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
 }
