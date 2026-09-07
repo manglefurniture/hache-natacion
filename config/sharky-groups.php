@@ -96,6 +96,7 @@ function hache_sharky_groups_decorate_events(array $events,array $payload): arra
         if(!is_array($event))continue;
         $id=trim((string)($event['id']??''));
         if($id!==''&&isset($map[$id]))$event['group_id']=$map[$id];
+        $event=hache_sharky_whatsapp_birthdate_text_compat($event);
     }
     unset($event);
     return $events;
