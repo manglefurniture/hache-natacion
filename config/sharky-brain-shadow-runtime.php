@@ -5,11 +5,6 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-conversation-brain.php';
 require_once __DIR__.'/sharky-brain-diagnostics.php';
 
-/**
- * Map the already-selected live result into the same coarse action vocabulary
- * used by the shadow Brain. This does not affect routing; it exists only so the
- * production observer can measure agreement/drift without logging user content.
- */
 function hache_sharky_brain_shadow_live_action(array $beforeState,array $afterState,array $result): string
 {
     $decision=is_array($result['decision']??null)?$result['decision']:[];
@@ -48,13 +43,17 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
     $eligiblePause=$rawPause
         &&function_exists('hache_sharky_whatsapp_pause_eligible')
         &&hache_sharky_whatsapp_pause_eligible($beforeState,$event);
-    $sideQuestion=$decisionKind==='side_question'
-        ||(function_exists('hache_sharky_whatsapp_is_side_question')&&hache_sharky_whatsapp_is_side_question($beforeState,$event));
 
-    // Adapter-owned presentation decisions are compared as high-level Brain
-    // policy rather than being hidden behind preserve_deterministic_decision.
-    $brainDecisionKind=in_array($decisionKind,['commercial_next_action','conversation_identity_prompt'],true)
+    // These adapter-owned presentation decisions are conversational policy for
+    // Brain comparison. A real side_question is explicitly included so the new
+    // protected-decision guard does not suppress legitimate flow interruptions.
+    $brainDecisionKind=in_array($decisionKind,['commercial_next_action','conversation_identity_prompt','side_question'],true)
         ?'conversation':($decisionKind!==''?$decisionKind:'conversation');
+
+    $heuristicSideQuestion=function_exists('hache_sharky_whatsapp_is_side_question')
+        &&hache_sharky_whatsapp_is_side_question($beforeState,$event);
+    $sideQuestion=$decisionKind==='side_question'
+        ||($brainDecisionKind==='conversation'&&$heuristicSideQuestion);
 
     $signals=[
         'decision_kind'=>$brainDecisionKind,
@@ -63,8 +62,6 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
         'known_student'=>$knownStudent,
         'family_age_unavailable'=>$decisionKind==='family_age_scope_unavailable',
         'pause_requested'=>$rawPause,
-        // This is the exact live eligibility predicate, not merely recognition
-        // of the words/button title "Ahora no".
         'pause_eligible'=>$eligiblePause,
         'policy_handoff_required'=>(($decisionAction['type']??'')==='human_takeover'&&!$knownStudent),
         'side_question'=>$sideQuestion,
@@ -85,13 +82,7 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
     ];
 }
 
-/**
- * Read-only production shadow observer.
- *
- * It intentionally cannot modify $result/$state, enqueue an outbox row or call
- * OpenAI. Failures are swallowed after a metric/log marker so shadow telemetry
- * can never block a customer conversation.
- */
+/** Read-only production shadow observer. */
 function hache_sharky_brain_shadow_observe(array $beforeState,array $afterState,array $event,array $result,bool $directChat=true): void
 {
     try{
@@ -103,17 +94,16 @@ function hache_sharky_brain_shadow_observe(array $beforeState,array $afterState,
         $decisionKind=(string)($evaluation['decision_kind']??'');
 
         if(function_exists('hache_sharky_metric_increment')){
-            // Existing lifetime shadow counters remain intact.
+            // Lifetime counters remain continuous across Brain policy versions.
             hache_sharky_metric_increment('brain_shadow_observed');
             hache_sharky_metric_increment($match?'brain_shadow_match':'brain_shadow_mismatch');
 
-            // Diagnostic cohort starts with this feature. Readiness for Phase 2B
-            // uses only this cohort so pre-diagnostic mismatches are not guessed.
-            hache_sharky_metric_increment('brain_diag_observed');
+            // Readiness uses a fresh v2 cohort so the reviewed v1 protected
+            // mismatch cannot linger in the activation gate after this fix.
+            hache_sharky_metric_increment(hache_sharky_brain_diag_observed_metric_key());
             if(!$match)hache_sharky_metric_increment(hache_sharky_brain_diag_metric_key($live,$brainAction));
         }
         if(!$match){
-            // No phone, name, message text, state JSON or campaign data is logged.
             error_log('[sharky-brain-shadow] mismatch live='.$live.' brain='.$brainAction
                 .' reason='.(string)($brain['reason']??'unknown').' decision='.$decisionKind);
         }

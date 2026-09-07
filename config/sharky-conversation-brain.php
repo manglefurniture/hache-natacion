@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Sharky 3.0 Conversation Brain — shadow policy v1.
+ * Sharky 3.0 Conversation Brain — shadow policy v2.
  *
  * This module is deliberately pure: it does not send messages, persist state,
  * call OpenAI, touch payments or execute business actions. It receives the
@@ -14,7 +14,7 @@ declare(strict_types=1);
  * allowed to route live.
  */
 
-const HACHE_SHARKY_BRAIN_VERSION = '3.0-shadow-v1';
+const HACHE_SHARKY_BRAIN_VERSION = '3.0-shadow-v2';
 
 /** @return list<string> */
 function hache_sharky_brain_precedence(): array
@@ -111,25 +111,17 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
         ];
     };
 
-    // Priority 1: once a person owns the chat, automation must remain silent.
     if (($signals['human_takeover_active'] ?? false) === true) {
         return $select('wait_for_human', 'human_takeover_active', 'silent');
     }
 
-    // Current operating policy: a known student in a direct WhatsApp chat goes
-    // to the team until student self-service is deliberately re-enabled.
     if ($directChat && ($signals['known_student'] ?? false) === true) {
         return $select('handoff_known_student', 'known_student_direct_handoff_policy', 'human');
     }
 
-    // Explicit service/policy closures win before commercial continuation.
     if (($signals['family_age_unavailable'] ?? false) === true) {
         return $select('close_age_scope', 'baby_or_maternal_swim_out_of_scope', 'deterministic');
     }
-    // Recognition of the words/button "Ahora no" is intentionally not enough.
-    // The caller must supply the exact live eligibility decision (active flow or
-    // commercially-ready prospect), otherwise stale/first-contact pauses remain
-    // ordinary conversation just as they do in production today.
     if (($signals['pause_eligible'] ?? false) === true) {
         return $select('pause_commercial_intent', 'user_requested_eligible_pause', 'deterministic');
     }
@@ -137,30 +129,31 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
         return $select('handoff_policy_exception', 'business_policy_requires_human', 'human');
     }
 
-    // Informational interruptions temporarily outrank the active form, but the
-    // form remains durable and resumes after the answer.
-    if (($signals['side_question'] ?? false) === true) {
+    // A side-question may interrupt a controlled flow only when the live turn is
+    // explicitly conversational. A heuristic alone can never override a concrete
+    // deterministic decision.
+    if ($decisionKind === 'conversation' && ($signals['side_question'] ?? false) === true) {
         return $select('answer_side_question', 'informational_interrupt_preserves_flow', 'conversation');
     }
 
+    // Keep the existing diagnostic vocabulary for any active controlled flow.
+    // Live shadow mapping also classifies these decisions as continue_controlled_flow,
+    // including deterministic prompts such as prospect_swim_prompt.
     if (($after['flow_name'] ?? null) !== null) {
         return $select('continue_controlled_flow', 'controlled_flow_is_active', 'deterministic');
     }
 
-    // A deterministic orchestrator decision is already safer/more specific than
-    // a generic next-best-action recommendation and therefore remains authoritative.
+    // Outside a controlled flow, a concrete orchestrator decision is already
+    // safer/more specific than any conversational heuristic and remains protected.
     if ($decisionKind !== '' && $decisionKind !== 'conversation') {
         return $select('preserve_deterministic_decision', 'orchestrator_decision_is_authoritative', 'deterministic');
     }
 
-    // New-prospect identity transition starts the guided qualification once.
     if (($before['identity_kind'] ?? 'unknown') === 'unknown'
         && ($after['identity_kind'] ?? 'unknown') === 'prospect') {
         return $select('start_guided_qualification', 'identity_transitioned_to_prospect', 'guided');
     }
 
-    // Commercial readiness is enough once program + venue are known. Age is not
-    // a mandatory discovery slot unless the person volunteers it.
     if (($after['commercial_ready'] ?? false) === true) {
         if (($signals['low_information'] ?? false) === true) {
             return $select('show_commercial_menu', 'commercial_context_ready_on_reengagement', 'commercial');
