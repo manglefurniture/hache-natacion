@@ -14,6 +14,8 @@ const quickPay = read('public/assets/alumnos-quick-pay.js');
 const paymentContext = read('api/pago-contexto.php');
 const paymentUi = read('public/assets/pagos-flow-v2.js');
 const paymentCore = read('api/pagos-smart.php');
+const paymentPage = read('public/pagos.php');
+const historicalPaymentCourses = read('api/alumno-intensivos-pago.php');
 const statusRules = read('config/intensivos-estado.php');
 const intensivesApi = read('api/intensivos.php');
 const bootstrap = read('config/backend-bootstrap.php');
@@ -52,6 +54,30 @@ assert.ok(paymentUi.includes('Este curso intensivo ya está pagado.'));
 assert.match(paymentCore, /WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1/,
   'La barrera transaccional contra pagos duplicados debe permanecer intacta');
 assert.ok(paymentCore.includes('Este alumno ya pagó este curso intensivo'), 'Debe conservarse el rechazo explícito del duplicado');
+
+// ADMIN puede seleccionar expresamente un curso histórico sin reabrirlo. La
+// selección explícita valida la relación alumno+curso+sede, pero no exige que el
+// curso siga PROGRAMADO/EN_CURSO. Sin id explícito, el fallback viejo sí queda
+// restringido a un intensivo activo para no asociar dinero histórico por error.
+assert.ok(paymentCore.includes('function hache_pago_resolver_intensivo'));
+assert.match(paymentCore, /ci\.id=:curso AND ci\.sede_id=:sede[\s\S]{0,80}LIMIT 1\s+FOR UPDATE/);
+assert.match(paymentCore, /ci\.estado IN \('PROGRAMADO','EN_CURSO'\)[\s\S]{0,180}ORDER BY ci\.fecha_inicio DESC LIMIT 1\s+FOR UPDATE/);
+assert.ok(paymentCore.includes('hache_admin_historical_note'));
+assert.ok(paymentCore.includes('pago_intensivo_historico'));
+assert.ok(paymentCore.includes("hache_admin_history($pdo,$alumnoId,'PAGO'"));
+
+// El formulario administrativo muestra todos los intensivos en los que el
+// alumno está inscrito, incluidos históricos, obliga a seleccionar uno y envía
+// su id al core de pagos. Un curso ya pagado no puede volver a elegirse.
+assert.ok(paymentPage.includes('id="curso_intensivo_id"'));
+assert.ok(paymentPage.includes('/api/alumno-intensivos-pago.php?'));
+assert.ok(paymentPage.includes("if(tipo==='INTENSIVO')datos.curso_intensivo_id=cursoId"));
+assert.ok(paymentPage.includes("option.disabled=curso.pagado===true"));
+assert.ok(paymentPage.includes("query.get('curso_intensivo_id')"));
+assert.match(historicalPaymentCourses, /WHERE cia\.alumno_id=:a AND ci\.sede_id=:s/);
+assert.doesNotMatch(historicalPaymentCourses, /ci\.estado IN \('PROGRAMADO','EN_CURSO'\)/, 'El catálogo de ADMIN debe incluir cursos terminados');
+assert.ok(historicalPaymentCourses.includes("p.tipo='INTENSIVO'"));
+assert.ok(historicalPaymentCourses.includes("p.estado='VALIDO'"));
 
 // El pago rápido del listado general mantiene su preflight añadido previamente.
 assert.ok(quickPay.includes('/api/intensivo-pago-estado.php?'), 'El pago rápido debe refrescar el estado del intensivo');

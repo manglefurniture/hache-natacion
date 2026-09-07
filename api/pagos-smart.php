@@ -6,6 +6,7 @@ require_once __DIR__.'/../config/auth.php';
 $me=auth_require(['ADMIN']);
 require_once __DIR__.'/../config/reglas-acceso.php';
 require_once __DIR__.'/../config/intensivos-estado.php';
+require_once __DIR__.'/../config/admin-historical-corrections.php';
 $config=require __DIR__.'/../config/database.php';
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST'){http_response_code(405);header('Allow: POST');echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);exit;}
 
@@ -32,6 +33,39 @@ function fechaPagoExacta(string $value):DateTimeImmutable{
     throw new InvalidArgumentException('Fecha de pago inválida');
 }
 
+/**
+ * An explicit course id is authoritative for ADMIN and may point to a finished
+ * course. That is the controlled path used while importing historical records.
+ * Without an explicit id we preserve the old behaviour and only infer an active
+ * intensive, so normal quick-pay cannot silently attach money to an old course.
+ */
+function hache_pago_resolver_intensivo(PDO $pdo,string $alumnoId,string $sedeId,string $cursoId): array
+{
+    if($cursoId!==''){
+        $st=$pdo->prepare("SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.estado,ci.precio
+            FROM curso_intensivo_alumnos cia
+            INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
+            WHERE cia.alumno_id=:alumno AND ci.id=:curso AND ci.sede_id=:sede
+            LIMIT 1
+            FOR UPDATE");
+        $st->execute([':alumno'=>$alumnoId,':curso'=>$cursoId,':sede'=>$sedeId]);
+        $course=$st->fetch(PDO::FETCH_ASSOC);
+        if(!$course)throw new RuntimeException('El alumno no pertenece al curso intensivo seleccionado en esta sede');
+        return $course;
+    }
+
+    $st=$pdo->prepare("SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.estado,ci.precio
+        FROM curso_intensivo_alumnos cia
+        INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
+        WHERE cia.alumno_id=:alumno AND ci.sede_id=:sede AND ci.estado IN ('PROGRAMADO','EN_CURSO')
+        ORDER BY ci.fecha_inicio DESC LIMIT 1
+        FOR UPDATE");
+    $st->execute([':alumno'=>$alumnoId,':sede'=>$sedeId]);
+    $course=$st->fetch(PDO::FETCH_ASSOC);
+    if(!$course)throw new RuntimeException('Selecciona el curso intensivo al que corresponde este pago');
+    return $course;
+}
+
 try{
 $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
 $input=json_decode(file_get_contents('php://input'),true);if(!is_array($input)){http_response_code(400);echo json_encode(['ok'=>false,'error'=>'JSON inválido']);exit;}
@@ -50,7 +84,7 @@ $ciclo=$alumno['ciclo_pago']!==null?strtoupper((string)$alumno['ciclo_pago']):nu
 if($sedeClave==='PALAPAS'&&$tipo==='MENSUALIDAD'&&!in_array($ciclo,['P1','P15'],true))throw new RuntimeException('El alumno regular de Palapas no tiene ciclo P1/P15 definido');
 if($tipo==='MENSUALIDAD'&&!$periodoExplicito){$actual=regla_periodo_regular_actual($sedeClave,$ciclo,$fechaPago);$periodoMes=(int)$actual['mes'];$periodoAnio=(int)$actual['anio'];}
 $periodo=periodoMensualidad($sedeClave,$ciclo,$periodoAnio,$periodoMes);$periodoInicio=$periodo['inicio'];$periodoFin=$periodo['fin'];$periodoActual=periodoActualInicio($sedeClave,$ciclo);
-$inscripcionId=null;$mensualidadId=null;$intensivoId=null;$cambioPlanProgramado=false;
+$inscripcionId=null;$mensualidadId=null;$intensivoId=null;$cambioPlanProgramado=false;$pagoIntensivoHistorico=false;$cursoPago=null;
 if($tipo==='INSCRIPCION'){
  $stmt=$pdo->prepare("SELECT p.fecha,p.folio FROM pagos p INNER JOIN inscripciones i ON i.id=p.inscripcion_id WHERE p.alumno_id=:id AND i.sede_id=:s AND p.tipo='INSCRIPCION' AND p.estado='VALIDO' ORDER BY p.fecha DESC LIMIT 1");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$ult=$stmt->fetch();
  if($ult){$u=new DateTimeImmutable(substr($ult['fecha'],0,10));$permitida=$u->modify('first day of this month')->modify('+3 months');if($fechaPago<$permitida)throw new RuntimeException('No corresponde nueva inscripción todavía. Próxima fecha posible: '.$permitida->format('d/m/Y'));}
@@ -66,9 +100,22 @@ if($tipo==='INSCRIPCION'){
  if($exist){$mensualidadId=$exist['id'];$stmt=$pdo->prepare("UPDATE mensualidades SET periodo_inicio=:pinicio,periodo_fin=:pfin,plan_id=:plan,importe_estandar=:estandar,importe_a_cobrar=:iac,importe_cobrado=:ic,estado='PAGADA',fecha_pago=:fecha,observacion=COALESCE(:obs,observacion),updated_at=NOW() WHERE id=:id");$stmt->execute([':pinicio'=>$periodoInicio->format('Y-m-d'),':pfin'=>$periodoFin->format('Y-m-d'),':plan'=>$planPagoId,':estandar'=>$estandar,':iac'=>$importeDecimal,':ic'=>$importeDecimal,':fecha'=>$fechaSql,':obs'=>$observacion!==''?$observacion:null,':id'=>$mensualidadId]);}
  else{$mensualidadId=$pdo->query("SELECT UUID()")->fetchColumn();$stmt=$pdo->prepare("INSERT INTO mensualidades(id,sede_id,alumno_id,mes,anio,periodo_inicio,periodo_fin,plan_id,importe_estandar,importe_a_cobrar,importe_cobrado,estado,observacion,fecha_pago,created_by) VALUES(:id,:sede,:alumno,:mes,:anio,:pinicio,:pfin,:plan,:estandar,:iac,:ic,'PAGADA',:obs,:fecha,:uid)");$stmt->execute([':id'=>$mensualidadId,':sede'=>$sedeId,':alumno'=>$alumnoId,':mes'=>$periodoMes,':anio'=>$periodoAnio,':pinicio'=>$periodoInicio->format('Y-m-d'),':pfin'=>$periodoFin->format('Y-m-d'),':plan'=>$planPagoId,':estandar'=>$estandar,':iac'=>$importeDecimal,':ic'=>$importeDecimal,':obs'=>$observacion!==''?$observacion:null,':fecha'=>$fechaSql,':uid'=>$createdBy]);}
 }else{
- if($cursoId!==''){$stmt=$pdo->prepare("SELECT ci.id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:alumno AND ci.id=:curso AND ci.sede_id=:sede AND ci.estado IN ('PROGRAMADO','EN_CURSO') LIMIT 1");$stmt->execute([':alumno'=>$alumnoId,':curso'=>$cursoId,':sede'=>$sedeId]);}else{$stmt=$pdo->prepare("SELECT ci.id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:alumno AND ci.sede_id=:sede AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1");$stmt->execute([':alumno'=>$alumnoId,':sede'=>$sedeId]);}$curso=$stmt->fetch();if(!$curso)throw new RuntimeException('El alumno no está inscrito en un intensivo activo de esta sede');$intensivoId=$curso['id'];$stmt=$pdo->prepare("SELECT id FROM pagos WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1");$stmt->execute([':curso'=>$intensivoId,':alumno'=>$alumnoId]);if($stmt->fetch())throw new RuntimeException('Este alumno ya pagó este curso intensivo');
+ $cursoPago=hache_pago_resolver_intensivo($pdo,$alumnoId,$sedeId,$cursoId);
+ $intensivoId=(string)$cursoPago['id'];
+ $stmt=$pdo->prepare("SELECT id FROM pagos WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1");$stmt->execute([':curso'=>$intensivoId,':alumno'=>$alumnoId]);if($stmt->fetch())throw new RuntimeException('Este alumno ya pagó este curso intensivo');
+ $today=(new DateTimeImmutable('today',new DateTimeZone('America/Cancun')))->format('Y-m-d');
+ $pagoIntensivoHistorico=(string)$cursoPago['fecha_fin']<$today;
+ if($pagoIntensivoHistorico){
+     $motivo='Pago del curso intensivo iniciado '.date('d/m/Y',strtotime((string)$cursoPago['fecha_inicio']));
+     $observacion=hache_admin_historical_note($motivo,$observacion);
+     if(mb_strlen($observacion)>1000)throw new RuntimeException('La observación de la corrección histórica excede 1000 caracteres');
+ }
 }
 $stmt=$pdo->prepare("INSERT INTO pagos(alumno_id,inscripcion_id,mensualidad_id,intensivo_id,tipo,importe,metodo,fecha,estado,observacion,created_by) VALUES(:alumno,:ins,:men,:int,:tipo,:importe,:metodo,:fecha,'VALIDO',:obs,:uid)");$stmt->execute([':alumno'=>$alumnoId,':ins'=>$inscripcionId,':men'=>$mensualidadId,':int'=>$intensivoId,':tipo'=>$tipo,':importe'=>$importeDecimal,':metodo'=>$metodo,':fecha'=>$fechaSql,':obs'=>$observacion!==''?$observacion:null,':uid'=>$createdBy]);$folio=(int)$pdo->lastInsertId();
+if($pagoIntensivoHistorico){
+    $st=$pdo->prepare("SELECT id FROM pagos WHERE folio=:f LIMIT 1");$st->execute([':f'=>$folio]);$paymentId=(string)$st->fetchColumn();
+    if($paymentId!=='')hache_admin_history($pdo,$alumnoId,'PAGO','Pago histórico de curso intensivo registrado por ADMIN. Fecha efectiva: '.$fechaSql,$createdBy,'PAGO',$paymentId);
+}
 regla_recalcular_alumno($pdo,$alumnoId);$pdo->commit();
-$stmt=$pdo->prepare("SELECT p.*,a.nombre alumno_nombre FROM pagos p INNER JOIN alumnos a ON a.id=p.alumno_id WHERE p.folio=:folio LIMIT 1");$stmt->execute([':folio'=>$folio]);echo json_encode(['ok'=>true,'mensaje'=>'Pago registrado correctamente','periodo_mensualidad'=>$tipo==='MENSUALIDAD'?['mes'=>$periodoMes,'anio'=>$periodoAnio,'inicio'=>$periodoInicio->format('Y-m-d'),'fin'=>$periodoFin->format('Y-m-d'),'etiqueta'=>$periodo['etiqueta'],'ciclo'=>$ciclo]:null,'cambio_plan_programado'=>$cambioPlanProgramado,'pago'=>$stmt->fetch()],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+$stmt=$pdo->prepare("SELECT p.*,a.nombre alumno_nombre FROM pagos p INNER JOIN alumnos a ON a.id=p.alumno_id WHERE p.folio=:folio LIMIT 1");$stmt->execute([':folio'=>$folio]);echo json_encode(['ok'=>true,'mensaje'=>'Pago registrado correctamente','periodo_mensualidad'=>$tipo==='MENSUALIDAD'?['mes'=>$periodoMes,'anio'=>$periodoAnio,'inicio'=>$periodoInicio->format('Y-m-d'),'fin'=>$periodoFin->format('Y-m-d'),'etiqueta'=>$periodo['etiqueta'],'ciclo'=>$ciclo]:null,'cambio_plan_programado'=>$cambioPlanProgramado,'pago_intensivo_historico'=>$pagoIntensivoHistorico,'pago'=>$stmt->fetch()],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
 }catch(PDOException $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('pagos-smart: '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'No se pudo registrar el pago'],JSON_UNESCAPED_UNICODE);}catch(RuntimeException|InvalidArgumentException $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}catch(Throwable $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('pagos-smart: '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'No se pudo registrar el pago'],JSON_UNESCAPED_UNICODE);}
