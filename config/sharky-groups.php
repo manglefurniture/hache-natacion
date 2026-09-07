@@ -5,6 +5,9 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-whatsapp-flow-runtime.php';
 require_once __DIR__.'/sharky-commerce-flows.php';
 require_once __DIR__.'/sharky-commerce-runtime.php';
+require_once __DIR__.'/sharky-commerce-flow-v2.php';
+
+hache_sharky_commerce_flow_v2_bootstrap();
 
 const HACHE_SHARKY_GROUPS_KEY = 'sharky_grupos_habilitado';
 
