@@ -11,6 +11,16 @@ function hache_sharky_whatsapp_flow_secret(string $name): string
     return '';
 }
 
+function hache_sharky_whatsapp_birthdate_text_compat(array $event): array
+{
+    if(trim((string)($event['interactive_id']??''))!=='')return $event;
+    $text=trim((string)($event['text']??''));if($text==='')return $event;
+    $months='enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sept|sep|set|oct|nov|dic';
+    $normalized=preg_replace('/\b(\d{1,2})\s+(?:de\s+)?('.$months.')\.?\s+del\s+(\d{4})\b/iu','$1 de $2 de $3',$text);
+    if(is_string($normalized)&&$normalized!==$text)$event['text']=$normalized;
+    return $event;
+}
+
 function hache_sharky_whatsapp_birthdate_flow_cache_dir(): string
 {
     if(function_exists('hache_sharky_orchestrator_runtime_dir')){
