@@ -100,7 +100,7 @@ if ($accion === 'PLAN') {
             $stmt->execute([':sede'=>$sedeId,':nombre'=>$nombre,':sesiones'=>$sesiones,':precio'=>$precio,':activo'=>$activo]);
         }
     } catch (PDOException $e) {
-        if ((string)$e->getCode() === '23000') out(['ok'=>false,'error'=>'Ya existe un plan con ese nombre o número de sesiones en esta sede'], 409);
+        if ((string)$e->getCode() === '23000') out(['ok'=>false,'error'=>'Ya existe un plan con ese nombre en esta sede'], 409);
         throw $e;
     }
     out(['ok'=>true]);

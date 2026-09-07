@@ -20,6 +20,9 @@ const statusRules = read('config/intensivos-estado.php');
 const intensivesApi = read('api/intensivos.php');
 const bootstrap = read('config/backend-bootstrap.php');
 const backendMenu = read('public/assets/backend-menu.js');
+const configApi = read('api/configuracion.php');
+const planVariantsMigration = read('database/migrations/20260907_allow_plan_variants_same_sessions.sql');
+const planVariantsRunner = read('bin/migrate-plan-variants.php');
 
 // El estado de pago canónico sigue siendo alumno + curso + INTENSIVO + VALIDO.
 assert.match(statusApi, /p\.alumno_id=cia\.alumno_id/);
@@ -40,15 +43,38 @@ const payLink = detailFlow.indexOf("pagar.href='/pagos.php?alumno_id='", paidBra
 assert.ok(paidBranch >= 0 && payLink > paidBranch, 'El enlace Pagar debe existir únicamente dentro de la rama no pagada');
 assert.ok(detailFlow.slice(paidBranch, payLink).includes('}else{'), 'Pagar debe quedar detrás del else del estado pagado');
 
-// La ruta general de pagos también debe conocer el curso específico y bloquear el duplicado visual.
+// La ruta general de pagos conoce el curso específico, acepta ambos nombres de
+// parámetro históricos y, cuando hay selección explícita, valida exactamente ese
+// curso aunque ya haya terminado.
 assert.match(paymentContext, /pg\.alumno_id=cia\.alumno_id AND pg\.intensivo_id=ci\.id AND pg\.tipo='INTENSIVO' AND pg\.estado='VALIDO'/);
-assert.ok(paymentContext.includes("$cursoId=trim((string)($_GET['curso_id']??''))"));
+assert.ok(paymentContext.includes("$_GET['curso_intensivo_id']??($_GET['curso_id']??'')"));
 assert.ok(paymentContext.includes("$intensivo['pagado']=(int)($intensivo['pagado']??0)===1"));
 assert.ok(paymentContext.includes("$hoyIntensivo=intensivo_hoy_operativo()->format('Y-m-d')"));
-assert.ok(paymentContext.includes('ci.fecha_fin>=:hoy'), 'El contexto no debe depender de un estado persistido ni del huso horario de MariaDB');
-assert.ok(paymentUi.includes("cursoParam=cursoId?'&curso_id='+encodeURIComponent(cursoId):''"));
-assert.ok(paymentUi.includes("tipo==='INTENSIVO'&&ctx.intensivo_activo?.pagado"));
+assert.ok(paymentContext.includes("if($cursoId!=='')"));
+assert.ok(paymentContext.includes('ci.id=:c'));
+assert.ok(paymentContext.includes('ci.fecha_fin>=:hoy'), 'Sin selección explícita, el contexto activo debe seguir usando la fecha operativa');
+assert.ok(paymentContext.includes("'intensivo_seleccionado'=>$cursoId!==''?$intensivo:null"));
+
+// El selector visible es la única fuente de verdad para el POST. No puede quedar
+// un curso_id fijo de la URL sobrescribiendo una selección posterior del ADMIN.
+assert.ok(paymentUi.includes("initialCursoId=qs.get('curso_intensivo_id')||qs.get('curso_id')||''"));
+assert.ok(paymentUi.includes("function selectedCourseId(){return document.getElementById('curso_intensivo_id')?.value||initialCursoId||'';}"));
+assert.ok(paymentUi.includes("const chosen=document.getElementById('curso_intensivo_id')?.value||''"));
+assert.ok(paymentUi.includes('b.curso_intensivo_id=chosen'));
+assert.doesNotMatch(paymentUi, /b\.curso_intensivo_id=cursoId/);
+assert.ok(paymentUi.includes('selectedIntensiveContext()?.pagado'));
 assert.ok(paymentUi.includes('Este curso intensivo ya está pagado.'));
+assert.ok(paymentUi.includes("document.addEventListener('hache:intensivo-seleccionado'"));
+
+// La carga del catálogo solo acepta una respuesta HTTP/JSON con cursos válidos;
+// cualquier 404/500, JSON inválido o payload viejo sin cursos cae al endpoint de
+// compatibilidad en lugar de mostrarse como una lista vacía.
+assert.ok(paymentPage.includes('async function leerCatalogoIntensivos(url)'));
+assert.ok(paymentPage.includes("if(!response.ok)throw new Error('HTTP '+response.status)"));
+assert.ok(paymentPage.includes('!Array.isArray(data.cursos)'));
+assert.ok(paymentPage.includes("intensiveCourses=await leerCatalogoIntensivos('/api/pagos.php?'"));
+assert.ok(paymentPage.includes("intensiveCourses=await leerCatalogoIntensivos('/api/alumno-intensivos-pago.php?'"));
+assert.ok(paymentPage.includes("function cursoSolicitado(){return query.get('curso_intensivo_id')||query.get('curso_id')||'';}"));
 
 // La barrera transaccional auditada permanece intacta como defensa final.
 assert.match(paymentCore, /WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1/,
@@ -74,10 +100,24 @@ assert.ok(paymentPage.includes('/api/alumno-intensivos-pago.php?'));
 assert.ok(paymentPage.includes("if(tipo==='INTENSIVO')datos.curso_intensivo_id=cursoId"));
 assert.ok(paymentPage.includes("option.disabled=curso.pagado===true"));
 assert.ok(paymentPage.includes("query.get('curso_intensivo_id')"));
+assert.ok(paymentPage.includes("query.get('curso_id')"));
 assert.match(historicalPaymentCourses, /WHERE cia\.alumno_id=:a AND ci\.sede_id=:s/);
 assert.doesNotMatch(historicalPaymentCourses, /ci\.estado IN \('PROGRAMADO','EN_CURSO'\)/, 'El catálogo de ADMIN debe incluir cursos terminados');
 assert.ok(historicalPaymentCourses.includes("p.tipo='INTENSIVO'"));
 assert.ok(historicalPaymentCourses.includes("p.estado='VALIDO'"));
+assert.ok(historicalPaymentCourses.includes("require_once __DIR__.'/../config/intensivos-estado.php'"));
+assert.ok(historicalPaymentCourses.includes("$today=intensivo_hoy_operativo()->format('Y-m-d')"));
+assert.doesNotMatch(historicalPaymentCourses, /<date\('Y-m-d'\)/, 'El catálogo histórico no debe usar la zona horaria implícita del servidor');
+
+// Configuración permite variantes comerciales con la misma frecuencia semanal:
+// la unicidad se conserva por nombre de plan, no por sesiones_semana.
+assert.ok(planVariantsMigration.includes('DROP INDEX uq_planes_sede_sesiones'));
+assert.ok(planVariantsMigration.includes("index_name='uq_planes_sede_sesiones'"));
+assert.ok(planVariantsRunner.includes("ALTER TABLE planes DROP INDEX uq_planes_sede_sesiones"));
+assert.ok(planVariantsRunner.includes("index_name='uq_planes_sede_nombre'"));
+assert.ok(planVariantsRunner.includes('PLAN_VARIANTS_MIGRATION_OK'));
+assert.ok(configApi.includes('Ya existe un plan con ese nombre en esta sede'));
+assert.ok(!configApi.includes('nombre o número de sesiones'), 'La API no debe seguir comunicando sesiones_semana como clave única');
 
 // El pago rápido del listado general mantiene su preflight añadido previamente.
 assert.ok(quickPay.includes('/api/intensivo-pago-estado.php?'), 'El pago rápido debe refrescar el estado del intensivo');
