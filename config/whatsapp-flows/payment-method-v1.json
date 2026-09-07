@@ -7,6 +7,8 @@
       "terminal": true,
       "data": {
         "intro": {"type": "string", "__example__": "Te recomendamos transferencia SPEI porque no genera cargos adicionales."},
+        "student_id": {"type": "string", "__example__": "student-id"},
+        "course_id": {"type": "string", "__example__": "course-id"},
         "methods": {
           "type": "array",
           "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}}},
@@ -34,7 +36,9 @@
                   "name": "complete",
                   "payload": {
                     "flow_kind": "payment_method",
-                    "method": "${form.payment_method}"
+                    "method": "${form.payment_method}",
+                    "student_id": "${data.student_id}",
+                    "course_id": "${data.course_id}"
                   }
                 }
               }
