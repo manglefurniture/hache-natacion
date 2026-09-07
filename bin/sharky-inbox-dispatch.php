@@ -29,6 +29,12 @@ try{
             hache_sharky_metric_increment('messages_skipped_group');
             return hache_sharky_orchestrator_mark_processed($pdo,$messageId);
         }
+        // Recovery must preserve the same semantic lane used by the realtime
+        // webhook. Otherwise an encrypted nfm_reply could be replayed as an empty
+        // ordinary message and marked processed without its commerce action.
+        if(hache_sharky_commerce_event_candidate($event)){
+            return hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
+        }
         return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$threshold);
     };
     // Recovery is intentionally bounded: realtime webhook processing does the
