@@ -36,8 +36,8 @@ conversation_cases_ok(($paused['commercial_context']['program']??null)==='intens
 conversation_cases_ok(($paused['commercial_context']['sede_clave']??null)==='PALAPAS','Pausing must preserve the selected venue.');
 $followup=$paused['commercial_context']['_idle_followup']??[];
 conversation_cases_ok(($followup['status']??null)==='completed_optout','Pausing must make already-armed idle follow-ups ineligible for delivery.');
-conversation_cases_ok(($followup['token']??'not-null')===null&&($followup['next_stage']??'not-null')===null,'Pausing must clear the active follow-up token and stage.');
-conversation_cases_ok(($followup['first_due_at']??'not-null')===null&&($followup['second_due_at']??'not-null')===null,'Pausing must clear scheduled follow-up due times.');
+conversation_cases_ok(array_key_exists('token',$followup)&&$followup['token']===null&&array_key_exists('next_stage',$followup)&&$followup['next_stage']===null,'Pausing must clear the active follow-up token and stage.');
+conversation_cases_ok(array_key_exists('first_due_at',$followup)&&$followup['first_due_at']===null&&array_key_exists('second_due_at',$followup)&&$followup['second_due_at']===null,'Pausing must clear scheduled follow-up due times.');
 conversation_cases_ok(($followup['pause_reason']??null)==='user_now_not','The follow-up state must record why it was paused.');
 
 $contact='529983994917';
