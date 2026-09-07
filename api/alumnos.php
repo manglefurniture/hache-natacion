@@ -7,6 +7,7 @@ require_once __DIR__.'/../config/reglas-acceso.php';
 require_once __DIR__.'/../config/telefono.php';
 require_once __DIR__.'/../config/passwords.php';
 require_once __DIR__.'/../config/intensivos-estado.php';
+require_once __DIR__.'/../config/admin-historical-corrections.php';
 $config = require __DIR__ . '/../config/database.php';
 require_once __DIR__.'/../config/notificaciones-email.php';
 
@@ -15,17 +16,12 @@ function out_alta_con_alerta(array $d,array $alumno,string $tipoIngreso):never
 {
     http_response_code(201);
     echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
-
-    // En PHP-FPM la respuesta ya quedó enviada al navegador antes de abrir SMTP.
-    // Si SMTP falla, solo se registra el fallo: el alta ya confirmada no cambia.
     if(function_exists('fastcgi_finish_request')) fastcgi_finish_request();
     try{
         hache_notificar_nueva_inscripcion($alumno,$tipoIngreso,[
             'curso_inicio'=>$tipoIngreso==='INTENSIVO'?(string)($alumno['fecha_inicio']??''):'',
         ]);
-    }catch(Throwable $e){
-        error_log('[notificaciones-email] Falló el disparador diferido: '.$e->getMessage());
-    }
+    }catch(Throwable $e){error_log('[notificaciones-email] Falló el disparador diferido: '.$e->getMessage());}
     exit;
 }
 function slug_usuario(string $nombre):string{$ascii=iconv('UTF-8','ASCII//TRANSLIT//IGNORE',$nombre) ?: $nombre;$ascii=strtolower($ascii);$ascii=preg_replace('/[^a-z0-9 ]+/',' ',$ascii)??'';$parts=array_values(array_filter(preg_split('/\s+/',trim($ascii))?:[]));if(!$parts)return 'alumno';$base=$parts[0];if(count($parts)>1)$base.='.'.end($parts);return substr($base,0,40);}
@@ -61,6 +57,8 @@ try {
     $cursoId=trim((string)($input['curso_intensivo_id']??''));
     $horarioIntensivoId=trim((string)($input['horario_intensivo_id']??''));
     $observaciones=trim((string)($input['observaciones']??''));
+    $historica=hache_admin_bool($input['correccion_historica']??false);
+    $motivoHistorico=trim((string)($input['motivo_correccion']??''));
     $sedeClave=auth_resolve_sede_clave((string)($input['sede']??''));
     $s=sede($pdo,$sedeClave);
     $cicloPago=strtoupper(trim((string)($input['ciclo_pago']??'')));
@@ -71,6 +69,8 @@ try {
     if($fechaNacimiento!==''){$nacimiento=fecha_exacta($fechaNacimiento,'La fecha de nacimiento no es válida');if($nacimiento>new DateTimeImmutable('today'))out(['ok'=>false,'error'=>'La fecha de nacimiento no es válida'],422);}
     if($correo!==''&&!filter_var($correo,FILTER_VALIDATE_EMAIL))out(['ok'=>false,'error'=>'El correo no es válido'],422);
     if(mb_strlen($observaciones)>2000)out(['ok'=>false,'error'=>'Las observaciones no pueden exceder 2000 caracteres'],422);
+    if(mb_strlen($motivoHistorico)>700)out(['ok'=>false,'error'=>'El motivo de la corrección histórica no puede exceder 700 caracteres'],422);
+    if($historica&&$tipoIngreso!=='INTENSIVO')out(['ok'=>false,'error'=>'La corrección histórica de este flujo solo aplica a cursos intensivos'],422);
     try{$whatsapp=telefono_normalizar($whatsappPais,$whatsappNacional);}catch(InvalidArgumentException $e){out(['ok'=>false,'error'=>$e->getMessage()],422);}
 
     $planPrecio=null;$curso=null;
@@ -90,8 +90,12 @@ try {
         intensivos_reconciliar_estados_sede($pdo,(string)$s['id']);
         $stmt=$pdo->prepare("SELECT id,fecha_inicio,fecha_fin,estado FROM cursos_intensivos WHERE id=:id AND sede_id=:s LIMIT 1");$stmt->execute([':id'=>$cursoId,':s'=>$s['id']]);$curso=$stmt->fetch();
         if(!$curso)out(['ok'=>false,'error'=>'El curso intensivo no existe en la sede seleccionada'],422);
-        if(!intensivo_inscripcion_abierta((string)$curso['fecha_inicio']))out(['ok'=>false,'error'=>'La ventana de inscripción de este intensivo ya cerró'],422);
-        $stmt=$pdo->prepare("SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND intensivo=1 LIMIT 1");$stmt->execute([':id'=>$horarioIntensivoId,':s'=>$s['id']]);if(!$stmt->fetch())out(['ok'=>false,'error'=>'Horario intensivo inválido para la sede seleccionada'],422);
+        $curso['estado']=intensivo_estado_por_fechas((string)$curso['fecha_inicio'],(string)$curso['fecha_fin']);
+        $abierta=intensivo_inscripcion_abierta((string)$curso['fecha_inicio']);
+        if($historica&&$abierta)out(['ok'=>false,'error'=>'Este curso aún admite altas normales; no uses corrección histórica'],422);
+        if(!$abierta&&!$historica)out(['ok'=>false,'error'=>'La ventana de inscripción de este intensivo ya cerró'],422);
+        if($historica&&$motivoHistorico==='')out(['ok'=>false,'error'=>'Escribe el motivo de la corrección histórica'],422);
+        $stmt=$pdo->prepare("SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND intensivo=1 AND (activo=1 OR :hist=1) LIMIT 1");$stmt->execute([':id'=>$horarioIntensivoId,':s'=>$s['id'],':hist'=>$historica?1:0]);if(!$stmt->fetch())out(['ok'=>false,'error'=>'Horario intensivo inválido para la sede seleccionada'],422);
         $fechaInicio=(string)$curso['fecha_inicio'];$horarioId='';$planId='';
     }
 
@@ -106,21 +110,28 @@ try {
         $stmt=$pdo->prepare("SELECT id,precio FROM planes WHERE id=:id AND sede_id=:sede AND activo=1 LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$planId,':sede'=>$s['id']]);$plan=$stmt->fetch();if(!$plan){$pdo->rollBack();out(['ok'=>false,'error'=>'El plan dejó de estar disponible en la sede seleccionada'],409);}$planPrecio=(float)$plan['precio'];
     }else{
         $stmt=$pdo->prepare("SELECT id,fecha_inicio,fecha_fin,estado FROM cursos_intensivos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$cursoId,':s'=>$s['id']]);$curso=$stmt->fetch();
-        if(!$curso||!intensivo_inscripcion_abierta((string)$curso['fecha_inicio'])){$pdo->rollBack();out(['ok'=>false,'error'=>'El curso ya no está disponible para nuevas inscripciones'],409);}
-        $stmt=$pdo->prepare("SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND intensivo=1 LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$horarioIntensivoId,':s'=>$s['id']]);if(!$stmt->fetch()){$pdo->rollBack();out(['ok'=>false,'error'=>'El horario intensivo dejó de estar disponible'],409);}
+        if(!$curso){$pdo->rollBack();out(['ok'=>false,'error'=>'El curso ya no existe en la sede seleccionada'],409);}
+        $curso['estado']=intensivo_estado_por_fechas((string)$curso['fecha_inicio'],(string)$curso['fecha_fin']);$abierta=intensivo_inscripcion_abierta((string)$curso['fecha_inicio']);
+        if(($historica&&$abierta)||(!$historica&&!$abierta)){$pdo->rollBack();out(['ok'=>false,'error'=>$historica?'El curso volvió a estar disponible para alta normal; recarga la página':'El curso ya no está disponible para nuevas inscripciones'],409);}
+        $stmt=$pdo->prepare("SELECT id FROM horarios WHERE id=:id AND sede_id=:s AND intensivo=1 AND (activo=1 OR :hist=1) LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$horarioIntensivoId,':s'=>$s['id'],':hist'=>$historica?1:0]);if(!$stmt->fetch()){$pdo->rollBack();out(['ok'=>false,'error'=>'El horario intensivo dejó de estar disponible'],409);}
         $fechaInicio=(string)$curso['fecha_inicio'];
     }
 
+    $estadoInicial=($historica&&is_array($curso)&&($curso['estado']??'')==='TERMINADO')?'BAJA':'PENDIENTE';
     $id=(string)$pdo->query('SELECT UUID()')->fetchColumn();
-    $stmt=$pdo->prepare("INSERT INTO alumnos(id,sede_id,ciclo_pago,nombre,fecha_nacimiento,whatsapp,correo,fecha_inicio,horario_preferido_id,plan_actual_id,estado_administrativo,observaciones) VALUES(:id,:sede,:ciclo,:nombre,:nac,:wa,:correo,:inicio,:horario,:plan,'PENDIENTE',:obs)");
-    $stmt->execute([':id'=>$id,':sede'=>$s['id'],':ciclo'=>$cicloPago,':nombre'=>$nombre,':nac'=>$fechaNacimiento!==''?$fechaNacimiento:null,':wa'=>$whatsapp,':correo'=>$correo!==''?$correo:null,':inicio'=>$fechaInicio,':horario'=>$tipoIngreso==='REGULAR'?$horarioId:null,':plan'=>$tipoIngreso==='REGULAR'?$planId:null,':obs'=>$observaciones!==''?$observaciones:null]);
+    $stmt=$pdo->prepare("INSERT INTO alumnos(id,sede_id,ciclo_pago,nombre,fecha_nacimiento,whatsapp,correo,fecha_inicio,horario_preferido_id,plan_actual_id,estado_administrativo,observaciones) VALUES(:id,:sede,:ciclo,:nombre,:nac,:wa,:correo,:inicio,:horario,:plan,:estado,:obs)");
+    $stmt->execute([':id'=>$id,':sede'=>$s['id'],':ciclo'=>$cicloPago,':nombre'=>$nombre,':nac'=>$fechaNacimiento!==''?$fechaNacimiento:null,':wa'=>$whatsapp,':correo'=>$correo!==''?$correo:null,':inicio'=>$fechaInicio,':horario'=>$tipoIngreso==='REGULAR'?$horarioId:null,':plan'=>$tipoIngreso==='REGULAR'?$planId:null,':estado'=>$estadoInicial,':obs'=>$observaciones!==''?$observaciones:null]);
 
     if($tipoIngreso==='REGULAR'){
         regla_crear_mensualidad_pendiente($pdo,$id,(string)$s['id'],(string)$s['clave'],$cicloPago,(string)$planId,(float)$planPrecio,(string)$admin['id'],new DateTimeImmutable($fechaInicio));
     }else{
         $relId=(string)$pdo->query('SELECT UUID()')->fetchColumn();
+        $relObs=$historica?hache_admin_historical_note($motivoHistorico,$observaciones):'Alta desde administración. Pendiente de pago.';
         $stmt=$pdo->prepare("INSERT INTO curso_intensivo_alumnos(id,curso_intensivo_id,alumno_id,horario_id,observaciones,created_by) VALUES(:id,:curso,:alumno,:horario,:obs,:uid)");
-        $stmt->execute([':id'=>$relId,':curso'=>$cursoId,':alumno'=>$id,':horario'=>$horarioIntensivoId,':obs'=>'Alta desde administración. Pendiente de pago.',':uid'=>$admin['id']]);
+        $stmt->execute([':id'=>$relId,':curso'=>$cursoId,':alumno'=>$id,':horario'=>$horarioIntensivoId,':obs'=>$relObs,':uid'=>$admin['id']]);
+        if($historica){
+            hache_admin_history($pdo,$id,'INTENSIVO','Alumno creado administrativamente para completar el intensivo histórico del '.date('d/m/Y',strtotime($fechaInicio)).'. Motivo: '.$motivoHistorico.'.',(string)$admin['id'],'CURSO_INTENSIVO',$cursoId);
+        }
     }
 
     $usuario=usuario_unico($pdo,$nombre);$uid=(string)$pdo->query('SELECT UUID()')->fetchColumn();
@@ -128,5 +139,7 @@ try {
     $pdo->commit();
 
     $stmt=$pdo->prepare("SELECT a.*,s.clave sede_clave,s.nombre sede_nombre,p.nombre plan_nombre,p.precio plan_precio FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id LEFT JOIN planes p ON p.id=a.plan_actual_id WHERE a.id=:id LIMIT 1");$stmt->execute([':id'=>$id]);$alumnoCreado=$stmt->fetch();
-    out_alta_con_alerta(['ok'=>true,'mensaje'=>$tipoIngreso==='REGULAR'?'Alumno creado. Queda pendiente de inscripción y primera mensualidad antes de poder tomar clase.':'Alumno creado y agregado al curso intensivo. Queda pendiente de pago.','tipo_ingreso'=>$tipoIngreso,'obligaciones'=>$tipoIngreso==='REGULAR'?['inscripcion'=>'PENDIENTE','mensualidad'=>'PENDIENTE']:['intensivo'=>'PENDIENTE'],'curso_intensivo_id'=>$tipoIngreso==='INTENSIVO'?$cursoId:null,'alumno'=>$alumnoCreado,'acceso_portal'=>['usuario'=>$usuario,'password_temporal'=>$temporal,'debe_cambiar_password'=>true]],$alumnoCreado?:[],$tipoIngreso);
+    $respuesta=['ok'=>true,'mensaje'=>$historica?'Alumno creado y agregado como corrección histórica.':($tipoIngreso==='REGULAR'?'Alumno creado. Queda pendiente de inscripción y primera mensualidad antes de poder tomar clase.':'Alumno creado y agregado al curso intensivo. Queda pendiente de pago.'),'tipo_ingreso'=>$tipoIngreso,'correccion_historica'=>$historica,'obligaciones'=>$historica?['intensivo'=>'HISTORICO']:($tipoIngreso==='REGULAR'?['inscripcion'=>'PENDIENTE','mensualidad'=>'PENDIENTE']:['intensivo'=>'PENDIENTE']),'curso_intensivo_id'=>$tipoIngreso==='INTENSIVO'?$cursoId:null,'alumno'=>$alumnoCreado,'acceso_portal'=>['usuario'=>$usuario,'password_temporal'=>$temporal,'debe_cambiar_password'=>true]];
+    if($historica)out($respuesta,201);
+    out_alta_con_alerta($respuesta,$alumnoCreado?:[],$tipoIngreso);
 } catch(Throwable $e){if(isset($pdo)&&$pdo->inTransaction())$pdo->rollBack();error_log('[alumnos] '.$e->getMessage());out(['ok'=>false,'error'=>'No se pudo procesar el alumno'],500);}
