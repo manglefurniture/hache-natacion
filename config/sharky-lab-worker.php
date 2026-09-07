@@ -173,9 +173,25 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     }
 
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';if($contact==='')return false;$eventId=(string)($event['id']??'event');
+
+    // Capture the durable pre-turn state before any customer-facing policy branch.
+    // This read is observation-only. If it fails, readiness must be blocked rather
+    // than silently counting the turn as unobserved/healthy.
+    $brainBeforeState=null;
+    try{$brainBeforeState=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){
+        hache_sharky_metric_increment('brain_shadow_error');
+        hache_sharky_metric_increment('brain_diag_error');
+        error_log('[sharky-brain-shadow] unable to load pre-turn state');
+    }
+
     $handoffPending=hache_sharky_inbox_handoff_pending($pdo,$eventId);
     if(hache_sharky_takeover_active($contact)&&!$handoffPending){
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'message')))return false;
+        if(is_array($brainBeforeState)){
+            hache_sharky_brain_shadow_observe($brainBeforeState,$brainBeforeState,$event,[
+                'decision'=>['kind'=>'silent_human_takeover'],
+            ],$groupId==='');
+        }
         return hache_sharky_orchestrator_mark_processed($pdo,$eventId);
     }
     $minAge??=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold??=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
@@ -209,18 +225,16 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
                 error_log('[sharky-lab] takeover persistence failed before handoff delivery reason='.$reason);
                 return false;
             }
+            if(is_array($brainBeforeState)){
+                // Represent the live protected decision without injecting message
+                // content into diagnostics. Future Brain drift here must block readiness.
+                hache_sharky_brain_shadow_observe($brainBeforeState,$brainBeforeState,$event,[
+                    'decision'=>['kind'=>'early_policy_handoff','action'=>['type'=>'human_takeover']],
+                ],$groupId==='');
+            }
             $payload=hache_sharky_groups_prepare_outbound(hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_text_payload($contact,$message)),$groupId);
             return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|handoff',$eventId);
         }finally{hache_sharky_lab_release_delivery_lock($deliveryLock);}
-    }
-
-    // True shadow mode: capture the durable state before the existing live
-    // pipeline runs. This extra read is observation-only and is never reused by
-    // routing/business logic, so a Brain disagreement cannot alter behaviour.
-    $brainBeforeState=null;
-    try{$brainBeforeState=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){
-        hache_sharky_metric_increment('brain_shadow_error');
-        error_log('[sharky-brain-shadow] unable to load pre-turn state');
     }
 
     $deliveryLock=null;
