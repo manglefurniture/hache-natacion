@@ -52,10 +52,12 @@ $paymentMigration=(string)file_get_contents($root.'/database/migrations/20260907
 member_ok(str_contains($paymentMigration,'sharky_member_payment_intents'),'Registered-student checkout needs durable payment intents.');
 
 $webhook=(string)file_get_contents($root.'/public/api/whatsapp-orchestrator-lab.php');
-member_ok(str_contains($webhook,'$memberEvidenceEvents=hache_sharky_member_extract_media_events($pdo,$payload)'),'Webhook must extract absence evidence before generic proof media.');
+member_ok(str_contains($webhook,'$memberOpsReady=hache_sharky_member_schema_ready($pdo)&&hache_sharky_member_payments_schema_ready($pdo)'),'Member operations must stay dormant until both additive schemas are present.');
+member_ok(str_contains($webhook,'$memberEvidenceEvents=$memberOpsReady?hache_sharky_member_extract_media_events($pdo,$payload):[]'),'Absence evidence extraction must also stay dormant before migration.');
 member_ok(str_contains($webhook,'$memberEvidenceIds[$memberEvidenceId]=true'),'Absence evidence must reserve its Meta message receipt.');
 member_ok(str_contains($webhook,'!isset($memberEvidenceIds[(string)($event[\'id\']??\'\')])'),'Generic proof events must be deduplicated against absence evidence IDs.');
-member_ok(str_contains($webhook,'hache_sharky_member_payment_process_event'),'Payment self-service must run before generic Sharky routing.');
+member_ok(str_contains($webhook,'if($memberOpsReady){'),'Registered-member routing must be guarded by schema readiness at runtime.');
+member_ok(str_contains($webhook,'hache_sharky_member_payment_process_event'),'Payment self-service must run before generic Sharky routing once ready.');
 member_ok(str_contains($webhook,'sharky_member_should_handle'),'Member operations must be explicitly gated before claiming an inbox event.');
 $payments=(string)file_get_contents($root.'/config/sharky-member-payments.php');
 member_ok(str_contains($payments,"tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE"),'MP reconciliation must revalidate the one-valid-intensive-payment invariant inside the transaction.');
