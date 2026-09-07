@@ -5,6 +5,7 @@ declare(strict_types=1);
 header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-lab-worker.php';
 require_once __DIR__.'/../../config/sharky-member-ops.php';
+require_once __DIR__.'/../../config/sharky-member-payments.php';
 require_once __DIR__.'/../../config/sharky-inbox.php';
 require_once __DIR__.'/../../config/sharky-groups.php';
 require_once __DIR__.'/../../config/sharky-delivery-status.php';
@@ -113,6 +114,8 @@ foreach($processing as $event){
         hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
         continue;
     }
+    $memberPayment=hache_sharky_member_payment_process_event($pdo,$event,$business);
+    if($memberPayment!==null)continue;
     if(sharky_member_should_handle($pdo,$event)){
         hache_sharky_member_process_event($pdo,$event,$business);
         continue;
