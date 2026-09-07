@@ -49,6 +49,7 @@ if(!$groupsEnabled&&$groupCount>0){
 
 $events=array_merge(
     hache_sharky_whatsapp_extract($payload),
+    hache_sharky_commerce_flow_extract_events($payload),
     hache_sharky_whatsapp_birthdate_flow_extract_events($payload,hache_sharky_lab_today()),
     hache_sharky_draft_extract_audio_events($payload),
     hache_sharky_payment_reminder_extract_proof_events($payload,hache_sharky_lab_secret('WHATSAPP_PHONE_NUMBER_ID'))
@@ -56,7 +57,7 @@ $events=array_merge(
 $events=hache_sharky_groups_decorate_events($events,$payload);
 foreach($events as &$event){
     if(!isset($event['kind']))$event['kind']='message';
-    // Una imagen de un grupo no puede cancelar el recordatorio de una conversación individual.
+    // Una imagen/comprobante de un grupo no puede cancelar el recordatorio de una conversación individual.
     if(($event['kind']??'')===HACHE_SHARKY_PAYMENT_PROOF_KIND&&trim((string)($event['group_id']??''))!=='')$event['kind']='group_media';
 }
 unset($event);
@@ -68,7 +69,8 @@ foreach($durable as $event)if(!hache_sharky_inbox_store($pdo,$event))sharky_lab_
 
 // Imágenes/documentos quedan como evidencia durable cifrada, pero no se envían a
 // OpenAI ni generan una respuesta automática. El recordatorio los consulta por
-// contact_hash + kind justo antes de enviarse.
+// contact_hash + kind justo antes de enviarse. PhotoPicker Flow replies are
+// interactive and are handled by the dedicated commerce path after the ACK.
 foreach($events as $event){
     if(!in_array((string)($event['type']??''),['image','document'],true))continue;
     if(!hache_sharky_orchestrator_mark_processed($pdo,(string)($event['id']??'')))sharky_lab_json(503,['ok'=>false,'error'=>'Unable to finalize inbound media event']);
@@ -76,10 +78,11 @@ foreach($events as $event){
 
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);
 
-// Flow creation/list/upload is deliberately after Meta's ACK. The helper is
-// idempotent and fail-soft; if management permission is unavailable, typed dates
-// continue to work and retries are throttled for 15 minutes.
+// Flow creation/list/upload is deliberately after Meta's ACK. Both provisioners
+// are idempotent and fail-soft, so legacy text/buttons remain usable if Meta Flow
+// management permission is unavailable.
 hache_sharky_whatsapp_birthdate_flow_prime($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
+hache_sharky_commerce_flows_prime($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
 
 $business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
 
@@ -95,6 +98,10 @@ usort($processing,static function(array $a,array $b):int{
 });
 foreach($processing as $event){
     if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
+    if(hache_sharky_commerce_event_candidate($event)){
+        hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
+        continue;
+    }
     hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
 }
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
