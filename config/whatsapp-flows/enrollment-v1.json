@@ -1,0 +1,142 @@
+{
+  "version": "7.0",
+  "routing_model": {
+    "ENROLLMENT": ["FINAL"],
+    "FINAL": []
+  },
+  "screens": [
+    {
+      "id": "ENROLLMENT",
+      "title": "Completar inscripción",
+      "data": {
+        "venue_key": {"type": "string", "__example__": "PALAPAS"},
+        "venue_label": {"type": "string", "__example__": "Palapas Protudec"},
+        "min_birthdate": {"type": "string", "__example__": "1906-01-01"},
+        "max_birthdate": {"type": "string", "__example__": "2014-09-07"},
+        "start_dates": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}}},
+          "__example__": [{"id": "date:palapas:2026-09-14", "title": "14/09/2026", "description": "Inicio lunes"}]
+        },
+        "schedules": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}}},
+          "__example__": [{"id": "schedule-id", "title": "08:00–09:00"}]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "enrollment_form",
+            "children": [
+              {"type": "TextHeading", "text": "Inscripción al intensivo"},
+              {"type": "TextBody", "text": "Sede fija: ${data.venue_label}"},
+              {"type": "TextCaption", "text": "Si necesitas otra sede, cancela y regresa al chat."},
+              {"type": "TextInput", "name": "full_name", "label": "Nombre completo", "required": true},
+              {"type": "DatePicker", "name": "birthdate", "label": "Fecha de nacimiento", "helper-text": "Selecciona día, mes y año", "min-date": "${data.min_birthdate}", "max-date": "${data.max_birthdate}", "required": true},
+              {"type": "Dropdown", "name": "course_id", "label": "Fecha de inicio", "data-source": "${data.start_dates}", "required": true},
+              {"type": "Dropdown", "name": "schedule_id", "label": "Horario", "data-source": "${data.schedules}", "required": true},
+              {
+                "type": "EmbeddedLink",
+                "text": "Cancelar y volver",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {"type": "screen", "name": "FINAL"},
+                  "payload": {
+                    "flow_kind": "enrollment",
+                    "user_action": "cancel",
+                    "venue_key": "${data.venue_key}",
+                    "venue_label": "${data.venue_label}",
+                    "full_name": "",
+                    "birthdate": "",
+                    "course_id": "",
+                    "schedule_id": ""
+                  }
+                }
+              },
+              {
+                "type": "Footer",
+                "label": "Revisar datos",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {"type": "screen", "name": "FINAL"},
+                  "payload": {
+                    "flow_kind": "enrollment",
+                    "user_action": "submit",
+                    "venue_key": "${data.venue_key}",
+                    "venue_label": "${data.venue_label}",
+                    "full_name": "${form.full_name}",
+                    "birthdate": "${form.birthdate}",
+                    "course_id": "${form.course_id}",
+                    "schedule_id": "${form.schedule_id}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "FINAL",
+      "title": "Revisar",
+      "terminal": true,
+      "data": {
+        "flow_kind": {"type": "string", "__example__": "enrollment"},
+        "user_action": {"type": "string", "__example__": "submit"},
+        "venue_key": {"type": "string", "__example__": "PALAPAS"},
+        "venue_label": {"type": "string", "__example__": "Palapas Protudec"},
+        "full_name": {"type": "string", "__example__": "Ariel Fernández"},
+        "birthdate": {"type": "string", "__example__": "1983-06-01"},
+        "course_id": {"type": "string", "__example__": "date:palapas:2026-09-14"},
+        "schedule_id": {"type": "string", "__example__": "schedule-id"}
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "final_form",
+            "children": [
+              {
+                "type": "Switch",
+                "value": "${data.user_action}",
+                "cases": {
+                  "submit": [
+                    {"type": "TextHeading", "text": "Revisa tu inscripción"},
+                    {"type": "TextBody", "text": "Sede: ${data.venue_label}"},
+                    {"type": "TextBody", "text": "Nombre: ${data.full_name}"},
+                    {"type": "TextBody", "text": "Nacimiento: ${data.birthdate}"},
+                    {"type": "TextCaption", "text": "Al volver al chat, Sharky validará fecha de inicio y horario antes de registrar."}
+                  ],
+                  "cancel": [
+                    {"type": "TextHeading", "text": "Volver al chat"},
+                    {"type": "TextBody", "text": "No se registrará nada. Sharky conservará tu sede y programa para que puedas seguir desde el menú anterior."}
+                  ]
+                }
+              },
+              {
+                "type": "Footer",
+                "label": "Volver a Sharky",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "flow_kind": "${data.flow_kind}",
+                    "user_action": "${data.user_action}",
+                    "venue_key": "${data.venue_key}",
+                    "full_name": "${data.full_name}",
+                    "birthdate": "${data.birthdate}",
+                    "course_id": "${data.course_id}",
+                    "schedule_id": "${data.schedule_id}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
