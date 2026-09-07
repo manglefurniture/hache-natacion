@@ -25,15 +25,40 @@ if (!function_exists('env')) {
     }
 }
 
+function hache_sharky_mp_store_root_valid(string $root): bool
+{
+    $root = rtrim(trim($root), '/');
+    if ($root === '') return false;
+    return is_readable($root.'/.env')
+        && is_file($root.'/src/PaymentCredentialCipher.php')
+        && is_file($root.'/src/PaymentGatewayConfig.php');
+}
+
 function hache_sharky_mp_store_root(): string
 {
     $configured = trim((string)(getenv('HACHE_TIENDA_ROOT') ?: ''));
-    return $configured !== '' ? rtrim($configured, '/') : '/var/www/tienda.hnatacion.com/app';
+    if ($configured !== '') return rtrim($configured, '/');
+
+    // Production layout is intentionally discovered by structure rather than by
+    // a guessed single absolute path. This keeps Hache Natación independent from
+    // the Nginx/document-root convention used by Tienda Natación.
+    foreach ([
+        '/var/www/tienda.hnatacion.com',
+        '/var/www/tienda.hnatacion.com/app',
+        '/var/www/tienda-natacion',
+        '/var/www/tienda-natacion/app',
+        '/var/www/tienda',
+    ] as $candidate) {
+        if (hache_sharky_mp_store_root_valid($candidate)) return $candidate;
+    }
+    return '';
 }
 
 function hache_sharky_mp_store_environment(): array
 {
-    $path = hache_sharky_mp_store_root().'/.env';
+    $root = hache_sharky_mp_store_root();
+    if ($root === '') return [];
+    $path = $root.'/.env';
     if (!is_file($path) || !is_readable($path)) return [];
     $values = @parse_ini_file($path, false, INI_SCANNER_RAW);
     return is_array($values) ? $values : [];
@@ -63,6 +88,7 @@ function hache_sharky_mp_credentials(?callable $resolver = null): ?array
     }
 
     $root = hache_sharky_mp_store_root();
+    if ($root === '') return null;
     $cipherFile = $root.'/src/PaymentCredentialCipher.php';
     $configFile = $root.'/src/PaymentGatewayConfig.php';
     if (!is_file($cipherFile) || !is_file($configFile)) return null;
