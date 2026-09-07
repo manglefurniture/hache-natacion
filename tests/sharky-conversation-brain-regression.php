@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require __DIR__.'/../config/sharky-conversation-brain.php';
 require __DIR__.'/../config/sharky-brain-diagnostics.php';
+require __DIR__.'/../config/sharky-brain-shadow-runtime.php';
 
 function brain_ok(bool $condition,string $message): void
 {
@@ -124,6 +125,20 @@ brain_eq($decision['action'],'answer_user','A normal informational question with
 brain_ok(hache_sharky_brain_shadow_matches('answer_user',$decision),'Shadow comparator must report exact policy matches.');
 brain_ok(!hache_sharky_brain_shadow_matches('show_commercial_menu',$decision),'Shadow comparator must expose policy divergences.');
 
+// Protected decisions that return before the adapter must also be comparable.
+$earlyHandoff=hache_sharky_brain_shadow_evaluate($ready,$ready,['text'=>'Excepción'],[
+    'decision'=>['kind'=>'early_policy_handoff','action'=>['type'=>'human_takeover']],
+]);
+brain_eq($earlyHandoff['live_action'],'handoff_policy_exception','Early policy handoff must map into the protected live vocabulary.');
+brain_eq($earlyHandoff['brain']['action']??null,'handoff_policy_exception','Brain must evaluate early policy handoffs instead of leaving a coverage hole.');
+brain_ok(($earlyHandoff['match']??false)===true,'Current Brain and live early handoff policy must agree.');
+
+$silentTakeover=hache_sharky_brain_shadow_evaluate($ready,$ready,['text'=>'Hola'],[
+    'decision'=>['kind'=>'silent_human_takeover'],
+]);
+brain_eq($silentTakeover['live_action'],'wait_for_human','Active manual takeover must be represented in shadow diagnostics.');
+brain_eq($silentTakeover['brain']['action']??null,'wait_for_human','Brain must remain silent while a human owns the chat.');
+
 // Diagnostic keys are bounded enumerations, never user text or state values.
 brain_eq(hache_sharky_brain_diag_metric_key('answer_user','continue_discovery'),'brain_mm_13_12','Mismatch metric key must use stable numeric action codes.');
 brain_eq(hache_sharky_brain_diag_metric_key('anything-unexpected','answer_user'),'brain_mm_00_13','Unknown actions must collapse into the protected unknown bucket.');
@@ -158,5 +173,9 @@ $shadowSource=(string)file_get_contents(__DIR__.'/../config/sharky-brain-shadow-
 brain_ok(str_contains($shadowSource,"hache_sharky_metric_increment('brain_diag_observed')"),'Live shadow observer must start the diagnostic observation cohort.');
 brain_ok(str_contains($shadowSource,'hache_sharky_brain_diag_metric_key($live,$brainAction)'),'Live mismatches must be classified by bounded action pair.');
 brain_ok(!str_contains($shadowSource,"hache_sharky_metric_increment('brain_diag_match')"),'Diagnostic matches are derived, avoiding redundant counters.');
+
+$workerSource=(string)file_get_contents(__DIR__.'/../config/sharky-lab-worker.php');
+brain_ok(preg_match("/brain_shadow_error'\);\s*hache_sharky_metric_increment\('brain_diag_error'\);\s*error_log\('\[sharky-brain-shadow\] unable to load pre-turn state'/s",$workerSource)===1,'Pre-turn state load failures must block diagnostic readiness too.');
+brain_ok(str_contains($workerSource,"'kind'=>'early_policy_handoff'")&&str_contains($workerSource,"'kind'=>'silent_human_takeover'"),'Protected early-return branches must feed the read-only shadow observer.');
 
 fwrite(STDOUT,"SHARKY_CONVERSATION_BRAIN_OK\n");
