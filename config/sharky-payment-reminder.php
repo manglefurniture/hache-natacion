@@ -119,6 +119,15 @@ function hache_sharky_payment_reminder_prepare_registration_outbound(
 
     $candidate = hache_sharky_payment_reminder_registration_candidate($pdo, $contact);
     if (!is_array($candidate)) return $payload;
+
+    // When the commerce close is available, the registration message is replaced
+    // at final delivery by the payment-method Flow/buttons. The reminder must arm
+    // only after the user chooses transfer/card, otherwise two payment tracks race.
+    if (function_exists('hache_sharky_commerce_pending_registration')) {
+        $commerceCandidate = hache_sharky_commerce_pending_registration($pdo, $contact);
+        if (is_array($commerceCandidate)) return $payload;
+    }
+
     $now ??= time();
     // El token es estable por inscripción. Incluso si el mensaje de alta se
     // recupera/reintenta, INSERT IGNORE del outbox no puede crear dos avisos.
@@ -178,9 +187,39 @@ function hache_sharky_payment_reminder_after_registration_sent(PDO $pdo, string 
     $studentId = trim((string)($meta['student_id'] ?? ''));
     $courseId = trim((string)($meta['course_id'] ?? ''));
     $watchFrom = (int)($meta['watch_from'] ?? 0);
+    $mode = strtolower(trim((string)($meta['mode'] ?? '')));
     if ($token === '' || $studentId === '' || $courseId === '') return;
     $now ??= time();
     if ($watchFrom <= 0) $watchFrom = $now;
+
+    if ($mode === 'mp_card') {
+        $external = trim((string)($meta['external_reference'] ?? ''));
+        if ($external === '') return;
+        $delay = defined('HACHE_SHARKY_MP_CARD_FOLLOWUP_SECONDS') ? HACHE_SHARKY_MP_CARD_FOLLOWUP_SECONDS : 900;
+        $due = hache_sharky_payment_reminder_next_allowed_at($now + $delay);
+        $reminderMeta = [
+            'mode'=>'mp_card',
+            'token'=>$token,
+            'student_id'=>$studentId,
+            'course_id'=>$courseId,
+            'external_reference'=>$external,
+            'preference_id'=>trim((string)($meta['preference_id'] ?? '')),
+            'watch_from'=>$watchFrom,
+            'registration_sent_at'=>$now,
+            'due_at'=>$due,
+        ];
+        $business = function_exists('hache_sharky_business_values') ? hache_sharky_business_values($pdo) : [];
+        $payload = function_exists('hache_sharky_mp_followup_payload')
+            ? hache_sharky_mp_followup_payload($contact, $reminderMeta, $business)
+            : hache_sharky_payment_reminder_payload($contact, $reminderMeta);
+        unset($payload['_sharky_payment_session']);
+        $payload['_sharky_payment_reminder'] = $reminderMeta;
+        if (!hache_sharky_outbox_enqueue_raw($pdo, $contact, $payload, 'mp-card-followup|'.$token, $due)) {
+            error_log('[sharky-payment-reminder] Mercado Pago followup schedule failed');
+        }
+        return;
+    }
+
     $due = hache_sharky_payment_reminder_next_allowed_at($now + HACHE_SHARKY_PAYMENT_REMINDER_DELAY_SECONDS);
     $reminderMeta = [
         'token' => $token,
@@ -262,10 +301,14 @@ function hache_sharky_payment_reminder_validate_before_send(PDO $pdo, string $co
     $courseId = trim((string)($meta['course_id'] ?? ''));
     $watchFrom = (int)($meta['watch_from'] ?? 0);
     $registrationSentAt = (int)($meta['registration_sent_at'] ?? 0);
+    $mode = strtolower(trim((string)($meta['mode'] ?? '')));
     if ($token === '' || $studentId === '' || $courseId === '' || $watchFrom <= 0 || $registrationSentAt <= 0) {
         return ['ok'=>false, 'reason'=>'INVALID_PAYMENT_REMINDER_META'];
     }
-    if ($now > $registrationSentAt + HACHE_SHARKY_PAYMENT_REMINDER_MAX_AGE_SECONDS) {
+    $maxAge = $mode === 'mp_card'
+        ? (defined('HACHE_SHARKY_MP_CARD_FOLLOWUP_MAX_AGE_SECONDS') ? HACHE_SHARKY_MP_CARD_FOLLOWUP_MAX_AGE_SECONDS : 7200)
+        : HACHE_SHARKY_PAYMENT_REMINDER_MAX_AGE_SECONDS;
+    if ($now > $registrationSentAt + $maxAge) {
         return ['ok'=>false, 'reason'=>'PAYMENT_REMINDER_EXPIRED'];
     }
 
@@ -280,6 +323,25 @@ function hache_sharky_payment_reminder_validate_before_send(PDO $pdo, string $co
     $proof = hache_sharky_payment_reminder_proof_received($pdo, $contact, $watchFrom);
     if ($proof === null) return ['ok'=>false, 'reason'=>'PAYMENT_PROOF_STATE_UNAVAILABLE'];
     if ($proof) return ['ok'=>false, 'reason'=>'PAYMENT_PROOF_RECEIVED'];
+
+    if ($mode === 'mp_card') {
+        $external = trim((string)($meta['external_reference'] ?? ''));
+        if ($external === '' || !function_exists('hache_sharky_mp_status_by_external_reference')) {
+            return ['ok'=>false, 'reason'=>'MP_STATUS_UNAVAILABLE'];
+        }
+        $status = hache_sharky_mp_status_by_external_reference($external);
+        $state = (string)($status['state'] ?? 'unavailable');
+        if ($state === 'approved') return ['ok'=>false, 'reason'=>'MP_APPROVED'];
+        if (in_array($state, ['pending','unavailable'], true)) {
+            $delay = defined('HACHE_SHARKY_MP_CARD_FOLLOWUP_SECONDS') ? HACHE_SHARKY_MP_CARD_FOLLOWUP_SECONDS : 900;
+            return [
+                'ok'=>false,
+                'reason'=>$state === 'pending' ? 'MP_PENDING' : 'MP_STATUS_UNAVAILABLE',
+                'reschedule_at'=>hache_sharky_payment_reminder_next_allowed_at($now + $delay),
+            ];
+        }
+        // failed/not_found: offer SPEI/cash below, but still respect quiet hours.
+    }
 
     if (!hache_sharky_payment_reminder_send_allowed_now($now)) {
         return [
