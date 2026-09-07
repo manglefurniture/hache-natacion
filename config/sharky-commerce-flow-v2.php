@@ -10,22 +10,26 @@ function hache_sharky_commerce_flow_v2_specs(): array
         'enrollment'=>[
             'name'=>'Hache_Sharky_Enrollment_v2',
             'asset'=>'enrollment-v1.json',
-            'env'=>'WHATSAPP_ENROLLMENT_FLOW_ID',
+            'pin_env'=>'WHATSAPP_ENROLLMENT_FLOW_V2_ID',
+            'runtime_env'=>'WHATSAPP_ENROLLMENT_FLOW_ID',
         ],
         'payment_method'=>[
             'name'=>'Hache_Sharky_Payment_Method_v2',
             'asset'=>'payment-method-v1.json',
-            'env'=>'WHATSAPP_PAYMENT_METHOD_FLOW_ID',
+            'pin_env'=>'WHATSAPP_PAYMENT_METHOD_FLOW_V2_ID',
+            'runtime_env'=>'WHATSAPP_PAYMENT_METHOD_FLOW_ID',
         ],
         'payment_transfer'=>[
             'name'=>'Hache_Sharky_Payment_Transfer_v2',
             'asset'=>'payment-transfer-v1.json',
-            'env'=>'WHATSAPP_PAYMENT_TRANSFER_FLOW_ID',
+            'pin_env'=>'WHATSAPP_PAYMENT_TRANSFER_FLOW_V2_ID',
+            'runtime_env'=>'WHATSAPP_PAYMENT_TRANSFER_FLOW_ID',
         ],
         'payment_card'=>[
             'name'=>'Hache_Sharky_Payment_Card_v2',
             'asset'=>'payment-card-v1.json',
-            'env'=>'WHATSAPP_PAYMENT_CARD_FLOW_ID',
+            'pin_env'=>'WHATSAPP_PAYMENT_CARD_FLOW_V2_ID',
+            'runtime_env'=>'WHATSAPP_PAYMENT_CARD_FLOW_ID',
         ],
     ];
 }
@@ -62,12 +66,30 @@ function hache_sharky_commerce_flow_v2_cache_id(string $key,string $flowId): boo
     return $ok;
 }
 
-function hache_sharky_commerce_flow_v2_inject(string $env,string $flowId): void
+/**
+ * The existing commerce send paths still read the legacy runtime variable names.
+ * v2 owns separate pin variables, then injects only a verified/published v2 ID into
+ * those runtime names for the current PHP process.
+ */
+function hache_sharky_commerce_flow_v2_inject(string $runtimeEnv,string $flowId): void
 {
     $flowId=preg_replace('/\D+/','',$flowId)?:'';
-    if($env===''||$flowId==='')return;
-    putenv($env.'='.$flowId);
-    $_ENV[$env]=$flowId;
+    if($runtimeEnv===''||$flowId==='')return;
+    putenv($runtimeEnv.'='.$flowId);
+    $_ENV[$runtimeEnv]=$flowId;
+}
+
+/**
+ * A legacy v1 pin must not leak through while v2 is still provisioning. The
+ * non-numeric sentinel deliberately wins getenv() lookup, while downstream ID
+ * normalization turns it into an empty ID and therefore uses the safe fallback.
+ */
+function hache_sharky_commerce_flow_v2_mask_legacy_runtime(string $runtimeEnv): void
+{
+    if($runtimeEnv==='')return;
+    $sentinel='__HACHE_COMMERCE_V2_PENDING__';
+    putenv($runtimeEnv.'='.$sentinel);
+    $_ENV[$runtimeEnv]=$sentinel;
 }
 
 function hache_sharky_commerce_flow_v2_drop_legacy_cache(string $key): void
@@ -76,28 +98,34 @@ function hache_sharky_commerce_flow_v2_drop_legacy_cache(string $key): void
     if($path!==''&&is_file($path))@unlink($path);
 }
 
+function hache_sharky_commerce_flow_v2_pinned_id(array $spec,?callable $secretResolver=null): string
+{
+    $pinEnv=(string)($spec['pin_env']??'');
+    if($pinEnv==='')return '';
+    $value=$secretResolver!==null?(string)$secretResolver($pinEnv):hache_sharky_whatsapp_flow_secret($pinEnv);
+    return preg_replace('/\D+/','',$value)?:'';
+}
+
 /**
- * Existing commerce code already prioritizes explicit WHATSAPP_*_FLOW_ID values.
- * Load the v2 runtime cache into those variables so all current send paths switch
- * to the corrected published resources without duplicating the commerce engine.
- * If no v2 resource exists yet, remove the legacy v1 runtime cache so Sharky uses
- * its safe chat/buttons fallback instead of showing known-bad literal placeholders.
+ * Load only verified v2 IDs into the legacy runtime slots consumed by existing
+ * send paths. Existing WHATSAPP_*_FLOW_ID pins are treated strictly as v1 and are
+ * masked until a distinct v2 pin/cache is available.
  */
 function hache_sharky_commerce_flow_v2_bootstrap(): array
 {
     $ready=[];
     foreach(hache_sharky_commerce_flow_v2_specs() as $key=>$spec){
-        $env=(string)$spec['env'];
-        $configured=preg_replace('/\D+/','',hache_sharky_whatsapp_flow_secret($env))?:'';
-        if($configured!==''){
-            $ready[(string)$key]=$configured;
+        $runtimeEnv=(string)$spec['runtime_env'];
+        $configured=hache_sharky_commerce_flow_v2_pinned_id($spec);
+        $cached=$configured!==''?null:hache_sharky_commerce_flow_v2_cached_id((string)$key);
+        hache_sharky_commerce_flow_v2_drop_legacy_cache((string)$key);
+        $id=$configured!==''?$configured:($cached??'');
+        if($id===''){
+            hache_sharky_commerce_flow_v2_mask_legacy_runtime($runtimeEnv);
             continue;
         }
-        $cached=hache_sharky_commerce_flow_v2_cached_id((string)$key);
-        hache_sharky_commerce_flow_v2_drop_legacy_cache((string)$key);
-        if($cached===null)continue;
-        hache_sharky_commerce_flow_v2_inject($env,$cached);
-        $ready[(string)$key]=$cached;
+        hache_sharky_commerce_flow_v2_inject($runtimeEnv,$id);
+        $ready[(string)$key]=$id;
     }
     return $ready;
 }
@@ -131,16 +159,23 @@ function hache_sharky_commerce_flow_v2_ensure(string $key,string $wabaId,callabl
     $spec=is_array($specs[$key]??null)?$specs[$key]:null;
     if(!$spec)return null;
 
-    $env=(string)$spec['env'];
-    $configured=preg_replace('/\D+/','',(string)$secretResolver($env))?:'';
-    if($configured!=='')return $configured;
+    $runtimeEnv=(string)$spec['runtime_env'];
+    $configured=hache_sharky_commerce_flow_v2_pinned_id($spec,$secretResolver);
+    if($configured!==''){
+        hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
+        hache_sharky_commerce_flow_v2_inject($runtimeEnv,$configured);
+        return $configured;
+    }
 
     $cached=hache_sharky_commerce_flow_v2_cached_id($key);
     if($cached!==null){
         hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
-        hache_sharky_commerce_flow_v2_inject($env,$cached);
+        hache_sharky_commerce_flow_v2_inject($runtimeEnv,$cached);
         return $cached;
     }
+
+    hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
+    hache_sharky_commerce_flow_v2_mask_legacy_runtime($runtimeEnv);
 
     $wabaId=preg_replace('/\D+/','',$wabaId)?:'';
     $token=trim((string)$secretResolver('WHATSAPP_ACCESS_TOKEN'));
@@ -154,8 +189,7 @@ function hache_sharky_commerce_flow_v2_ensure(string $key,string $wabaId,callabl
     if(is_array($existing)&&$existing['status']==='PUBLISHED'){
         $id=(string)$existing['id'];
         hache_sharky_commerce_flow_v2_cache_id($key,$id);
-        hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
-        hache_sharky_commerce_flow_v2_inject($env,$id);
+        hache_sharky_commerce_flow_v2_inject($runtimeEnv,$id);
         return $id;
     }
 
@@ -178,8 +212,7 @@ function hache_sharky_commerce_flow_v2_ensure(string $key,string $wabaId,callabl
     }
 
     hache_sharky_commerce_flow_v2_cache_id($key,$flowId);
-    hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
-    hache_sharky_commerce_flow_v2_inject($env,$flowId);
+    hache_sharky_commerce_flow_v2_inject($runtimeEnv,$flowId);
     return $flowId;
 }
 
@@ -197,9 +230,11 @@ function hache_sharky_commerce_flow_v2_prime_throttled(array $payload,?callable 
     $networkAttempted=false;
 
     foreach(hache_sharky_commerce_flow_v2_specs() as $key=>$spec){
-        $env=(string)$spec['env'];
-        $configured=preg_replace('/\D+/','',(string)$secretResolver($env))?:'';
+        $runtimeEnv=(string)$spec['runtime_env'];
+        $configured=hache_sharky_commerce_flow_v2_pinned_id($spec,$secretResolver);
         if($configured!==''){
+            hache_sharky_commerce_flow_v2_drop_legacy_cache((string)$key);
+            hache_sharky_commerce_flow_v2_inject($runtimeEnv,$configured);
             $ready[(string)$key]=$configured;
             hache_sharky_commerce_flow_v2_clear_retry((string)$key);
             continue;
@@ -207,11 +242,14 @@ function hache_sharky_commerce_flow_v2_prime_throttled(array $payload,?callable 
         $cached=hache_sharky_commerce_flow_v2_cached_id((string)$key);
         if($cached!==null){
             hache_sharky_commerce_flow_v2_drop_legacy_cache((string)$key);
-            hache_sharky_commerce_flow_v2_inject($env,$cached);
+            hache_sharky_commerce_flow_v2_inject($runtimeEnv,$cached);
             $ready[(string)$key]=$cached;
             hache_sharky_commerce_flow_v2_clear_retry((string)$key);
             continue;
         }
+
+        hache_sharky_commerce_flow_v2_drop_legacy_cache((string)$key);
+        hache_sharky_commerce_flow_v2_mask_legacy_runtime($runtimeEnv);
         if($networkAttempted||!hache_sharky_commerce_flow_v2_retry_allowed((string)$key,$now))continue;
 
         $networkAttempted=true;
