@@ -1,0 +1,47 @@
+{
+  "version": "7.0",
+  "screens": [
+    {
+      "id": "PAYMENT_METHOD",
+      "title": "Forma de pago",
+      "terminal": true,
+      "data": {
+        "intro": {"type": "string", "__example__": "Te recomendamos transferencia SPEI porque no genera cargos adicionales."},
+        "methods": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}}},
+          "__example__": [
+            {"id": "transfer", "title": "Transferencia SPEI", "description": "Recomendada · sin recargo"},
+            {"id": "card", "title": "Tarjeta", "description": "+5% mediante Mercado Pago"},
+            {"id": "cash", "title": "Efectivo", "description": "Sujeto a disponibilidad"}
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "payment_method_form",
+            "children": [
+              {"type": "TextHeading", "text": "¿Cómo prefieres pagar?"},
+              {"type": "TextBody", "text": "${data.intro}"},
+              {"type": "RadioButtonsGroup", "name": "payment_method", "label": "Método de pago", "data-source": "${data.methods}", "required": true},
+              {
+                "type": "Footer",
+                "label": "Continuar",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "flow_kind": "payment_method",
+                    "method": "${form.payment_method}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
