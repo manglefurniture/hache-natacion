@@ -154,13 +154,36 @@ function hache_sharky_groups_prepare_outbound(array $payload,string $groupId): a
     return $out;
 }
 
+/**
+ * The enrollment Flow may replace only the native intensive course/date list.
+ * Side-question menus or any other list emitted while the state happens to be at
+ * register_intensive/course must keep their original semantics.
+ */
+function hache_sharky_groups_direct_commerce_upgrade_allowed(array $payload): bool
+{
+    if(($payload['type']??'')!=='interactive'||($payload['interactive']['type']??'')!=='list')return true;
+    $rows=[];
+    foreach(($payload['interactive']['action']['sections']??[]) as $section){
+        if(!is_array($section))continue;
+        foreach(($section['rows']??[]) as $row)if(is_array($row))$rows[]=$row;
+    }
+    if(!$rows)return false;
+    foreach($rows as $row){
+        $id=trim((string)($row['id']??''));
+        if($id===''||!str_starts_with($id,'course:'))return false;
+    }
+    return true;
+}
+
 function hache_sharky_groups_finalize_outbound(array $payload): array
 {
     $groupId=trim((string)($payload['_sharky_group_target']??''));
     $isGroup=($payload['_sharky_group']??false)===true&&$groupId!=='';
     unset($payload['_sharky_group'],$payload['_sharky_group_target']);
     if(!$isGroup){
-        $payload=hache_sharky_commerce_upgrade_direct_payload($payload);
+        if(hache_sharky_groups_direct_commerce_upgrade_allowed($payload)){
+            $payload=hache_sharky_commerce_upgrade_direct_payload($payload);
+        }
         // The registration-success upgrade is intentionally late, after durable
         // state commit. Apply the same binding/reminder preparation here so the
         // first payment selector cannot escape without its student/course fence.
