@@ -9,6 +9,8 @@ const alta = read('api/alumnos.php');
 const altaUi = read('public/agregar-alumno.php');
 const intensivo = read('api/intensivo-alumnos.php');
 const intensivoUi = read('public/intensivo-detalle.php');
+const cursosApi = read('api/intensivos.php');
+const cursosUi = read('public/intensivos.php');
 const gestion = read('api/alumno-gestion.php');
 const ficha = read('public/ficha-alumno.php');
 
@@ -45,6 +47,21 @@ assert.match(intensivoUi, /sincronizar_fecha_inicio/);
 assert.match(intensivoUi, /La inscripción normal está cerrada/);
 assert.match(intensivoUi, /Observaciones/);
 
+// ADMIN también debe poder crear el propio curso histórico que falta. La UI
+// normal no ofrece lunes pasados: el carril histórico usa una fecha explícita,
+// exige motivo y el backend vuelve a validar que la ventana ya esté cerrada.
+assert.match(cursosUi, /Corrección histórica de ADMIN/);
+assert.match(cursosUi, /fecha_inicio_historica/);
+assert.match(cursosUi, /motivo_correccion/);
+assert.match(cursosUi, /correccion_historica:hist/);
+assert.match(cursosUi, /location\.href='\/intensivo-detalle\.php\?id='/,'Tras crear el curso histórico debe abrirse su detalle para cargar alumnos de inmediato.');
+assert.match(cursosApi, /hache_admin_bool\(\$in\['correccion_historica'\]/);
+assert.match(cursosApi, /\$requiereHistorica=!\$inscripcionAbierta/);
+assert.match(cursosApi, /if\(\$requiereHistorica&&!\$historica\)/,'Un POST directo no debe poder crear un curso cerrado sin marcar la corrección histórica.');
+assert.match(cursosApi, /if\(\$historica&&\$motivoHistorico===''/,'La creación histórica debe exigir motivo en backend.');
+assert.match(cursosApi, /hache_admin_historical_note/);
+assert.match(cursosApi, /Curso histórico creado correctamente/);
+
 // Si el alumno todavía no existe, el mismo carril ADMIN debe poder crearlo
 // directamente dentro del curso histórico sin abrir esa fecha al registro normal.
 assert.match(altaUi, /OR ci\.id=:preset/,'Agregar alumno debe poder cargar el curso histórico exacto recibido desde su detalle.');
@@ -72,4 +89,4 @@ assert.match(ficha, /Tu contraseña de administrador/);
 assert.match(ficha, /accion:'ELIMINAR'/);
 assert.match(ficha, /csrf:/);
 
-console.log('OK: altas de intensivo, corrección histórica ADMIN y eliminación administrativa protegidas.');
+console.log('OK: altas de intensivo, creación/corrección histórica ADMIN y eliminación administrativa protegidas.');
