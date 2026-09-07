@@ -58,25 +58,32 @@ $prospect=brain_state('prospect');
 $flow=brain_state('prospect','intensive','PALAPAS',['name'=>'register_intensive','step'=>'offer','data'=>[]]);
 
 $decision=hache_sharky_brain_next_best_action($unknown,$prospect,['text'=>'Soy nuevo'],[
-    'decision_kind'=>'conversation','human_takeover_active'=>true,'known_student'=>true,'pause_requested'=>true,
+    'decision_kind'=>'conversation','human_takeover_active'=>true,'known_student'=>true,'pause_eligible'=>true,
 ]);
 brain_eq($decision['action'],'wait_for_human','Human takeover must silence every lower-priority policy.');
 
 $student=brain_state('student');
 $decision=hache_sharky_brain_next_best_action($unknown,$student,['text'=>'Hola'],[
-    'known_student'=>true,'direct_chat'=>true,'pause_requested'=>true,
+    'known_student'=>true,'direct_chat'=>true,'pause_eligible'=>true,
 ]);
 brain_eq($decision['action'],'handoff_known_student','Known student must not enter prospect pause/commercial logic.');
 
 $decision=hache_sharky_brain_next_best_action($unknown,$prospect,['text'=>'Bebé'],[
-    'family_age_unavailable'=>true,'pause_requested'=>true,
+    'family_age_unavailable'=>true,'pause_eligible'=>true,
 ]);
 brain_eq($decision['action'],'close_age_scope','Age-scope closure must outrank a lower commercial pause signal.');
 
 $decision=hache_sharky_brain_next_best_action($ready,$ready,['text'=>'Ahora no'],[
-    'pause_requested'=>true,'policy_handoff_required'=>true,
+    'pause_requested'=>true,'pause_eligible'=>true,'policy_handoff_required'=>true,
 ]);
-brain_eq($decision['action'],'pause_commercial_intent','An explicit supported pause must be deterministic and must not open a new commercial action.');
+brain_eq($decision['action'],'pause_commercial_intent','An eligible supported pause must be deterministic and must not open a new commercial action.');
+
+// Raw recognition alone is not enough: first-contact/stale pause requests do not
+// satisfy the live pause guard and therefore must keep normal identity routing.
+$decision=hache_sharky_brain_next_best_action($unknown,$unknown,['text'=>'Ahora no'],[
+    'decision_kind'=>'conversation','pause_requested'=>true,'pause_eligible'=>false,
+]);
+brain_eq($decision['action'],'ask_identity','Ineligible pause recognition must not terminate an unknown conversation.');
 
 $decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'¿Cuánto cuesta?'],[
     'side_question'=>true,'decision_kind'=>'conversation',
