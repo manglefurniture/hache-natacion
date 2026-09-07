@@ -18,10 +18,12 @@ try{
   $st=$pdo->prepare("SELECT ph.profesor_id,h.id horario_id,h.hora_inicio,h.hora_fin,s.id sede_id,s.clave sede_clave,s.nombre sede_nombre,ph.activo FROM profesor_horarios ph JOIN horarios h ON h.id=ph.horario_id JOIN sedes s ON s.id=h.sede_id ORDER BY s.nombre,h.hora_inicio");$st->execute();$assignments=[];foreach($st->fetchAll() as $r)$assignments[(string)$r['profesor_id']][]=$r;
   foreach($rows as &$row)$row['horarios']=$assignments[(string)$row['id']]??[];unset($row);
   $horarios=$pdo->query("SELECT h.id,h.hora_inicio,h.hora_fin,s.id sede_id,s.clave sede_clave,s.nombre sede_nombre FROM horarios h JOIN sedes s ON s.id=h.sede_id WHERE h.activo=1 AND s.activo=1 ORDER BY s.nombre,h.hora_inicio")->fetchAll();
-  profesores_out(['ok'=>true,'profesores'=>$rows,'horarios'=>$horarios]);
+  profesores_out(['ok'=>true,'profesores'=>$rows,'horarios'=>$horarios,'csrf'=>auth_csrf_token()]);
  }
  if($method!=='POST')profesores_out(['ok'=>false,'error'=>'Método no permitido'],405);
- $in=json_decode(file_get_contents('php://input'),true);if(!is_array($in))profesores_out(['ok'=>false,'error'=>'JSON inválido'],400);$action=strtoupper(trim((string)($in['accion']??'')));
+ $in=json_decode(file_get_contents('php://input'),true);if(!is_array($in))profesores_out(['ok'=>false,'error'=>'JSON inválido'],400);
+ if(!auth_csrf_validate(isset($in['csrf'])?(string)$in['csrf']:null))profesores_out(['ok'=>false,'error'=>'Sesión de seguridad vencida. Recarga la página.'],419);
+ $action=strtoupper(trim((string)($in['accion']??'')));
  if($action==='SAVE'){
   $id=trim((string)($in['id']??''));$name=preg_replace('/\s+/u',' ',trim((string)($in['nombre']??'')))??'';$phone=profesores_phone((string)($in['whatsapp']??''));$email=trim((string)($in['correo']??''));$active=array_key_exists('activo',$in)?(!empty($in['activo'])?1:0):1;
   if($name===''||mb_strlen($name)>180)profesores_out(['ok'=>false,'error'=>'El nombre es obligatorio y debe tener máximo 180 caracteres.'],422);if($phone===null)profesores_out(['ok'=>false,'error'=>'WhatsApp inválido. Usa un número de México o formato internacional.'],422);if($email!==''&&!filter_var($email,FILTER_VALIDATE_EMAIL))profesores_out(['ok'=>false,'error'=>'Correo inválido.'],422);
@@ -31,7 +33,8 @@ try{
  }
  if($action==='ASSIGN'){
   $teacher=trim((string)($in['profesor_id']??''));$schedule=trim((string)($in['horario_id']??''));$active=!empty($in['activo'])?1:0;if($teacher===''||$schedule==='')profesores_out(['ok'=>false,'error'=>'Profesor y horario son obligatorios.'],422);
-  $st=$pdo->prepare('SELECT 1 FROM profesores WHERE id=:p AND activo=1');$st->execute([':p'=>$teacher]);if(!$st->fetchColumn())profesores_out(['ok'=>false,'error'=>'Profesor inválido o inactivo.'],422);$st=$pdo->prepare('SELECT 1 FROM horarios WHERE id=:h AND activo=1');$st->execute([':h'=>$schedule]);if(!$st->fetchColumn())profesores_out(['ok'=>false,'error'=>'Horario inválido o inactivo.'],422);
+  $st=$pdo->prepare('SELECT activo FROM profesores WHERE id=:p LIMIT 1');$st->execute([':p'=>$teacher]);$teacherActive=$st->fetchColumn();if($teacherActive===false)profesores_out(['ok'=>false,'error'=>'Profesor no encontrado.'],422);if($active===1&&(int)$teacherActive!==1)profesores_out(['ok'=>false,'error'=>'No puedes asignar horarios a un profesor inactivo.'],422);
+  $st=$pdo->prepare('SELECT activo FROM horarios WHERE id=:h LIMIT 1');$st->execute([':h'=>$schedule]);$scheduleActive=$st->fetchColumn();if($scheduleActive===false)profesores_out(['ok'=>false,'error'=>'Horario no encontrado.'],422);if($active===1&&(int)$scheduleActive!==1)profesores_out(['ok'=>false,'error'=>'No puedes asignar un horario inactivo.'],422);
   $st=$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo,created_by) VALUES(UUID(),:p,:h,:a,:u) ON DUPLICATE KEY UPDATE activo=VALUES(activo),updated_at=NOW()");$st->execute([':p'=>$teacher,':h'=>$schedule,':a'=>$active,':u'=>$me['id']]);profesores_out(['ok'=>true]);
  }
  profesores_out(['ok'=>false,'error'=>'Acción inválida'],422);
