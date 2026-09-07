@@ -61,6 +61,10 @@ $payments=(string)file_get_contents($root.'/config/sharky-member-payments.php');
 member_ok(str_contains($payments,"tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE"),'MP reconciliation must revalidate the one-valid-intensive-payment invariant inside the transaction.');
 $api=(string)file_get_contents($root.'/api/profesores.php');
 member_ok(str_contains($api,"auth_require(['ADMIN'])"),'Only administrators may register or assign professors.');
+member_ok(str_contains($api,'auth_csrf_validate'),'Professor administration POSTs must validate CSRF.');
+member_ok(str_contains($api,"'csrf'=>auth_csrf_token()"),'Professor administration GET must provide a session CSRF token.');
 member_ok(str_contains($api,"accion:'")===false,'Professor API must not contain UI-side action literals.');
+$professorPage=(string)file_get_contents($root.'/public/profesores.php');
+member_ok(str_contains($professorPage,'csrf:model.csrf'),'Professor administration UI must send the current CSRF token on mutations.');
 
 fwrite(STDOUT,"SHARKY_MEMBER_OPS_REGRESSION_OK\n");
