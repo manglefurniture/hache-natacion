@@ -70,10 +70,18 @@ function hache_sharky_commerce_flow_v2_inject(string $env,string $flowId): void
     $_ENV[$env]=$flowId;
 }
 
+function hache_sharky_commerce_flow_v2_drop_legacy_cache(string $key): void
+{
+    $path=hache_sharky_commerce_flow_cache_path($key);
+    if($path!==''&&is_file($path))@unlink($path);
+}
+
 /**
  * Existing commerce code already prioritizes explicit WHATSAPP_*_FLOW_ID values.
  * Load the v2 runtime cache into those variables so all current send paths switch
  * to the corrected published resources without duplicating the commerce engine.
+ * If no v2 resource exists yet, remove the legacy v1 runtime cache so Sharky uses
+ * its safe chat/buttons fallback instead of showing known-bad literal placeholders.
  */
 function hache_sharky_commerce_flow_v2_bootstrap(): array
 {
@@ -86,6 +94,7 @@ function hache_sharky_commerce_flow_v2_bootstrap(): array
             continue;
         }
         $cached=hache_sharky_commerce_flow_v2_cached_id((string)$key);
+        hache_sharky_commerce_flow_v2_drop_legacy_cache((string)$key);
         if($cached===null)continue;
         hache_sharky_commerce_flow_v2_inject($env,$cached);
         $ready[(string)$key]=$cached;
@@ -128,6 +137,7 @@ function hache_sharky_commerce_flow_v2_ensure(string $key,string $wabaId,callabl
 
     $cached=hache_sharky_commerce_flow_v2_cached_id($key);
     if($cached!==null){
+        hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
         hache_sharky_commerce_flow_v2_inject($env,$cached);
         return $cached;
     }
@@ -144,6 +154,7 @@ function hache_sharky_commerce_flow_v2_ensure(string $key,string $wabaId,callabl
     if(is_array($existing)&&$existing['status']==='PUBLISHED'){
         $id=(string)$existing['id'];
         hache_sharky_commerce_flow_v2_cache_id($key,$id);
+        hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
         hache_sharky_commerce_flow_v2_inject($env,$id);
         return $id;
     }
@@ -167,6 +178,7 @@ function hache_sharky_commerce_flow_v2_ensure(string $key,string $wabaId,callabl
     }
 
     hache_sharky_commerce_flow_v2_cache_id($key,$flowId);
+    hache_sharky_commerce_flow_v2_drop_legacy_cache($key);
     hache_sharky_commerce_flow_v2_inject($env,$flowId);
     return $flowId;
 }
@@ -194,6 +206,7 @@ function hache_sharky_commerce_flow_v2_prime_throttled(array $payload,?callable 
         }
         $cached=hache_sharky_commerce_flow_v2_cached_id((string)$key);
         if($cached!==null){
+            hache_sharky_commerce_flow_v2_drop_legacy_cache((string)$key);
             hache_sharky_commerce_flow_v2_inject($env,$cached);
             $ready[(string)$key]=$cached;
             hache_sharky_commerce_flow_v2_clear_retry((string)$key);
