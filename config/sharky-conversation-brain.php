@@ -25,9 +25,9 @@ function hache_sharky_brain_precedence(): array
         'close_age_scope',
         'pause_commercial_intent',
         'handoff_policy_exception',
-        'preserve_deterministic_decision',
         'answer_side_question',
         'continue_controlled_flow',
+        'preserve_deterministic_decision',
         'start_guided_qualification',
         'show_commercial_menu',
         'ask_identity',
@@ -129,22 +129,24 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
         return $select('handoff_policy_exception', 'business_policy_requires_human', 'human');
     }
 
-    // A concrete orchestrator decision is already safer/more specific than a
-    // heuristic conversational signal. This is the protected boundary that v1
-    // violated once in production: a side-question heuristic must never override
-    // an already-selected deterministic decision.
-    if ($decisionKind !== '' && $decisionKind !== 'conversation') {
-        return $select('preserve_deterministic_decision', 'orchestrator_decision_is_authoritative', 'deterministic');
-    }
-
-    // Informational interruptions may temporarily outrank an active form only
-    // after the caller has classified the turn as conversational.
-    if (($signals['side_question'] ?? false) === true) {
+    // A side-question may interrupt a controlled flow only when the live turn is
+    // explicitly conversational. A heuristic alone can never override a concrete
+    // deterministic decision.
+    if ($decisionKind === 'conversation' && ($signals['side_question'] ?? false) === true) {
         return $select('answer_side_question', 'informational_interrupt_preserves_flow', 'conversation');
     }
 
+    // Keep the existing diagnostic vocabulary for any active controlled flow.
+    // Live shadow mapping also classifies these decisions as continue_controlled_flow,
+    // including deterministic prompts such as prospect_swim_prompt.
     if (($after['flow_name'] ?? null) !== null) {
         return $select('continue_controlled_flow', 'controlled_flow_is_active', 'deterministic');
+    }
+
+    // Outside a controlled flow, a concrete orchestrator decision is already
+    // safer/more specific than any conversational heuristic and remains protected.
+    if ($decisionKind !== '' && $decisionKind !== 'conversation') {
+        return $select('preserve_deterministic_decision', 'orchestrator_decision_is_authoritative', 'deterministic');
     }
 
     if (($before['identity_kind'] ?? 'unknown') === 'unknown'
