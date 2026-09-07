@@ -46,7 +46,7 @@ check(is_string($helper)&&is_string($editar),'No se pudieron leer los archivos d
 foreach(["tipo='INTENSIVO' AND estado='VALIDO'",'FROM ausencias WHERE alumno_id=:a AND intensivo_id=:c','FROM asistencias aa INNER JOIN sesiones se','UPDATE curso_intensivo_alumnos SET curso_intensivo_id=:nuevo','Creado automáticamente al transferir un alumno desde la edición administrativa.'] as $needle){check(str_contains($helper,$needle),'Falta una protección crítica en la transferencia de intensivos: '.$needle);}
 check(!str_contains($helper,'UPDATE alumnos SET fecha_inicio=:f,horario_preferido_id=:h'),'La transferencia no debe reemplazar horario_preferido_id con el horario del intensivo.');
 check(str_contains($helper,'UPDATE alumnos SET fecha_inicio=:f,updated_at=NOW()'),'La sincronización debe limitarse a la fecha del alumno y preservar su horario regular/preferido.');
-check(str_contains($helper,'bool $permitirHistorico=false')&&str_contains($helper,"$estado==='TERMINADO'&&!$permitirHistorico"),'Solo una corrección administrativa explícita debe poder apuntar a un intensivo ya terminado.');
+check(str_contains($helper,'bool $permitirHistorico=false')&&str_contains($helper,"if(\$estado==='TERMINADO'&&!\$permitirHistorico)"),'Solo una corrección administrativa explícita debe poder apuntar a un intensivo ya terminado.');
 check(str_contains($helper,'Corrección histórica:'),'La transferencia histórica debe dejar nota en la relación del intensivo.');
 
 check(str_contains($editar,"require_once __DIR__.'/../config/intensivo-transferencias.php'")&&str_contains($editar,'intensivo_transferir_por_fecha_edicion($pdo,$id,$sedeId,$fechaInicio'),'Editar alumno debe sincronizar la fecha con la pertenencia real al intensivo.');
