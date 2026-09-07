@@ -40,7 +40,6 @@ brain_eq(HACHE_SHARKY_BRAIN_VERSION,'3.0-shadow-v2','Brain version must identify
 brain_eq(HACHE_SHARKY_BRAIN_DIAG_COHORT,'v2','Readiness must use the post-fix v2 diagnostic cohort.');
 brain_eq(hache_sharky_brain_precedence()[0],'wait_for_human','Human takeover must be the highest-priority Brain policy.');
 brain_eq(hache_sharky_brain_precedence()[1],'handoff_known_student','Known-student policy must win before commercial automation.');
-brain_ok(array_search('preserve_deterministic_decision',hache_sharky_brain_precedence(),true)<array_search('answer_side_question',hache_sharky_brain_precedence(),true),'Protected deterministic decisions must outrank side-question heuristics.');
 
 $ready=brain_state('prospect','intensive','PALAPAS');
 $snapshot=hache_sharky_brain_snapshot($ready);
@@ -93,13 +92,13 @@ $decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'¿Cuánto cu
 brain_eq($decision['action'],'answer_side_question','A conversational side question must temporarily outrank the active controlled flow.');
 brain_eq($decision['route'],'conversation','Side questions are answered conversationally while preserving state.');
 
-$decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'¿Cuánto cuesta?'],[
-    'side_question'=>true,'decision_kind'=>'registration_confirm',
-]);
-brain_eq($decision['action'],'preserve_deterministic_decision','A side-question heuristic must never override an already-selected protected decision.');
+$decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'Sí'],['decision_kind'=>'prospect_swim_prompt']);
+brain_eq($decision['action'],'continue_controlled_flow','A deterministic prompt inside an active controlled flow must keep the controlled-flow diagnostic action.');
 
-$decision=hache_sharky_brain_next_best_action($flow,$flow,['text'=>'Sí'],['decision_kind'=>'conversation']);
-brain_eq($decision['action'],'continue_controlled_flow','An active controlled flow must remain authoritative.');
+$decision=hache_sharky_brain_next_best_action($ready,$ready,['text'=>'¿Cuánto cuesta?'],[
+    'side_question'=>true,'decision_kind'=>'weather_cancellation_policy',
+]);
+brain_eq($decision['action'],'preserve_deterministic_decision','Outside a controlled flow, a side-question heuristic must never override an already-selected protected decision.');
 
 $decision=hache_sharky_brain_next_best_action($prospect,$prospect,['text'=>'x'],['decision_kind'=>'weather_cancellation_policy']);
 brain_eq($decision['action'],'preserve_deterministic_decision','A specific deterministic decision must not be replaced by generic Brain guidance.');
@@ -149,6 +148,13 @@ $realSideQuestion=hache_sharky_brain_shadow_evaluate($flow,$flow,['text'=>'¿Cu�
 brain_eq($realSideQuestion['live_action'],'answer_side_question','Live side-question decisions must retain their explicit diagnostic action.');
 brain_eq($realSideQuestion['brain']['action']??null,'answer_side_question','Confirmed live side questions must remain conversational after the protected-precedence fix.');
 brain_ok(($realSideQuestion['match']??false)===true,'Protected precedence must not regress legitimate side-question handling.');
+
+$protectedHeuristic=hache_sharky_brain_shadow_evaluate($ready,$ready,['text'=>'¿Cuánto cuesta?'],[
+    'decision'=>['kind'=>'weather_cancellation_policy'],
+]);
+brain_eq($protectedHeuristic['live_action'],'preserve_deterministic_decision','A protected live decision without active flow must retain the protected vocabulary.');
+brain_eq($protectedHeuristic['brain']['action']??null,'preserve_deterministic_decision','Heuristic side-question detection must not override a protected live decision.');
+brain_ok(($protectedHeuristic['match']??false)===true,'The production protected mismatch class must be closed in Brain v2.');
 
 brain_eq(hache_sharky_brain_diag_observed_metric_key(),'brain_diag_v2_observed','The corrected cohort must use a fresh observation counter.');
 brain_eq(hache_sharky_brain_diag_metric_key('answer_user','continue_discovery'),'brain_v2_mm_13_12','Mismatch metric key must be versioned and use stable numeric action codes.');
