@@ -88,13 +88,15 @@ $paymentMigration=(string)file_get_contents($root.'/database/migrations/20260907
 member_ok(str_contains($paymentMigration,'sharky_member_payment_intents'),'Registered-student checkout needs durable payment intents.');
 
 $webhook=(string)file_get_contents($root.'/public/api/whatsapp-orchestrator-lab.php');
+$memberRouter=(string)file_get_contents($root.'/config/sharky-member-routing.php');
 member_ok(str_contains($webhook,'$memberOpsReady=hache_sharky_member_schema_ready($pdo)&&hache_sharky_member_payments_schema_ready($pdo)'),'Member operations must stay dormant until both additive schemas are present.');
 member_ok(str_contains($webhook,'$memberEvidenceEvents=$memberOpsReady?hache_sharky_member_extract_media_events($pdo,$payload):[]'),'Member evidence extraction must stay dormant before migration.');
 member_ok(str_contains($webhook,'$memberEvidenceIds[$memberEvidenceId]=true'),'Member media must reserve its Meta message receipt.');
 member_ok(str_contains($webhook,'!isset($memberEvidenceIds[(string)($event[\'id\']??\'\')])'),'Generic proof events must be deduplicated against member-owned media IDs.');
 member_ok(str_contains($webhook,'if($memberOpsReady){'),'Registered-member routing must be guarded by schema readiness at runtime.');
-member_ok(str_contains($webhook,'hache_sharky_member_payment_process_event'),'Payment self-service must run before generic Sharky routing once ready.');
-member_ok(str_contains($webhook,'sharky_member_should_handle'),'Member operations must be explicitly gated before claiming an inbox event.');
+member_ok(str_contains($webhook,'hache_sharky_member_route_event'),'Webhook must delegate registered-member turns to the shared member router.');
+member_ok(str_contains($memberRouter,'hache_sharky_member_payment_process_event'),'Shared member router must run payment self-service before general member operations.');
+member_ok(str_contains($memberRouter,'hache_sharky_member_supported_event'),'Member operations must be explicitly gated before claiming an inbox event.');
 $payments=(string)file_get_contents($root.'/config/sharky-member-payments.php');
 member_ok(str_contains($payments,"tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE"),'MP reconciliation must revalidate the one-valid-intensive-payment invariant inside the transaction.');
 member_ok(str_contains($payments,"'name'=>'member_payment_transfer','step'=>'evidence'"),'SPEI choice must arm a bounded member-owned proof flow.');
