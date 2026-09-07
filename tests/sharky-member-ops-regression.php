@@ -68,5 +68,9 @@ member_ok(str_contains($api,"'csrf'=>auth_csrf_token()"),'Professor administrati
 member_ok(str_contains($api,"accion:'")===false,'Professor API must not contain UI-side action literals.');
 $professorPage=(string)file_get_contents($root.'/public/profesores.php');
 member_ok(str_contains($professorPage,'csrf:model.csrf'),'Professor administration UI must send the current CSRF token on mutations.');
+$status=(string)file_get_contents($root.'/bin/sharky-orchestrator-status.php');
+member_ok(str_contains($status,"'member_ops'=>["),'Operational status must expose a member-ops readiness block.');
+member_ok(str_contains($status,"'routing_ready'=>"),'Operational status must distinguish schema presence from live routing readiness.');
+member_ok(str_contains($status,'missing_tables'),'Status must name missing schema objects without exposing PII.');
 
 fwrite(STDOUT,"SHARKY_MEMBER_OPS_REGRESSION_OK\n");
