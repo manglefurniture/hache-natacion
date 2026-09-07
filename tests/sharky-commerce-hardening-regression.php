@@ -52,7 +52,7 @@ foreach($flowFiles as $file){
     $decodedFlows[$file]=$decoded;
 }
 $enrollmentText=json_encode($decodedFlows['enrollment-v1.json'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'';
-commerce_hard_expect(str_contains($enrollmentText,'"text":"Sede fija"')&&str_contains($enrollmentText,'"text":"${data.venue_label}"'),'Enrollment venue label and dynamic value must be separate components.');
+commerce_hard_expect(str_contains($enrollmentText,'"text":"Sede fija:"')&&str_contains($enrollmentText,'"text":"${data.venue_label}"'),'Enrollment venue label and dynamic value must be separate components.');
 commerce_hard_expect(!str_contains($enrollmentText,'Sede fija: ${data.venue_label}')&&!str_contains($enrollmentText,'Sede: ${data.venue_label}')&&!str_contains($enrollmentText,'Nombre: ${data.full_name}')&&!str_contains($enrollmentText,'Nacimiento: ${data.birthdate}'),'Enrollment Flow must not contain mixed literal/dynamic display strings.');
 $transferText=json_encode($decodedFlows['payment-transfer-v1.json'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'';
 commerce_hard_expect(str_contains($transferText,'"text":"Importe"')&&str_contains($transferText,'"text":"${data.amount_label}"'),'SPEI amount label and dynamic value must be separate components.');
