@@ -80,8 +80,9 @@ function hache_sharky_outbox_add_venue_hints(array $payload): array
 /**
  * Turns the final intensive-registration offer into a clearer sales close.
  * This is deliberately presentation-only: durable Sharky state is already
- * decided before this layer. The existing flow:yes / flow:no IDs are preserved
- * and action:human uses the orchestrator's established takeover path.
+ * decided before this layer. `flow:yes` keeps the existing controlled path,
+ * while `flow:pause` is reserved exclusively for the sales-close “Ahora no”.
+ * `action:human` uses the orchestrator's established takeover path.
  */
 function hache_sharky_outbox_add_sales_close(array $payload): array
 {
@@ -125,7 +126,7 @@ function hache_sharky_outbox_add_sales_close(array $payload): array
     $payload['interactive']['action']['buttons']=[
         ['type'=>'reply','reply'=>['id'=>'flow:yes','title'=>'Apartar mi lugar']],
         ['type'=>'reply','reply'=>['id'=>'action:human','title'=>'Hablar con un profe']],
-        ['type'=>'reply','reply'=>['id'=>'flow:no','title'=>'Ahora no']],
+        ['type'=>'reply','reply'=>['id'=>'flow:pause','title'=>'Ahora no']],
     ];
     return $payload;
 }
