@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/../config/sharky-whatsapp-adapter.php';
 require_once __DIR__.'/../config/sharky-member-ops.php';
 require_once __DIR__.'/../config/sharky-member-payments.php';
 
