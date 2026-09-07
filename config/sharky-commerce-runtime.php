@@ -115,14 +115,23 @@ function hache_sharky_commerce_bind_fallback_event(array $event): array
     return $event;
 }
 
-/** null = legacy unbound selector; true = exact current registration; false = stale. */
+/**
+ * null = legacy unbound fallback button already sent before this hardening;
+ * true = exact current registration; false = stale/malformed selector.
+ */
 function hache_sharky_commerce_payment_binding_matches(PDO $pdo, string $contact, array $event): ?bool
 {
     $commerce = is_array($event['commerce'] ?? null) ? $event['commerce'] : [];
     if (strtolower(trim((string)($commerce['flow_kind'] ?? ''))) !== 'payment_method') return null;
     $studentId = trim((string)($commerce['student_id'] ?? ''));
     $courseId = trim((string)($commerce['course_id'] ?? ''));
-    if ($studentId === '' && $courseId === '') return null;
+    if ($studentId === '' && $courseId === '') {
+        // Only an explicit fallback button id gets legacy compatibility. An
+        // nfm_reply without its server-injected binding is malformed/stale and
+        // must never be allowed to select a method for whatever registration is
+        // currently pending under the same phone number.
+        return trim((string)($event['interactive_id'] ?? '')) !== '' ? null : false;
+    }
     if ($studentId === '' || $courseId === '') return false;
     $current = hache_sharky_commerce_pending_registration($pdo, $contact);
     if (!is_array($current)) return false;
