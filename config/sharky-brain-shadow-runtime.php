@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-conversation-brain.php';
+require_once __DIR__.'/sharky-brain-diagnostics.php';
 
 /**
  * Map the already-selected live result into the same coarse action vocabulary
@@ -62,8 +63,8 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
         'known_student'=>$knownStudent,
         'family_age_unavailable'=>$decisionKind==='family_age_scope_unavailable',
         'pause_requested'=>$rawPause,
-        // P2 guard: this is the exact live eligibility predicate, not merely
-        // recognition of the words/button title "Ahora no".
+        // This is the exact live eligibility predicate, not merely recognition
+        // of the words/button title "Ahora no".
         'pause_eligible'=>$eligiblePause,
         'policy_handoff_required'=>(($decisionAction['type']??'')==='human_takeover'&&!$knownStudent),
         'side_question'=>$sideQuestion,
@@ -97,20 +98,30 @@ function hache_sharky_brain_shadow_observe(array $beforeState,array $afterState,
         $evaluation=hache_sharky_brain_shadow_evaluate($beforeState,$afterState,$event,$result,$directChat);
         $brain=is_array($evaluation['brain']??null)?$evaluation['brain']:[];
         $live=(string)($evaluation['live_action']??'unknown');
+        $brainAction=(string)($brain['action']??'unknown');
         $match=($evaluation['match']??false)===true;
         $decisionKind=(string)($evaluation['decision_kind']??'');
 
         if(function_exists('hache_sharky_metric_increment')){
+            // Existing lifetime shadow counters remain intact.
             hache_sharky_metric_increment('brain_shadow_observed');
             hache_sharky_metric_increment($match?'brain_shadow_match':'brain_shadow_mismatch');
+
+            // Diagnostic cohort starts with this feature. Readiness for Phase 2B
+            // uses only this cohort so pre-diagnostic mismatches are not guessed.
+            hache_sharky_metric_increment('brain_diag_observed');
+            if(!$match)hache_sharky_metric_increment(hache_sharky_brain_diag_metric_key($live,$brainAction));
         }
         if(!$match){
             // No phone, name, message text, state JSON or campaign data is logged.
-            error_log('[sharky-brain-shadow] mismatch live='.$live.' brain='.(string)($brain['action']??'unknown')
+            error_log('[sharky-brain-shadow] mismatch live='.$live.' brain='.$brainAction
                 .' reason='.(string)($brain['reason']??'unknown').' decision='.$decisionKind);
         }
     }catch(Throwable $e){
-        if(function_exists('hache_sharky_metric_increment'))hache_sharky_metric_increment('brain_shadow_error');
+        if(function_exists('hache_sharky_metric_increment')){
+            hache_sharky_metric_increment('brain_shadow_error');
+            hache_sharky_metric_increment('brain_diag_error');
+        }
         error_log('[sharky-brain-shadow] observer failed');
     }
 }
