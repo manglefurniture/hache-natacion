@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-whatsapp-flow-runtime.php';
 require_once __DIR__.'/sharky-commerce-flows.php';
+require_once __DIR__.'/sharky-commerce-runtime.php';
 
 const HACHE_SHARKY_GROUPS_KEY = 'sharky_grupos_habilitado';
 
@@ -106,10 +107,10 @@ function hache_sharky_groups_decorate_events(array $events,array $payload): arra
 function hache_sharky_groups_prepare_outbound(array $payload,string $groupId): array
 {
     $groupId=trim($groupId);
-    if($groupId===''){
-        $payload=hache_sharky_whatsapp_birthdate_flow_upgrade_cached($payload);
-        return hache_sharky_commerce_upgrade_direct_payload($payload);
-    }
+    // Commerce upgrades need the state committed by the current turn. They run
+    // in finalize_outbound, immediately before the Meta call. The birthdate Flow
+    // remains safe here because it only decorates an already-decided prompt.
+    if($groupId==='')return hache_sharky_whatsapp_birthdate_flow_upgrade_cached($payload);
 
     $body='';
     if(($payload['type']??'')==='text'){
@@ -158,8 +159,12 @@ function hache_sharky_groups_finalize_outbound(array $payload): array
     $groupId=trim((string)($payload['_sharky_group_target']??''));
     $isGroup=($payload['_sharky_group']??false)===true&&$groupId!=='';
     unset($payload['_sharky_group'],$payload['_sharky_group_target']);
-    if(!$isGroup)return $payload;
+    if(!$isGroup){
+        $payload=hache_sharky_commerce_upgrade_direct_payload($payload);
+        return hache_sharky_commerce_finalize_payload($payload);
+    }
+    // WhatsApp Flows are never emitted into group chats.
     $payload['recipient_type']='group';
     $payload['to']=$groupId;
-    return $payload;
+    return hache_sharky_commerce_finalize_payload($payload);
 }
