@@ -46,7 +46,8 @@ function hache_pago_resolver_intensivo(PDO $pdo,string $alumnoId,string $sedeId,
             FROM curso_intensivo_alumnos cia
             INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
             WHERE cia.alumno_id=:alumno AND ci.id=:curso AND ci.sede_id=:sede
-            LIMIT 1 FOR UPDATE");
+            LIMIT 1
+            FOR UPDATE");
         $st->execute([':alumno'=>$alumnoId,':curso'=>$cursoId,':sede'=>$sedeId]);
         $course=$st->fetch(PDO::FETCH_ASSOC);
         if(!$course)throw new RuntimeException('El alumno no pertenece al curso intensivo seleccionado en esta sede');
@@ -57,7 +58,8 @@ function hache_pago_resolver_intensivo(PDO $pdo,string $alumnoId,string $sedeId,
         FROM curso_intensivo_alumnos cia
         INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
         WHERE cia.alumno_id=:alumno AND ci.sede_id=:sede AND ci.estado IN ('PROGRAMADO','EN_CURSO')
-        ORDER BY ci.fecha_inicio DESC LIMIT 1 FOR UPDATE");
+        ORDER BY ci.fecha_inicio DESC LIMIT 1
+        FOR UPDATE");
     $st->execute([':alumno'=>$alumnoId,':sede'=>$sedeId]);
     $course=$st->fetch(PDO::FETCH_ASSOC);
     if(!$course)throw new RuntimeException('Selecciona el curso intensivo al que corresponde este pago');
