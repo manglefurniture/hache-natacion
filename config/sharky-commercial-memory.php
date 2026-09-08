@@ -123,6 +123,16 @@ function hache_sharky_commercial_relative_date_question(string $text): bool
         ||preg_match('/\b(?:que\s+dia|que\s+fecha|cuando)\s+(?:es|cae)\b/u',$t)===1;
 }
 
+function hache_sharky_commercial_course_options_question(string $text): bool
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if($t==='')return false;
+    $question=str_contains($text,'?')||str_contains($text,'¿')||preg_match('/^(?:cuando|cual|que\s+fecha)\b/u',$t)===1;
+    if(!$question)return false;
+    return preg_match('/\b(?:cuando|cual|que\s+fecha)\b.{0,50}\b(?:inicia|inicio|empieza|comienza|arranca|proximo\s+curso|curso\s+intensivo)\b/u',$t)===1
+        ||preg_match('/\b(?:proximo\s+curso|curso\s+intensivo)\b.{0,45}\b(?:inicia|inicio|empieza|comienza|fecha)\b/u',$t)===1;
+}
+
 function hache_sharky_commercial_human_date(string $iso): string
 {
     $d=DateTimeImmutable::createFromFormat('!Y-m-d',$iso,new DateTimeZone('America/Cancun'));
@@ -251,6 +261,8 @@ function hache_sharky_commercial_interactive_input(PDO $pdo,array $state,array $
 
     $catalog=hache_sharky_commercial_catalog($pdo,$state,$context);
     $next=hache_sharky_commercial_next($state);$slot=(string)($next['slot']??'');
+    $requestedSlot=(string)($state['commercial_context']['_requested_slot']??'');
+    if($requestedSlot==='course'&&($state['commercial_context']['program']??'')==='intensive'&&in_array(($state['commercial_context']['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))$slot='course';
     $prefix='action:commercial:'.$slot.':';
     if(!in_array($slot,['plan','schedule','course'],true)||!str_starts_with($id,$prefix)){
         return [$state,hache_sharky_commercial_reply($state,'Esa opción corresponde a un paso anterior. Seguimos con la opción que toca ahora.',$catalog)];
@@ -258,7 +270,7 @@ function hache_sharky_commercial_interactive_input(PDO $pdo,array $state,array $
     $selectedId=substr($id,strlen($prefix));
     if($selectedId==='')return [$state,hache_sharky_commercial_reply($state,'Esa opción ya no está disponible.',$catalog)];
 
-    $c=&$state['commercial_context'];$label='';$matched=null;
+    $c=&$state['commercial_context'];unset($c['_requested_slot']);$label='';$matched=null;
     if($slot==='plan'){
         foreach(hache_sharky_commercial_visible_plans($state,$catalog) as $plan)if(strtolower((string)($plan['id']??''))===$selectedId){$matched=$plan;break;}
         if(is_array($matched)){
@@ -292,6 +304,8 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
     if(is_array($state['flow']??null)&&($state['flow']['name']??'')!=='qualify_prospect')return $state;
     $state=hache_sharky_commercial_reconcile_guidance($state,$text);
     $c=&$state['commercial_context'];
+    unset($c['_requested_slot']);
+    if(($c['program']??'')==='intensive'&&in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)&&hache_sharky_commercial_course_options_question($text))$c['_requested_slot']='course';
     foreach(hache_sharky_orchestrator_text_segments($text) as $line){
         $t=hache_sharky_orchestrator_normalize($line);
         if(str_contains($line,'?')||str_contains($line,'¿'))continue;
@@ -381,9 +395,12 @@ function hache_sharky_commercial_next(array $state): array
 /** One commercial continuation, never a business mutation or implicit consent. */
 function hache_sharky_commercial_reply(array $state,string $answer,array $catalog=[]): array
 {
-    $next=hache_sharky_commercial_next($state);
+    $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $requestedCourse=($c['_requested_slot']??null)==='course'&&($c['program']??null)==='intensive'&&in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true);
+    $next=$requestedCourse?['slot'=>'course','prompt'=>'Elige uno de los inicios disponibles.']:hache_sharky_commercial_next($state);
     $answer=preg_replace('/¿[^?]*\?/u','',$answer)??$answer;
-    $message=trim($answer);$slot=(string)$next['slot'];
+    $message=$requestedCourse?'Estos son los inicios disponibles actualmente en '.(($c['sede_clave']??'')==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec').'.':trim($answer);
+    $slot=(string)$next['slot'];
 
     if($slot==='plan'){
         $message.=($message!==''?"\n\n":'').$next['prompt'].' Toca una opción o escribe el nombre del plan.';
