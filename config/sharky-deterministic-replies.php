@@ -54,6 +54,47 @@ function hache_sharky_deterministic_location_request(string $text): bool
     return preg_match('/\b(ubicacion|direccion|maps|mapa|donde\s+queda|donde\s+esta|como\s+llego|como\s+llegar|mandame\s+la\s+ubicacion|enviame\s+la\s+ubicacion)\b/u',$t)===1;
 }
 
+function hache_sharky_deterministic_amenities_request(string $text): bool
+{
+    $t=hache_sharky_deterministic_normalize($text);
+    $amenity='(?:regadera|regaderas|ducha|duchas|bano|banos|sanitario|sanitarios)';
+    if(preg_match('/\b'.$amenity.'\b/u',$t)!==1)return false;
+
+    // Solo conocemos existencia/disponibilidad. Detalles de accesibilidad,
+    // precio, ubicación, horario o características deben seguir la ruta normal.
+    if(preg_match('/\b(accesible|accesibles|accesibilidad|costo|costos|precio|precios|cuanto|cuanta|cuantos|cuantas|ubicacion|direccion|donde|maps|mapa|horario|horarios|agua\s+caliente|agua\s+fria)\b/u',$t)===1)return false;
+
+    $bare=preg_match('/^[¿?¡!\s]*(?:tienen?\s+)?'.$amenity.'[?!.¿¡\s]*$/u',$t)===1;
+    $availability=preg_match('/\b(?:hay|manejan|ofrecen|incluyen|cuenta|cuentan|dispone|disponen|tiene|tienen)\b.{0,40}\b'.$amenity.'\b/u',$t)===1
+        || preg_match('/\b'.$amenity.'\b.{0,24}\b(?:hay|disponible|disponibles)\b/u',$t)===1
+        || preg_match('/\bservicio\s+de\s+'.$amenity.'\b/u',$t)===1;
+    return $bare||$availability;
+}
+
+function hache_sharky_deterministic_mentions_both_venues(string $text): bool
+{
+    $t=hache_sharky_deterministic_normalize($text);
+    return preg_match('/\bmonteverde\b/u',$t)===1
+        && preg_match('/\bpalapas(?:\s+protudec)?\b/u',$t)===1;
+}
+
+function hache_sharky_deterministic_amenities_message(string $text,array $state): string
+{
+    if(hache_sharky_deterministic_mentions_both_venues($text)){
+        return 'Sí. Tanto Colegio Monteverde como Palapas Protudec cuentan con baños y regaderas.';
+    }
+    $sede=hache_sharky_deterministic_detect_explicit_sede($text);
+    if($sede===null){
+        $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+        $candidate=(string)($commercial['sede_clave']??'');
+        if(in_array($candidate,['MONTEVERDE','PALAPAS'],true))$sede=$candidate;
+    }
+    if(in_array($sede,['MONTEVERDE','PALAPAS'],true)){
+        return 'Sí. '.hache_sharky_deterministic_sede_label($sede).' cuenta con baños y regaderas.';
+    }
+    return 'Sí. Tanto Colegio Monteverde como Palapas Protudec cuentan con baños y regaderas.';
+}
+
 function hache_sharky_deterministic_location_followup_request(string $text,array $state): bool
 {
     if(hache_sharky_deterministic_detect_explicit_sede($text)===null)return false;
@@ -157,6 +198,7 @@ function hache_sharky_deterministic_schedule_selection_message(string $text,arra
 
 function hache_sharky_deterministic_reply(string $text,array $state,array $context=[]): ?string
 {
+    if(hache_sharky_deterministic_amenities_request($text))return hache_sharky_deterministic_amenities_message($text,$state);
     if(hache_sharky_deterministic_location_request($text)||hache_sharky_deterministic_location_followup_request($text,$state))return hache_sharky_deterministic_location_message($text,$state);
     if(hache_sharky_deterministic_schedule_request($text))return hache_sharky_deterministic_schedule_message($state);
     if(hache_sharky_deterministic_price_request($text))return hache_sharky_deterministic_price_message($state);
