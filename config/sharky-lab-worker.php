@@ -337,7 +337,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         if($shouldTakeover){
             if(!hache_sharky_lab_mark_handoff_pending($pdo,$deliverySource,$batchedIds))return false;
             $reason=$decisionKind==='conversation'?'unresolved':((string)($actionResult['code']??'')==='START_DATE_REQUIRES_HUMAN'?'start_date_exception':'requested_human');
-            if(!hache_sharky_takeover_mark($contact,$reason,'Sharky 2.0 controlled handoff'.(($result['state']['commercial_context']['program']??'')==='regular'?' — Contexto comercial: '.json_encode(hache_sharky_commercial_snapshot($result['state']),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES):'')){
+            if(!hache_sharky_takeover_mark($contact,$reason,'Sharky 2.0 controlled handoff'.(($result['state']['commercial_context']['program']??'')==='regular'?' — Contexto comercial: '.json_encode(hache_sharky_commercial_snapshot($result['state']),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES):''))){
                 error_log('[sharky-lab] controlled takeover persistence failed reason='.$reason);
                 return false;
             }
