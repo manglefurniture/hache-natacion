@@ -104,6 +104,26 @@ function hache_sharky_followup_complete_registration(array $state,int $now): arr
     return hache_sharky_followup_set_state($state,$followup);
 }
 
+/**
+ * Backend authority for late/stale follow-ups. null means the lookup itself was
+ * unavailable; commercial reminders fail closed in that case because they are
+ * optional and must never outrank a real student record.
+ */
+function hache_sharky_followup_registered_contact(PDO $pdo,string $contact): ?bool
+{
+    $digits=preg_replace('/\D+/','',$contact)?:'';
+    if(strlen($digits)===13&&str_starts_with($digits,'521'))$digits='52'.substr($digits,3);
+    if($digits==='')return null;
+    try{
+        $st=$pdo->prepare("SELECT 1 FROM alumnos WHERE whatsapp=:w AND estado_administrativo IN ('PENDIENTE','ACTIVO') LIMIT 1");
+        $st->execute([':w'=>'+'.$digits]);
+        return (bool)$st->fetchColumn();
+    }catch(Throwable $e){
+        error_log('[sharky-followup] registered-contact lookup failed');
+        return null;
+    }
+}
+
 function hache_sharky_followup_payload_armable(array $payload): bool
 {
     if(is_array($payload['_sharky_followup']??null)||is_array($payload['_sharky_followup_arm']??null)||($payload['_sharky_allow_takeover']??false)===true)return false;
@@ -196,6 +216,10 @@ function hache_sharky_followup_prepare_normal_outbound(PDO $pdo,string $contact,
             }
             return $payload;
         }
+        if(hache_sharky_followup_registered_contact($pdo,$contact)===true){
+            hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_complete_registration($state,$now));
+            return $payload;
+        }
         $meta=hache_sharky_followup_arm_meta($state,$contact,$dedupeSeed);if(!is_array($meta))return $payload;
         $followup=['status'=>'pending_delivery','token'=>$meta['token'],'user_turn_at'=>$meta['user_turn_at'],'sent_count'=>0,'next_stage'=>1,'first_due_at'=>null,'first_sent_at'=>null,'second_due_at'=>null,'completed_at'=>null];
         hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
@@ -228,6 +252,10 @@ function hache_sharky_followup_after_normal_sent(PDO $pdo,string $contact,array 
         $state=hache_sharky_db_state_load($pdo,$contact);$followup=hache_sharky_followup_state($state);
         if(($followup['status']??'')!=='pending_delivery'||!hash_equals((string)($followup['token']??''),$token)||(int)($state['updated_at']??0)!==$userTurnAt)return;
         if($now>=$userTurnAt+HACHE_SHARKY_FOLLOWUP_SESSION_SECONDS||!hache_sharky_followup_commercial_ready($state)||!hache_sharky_followup_context_matches($state,$meta))return;
+        if(hache_sharky_followup_registered_contact($pdo,$contact)===true){
+            hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_complete_registration($state,$now));
+            return;
+        }
         $due=hache_sharky_followup_next_allowed_at($now+HACHE_SHARKY_FOLLOWUP_FIRST_DELAY_SECONDS);
         $followup['status']='armed';$followup['first_due_at']=$due;
         $state=hache_sharky_followup_set_state($state,$followup);hache_sharky_db_state_save_now($pdo,$contact,$state);
@@ -249,6 +277,9 @@ function hache_sharky_followup_validate_before_send(PDO $pdo,string $contact,arr
     if((int)($state['updated_at']??0)!==$userTurnAt)return ['ok'=>false,'reason'=>'USER_REPLIED'];
     if(hache_sharky_followup_newer_inbound_pending($pdo,$contact,$userTurnAt))return ['ok'=>false,'reason'=>'PENDING_INBOUND'];
     if($now>=$userTurnAt+HACHE_SHARKY_FOLLOWUP_SESSION_SECONDS)return ['ok'=>false,'reason'=>'SESSION_EXPIRED'];
+    $registered=hache_sharky_followup_registered_contact($pdo,$contact);
+    if($registered===true)return ['ok'=>false,'reason'=>'REGISTRATION_EXISTS'];
+    if($registered===null)return ['ok'=>false,'reason'=>'REGISTRATION_CHECK_UNAVAILABLE'];
     if(!hache_sharky_followup_commercial_ready($state))return ['ok'=>false,'reason'=>'CONTEXT_NOT_ELIGIBLE'];
     if(!hache_sharky_followup_context_matches($state,$meta))return ['ok'=>false,'reason'=>'CONTEXT_CHANGED'];
     if(!hache_sharky_followup_send_allowed_now($now))return ['ok'=>false,'reason'=>'QUIET_HOURS','reschedule_at'=>hache_sharky_followup_next_allowed_at($now)];
@@ -261,6 +292,10 @@ function hache_sharky_followup_note_cancelled(PDO $pdo,string $contact,array $me
     try{
         $state=hache_sharky_db_state_load($pdo,$contact);$followup=hache_sharky_followup_state($state);
         if(!hash_equals((string)($followup['token']??''),$token))return;
+        if($reason==='REGISTRATION_EXISTS'){
+            hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_complete_registration($state,$now));
+            return;
+        }
         if(in_array($reason,['USER_REPLIED','PENDING_INBOUND','SESSION_EXPIRED','CONTEXT_NOT_ELIGIBLE','CONTEXT_CHANGED'],true)){
             $followup['status']='completed_'.strtolower($reason);$followup['next_stage']=null;$followup['token']=null;$followup['completed_at']=$now;
             hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
