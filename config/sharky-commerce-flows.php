@@ -478,13 +478,19 @@ function hache_sharky_commerce_card_payload(
 function hache_sharky_commerce_enrollment_launch_data(PDO $pdo, array $state, int $minAge = 12): ?array
 {
     $flow = $state['flow'] ?? null;
-    if (!is_array($flow) || ($flow['name'] ?? '') !== 'register_intensive' || ($flow['step'] ?? '') !== 'course') return null;
+    if (!is_array($flow) || ($flow['name'] ?? '') !== 'register_intensive') return null;
+    $step = (string)($flow['step'] ?? '');
+    if (!in_array($step,['course','name'],true)) return null;
     $sede = strtoupper(trim((string)($flow['data']['sede_clave'] ?? '')));
     if (!in_array($sede,['MONTEVERDE','PALAPAS'],true)) return null;
+    $selectedCourseId = $step==='name' ? trim((string)($flow['data']['course_id'] ?? '')) : '';
+    $selectedScheduleId = $step==='name' ? trim((string)($flow['data']['schedule_id'] ?? '')) : '';
+    if ($step==='name' && ($selectedCourseId==='' || $selectedScheduleId==='')) return null;
     $today = (new DateTimeImmutable('today',new DateTimeZone('America/Cancun')))->format('Y-m-d');
     $options = [];
     foreach (hache_sharky_business_intensive_options($pdo) as $option) {
         if (!is_array($option) || strtoupper((string)($option['sede_clave'] ?? '')) !== $sede) continue;
+        if ($selectedCourseId!=='' && (string)($option['id'] ?? '')!==$selectedCourseId) continue;
         if (function_exists('hache_sharky_start_authority_intensive_date_allowed')
             && !hache_sharky_start_authority_intensive_date_allowed((string)($option['fecha_inicio'] ?? ''),$today)) continue;
         $options[] = $option;
@@ -497,16 +503,19 @@ function hache_sharky_commerce_enrollment_launch_data(PDO $pdo, array $state, in
         $dates[]=[
             'id'=>(string)($option['id']??''),
             'title'=>$dateObj?$dateObj->format('d/m/Y'):$date,
-            'description'=>'Inicio disponible',
+            'description'=>$step==='name'?'Inicio elegido':'Inicio disponible',
         ];
         foreach (($option['schedules']??[]) as $schedule) {
             if (!is_array($schedule)) continue;
-            $id=(string)($schedule['id']??''); if ($id===''||isset($seenSchedules[$id]))continue;
+            $id=(string)($schedule['id']??'');
+            if ($id===''||isset($seenSchedules[$id]))continue;
+            if ($selectedScheduleId!=='' && $id!==$selectedScheduleId) continue;
             $seenSchedules[$id]=true;
             $schedules[]=['id'=>$id,'title'=>(string)($schedule['label']??'Horario')];
         }
     }
     if (!$schedules) return null;
+    if ($step==='name' && (count($dates)!==1 || count($schedules)!==1)) return null;
     $minAge=max(1,$minAge);
     $todayObj=new DateTimeImmutable($today);
     return [
@@ -538,17 +547,28 @@ function hache_sharky_commerce_upgrade_direct_payload(array $payload): array
         }
     }
 
-    // The first course/date list is replaced by one enrollment form when possible.
     $flowId = hache_sharky_commerce_flow_cached_id('enrollment');
-    if ($flowId === null || ($payload['type']??'') !== 'interactive' || ($payload['interactive']['type']??'') !== 'list') return $payload;
+    if ($flowId === null) return $payload;
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return $payload;}
+    $flow=is_array($state['flow']??null)?$state['flow']:[];
+    $step=(string)($flow['step']??'');
+    $isPostReserveName=($flow['name']??'')==='register_intensive'
+        &&$step==='name'
+        &&($payload['type']??'')==='text'
+        &&str_contains($body,'Escribe el nombre completo de la persona que tomará el curso');
+    $isCourseList=($payload['type']??'')==='interactive'&&($payload['interactive']['type']??'')==='list';
+    if(!$isPostReserveName&&!$isCourseList)return $payload;
+
     $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];
     $minAge=is_numeric($business['sharky_edad_minima']??null)?(int)$business['sharky_edad_minima']:12;
     $data=hache_sharky_commerce_enrollment_launch_data($pdo,$state,$minAge);
     if (!is_array($data)) return $payload;
+    $message=$isPostReserveName
+        ?'Ya tengo tu sede, fecha y horario. Completa tus datos en este formulario para continuar con la inscripción.'
+        :'Completa en un solo formulario los datos de tu inscripción. La sede queda fija en '.(string)$data['venue_label'].'.';
     return hache_sharky_commerce_flow_payload(
         $contact,
-        'Completa en un solo formulario los datos de tu inscripción. La sede queda fija en '.(string)$data['venue_label'].'.',
+        $message,
         $flowId,
         'ENROLLMENT',
         'Completar inscripción',
@@ -560,7 +580,8 @@ function hache_sharky_commerce_enrollment_submit(array $state,array $event,array
 {
     $commerce=is_array($event['commerce']??null)?$event['commerce']:[];
     $flow=$state['flow']??null;
-    if (!is_array($flow)||($flow['name']??'')!=='register_intensive'||($flow['step']??'')!=='course') {
+    $step=is_array($flow)?(string)($flow['step']??''):'';
+    if (!is_array($flow)||($flow['name']??'')!=='register_intensive'||!in_array($step,['course','name'],true)) {
         $decision=hache_sharky_orchestrator_decision('commerce_enrollment_stale','Ese formulario pertenece a una inscripción anterior. No hice cambios; vuelve a elegir “Inscribirme” para abrir uno actualizado.');
         return [$state,$decision];
     }
@@ -585,6 +606,13 @@ function hache_sharky_commerce_enrollment_submit(array $state,array $event,array
         return [$state,hache_sharky_orchestrator_decision('registration_age_rejected','Hache Natación atiende a partir de '.$minAge.' años; no puedo continuar con este registro.')];
     }
     $courseId=trim((string)($commerce['course_id']??''));$scheduleId=trim((string)($commerce['schedule_id']??''));
+    if($step==='name'){
+        $expectedCourseId=trim((string)($flow['data']['course_id']??''));
+        $expectedScheduleId=trim((string)($flow['data']['schedule_id']??''));
+        if($expectedCourseId===''||$expectedScheduleId===''||!hash_equals($expectedCourseId,$courseId)||!hash_equals($expectedScheduleId,$scheduleId)){
+            return [$state,hache_sharky_orchestrator_decision('registration_course_invalid','La fecha de inicio o el horario del formulario ya no coincide con lo que habías elegido. No hice cambios; abriré opciones actualizadas.',[],['type'=>'refresh_intensive_options'])];
+        }
+    }
     $course=null;$schedule=null;
     foreach (($context['intensive_options']??[]) as $option) {
         if (!is_array($option)||(string)($option['id']??'')!==$courseId||strtoupper((string)($option['sede_clave']??''))!==$expectedSede)continue;
