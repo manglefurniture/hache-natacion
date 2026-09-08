@@ -245,6 +245,33 @@ function hache_sharky_member_student_fallback(PDO $pdo,array $event): bool
     }
 }
 
+function hache_sharky_member_brain_shadow_error(string $message): void
+{
+    if(function_exists('hache_sharky_metric_increment')){
+        hache_sharky_metric_increment('brain_shadow_error');
+        hache_sharky_metric_increment('brain_diag_error');
+    }
+    error_log('[sharky-brain-shadow] '.$message);
+}
+
+/** Observation-only bridge: it cannot change the member route result or payload. */
+function hache_sharky_member_brain_observe(PDO $pdo,?array $beforeState,array $event,string $lane): void
+{
+    if(!function_exists('hache_sharky_brain_shadow_observe_member'))return;
+    if(!is_array($beforeState)){
+        hache_sharky_member_brain_shadow_error('member pre-turn state unavailable');
+        return;
+    }
+    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
+    if($contact==='')return;
+    try{
+        $afterState=hache_sharky_db_state_load($pdo,$contact);
+        hache_sharky_brain_shadow_observe_member($beforeState,$afterState,$event,$lane);
+    }catch(Throwable $e){
+        hache_sharky_member_brain_shadow_error('member post-turn state unavailable');
+    }
+}
+
 /**
  * Shared semantic lane for realtime webhook and inbox recovery.
  * Returns null when the event belongs to the legacy/general Sharky pipeline.
@@ -259,6 +286,11 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if($contact==='')return null;
     if(function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact))return null;
 
+    $brainBeforeState=null;
+    if(function_exists('hache_sharky_brain_shadow_observe_member')){
+        try{$brainBeforeState=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){$brainBeforeState=null;}
+    }
+
     // Explicit human requests from a Palapas student must leave member-ops
     // before the payment processor sees the same text (e.g. "persona + pago").
     $routeIdentity=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
@@ -269,10 +301,16 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     // Palapas is intentionally intercepted before member payments so no
     // accounting flow can open or resume while the temporary red light is on.
     $palapas=hache_sharky_member_palapas_restricted_route($pdo,$event);
-    if($palapas!==null)return $palapas;
+    if($palapas!==null){
+        if($palapas===true)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'palapas');
+        return $palapas;
+    }
 
     $paymentResult=hache_sharky_member_payment_process_event($pdo,$event,$business);
-    if($paymentResult!==null)return $paymentResult;
+    if($paymentResult!==null){
+        if($paymentResult===true)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
+        return $paymentResult;
+    }
     if(!hache_sharky_member_supported_event($pdo,$event))return null;
 
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return null;}
@@ -291,13 +329,19 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if(!$teacherIntent){
         $student=hache_sharky_member_student_context($pdo,$contact);
         if(($student['found']??false)===true&&hache_sharky_member_pending_registration($student)&&$intent!=='payments'){
-            return hache_sharky_member_student_fallback($pdo,$event);
+            $handled=hache_sharky_member_student_fallback($pdo,$event);
+            if($handled)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
+            return $handled;
         }
     }
 
     if(hache_sharky_member_deterministic_event($pdo,$event,$state)){
-        return hache_sharky_member_process_event($pdo,$event,$business);
+        $handled=hache_sharky_member_process_event($pdo,$event,$business);
+        if($handled===true)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,$teacherIntent?'teacher':'student');
+        return $handled;
     }
 
-    return hache_sharky_member_student_fallback($pdo,$event);
+    $handled=hache_sharky_member_student_fallback($pdo,$event);
+    if($handled)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
+    return $handled;
 }
