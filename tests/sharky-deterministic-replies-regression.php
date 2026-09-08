@@ -19,11 +19,20 @@ deterministic_ok(hache_sharky_deterministic_schedule_request('¿Qué horarios ti
 deterministic_ok(!hache_sharky_deterministic_schedule_request('De 19:00 a 20:00'),'A concrete time selection is not a generic schedule request.');
 deterministic_ok(hache_sharky_deterministic_price_request('Precio de favor'),'Natural price wording must be deterministic.');
 deterministic_ok(hache_sharky_deterministic_location_request('Me envías la ubicación'),'Location requests must be deterministic.');
+deterministic_ok(hache_sharky_deterministic_amenities_request('Dudas, manejan regaderas?'),'Natural shower questions must be deterministic.');
+deterministic_ok(hache_sharky_deterministic_amenities_request('¿Palapas Protudec cuenta con baños?'),'Bathroom questions must be deterministic.');
 deterministic_ok(hache_sharky_deterministic_detect_explicit_sede('Quiero la ubicación de Monteverde')==='MONTEVERDE','Explicit Monteverde must override current venue context.');
 deterministic_ok(hache_sharky_deterministic_detect_explicit_sede('Maps de Palapas Protudec')==='PALAPAS','Explicit Palapas must be recognized.');
 deterministic_ok(hache_sharky_deterministic_route_followup('En coche'),'Route follow-ups from the historical screenshot must be caught.');
 deterministic_ok(hache_sharky_deterministic_time_range('De 19:00 a 20:00')===['19:00','20:00'],'Time ranges must normalize to HH:MM.');
 deterministic_ok(hache_sharky_deterministic_sede_label('MONTEVERDE')==='Colegio Monteverde','All deterministic user-facing Monteverde labels must use Colegio Monteverde.');
+
+$palapasAmenities=hache_sharky_deterministic_reply('Palapas protudec, cuenta con servicio de regaderas ?',$state)??'';
+deterministic_ok($palapasAmenities==='Sí. Palapas Protudec cuenta con baños y regaderas.','Explicit Palapas amenities question must answer the confirmed fact directly.');
+$monteverdeAmenities=hache_sharky_deterministic_reply('¿Hay baños en Monteverde?',$state)??'';
+deterministic_ok($monteverdeAmenities==='Sí. Colegio Monteverde cuenta con baños y regaderas.','Explicit Monteverde amenities question must answer the confirmed fact directly.');
+$genericAmenities=hache_sharky_deterministic_amenities_message('¿Tienen regaderas?',['identity'=>['kind'=>'prospect'],'commercial_context'=>['program'=>null,'sede_clave'=>null]])??'';
+deterministic_ok(str_contains($genericAmenities,'Colegio Monteverde')&&str_contains($genericAmenities,'Palapas Protudec')&&str_contains($genericAmenities,'baños y regaderas'),'Generic amenities question must state that both venues have bathrooms and showers.');
 
 deterministic_ok(hache_sharky_reply_looks_incomplete('¡Claro! 😊'),'Greeting plus emoji only must be rejected as incomplete.');
 deterministic_ok(hache_sharky_reply_looks_incomplete('¡Hola! 💰'),'Repeated greeting plus emoji only must be rejected as incomplete.');
