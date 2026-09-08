@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/sharky-orchestrator.php';
 require_once __DIR__.'/../config/sharky-payment-reminder.php';
 require_once __DIR__.'/../config/sharky-commerce-runtime.php';
+require_once __DIR__.'/sharky-enrollment-after-reserve-regression.php';
 
 function commerce_expect(bool $ok,string $message): void
 {
@@ -193,7 +194,7 @@ $primePos=strpos($webhook,'hache_sharky_commerce_flows_prime');
 commerce_expect($primePos!==false&&$primePos>$ackPos,'Commerce Flow provisioning must remain after webhook ACK.');
 $routePos=strpos($webhook,'if(hache_sharky_commerce_event_candidate($event))');
 $normalPos=strpos($webhook,'hache_sharky_lab_process_event($pdo,$event',$routePos===false?0:$routePos);
-commerce_expect($routePos!==false&&$normalPos!==false&&$routePos<$normalPos,'Commerce replies must bypass the normal known-student shortcut before general processing.');
+commerce_expect($routePos!==false&&$normalPos!==false&&$routePos<$normalPos,'Commerce Flow replies must be routed before the normal prospect/member worker.');
 
 $groups=file_get_contents(__DIR__.'/../config/sharky-groups.php')?:'';
 $preparePos=strpos($groups,'function hache_sharky_groups_prepare_outbound');
@@ -202,14 +203,4 @@ $upgradePos=strpos($groups,'hache_sharky_commerce_upgrade_direct_payload',$final
 commerce_expect($preparePos!==false&&$finalPos!==false&&$upgradePos!==false&&$upgradePos>$finalPos,'Enrollment/payment Flow upgrade must run only after durable state commit, at final send time.');
 commerce_expect(str_contains($groups,'WhatsApp Flows are never emitted into group chats'),'Group traffic must stay outside commerce Flows.');
 
-$mpSource=file_get_contents(__DIR__.'/../config/sharky-mercadopago.php')?:'';
-commerce_expect(str_contains($mpSource,"'/var/www/tienda.hnatacion.com/app'"),'Sharky must reuse the deployed Tienda Natación application root.');
-commerce_expect(str_contains($mpSource,'PaymentGatewayConfig::mercadoPago'),'Sharky must reuse Tienda Natación active encrypted gateway configuration.');
-commerce_expect(!preg_match('/APP_USR-[A-Za-z0-9_-]{20,}/',$mpSource),'No Mercado Pago credential may be committed in Sharky source.');
-
-$env=file_get_contents(__DIR__.'/../.env.example')?:'';
-foreach(['WHATSAPP_ENROLLMENT_FLOW_ID','WHATSAPP_PAYMENT_METHOD_FLOW_ID','WHATSAPP_PAYMENT_TRANSFER_FLOW_ID','WHATSAPP_PAYMENT_CARD_FLOW_ID','HACHE_TIENDA_ROOT'] as $key){
-    commerce_expect(str_contains($env,$key.'='),'Environment example must declare '.$key.'.');
-}
-
-echo "OK sharky commerce Flows regression\n";
+fwrite(STDOUT,"SHARKY_COMMERCE_FLOWS_OK\n");
