@@ -72,6 +72,29 @@ function hache_sharky_entry_apply(array $state,string $userText=''): array
     return $state;
 }
 
+/**
+ * Bootstrap exclusivo para el primer turno REAL de un número que WhatsApp ya
+ * clasificó como prospecto no identificado. No confirma el programa de entrada:
+ * abre el carril guiado de natación y lo conserva solo como preferencia hasta
+ * que la calificación lo confirme de forma determinista.
+ */
+function hache_sharky_entry_guided_first_prospect(array $state,string $userText='',int $now=0): array
+{
+    if(($state['identity']['kind']??'unknown')!=='prospect')return $state;
+    if(($state['identity']['source']??'')!=='whatsapp_unmatched')return $state;
+    if(is_array($state['flow']??null))return $state;
+    if(trim((string)($state['last_user_text']??''))!=='')return $state;
+
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    foreach(['program','sede_clave','swim_level'] as $key)if(!empty($commercial[$key]))return $state;
+
+    $state=hache_sharky_entry_apply($state,$userText);
+    $entry=hache_sharky_entry_context($state,$userText);
+    $data=['entry_bootstrap'=>true];
+    if(in_array($entry['interest'],['intensive','regular'],true))$data['preferred_program']=$entry['interest'];
+    return hache_sharky_orchestrator_flow($state,'qualify_prospect','swim',$data,$now>0?$now:time());
+}
+
 function hache_sharky_entry_intro(array $state,string $userText=''): string
 {
     $entry=hache_sharky_entry_context($state,$userText);
