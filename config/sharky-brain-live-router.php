@@ -7,6 +7,65 @@ require_once __DIR__.'/sharky-brain-shadow-runtime.php';
 const HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY = 'sharky_brain_2ba_habilitado';
 const HACHE_SHARKY_BRAIN_2BA_CANARY_KEY = 'sharky_brain_2ba_canary_pct';
 
+/** @return array<string,string> */
+function hache_sharky_brain_2ba_config_defaults(): array
+{
+    // The candidate gate has already been satisfied; start with a deliberately
+    // small cohort. Both values remain kill-switchable from Sharky admin.
+    return [
+        HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'1',
+        HACHE_SHARKY_BRAIN_2BA_CANARY_KEY=>'10',
+    ];
+}
+
+function hache_sharky_brain_2ba_config_value_valid(string $key,string $value): bool
+{
+    if($key===HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY)return in_array($value,['0','1'],true);
+    if($key===HACHE_SHARKY_BRAIN_2BA_CANARY_KEY)return ctype_digit($value)&&(int)$value>=0&&(int)$value<=100;
+    return false;
+}
+
+/** @return list<array{clave:string,valor:string,descripcion:string,tipo:string,etiqueta:string}> */
+function hache_sharky_brain_2ba_config_rows(array $values): array
+{
+    return [
+        [
+            'clave'=>HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,
+            'valor'=>(string)($values[HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY]??'0'),
+            'descripcion'=>'Kill switch de Fase 2B-A. Solo permite routing guiado de bajo riesgo para prospectos nuevos; nunca conversación abierta ni rutas protegidas.',
+            'tipo'=>'checkbox',
+            'etiqueta'=>'Brain Fase 2B-A — canary restringido',
+        ],
+        [
+            'clave'=>HACHE_SHARKY_BRAIN_2BA_CANARY_KEY,
+            'valor'=>(string)($values[HACHE_SHARKY_BRAIN_2BA_CANARY_KEY]??'0'),
+            'descripcion'=>'Porcentaje determinista de prospectos nuevos elegibles para Fase 2B-A (0–100).',
+            'tipo'=>'text',
+            'etiqueta'=>'Brain Fase 2B-A — porcentaje canary',
+        ],
+    ];
+}
+
+/** @return array<string,string> */
+function hache_sharky_brain_2ba_config(PDO $pdo): array
+{
+    $values=hache_sharky_brain_2ba_config_defaults();
+    try{
+        $st=$pdo->prepare('SELECT clave,valor FROM configuracion WHERE clave IN (?,?)');
+        $st->execute([HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,HACHE_SHARKY_BRAIN_2BA_CANARY_KEY]);
+        foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+            $key=(string)($row['clave']??'');$value=trim((string)($row['valor']??''));
+            if(isset($values[$key])&&hache_sharky_brain_2ba_config_value_valid($key,$value))$values[$key]=$value;
+        }
+        return $values;
+    }catch(Throwable $e){
+        // Fase live is optional. If its config authority is unavailable, the only
+        // safe behavior is shadow-only, never "default enabled" through an error.
+        error_log('[sharky-brain-2ba] configuration unavailable; live routing disabled');
+        return [HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'0',HACHE_SHARKY_BRAIN_2BA_CANARY_KEY=>'0'];
+    }
+}
+
 /** @return list<string> */
 function hache_sharky_brain_2ba_live_actions(): array
 {
