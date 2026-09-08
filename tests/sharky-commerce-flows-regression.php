@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/sharky-orchestrator.php';
 require_once __DIR__.'/../config/sharky-payment-reminder.php';
 require_once __DIR__.'/../config/sharky-commerce-runtime.php';
+require_once __DIR__.'/sharky-enrollment-after-reserve-regression.php';
 
 function commerce_expect(bool $ok,string $message): void
 {
