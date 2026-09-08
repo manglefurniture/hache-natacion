@@ -6,6 +6,7 @@ require_once __DIR__.'/sharky-runtime.php';
 require_once __DIR__.'/sharky-whatsapp-batching.php';
 require_once __DIR__.'/sharky-entry-guidance.php';
 require_once __DIR__.'/sharky-brain-shadow-runtime.php';
+require_once __DIR__.'/sharky-brain-live-router.php';
 require_once __DIR__.'/sharky-whatsapp-echoes.php';
 require_once __DIR__.'/sharky-draft-parity.php';
 require_once __DIR__.'/sharky-post-pr72.php';
@@ -283,7 +284,15 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     if($result['skip']??false){hache_sharky_lab_release_delivery_lock($deliveryLock);return false;}
 
     if(is_array($brainBeforeState)&&is_array($result['state']??null)){
+        // Preserve the raw live decision in the shadow cohort first. Phase 2B-A
+        // is deliberately downstream so its canary cannot inflate agreement.
         hache_sharky_brain_shadow_observe($brainBeforeState,$result['state'],$event,$result,$groupId==='');
+        $brain2baConfig=hache_sharky_brain_2ba_config($pdo);
+        $result=hache_sharky_brain_2ba_apply($brainBeforeState,$result,$event,$brain2baConfig,$contact,$groupId==='');
+        if(($result['_brain_2ba']['applied']??false)===true&&is_array($result['state']??null)){
+            if(is_array($deferredState))$deferredState['state']=$result['state'];
+            else $deferredState=['contact'=>$contact,'state'=>$result['state'],'ttl'=>86400];
+        }
     }
 
     try{
