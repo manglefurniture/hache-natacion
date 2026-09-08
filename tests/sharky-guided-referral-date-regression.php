@@ -38,6 +38,8 @@ guided_entry_ok($entry===['source'=>'meta_ad','interest'=>'intensive'],'Meta int
 $metaFallback=$meta;$metaFallback['referral']['latest']['headline']='Aprende a nadar';$metaFallback['referral']['latest']['body']='Inscripciones abiertas';
 $entry=hache_sharky_entry_context($metaFallback,'Hola');
 guided_entry_ok($entry===['source'=>'meta_ad','interest'=>'intensive'],'Current single Meta campaign must safely fall back to intensive entry interest.');
+$metaExplicitRegular=hache_sharky_entry_context($meta,'Quiero información de clases regulares');
+guided_entry_ok($metaExplicitRegular===['source'=>'meta_ad','interest'=>'regular'],'Explicit user interest must override an intensive Meta referral while preserving Meta as the source.');
 $entry=hache_sharky_entry_context($fresh,'Hola');
 guided_entry_ok($entry===['source'=>'direct','interest'=>null],'Unknown direct entry must remain generic.');
 
@@ -47,6 +49,10 @@ guided_entry_ok(($guided['commercial_context']['entry_source']??null)==='web','E
 guided_entry_ok(($guided['commercial_context']['entry_interest']??null)==='intensive','Entry interest must persist.');
 guided_entry_ok(empty($guided['commercial_context']['program']),'Entry interest must not masquerade as a confirmed program.');
 guided_entry_ok(($guided['flow']['data']['preferred_program']??null)==='intensive','Guided qualification must carry the entry program as a preference.');
+$metaGuided=hache_sharky_orchestrator_flow($meta,'qualify_prospect','swim',[],1788796800);
+$metaGuided=hache_sharky_entry_apply($metaGuided,'Quiero clases regulares');
+guided_entry_ok(($metaGuided['commercial_context']['entry_interest']??null)==='regular','Explicit regular interest must persist even when referral advertises intensive.');
+guided_entry_ok(($metaGuided['flow']['data']['preferred_program']??null)==='regular','Explicit regular interest must guide qualification instead of the referral fallback.');
 
 $decision=hache_sharky_orchestrator_decision('qualification_swim','Para orientarte bien, ¿ya sabes nadar o estás empezando desde cero?',['type'=>'buttons','buttons'=>[
     hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),
@@ -85,6 +91,11 @@ $bareDay['commercial_context']['program']='intensive';$bareDay['commercial_conte
 $bareDay['commercial_context']['schedule_id']='h8';$bareDay['commercial_context']['schedule_label']='08:00–09:00';
 $bareDay=hache_sharky_commercial_capture($bareDay,'el 14',$catalog,'2026-09-08');
 guided_entry_ok(($bareDay['commercial_context']['course_id']??null)==='c14','A unique typed day must behave like choosing that displayed Monday.');
+$singleCourseCatalog=$catalog;$singleCourseCatalog['courses']=[$catalog['courses'][0]];
+$staleCourse=$bareDay;
+$staleCourse=hache_sharky_commercial_capture($staleCourse,'el 21',$singleCourseCatalog,'2026-09-08');
+guided_entry_ok(empty($staleCourse['commercial_context']['course_id']),'An unavailable bare-day change must clear the previously selected course instead of enrolling into stale data.');
+guided_entry_ok((hache_sharky_commercial_next($staleCourse)['slot']??null)==='course','After an unresolved bare-day change Sharky must return to choosing a valid start date.');
 
 $questionState=$bareDay;
 unset($questionState['commercial_context']['course_id'],$questionState['commercial_context']['fecha_inicio'],$questionState['commercial_context']['course_price']);
