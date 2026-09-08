@@ -82,10 +82,13 @@ function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?b
     if(hache_sharky_member_routing_handoff_requested((string)($event['text']??'')))return null;
 
     // A professor may also exist in the member registry. Professor operations
-    // keep their own route and must not be shadowed by the Palapas student gate.
+    // and an already active teacher flow must never be shadowed by the Palapas
+    // student gate, including the free-text reason step of a cancellation.
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
     $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
-    if(($teacher['found']??false)===true&&in_array($intent,['teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return null;
+    try{$routingState=hache_sharky_db_state_load($pdo,$contact);$routingFlow=hache_sharky_member_flow($routingState);}catch(Throwable $e){$routingFlow=null;}
+    $teacherFlow=is_array($routingFlow)&&str_starts_with((string)($routingFlow['name']??''),'teacher_');
+    if(($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true)))return null;
 
     $student=hache_sharky_member_student_context($pdo,$contact);
     if(($student['found']??false)!==true)return null;
@@ -108,6 +111,14 @@ function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?b
         if(hache_sharky_member_closure_text($text)){
             $payload=hache_sharky_whatsapp_text_payload($contact,'¡Con gusto'.($first!==''?', '.$first:'').'! 😊');
             return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'palapas-close');
+        }
+
+        // A record created by an unfinished registration is identifiable, but it
+        // is not yet an active student. Never affirm a scheduled class for it.
+        if(hache_sharky_member_pending_registration($student)){
+            $body=($first!==''?'Hola, '.$first.' 😊. ':'').'Veo que tu inscripción en Palapas todavía está pendiente. Por ahora no puedo confirmar una clase activa para ti; el equipo de Hache puede revisar tu situación.';
+            $payload=hache_sharky_whatsapp_text_payload($contact,$body);
+            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'palapas-pending');
         }
 
         if($intent==='class_today'){
@@ -234,6 +245,13 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if($contact==='')return null;
     if(function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact))return null;
 
+    // Explicit human requests from a Palapas student must leave member-ops
+    // before the payment processor sees the same text (e.g. "persona + pago").
+    $routeIdentity=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
+    if(($routeIdentity['found']??false)===true
+        && strtoupper((string)($routeIdentity['sede_clave']??''))==='PALAPAS'
+        && hache_sharky_member_routing_handoff_requested((string)($event['text']??'')))return null;
+
     // Palapas is intentionally intercepted before member payments so no
     // accounting flow can open or resume while the temporary red light is on.
     $palapas=hache_sharky_member_palapas_restricted_route($pdo,$event);
@@ -253,7 +271,9 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     // the payment. They may still review/complete payment, but must not receive
     // active-student class/absence/reposition controls meanwhile.
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
-    $teacherIntent=($teacher['found']??false)===true&&in_array($intent,['teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true);
+    $activeFlow=hache_sharky_member_flow($state);
+    $teacherFlow=is_array($activeFlow)&&str_starts_with((string)($activeFlow['name']??''),'teacher_');
+    $teacherIntent=($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true));
     if(!$teacherIntent){
         $student=hache_sharky_member_student_context($pdo,$contact);
         if(($student['found']??false)===true&&hache_sharky_member_pending_registration($student)&&$intent!=='payments'){
