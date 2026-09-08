@@ -4,25 +4,29 @@ declare(strict_types=1);
 
 const HACHE_SHARKY_BRAIN_DIAG_MIN_OBS = 50;
 const HACHE_SHARKY_BRAIN_DIAG_MIN_AGREEMENT = 90.0;
-const HACHE_SHARKY_BRAIN_DIAG_COHORT = 'v2';
+const HACHE_SHARKY_BRAIN_DIAG_COHORT = 'v3';
 
 /** @return array<string,array{code:string,label:string,blocking:bool}> */
 function hache_sharky_brain_diag_actions(): array
 {
     return [
         'wait_for_human'=>['code'=>'01','label'=>'Esperar atención humana','blocking'=>true],
-        'handoff_known_student'=>['code'=>'02','label'=>'Derivar alumno conocido','blocking'=>true],
-        'close_age_scope'=>['code'=>'03','label'=>'Cerrar por alcance de edad','blocking'=>true],
-        'pause_commercial_intent'=>['code'=>'04','label'=>'Pausar intención comercial','blocking'=>true],
-        'handoff_policy_exception'=>['code'=>'05','label'=>'Derivar excepción de política','blocking'=>true],
-        'answer_side_question'=>['code'=>'06','label'=>'Responder duda lateral','blocking'=>false],
-        'continue_controlled_flow'=>['code'=>'07','label'=>'Continuar flujo controlado','blocking'=>true],
-        'preserve_deterministic_decision'=>['code'=>'08','label'=>'Conservar decisión determinista','blocking'=>true],
-        'start_guided_qualification'=>['code'=>'09','label'=>'Iniciar calificación guiada','blocking'=>false],
-        'show_commercial_menu'=>['code'=>'10','label'=>'Mostrar menú comercial','blocking'=>false],
-        'ask_identity'=>['code'=>'11','label'=>'Preguntar identidad','blocking'=>false],
-        'continue_discovery'=>['code'=>'12','label'=>'Continuar descubrimiento','blocking'=>false],
-        'answer_user'=>['code'=>'13','label'=>'Responder al usuario','blocking'=>false],
+        'handoff_policy_exception'=>['code'=>'02','label'=>'Derivar excepción de política','blocking'=>true],
+        'serve_teacher'=>['code'=>'03','label'=>'Atender profesor','blocking'=>true],
+        'serve_pending_student'=>['code'=>'04','label'=>'Atender inscripción pendiente','blocking'=>true],
+        'serve_palapas_restricted'=>['code'=>'05','label'=>'Atender Palapas restringido','blocking'=>true],
+        'serve_known_student'=>['code'=>'06','label'=>'Atender alumno conocido','blocking'=>true],
+        'handoff_known_student'=>['code'=>'07','label'=>'Derivar alumno conocido','blocking'=>true],
+        'close_age_scope'=>['code'=>'08','label'=>'Cerrar por alcance de edad','blocking'=>true],
+        'pause_commercial_intent'=>['code'=>'09','label'=>'Pausar intención comercial','blocking'=>true],
+        'answer_side_question'=>['code'=>'10','label'=>'Responder duda lateral','blocking'=>false],
+        'continue_controlled_flow'=>['code'=>'11','label'=>'Continuar flujo controlado','blocking'=>true],
+        'preserve_deterministic_decision'=>['code'=>'12','label'=>'Conservar decisión determinista','blocking'=>true],
+        'start_guided_qualification'=>['code'=>'13','label'=>'Iniciar calificación guiada','blocking'=>false],
+        'show_commercial_menu'=>['code'=>'14','label'=>'Mostrar menú comercial','blocking'=>false],
+        'ask_identity'=>['code'=>'15','label'=>'Preguntar identidad','blocking'=>false],
+        'continue_discovery'=>['code'=>'16','label'=>'Continuar descubrimiento','blocking'=>false],
+        'answer_user'=>['code'=>'17','label'=>'Responder al usuario','blocking'=>false],
         'unknown'=>['code'=>'00','label'=>'Acción desconocida','blocking'=>true],
     ];
 }
@@ -60,11 +64,12 @@ function hache_sharky_brain_diag_metric_key(string $liveAction,string $brainActi
 /**
  * Build an aggregate report from privacy-safe daily metric counters.
  *
- * The v2 cohort starts after the protected-precedence correction. Old v1
- * mismatches remain in historical metrics but do not poison readiness for the
- * corrected policy. Observer/pre-state errors remain conservative and continue
- * using the shared brain_diag_error counter, so any new instrumentation failure
- * still blocks Fase 2B.
+ * v3 starts when Brain learns the current member-service lanes (Monteverde
+ * self-service, Palapas red light, pending records and teacher ownership). Older
+ * v1/v2 observations remain historical evidence but cannot satisfy this new
+ * activation gate. Observer/pre-state errors remain conservative and continue
+ * using the shared brain_diag_error counter, so instrumentation failures still
+ * block Fase 2B.
  *
  * @param list<array{date?:string,counters?:array<string,int>}> $metrics
  * @return array<string,mixed>
