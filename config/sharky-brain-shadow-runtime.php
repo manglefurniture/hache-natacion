@@ -102,7 +102,11 @@ function hache_sharky_brain_shadow_member_evaluate(array $beforeState,array $aft
     if(!in_array($lane,['teacher','student','palapas'],true))$lane='student';
     $after=hache_sharky_brain_snapshot($afterState);
     $pending=($after['identity_status']??null)==='PENDIENTE';
-    $knownStudent=($after['identity_kind']??'unknown')==='student';
+    // The live member router has already resolved ownership from the database.
+    // That lane is authoritative for this read-only comparison even if the
+    // durable conversational identity has not yet been persisted on a first turn.
+    $knownStudent=in_array($lane,['student','palapas'],true)
+        ||($after['identity_kind']??'unknown')==='student';
 
     if($lane==='teacher')$live='serve_teacher';
     elseif($pending)$live='serve_pending_student';
