@@ -61,6 +61,8 @@ function hache_sharky_lab_present_once(array $payload,array $state,string $userT
         $body=preg_replace('/^(?:¡Hola!\s*)?Soy Sharky[^.]*\.\s*/iu','',$body)??$body;
         $body='Soy Sharky 🦈, el asistente IA de Hache Natación.'."\n\n".$body;
     }
+    // Reapply the transport limits after disclosure/no-reintroduction transforms.
+    $body=mb_substr(trim($body),0,(($payload['type']??'')==='interactive'?1024:4000));
     if(($payload['type']??'')==='text')$payload['text']['body']=$body;
     elseif(($payload['type']??'')==='interactive')$payload['interactive']['body']['text']=$body;
     return $payload;
