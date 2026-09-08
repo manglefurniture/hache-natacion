@@ -72,4 +72,29 @@ adapter_memory_ok(!$queued&&$db->states===$before&&!$db->inTransaction(),'AI dis
 $db->failSave=false;
 $result=hache_sharky_whatsapp_process($db,['id'=>'adapter-4','from'=>$contact,'type'=>'text','text'=>'7-8'],$model,['defer_receipt_completion'=>true]);
 adapter_memory_ok(($result['code']??'')==='DUPLICATE','Repeated receipt cannot produce a second response');
+// Legacy commercial menu taps must rebuild the live catalog before guided controls.
+$scheduleContact='529989991112';$scheduleState=hache_sharky_orchestrator_state();
+$scheduleState['identity']=array_replace($scheduleState['identity'],['kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched']);
+$scheduleState['commercial_context']=array_replace($scheduleState['commercial_context'],[
+    'program'=>'regular','sede_clave'=>'MONTEVERDE','plan_id'=>'real-five','plan_name'=>'Cinco semanal','sessions_per_week'=>5,'plan_price'=>1475.0,
+]);
+hache_sharky_db_state_save($db,$scheduleContact,$scheduleState);
+$menuModel=static fn(string $text,string $instruction,array $state,array $context):string=>str_contains(mb_strtolower($text),'precio')?'El precio depende del plan vigente.':'Estos son los horarios vigentes.';
+$scheduleMenu=hache_sharky_whatsapp_process($db,[
+    'id'=>'legacy-menu-schedules','from'=>$scheduleContact,'type'=>'interactive','text'=>'Horarios','interactive_id'=>'action:commercial_schedules',
+],$menuModel,['today'=>'2026-09-08','now'=>1788883200,'defer_receipt_completion'=>true]);
+adapter_memory_ok(($scheduleMenu['decision']['ui']['type']??null)==='buttons','Legacy Horarios tap must keep guided controls.');
+adapter_memory_ok(($scheduleMenu['decision']['ui']['buttons'][0]['id']??null)==='action:commercial:schedule:real-seven','Legacy Horarios tap must rebuild the backend schedule catalog before rendering.');
+adapter_memory_ok(($scheduleMenu['payload']['type']??null)==='interactive','Legacy Horarios tap must reach Meta as an interactive payload.');
+
+$priceContact='529989991113';$priceState=hache_sharky_orchestrator_state();
+$priceState['identity']=array_replace($priceState['identity'],['kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched']);
+$priceState['commercial_context']=array_replace($priceState['commercial_context'],['program'=>'regular','sede_clave'=>'MONTEVERDE']);
+hache_sharky_db_state_save($db,$priceContact,$priceState);
+$priceMenu=hache_sharky_whatsapp_process($db,[
+    'id'=>'legacy-menu-price','from'=>$priceContact,'type'=>'interactive','text'=>'Precio','interactive_id'=>'action:commercial_price',
+],$menuModel,['today'=>'2026-09-08','now'=>1788883200,'defer_receipt_completion'=>true]);
+adapter_memory_ok(($priceMenu['decision']['ui']['type']??null)==='buttons','Legacy Precio tap must keep guided controls.');
+adapter_memory_ok(($priceMenu['decision']['ui']['buttons'][0]['id']??null)==='action:commercial:plan:real-five','Legacy Precio tap must rebuild the backend plan catalog before rendering.');
+
 fwrite(STDOUT,"SHARKY_COMMERCIAL_MEMORY_ADAPTER_OK\n");
