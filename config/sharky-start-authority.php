@@ -21,6 +21,15 @@ function hache_sharky_start_authority_reference(?DateTimeImmutable $reference = 
     return new DateTimeImmutable('today', new DateTimeZone('America/Cancun'));
 }
 
+function hache_sharky_start_authority_next_weekday(DateTimeImmutable $reference,int $weekday,bool $strictNext=false): DateTimeImmutable
+{
+    $reference=$reference->setTime(0,0);
+    $current=(int)$reference->format('N');
+    $delta=($weekday-$current+7)%7;
+    if($strictNext&&$delta===0)$delta=7;
+    return $reference->modify('+'.$delta.' days');
+}
+
 function hache_sharky_start_authority_parse_date(string $normalized, ?DateTimeImmutable $reference = null): ?DateTimeImmutable
 {
     $reference = hache_sharky_start_authority_reference($reference);
@@ -32,6 +41,16 @@ function hache_sharky_start_authority_parse_date(string $normalized, ?DateTimeIm
     $dateText=preg_replace('/\b(?:por|en|de)\s+la\s+manana\b|\bhorario\s+(?:de\s+)?manana\b/u',' ',$normalized)??$normalized;
     if (preg_match('/\bmanana\b/u', $dateText) === 1) return $reference->modify('+1 day');
     if (preg_match('/\bhoy\b/u', $normalized) === 1) return $reference;
+
+    // Expresiones relativas usadas naturalmente en el funnel guiado.
+    // “Próximo lunes” siempre significa el lunes siguiente; si hoy es lunes,
+    // apunta a +7 días. “Este lunes” permite hoy cuando ya es lunes.
+    if (preg_match('/\b(?:el\s+)?(?:proximo\s+lunes|lunes\s+que\s+viene)\b/u',$normalized)===1) {
+        return hache_sharky_start_authority_next_weekday($reference,1,true);
+    }
+    if (preg_match('/\beste\s+lunes\b/u',$normalized)===1) {
+        return hache_sharky_start_authority_next_weekday($reference,1,false);
+    }
 
     if (preg_match('/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/u', $normalized, $m) === 1) {
         $day=(int)$m[1];$month=(int)$m[2];$year=isset($m[3])&&$m[3]!==''?(int)$m[3]:(int)$reference->format('Y');
