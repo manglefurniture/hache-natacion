@@ -42,6 +42,6 @@ sharky_entry_expect(str_contains($routing,"['id'=>'member:class_today','title'=>
 sharky_entry_expect(str_contains($routing,'Por ahora los temas de pagos de Palapas los está revisando directamente el equipo de Hache.'),'Palapas accounting requests must be answered without balances or checkout.');
 
 // This package must not rewrite the already-approved Brain runtime.
-sharky_entry_expect(str_contains($brain,"if($kind==='conversation_identity_prompt')return 'ask_identity';"),'Brain shadow contract remains present and untouched by this package.');
+sharky_entry_expect(str_contains($brain,"if(\$kind==='conversation_identity_prompt')return 'ask_identity';"),'Brain shadow contract remains present and untouched by this package.');
 
 fwrite(STDOUT,"Sharky entry/Palapas/email regression: OK\n");
