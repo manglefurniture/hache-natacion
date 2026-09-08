@@ -5,16 +5,19 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-orchestrator.php';
 require_once __DIR__.'/sharky-start-authority.php';
 
-/** Confirmed selections only. Pending preferences never masquerade as catalog ids. */
+/** Confirmed selections plus durable discovery/recommendation memory. */
 function hache_sharky_commercial_snapshot(array $state): array
 {
-    $keys=['program','sede_clave','age','swim_level','plan_id','plan_name','sessions_per_week','plan_price','schedule_id','schedule_label','course_id','fecha_inicio','course_price','kit','date_preference'];
+    $keys=['program','recommended_program','background','sede_clave','age','swim_level','plan_id','plan_name','sessions_per_week','plan_price','schedule_id','schedule_label','course_id','fecha_inicio','course_price','kit','date_preference'];
     return array_intersect_key(is_array($state['commercial_context']??null)?$state['commercial_context']:[],array_flip($keys));
 }
 
 function hache_sharky_commercial_invalidate(array $state,array $before): array
 {
     $c=&$state['commercial_context'];
+    if(($before['swim_level']??null)!==($c['swim_level']??null)){
+        unset($c['background'],$c['recommended_program']);
+    }
     if(($before['program']??null)!==($c['program']??null)||($before['sede_clave']??null)!==($c['sede_clave']??null)){
         foreach(['plan_id','plan_name','sessions_per_week','plan_price','schedule_id','schedule_label','course_id','fecha_inicio','course_price','date_preference'] as $key)unset($c[$key]);
     }
@@ -43,11 +46,78 @@ function hache_sharky_commercial_catalog(PDO $pdo,array $state,array $context): 
     return $out;
 }
 
+function hache_sharky_commercial_background_choice(string $text): ?string
+{
+    if(str_contains($text,'?')||str_contains($text,'¿'))return null;
+    $t=hache_sharky_orchestrator_normalize($text);
+    if(preg_match('/^(?:si|si\s+he\s+tomado\s+clases|he\s+tomado\s+clases|ya\s+tome\s+clases|con\s+profesor|con\s+entrenador|formal(?:mente)?)[.! ]*$/u',$t)===1)return 'formal';
+    if(preg_match('/^(?:por\s+mi\s+cuenta|aprendi\s+solo|aprendi\s+sola|autodidacta)[.! ]*$/u',$t)===1)return 'self_taught';
+    if(preg_match('/^(?:no(?:\s+nunca)?|nunca|no\s+he\s+tomado\s+clases|nunca\s+he\s+tomado\s+clases|jamas\s+he\s+tomado\s+clases)[.! ]*$/u',$t)===1)return 'no_formal';
+    return null;
+}
+
+function hache_sharky_commercial_recommendation_affirmation(string $text): bool
+{
+    if(str_contains($text,'?')||str_contains($text,'¿'))return false;
+    $t=hache_sharky_orchestrator_normalize($text);
+    return preg_match('/^(?:si|si\s+quiero|claro|claro\s+que\s+si|ok|oki|okay|vale|va|dale|de\s+acuerdo|esta\s+bien|me\s+parece\s+bien)[!. ]*$/u',$t)===1;
+}
+
+/**
+ * Keeps recommendation memory distinct from a confirmed program and makes sure
+ * an unresolved recommendation always has a live guided step. This prevents a
+ * model-written recommendation from becoming conversational memory only.
+ */
+function hache_sharky_commercial_reconcile_guidance(array $state,string $text): array
+{
+    $c=&$state['commercial_context'];
+    $flow=is_array($state['flow']??null)?$state['flow']:null;
+    $flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
+    $backgroundEligible=$flowName==='qualify_prospect'&&$flowStep==='background';
+    if(!$backgroundEligible&&!is_array($flow)&&($c['swim_level']??null)==='swims'&&empty($c['program']))$backgroundEligible=true;
+
+    if($backgroundEligible){
+        $background=hache_sharky_commercial_background_choice($text);
+        if($background!==null){
+            $c['background']=$background;
+            if(in_array($background,['self_taught','no_formal'],true))$c['recommended_program']='intensive';
+            if(empty($c['program'])){
+                $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',[
+                    'recommended_program'=>$c['recommended_program']??null,
+                    'background'=>$background,
+                ],(int)($state['updated_at']??time()));
+                $flow=$state['flow'];$flowName='qualify_prospect';$flowStep='program';
+            }
+        }
+    }
+
+    $recommended=(string)($c['recommended_program']??'');
+    if(empty($c['program'])&&in_array($recommended,['intensive','regular'],true)){
+        if(!is_array($state['flow']??null)){
+            $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',['recommended_program'=>$recommended],(int)($state['updated_at']??time()));
+            $flowStep='program';
+        }elseif(($state['flow']['name']??'')==='qualify_prospect'){
+            $flowStep=(string)($state['flow']['step']??'');
+        }
+        if($flowStep==='program'&&hache_sharky_commercial_recommendation_affirmation($text)){
+            $c=&$state['commercial_context'];
+            $c['program']=$recommended;
+            if(in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
+                $state=hache_sharky_orchestrator_clear_flow($state);
+            }else{
+                $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',['recommended_program'=>$recommended],(int)($state['updated_at']??time()));
+            }
+        }
+    }
+    return $state;
+}
+
 /** Pure reducer; catalog must come from the same current backend as controlled registration. */
 function hache_sharky_commercial_capture(array $state,string $text,array $catalog,string $today): array
 {
     if(($state['identity']['kind']??'')!=='prospect')return $state;
     if(is_array($state['flow']??null)&&($state['flow']['name']??'')!=='qualify_prospect')return $state;
+    $state=hache_sharky_commercial_reconcile_guidance($state,$text);
     $c=&$state['commercial_context'];
     foreach(hache_sharky_orchestrator_text_segments($text) as $line){
         $t=hache_sharky_orchestrator_normalize($line);
@@ -110,7 +180,11 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
 function hache_sharky_commercial_next(array $state): array
 {
     $c=$state['commercial_context']??[];
-    if(empty($c['program']))return ['slot'=>'program','prompt'=>'¿Buscas un curso intensivo o clases regulares?'];
+    if(empty($c['program'])){
+        if(($c['recommended_program']??null)==='intensive')return ['slot'=>'program','prompt'=>'Por lo que me contaste, te recomiendo el curso intensivo. ¿Seguimos con esa opción?'];
+        if(($c['recommended_program']??null)==='regular')return ['slot'=>'program','prompt'=>'Por lo que me contaste, te recomiendo las clases regulares. ¿Seguimos con esa opción?'];
+        return ['slot'=>'program','prompt'=>'¿Buscas un curso intensivo o clases regulares?'];
+    }
     if(empty($c['sede_clave']))return ['slot'=>'sede','prompt'=>'¿Prefieres Colegio Monteverde o Palapas Protudec?'];
     if($c['program']==='regular'&&empty($c['plan_id']))return ['slot'=>'plan','prompt'=>isset($c['sessions_per_week'])?'¿Qué plan de '.$c['sessions_per_week'].' sesiones prefieres?':'¿Qué plan de clases regulares prefieres?'];
     if(empty($c['schedule_id']))return ['slot'=>'schedule','prompt'=>'¿Qué horario prefieres?'];
