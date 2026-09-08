@@ -270,7 +270,7 @@ function hache_sharky_commercial_interactive_input(PDO $pdo,array $state,array $
     $selectedId=substr($id,strlen($prefix));
     if($selectedId==='')return [$state,hache_sharky_commercial_reply($state,'Esa opción ya no está disponible.',$catalog)];
 
-    $c=&$state['commercial_context'];unset($c['_requested_slot']);$label='';$matched=null;
+    $c=&$state['commercial_context'];$label='';$matched=null;
     if($slot==='plan'){
         foreach(hache_sharky_commercial_visible_plans($state,$catalog) as $plan)if(strtolower((string)($plan['id']??''))===$selectedId){$matched=$plan;break;}
         if(is_array($matched)){
@@ -293,7 +293,14 @@ function hache_sharky_commercial_interactive_input(PDO $pdo,array $state,array $
         }
     }
 
-    if(!is_array($matched))return [$state,hache_sharky_commercial_reply($state,'Esa opción ya no está disponible. Elige una de las opciones actuales.',$catalog)];
+    if(!is_array($matched)){
+        if($slot==='course'&&$requestedSlot==='course'){
+            unset($c['course_id'],$c['fecha_inicio'],$c['course_price']);
+            $c['_requested_slot']='course';
+        }
+        return [$state,hache_sharky_commercial_reply($state,'Esa opción ya no está disponible. Elige una de las opciones actuales.',$catalog)];
+    }
+    unset($c['_requested_slot']);
     return [$state,hache_sharky_commercial_reply($state,'Listo, elegiste '.$label.'.',$catalog)];
 }
 
@@ -302,6 +309,9 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
 {
     if(($state['identity']['kind']??'')!=='prospect')return $state;
     if(is_array($state['flow']??null)&&($state['flow']['name']??'')!=='qualify_prospect')return $state;
+    $flow=is_array($state['flow']??null)?$state['flow']:null;
+    $entryBootstrap=is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&($flow['step']??'')==='swim'&&($flow['data']['entry_bootstrap']??false)===true;
+    if($entryBootstrap&&in_array(($state['commercial_context']['program']??null),['intensive','regular'],true))$state['commercial_context']['program']=null;
     $state=hache_sharky_commercial_reconcile_guidance($state,$text);
     $c=&$state['commercial_context'];
     unset($c['_requested_slot']);
