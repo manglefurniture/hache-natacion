@@ -22,6 +22,8 @@ jobs:
         run: npm test
       - name: Sharky member routing and midnight takeover regression
         run: php tests/sharky-member-routing-midnight-regression.php
+      - name: Sharky entry, Palapas red light and registration email regression
+        run: php tests/sharky-entry-palapas-email-regression.php
       - name: Production readiness pilot regression
         run: node tests/production-readiness-pilot-regression.mjs
       - name: Production readiness RUM regression

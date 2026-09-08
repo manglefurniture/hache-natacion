@@ -10,6 +10,7 @@ require_once __DIR__.'/../../config/sharky-member-routing.php';
 require_once __DIR__.'/../../config/sharky-inbox.php';
 require_once __DIR__.'/../../config/sharky-groups.php';
 require_once __DIR__.'/../../config/sharky-delivery-status.php';
+require_once __DIR__.'/../../config/notificaciones-email.php';
 
 function sharky_lab_json(int $status,array $body): never
 {
@@ -30,6 +31,107 @@ function sharky_member_should_handle(PDO $pdo,array $event): bool
     if(($teacher['found']??false)===true&&in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
     $student=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
     return ($student['found']??false)===true&&in_array($intent,['greeting','class_today','payments','absence','repos','member:absence_no_evidence','member:absence_add_evidence','member:absence_confirm','member:absence_abort','absence_date'],true);
+}
+
+function sharky_lab_identity_before(PDO $pdo,array $event): array
+{
+    if(trim((string)($event['group_id']??''))!=='')return ['found'=>false];
+    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
+    if($contact==='')return ['found'=>false];
+    try{return hache_sharky_business_identity_by_whatsapp($pdo,$contact);}catch(Throwable $e){return ['found'=>false];}
+}
+
+/**
+ * A direct WhatsApp number that does not match an existing student starts as a
+ * prospect automatically. This is an operational assumption, not strong
+ * authentication: if the person later says they are already a student, the
+ * existing identify_student verification flow remains available.
+ */
+function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $identityBefore): void
+{
+    if(($identityBefore['found']??false)===true)return;
+    if(trim((string)($event['group_id']??''))!=='')return;
+    if((string)($event['kind']??'')==='echo')return;
+    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
+    if($contact==='')return;
+
+    try{
+        $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
+        if(($teacher['found']??false)===true)return;
+        $state=hache_sharky_db_state_load($pdo,$contact);
+        if(($state['identity']['kind']??'unknown')!=='unknown')return;
+        $state['identity']=array_replace(is_array($state['identity']??null)?$state['identity']:[],[
+            'kind'=>'prospect',
+            'verified'=>false,
+            'source'=>'whatsapp_unmatched',
+            'student_id'=>null,
+            'name'=>null,
+            'sede_clave'=>null,
+            'status'=>null,
+        ]);
+        $state['updated_at']=time();
+        hache_sharky_db_state_save($pdo,$contact,$state,86400);
+    }catch(Throwable $e){
+        error_log('[sharky-entry] No se pudo asumir prospecto para contacto no identificado.');
+    }
+}
+
+/**
+ * The public/admin registration routes already send this alert after commit.
+ * Sharky's transactional registration used to bypass that secondary effect.
+ * Detect the one-way identity transition caused by the conversational intensive
+ * registration and send the same Resend notification only after the DB commit.
+ */
+function sharky_lab_notify_registration_transition(PDO $pdo,array $event,array $identityBefore): void
+{
+    static $notified=[];
+    if(($identityBefore['found']??false)===true)return;
+    if(trim((string)($event['group_id']??''))!=='')return;
+    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
+    if($contact==='')return;
+
+    try{
+        $after=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
+        if(($after['found']??false)!==true)return;
+        $studentId=trim((string)($after['student_id']??''));
+        if($studentId===''||isset($notified[$studentId]))return;
+
+        $st=$pdo->prepare("SELECT a.id,a.nombre,a.whatsapp,a.correo,a.fecha_inicio,a.estado_administrativo,a.observaciones,
+                                 s.clave sede_clave,s.nombre sede_nombre,
+                                 h.hora_inicio,h.hora_fin,
+                                 ci.fecha_inicio curso_inicio
+                          FROM alumnos a
+                          JOIN sedes s ON s.id=a.sede_id
+                          LEFT JOIN horarios h ON h.id=a.horario_preferido_id
+                          LEFT JOIN curso_intensivo_alumnos cia ON cia.alumno_id=a.id
+                          LEFT JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
+                          WHERE a.id=:a
+                          ORDER BY ci.fecha_inicio DESC
+                          LIMIT 1");
+        $st->execute([':a'=>$studentId]);
+        $student=$st->fetch(PDO::FETCH_ASSOC);
+        if(!$student)return;
+        if(!str_starts_with((string)($student['observaciones']??''),'Registro conversacional Sharky INTENSIVO.'))return;
+
+        $notified[$studentId]=true;
+        $horario='';
+        if(!empty($student['hora_inicio']))$horario=substr((string)$student['hora_inicio'],0,5).(!empty($student['hora_fin'])?'–'.substr((string)$student['hora_fin'],0,5):'');
+        $ok=hache_notificar_nueva_inscripcion([
+            'nombre'=>(string)$student['nombre'],
+            'sede_clave'=>(string)$student['sede_clave'],
+            'sede_nombre'=>(string)$student['sede_nombre'],
+            'whatsapp'=>(string)$student['whatsapp'],
+            'correo'=>(string)($student['correo']??''),
+            'fecha_inicio'=>(string)$student['fecha_inicio'],
+            'estado_administrativo'=>(string)$student['estado_administrativo'],
+        ],'INTENSIVO',[
+            'horario'=>$horario,
+            'curso_inicio'=>(string)($student['curso_inicio']??$student['fecha_inicio']),
+        ]);
+        if(!$ok)error_log('[sharky-entry] La inscripción quedó confirmada, pero la alerta por correo no pudo enviarse.');
+    }catch(Throwable $e){
+        error_log('[sharky-entry] Falló el disparador de correo posterior al registro: '.$e->getMessage());
+    }
 }
 
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')sharky_lab_json(404,['ok'=>false,'error'=>'Lab disabled']);
@@ -131,15 +233,19 @@ usort($processing,static function(array $a,array $b):int{
 });
 foreach($processing as $event){
     if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
+    $identityBefore=sharky_lab_identity_before($pdo,$event);
     if(hache_sharky_commerce_event_candidate($event)){
         hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
+        sharky_lab_notify_registration_transition($pdo,$event,$identityBefore);
         continue;
     }
     if($memberOpsReady){
         $member=hache_sharky_member_route_event($pdo,$event,$business);
         if($member!==null)continue;
     }
+    sharky_lab_assume_unmatched_prospect($pdo,$event,$identityBefore);
     hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
+    sharky_lab_notify_registration_transition($pdo,$event,$identityBefore);
 }
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
 

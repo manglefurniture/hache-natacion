@@ -60,6 +60,77 @@ function hache_sharky_member_pending_message(array $student,string $text,string 
     return 'Claro'.$name.' 😊. Tu inscripción todavía está pendiente. Cuéntame qué necesitas y te ayudo a revisar cómo retomarla.';
 }
 
+/**
+ * Temporal Palapas red-light policy.
+ *
+ * A Palapas record can still be recognized by its WhatsApp number, but Sharky
+ * must not expose or operate payments, balances, absences or repositions while
+ * that site is under administrative reconciliation. The only self-service
+ * member capability left enabled is confirming whether today's class is on.
+ */
+function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?bool
+{
+    if(trim((string)($event['group_id']??''))!=='')return null;
+    if((string)($event['kind']??'')==='echo')return null;
+
+    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
+    if($contact==='')return null;
+    if(function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact))return null;
+
+    $identity=hache_sharky_business_identity_by_whatsapp($pdo,$contact);
+    if(($identity['found']??false)!==true||strtoupper((string)($identity['sede_clave']??''))!=='PALAPAS')return null;
+    if(hache_sharky_member_routing_handoff_requested((string)($event['text']??'')))return null;
+
+    // A professor may also exist in the member registry. Professor operations
+    // keep their own route and must not be shadowed by the Palapas student gate.
+    $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
+    $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
+    if(($teacher['found']??false)===true&&in_array($intent,['teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return null;
+
+    $student=hache_sharky_member_student_context($pdo,$contact);
+    if(($student['found']??false)!==true)return null;
+
+    $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);
+    if(!is_resource($deliveryLock))return false;
+    hache_sharky_db_state_defer_begin();
+    try{
+        if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'message'))){
+            hache_sharky_db_state_defer_cancel();
+            return false;
+        }
+        $state=hache_sharky_db_state_load($pdo,$contact);
+        $state=hache_sharky_member_set_flow($state,null,time());
+        $memberIdentity=$student['identity']??null;
+        if(is_array($memberIdentity)&&function_exists('hache_sharky_orchestrator_apply_identity'))$state=hache_sharky_orchestrator_apply_identity($state,$memberIdentity);
+
+        $text=trim((string)($event['text']??''));
+        $first=hache_sharky_member_first_name($student);
+        if(hache_sharky_member_closure_text($text)){
+            $payload=hache_sharky_whatsapp_text_payload($contact,'¡Con gusto'.($first!==''?', '.$first:'').'! 😊');
+            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'palapas-close');
+        }
+
+        if($intent==='class_today'){
+            $payload=hache_sharky_whatsapp_text_payload($contact,hache_sharky_member_class_message($student));
+            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'palapas-class-today');
+        }
+
+        if($intent==='payments'){
+            $body='Por ahora los temas de pagos de Palapas los está revisando directamente el equipo de Hache. Sí puedo ayudarte a confirmar si tienes clase hoy.';
+        }else{
+            $body=($first!==''?'¡Hola, '.$first.'! 👋 ':'').'Por ahora desde Sharky en Palapas puedo ayudarte a confirmar si tienes clase hoy. Para cualquier otro tema, el equipo de Hache lo revisa contigo.';
+        }
+        $payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:class_today','title'=>'Mi clase hoy']]);
+        return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'palapas-restricted-home');
+    }catch(Throwable $e){
+        hache_sharky_db_state_defer_cancel();
+        error_log('[sharky-member-routing] Palapas restriction failed');
+        return false;
+    }finally{
+        hache_sharky_lab_release_delivery_lock($deliveryLock);
+    }
+}
+
 function hache_sharky_member_deterministic_event(PDO $pdo,array $event,array $state): bool
 {
     $kind=(string)($event['kind']??'');
@@ -162,6 +233,11 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
     if($contact==='')return null;
     if(function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact))return null;
+
+    // Palapas is intentionally intercepted before member payments so no
+    // accounting flow can open or resume while the temporary red light is on.
+    $palapas=hache_sharky_member_palapas_restricted_route($pdo,$event);
+    if($palapas!==null)return $palapas;
 
     $paymentResult=hache_sharky_member_payment_process_event($pdo,$event,$business);
     if($paymentResult!==null)return $paymentResult;
