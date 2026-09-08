@@ -195,6 +195,8 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
             }));
             if(count($matches)===1){
                 $o=$matches[0];$c['course_id']=(string)$o['id'];$c['fecha_inicio']=(string)$o['fecha_inicio'];$c['course_price']=is_numeric($o['precio']??null)?(float)$o['precio']:null;unset($c['date_preference']);
+            }else{
+                unset($c['course_id'],$c['fecha_inicio'],$c['course_price']);
             }
         }elseif(preg_match('/^(?:de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\s+(?:de\s+)?(\d{4}))?[.! ]*$/u',$flat,$m)){
             unset($c['course_id'],$c['fecha_inicio'],$c['course_price']);
