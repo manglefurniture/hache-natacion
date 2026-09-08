@@ -86,7 +86,8 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
     $flat=preg_replace('/\s+/u',' ',hache_sharky_orchestrator_normalize(implode(' ',$declarations)))??'';
     if(($c['program']??'')==='intensive'&&!str_contains($flat,'?')&&!str_contains($flat,'¿')){
         $date=hache_sharky_start_authority_parse_date($flat,new DateTimeImmutable($today,new DateTimeZone('America/Cancun')));
-        if($date!==null&&preg_match('/\b(?:iniciar|inicio|empezar|comenzar|lunes|\d{1,2}\s+de)\b/u',$flat)){
+        $explicitNumericDate=preg_match('/\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/u',$flat)===1;
+        if($date!==null&&($explicitNumericDate||preg_match('/\b(?:iniciar|inicio|empezar|comenzar|lunes|\d{1,2}\s+de)\b/u',$flat))){
             $iso=$date->format('Y-m-d');
             $matches=array_values(array_filter($catalog['courses']??[],static fn(array $o):bool=>($o['fecha_inicio']??'')===$iso&&hache_sharky_start_authority_intensive_date_allowed($iso,$today)));
             if(count($matches)!==1){unset($c['course_id'],$c['fecha_inicio'],$c['course_price']);}
@@ -96,8 +97,12 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
                 if(!$valid){unset($c['schedule_id'],$c['schedule_label']);}
             }
         }elseif(preg_match('/^(?:de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\s+(?:de\s+)?(\d{4}))?[.! ]*$/u',$flat,$m)){
+            unset($c['course_id'],$c['fecha_inicio'],$c['course_price']);
             $c['date_preference']=['month'=>$m[1],'year'=>isset($m[2])?(int)$m[2]:null];
-        }elseif(preg_match('/^\d{4}$/',$flat)&&is_array($c['date_preference']??null))$c['date_preference']['year']=(int)$flat;
+        }elseif(preg_match('/^\d{4}$/',$flat)&&is_array($c['date_preference']??null)){
+            unset($c['course_id'],$c['fecha_inicio'],$c['course_price']);
+            $c['date_preference']['year']=(int)$flat;
+        }
     }
     return $state;
 }
