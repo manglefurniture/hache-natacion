@@ -239,6 +239,53 @@ function hache_sharky_commerce_finalize_payload(array $payload): array
 }
 
 /**
+ * A refresh action returned by the enrollment Flow cannot be left for the normal
+ * action executor because commerce replies are rendered and queued directly.
+ * Rebuild the current intensive choices here, reset stale selection state, and
+ * return a real payload containing the live options.
+ */
+function hache_sharky_commerce_refresh_intensive_options_result(
+    array $state,
+    string $contact,
+    array $context,
+    int $now
+): array {
+    $flow=is_array($state['flow']??null)?$state['flow']:[];
+    $data=is_array($flow['data']??null)?$flow['data']:[];
+    $sede=strtoupper(trim((string)($data['sede_clave']??($state['commercial_context']['sede_clave']??''))));
+
+    if(!in_array($sede,['MONTEVERDE','PALAPAS'],true)){
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        $decision=hache_sharky_orchestrator_decision(
+            'registration_course_refresh_unavailable',
+            'No pude reconstruir de forma segura las opciones vigentes. Regresemos al menú para elegir la sede nuevamente.'
+        );
+        return [
+            'state'=>$state,
+            'decision'=>$decision,
+            'payload'=>hache_sharky_whatsapp_render($contact,$decision),
+            'action_result'=>null,
+        ];
+    }
+
+    foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key)unset($data[$key]);
+    foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key)unset($state['commercial_context'][$key]);
+    $data['sede_clave']=$sede;
+
+    [$state,$decision]=hache_sharky_orchestrator_registration_course_step($state,$data,$context,$now);
+    if(is_array($decision)&&isset($decision['message'])){
+        $decision['message']='La opción anterior ya no coincide con las opciones vigentes. '.trim((string)$decision['message']);
+    }
+    [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
+    return [
+        'state'=>$state,
+        'decision'=>$decision,
+        'payload'=>hache_sharky_whatsapp_render($contact,$decision),
+        'action_result'=>null,
+    ];
+}
+
+/**
  * Durable commerce-event processor. It intentionally runs before the normal
  * "known student -> human" shortcut because a newly registered prospect is now
  * a known student precisely when the payment Flow reply arrives.
@@ -329,6 +376,9 @@ function hache_sharky_commerce_process_event(
             if (!is_array($result)) {
                 hache_sharky_db_state_defer_cancel();
                 return hache_sharky_orchestrator_mark_processed($pdo, $eventId);
+            }
+            if (($result['decision']['action']['type']??'')==='refresh_intensive_options') {
+                $result=hache_sharky_commerce_refresh_intensive_options_result($state,$contact,$context,$now);
             }
             $state = is_array($result['state'] ?? null) ? $result['state'] : $state;
             hache_sharky_db_state_save($pdo, $contact, $state);
