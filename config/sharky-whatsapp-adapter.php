@@ -1097,7 +1097,9 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         }
 
         if(($decision['kind']??'')==='conversation'&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)){
-            $decision=hache_sharky_commercial_reply($state,(string)$conversation,$catalog??[]);
+            if(!isset($catalog))$catalog=hache_sharky_commercial_catalog($pdo,$state,$context);
+    $decision=hache_sharky_commercial_reply($state,(string)$conversation,$catalog);
+    [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
             $conversation=null;
         }
 
