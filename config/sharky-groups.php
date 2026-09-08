@@ -68,7 +68,7 @@ function hache_sharky_groups_count_messages(array $payload): int
         if(!is_array($entry))continue;
         foreach(($entry['changes']??[]) as $change){
             if(!is_array($change))continue;
-            $value=$change['value']??null;if(!is_array($value))continue;
+            $value=$change['value']??null;if(!is_array($value)||!is_array($value['messages']??null))continue;
             foreach(($value['messages']??[]) as $message){
                 if(is_array($message)&&trim((string)($message['group_id']??''))!=='')$count++;
             }
@@ -158,13 +158,23 @@ function hache_sharky_groups_prepare_outbound(array $payload,string $groupId): a
 }
 
 /**
- * The enrollment Flow may replace only the native intensive course/date list.
- * Side-question menus or any other list emitted while the state happens to be at
- * register_intensive/course must keep their original semantics.
+ * Cheap gate for the late commerce upgrade. Only payloads that can actually be
+ * transformed are allowed through; this keeps ordinary outbound traffic from
+ * loading/decrypting conversation state just to discover that nothing applies.
  */
 function hache_sharky_groups_direct_commerce_upgrade_allowed(array $payload): bool
 {
-    if(($payload['type']??'')!=='interactive'||($payload['interactive']['type']??'')!=='list')return true;
+    $type=(string)($payload['type']??'');
+    $body='';
+    if($type==='text')$body=trim((string)($payload['text']['body']??''));
+    elseif($type==='interactive')$body=trim((string)($payload['interactive']['body']['text']??''));
+
+    $isRegistrationSuccess=str_contains($body,'✅ Registro recibido')
+        &&str_contains($body,'pendiente de confirmación/pago');
+    $isPostReserveName=str_contains($body,'Escribe el nombre completo de la persona que tomará el curso');
+    if($isRegistrationSuccess||$isPostReserveName)return true;
+
+    if($type!=='interactive'||($payload['interactive']['type']??'')!=='list')return false;
     $rows=[];
     foreach(($payload['interactive']['action']['sections']??[]) as $section){
         if(!is_array($section))continue;
