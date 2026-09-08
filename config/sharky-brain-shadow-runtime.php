@@ -54,6 +54,9 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
         &&hache_sharky_whatsapp_is_side_question($beforeState,$event);
     $sideQuestion=$decisionKind==='side_question'
         ||($brainDecisionKind==='conversation'&&$heuristicSideQuestion);
+    $defaultProspect=$directChat
+        &&(($afterState['identity']['kind']??'unknown')==='prospect')
+        &&(($afterState['identity']['source']??'')==='whatsapp_unmatched');
 
     $signals=[
         'decision_kind'=>$brainDecisionKind,
@@ -64,7 +67,7 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
         'teacher_member_event'=>false,
         'member_pending'=>false,
         'palapas_restricted'=>false,
-        'default_prospect_if_unmatched'=>$directChat,
+        'default_prospect_if_unmatched'=>$defaultProspect,
         'family_age_unavailable'=>$decisionKind==='family_age_scope_unavailable',
         'pause_requested'=>$rawPause,
         'pause_eligible'=>$eligiblePause,
