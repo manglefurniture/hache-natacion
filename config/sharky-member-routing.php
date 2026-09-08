@@ -60,6 +60,21 @@ function hache_sharky_member_pending_message(array $student,string $text,string 
     return 'Claro'.$name.' 😊. Tu inscripción todavía está pendiente. Cuéntame qué necesitas y te ayudo a revisar cómo retomarla.';
 }
 
+function hache_sharky_member_teacher_owned_event(array $teacher,?array $flow,array $event,?string $intent=null): bool
+{
+    if(($teacher['found']??false)!==true)return false;
+    $intent=$intent??hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
+    if(in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
+
+    // The only teacher-owned free text is the cancellation reason. Do not let
+    // a stale member payment button or payment-like text inherit teacher flow
+    // ownership merely because teacher_cancel is still active.
+    if(!is_array($flow)||($flow['name']??'')!=='teacher_cancel'||($flow['step']??'')!=='reason')return false;
+    if(trim((string)($event['interactive_id']??''))!=='')return false;
+    if(trim((string)($event['text']??''))==='')return false;
+    return $intent!=='payments';
+}
+
 /**
  * Temporal Palapas red-light policy.
  *
@@ -81,14 +96,13 @@ function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?b
     if(($identity['found']??false)!==true||strtoupper((string)($identity['sede_clave']??''))!=='PALAPAS')return null;
     if(hache_sharky_member_routing_handoff_requested((string)($event['text']??'')))return null;
 
-    // A professor may also exist in the member registry. Professor operations
-    // and an already active teacher flow must never be shadowed by the Palapas
-    // student gate, including the free-text reason step of a cancellation.
+    // A professor may also exist in the member registry. Only explicit teacher
+    // controls and the free-text cancellation-reason step bypass the Palapas
+    // gate; member payment events stay restricted even while a teacher flow is active.
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
     $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
     try{$routingState=hache_sharky_db_state_load($pdo,$contact);$routingFlow=hache_sharky_member_flow($routingState);}catch(Throwable $e){$routingFlow=null;}
-    $teacherFlow=is_array($routingFlow)&&str_starts_with((string)($routingFlow['name']??''),'teacher_');
-    if(($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true)))return null;
+    if(hache_sharky_member_teacher_owned_event($teacher,$routingFlow,$event,$intent))return null;
 
     $student=hache_sharky_member_student_context($pdo,$contact);
     if(($student['found']??false)!==true)return null;
