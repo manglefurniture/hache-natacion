@@ -113,7 +113,9 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
     $after = hache_sharky_brain_snapshot($afterState);
     $decisionKind = trim((string)($signals['decision_kind'] ?? 'conversation'));
     $directChat = ($signals['direct_chat'] ?? true) === true;
-    $knownStudent = ($signals['known_student'] ?? false) === true || ($after['identity_kind'] ?? '') === 'student';
+    // Identity state alone never implies a handoff. The live router must
+    // explicitly signal member ownership or the legacy human fallback.
+    $knownStudent = ($signals['known_student'] ?? false) === true;
     $memberService = ($signals['member_service_available'] ?? false) === true;
 
     $select = static function (string $action, string $reason, string $route) use ($before, $after): array {
