@@ -131,6 +131,160 @@ function hache_sharky_commercial_human_date(string $iso): string
     return (int)$d->format('j').' de '.$months[(int)$d->format('n')].' de '.$d->format('Y');
 }
 
+function hache_sharky_commercial_short_date(string $iso): string
+{
+    $d=DateTimeImmutable::createFromFormat('!Y-m-d',$iso,new DateTimeZone('America/Cancun'));
+    if(!$d||$d->format('Y-m-d')!==$iso)return $iso;
+    $months=[1=>'ene',2=>'feb',3=>'mar',4=>'abr',5=>'may',6=>'jun',7=>'jul',8=>'ago',9=>'sep',10=>'oct',11=>'nov',12=>'dic'];
+    return 'Lun '.(int)$d->format('j').' '.$months[(int)$d->format('n')];
+}
+
+function hache_sharky_commercial_visible_plans(array $state,array $catalog): array
+{
+    $sessions=$state['commercial_context']['sessions_per_week']??null;
+    return array_values(array_filter($catalog['plans']??[],static fn(array $p):bool=>$sessions===null||(int)($p['sesiones_semana']??0)===(int)$sessions));
+}
+
+function hache_sharky_commercial_visible_schedules(array $state,array $catalog): array
+{
+    $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    if(($c['program']??null)==='intensive'&&!empty($c['course_id'])){
+        foreach($catalog['courses']??[] as $course){
+            if((string)($course['id']??'')!==(string)$c['course_id'])continue;
+            return array_values(is_array($course['schedules']??null)?$course['schedules']:[]);
+        }
+        return [];
+    }
+    return array_values($catalog['schedules']??[]);
+}
+
+function hache_sharky_commercial_visible_courses(array $state,array $catalog): array
+{
+    $scheduleId=(string)($state['commercial_context']['schedule_id']??'');
+    $courses=array_values($catalog['courses']??[]);
+    if($scheduleId==='')return $courses;
+    return array_values(array_filter($courses,static function(array $course) use($scheduleId):bool {
+        foreach($course['schedules']??[] as $schedule)if((string)($schedule['id']??'')===$scheduleId)return true;
+        return false;
+    }));
+}
+
+/** Buttons when WhatsApp can show every choice safely; otherwise a native list. */
+function hache_sharky_commercial_choice_ui(string $slot,array $options): array
+{
+    $options=array_values(array_filter($options,static fn(array $o):bool=>trim((string)($o['id']??''))!==''&&trim((string)($o['title']??''))!==''));
+    if(!$options)return ['type'=>'list','list_id'=>'commercial_'.$slot,'options'=>[]];
+    $buttonSafe=count($options)<=3;
+    $titles=[];
+    foreach($options as $option){
+        $title=trim((string)$option['title']);
+        if(mb_strlen($title)>20||isset($titles[$title]))$buttonSafe=false;
+        $titles[$title]=true;
+    }
+    if($buttonSafe){
+        return ['type'=>'buttons','buttons'=>array_map(static fn(array $o):array=>hache_sharky_orchestrator_button((string)$o['id'],(string)$o['title']),$options)];
+    }
+    return ['type'=>'list','list_id'=>'commercial_'.$slot,'options'=>array_map(static fn(array $o):array=>[
+        'id'=>(string)$o['id'],'title'=>(string)$o['title'],'description'=>(string)($o['description']??''),
+    ],array_slice($options,0,10))];
+}
+
+function hache_sharky_commercial_control_ui(array $state,array $catalog,array $next): array
+{
+    $slot=(string)($next['slot']??'');$c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    if($slot==='program'){
+        $recommended=(string)($c['recommended_program']??'');
+        if($recommended==='intensive')return ['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:intensive','Seguir intensivo'),hache_sharky_orchestrator_button('qualify:regular','Ver regulares'),
+        ]];
+        if($recommended==='regular')return ['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:regular','Seguir regulares'),hache_sharky_orchestrator_button('qualify:intensive','Ver intensivo'),
+        ]];
+        return ['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),hache_sharky_orchestrator_button('qualify:regular','Regulares'),
+        ]];
+    }
+    if($slot==='sede')return ['type'=>'buttons','buttons'=>[
+        hache_sharky_orchestrator_button('sede:monteverde','Colegio Monteverde'),hache_sharky_orchestrator_button('sede:palapas','Palapas Protudec'),
+    ]];
+    if($slot==='plan'){
+        $options=[];
+        foreach(hache_sharky_commercial_visible_plans($state,$catalog) as $plan){
+            $price=is_numeric($plan['precio']??null)?'$'.rtrim(rtrim(number_format((float)$plan['precio'],2,'.',''),'0'),'.'):'';
+            $options[]=['id'=>'action:commercial:plan:'.(string)($plan['id']??''),'title'=>(string)($plan['nombre']??''),'description'=>(int)($plan['sesiones_semana']??0).' sesiones'.($price!==''?' · '.$price:'')];
+        }
+        return hache_sharky_commercial_choice_ui('plan',$options);
+    }
+    if($slot==='schedule'){
+        $options=[];
+        foreach(hache_sharky_commercial_visible_schedules($state,$catalog) as $schedule)$options[]=[
+            'id'=>'action:commercial:schedule:'.(string)($schedule['id']??''),'title'=>(string)($schedule['label']??''),'description'=>'',
+        ];
+        return hache_sharky_commercial_choice_ui('schedule',$options);
+    }
+    if($slot==='course'){
+        $options=[];
+        foreach(hache_sharky_commercial_visible_courses($state,$catalog) as $course){
+            $iso=(string)($course['fecha_inicio']??'');
+            $options[]=['id'=>'action:commercial:course:'.(string)($course['id']??''),'title'=>hache_sharky_commercial_short_date($iso),'description'=>hache_sharky_commercial_human_date($iso)];
+        }
+        return hache_sharky_commercial_choice_ui('course',$options);
+    }
+    if($slot==='enroll')return ['type'=>'buttons','buttons'=>[
+        hache_sharky_orchestrator_button(($c['program']??'')==='regular'?'action:human':'action:register_intensive','Inscribirme'),
+    ]];
+    return [];
+}
+
+function hache_sharky_commercial_interactive_input(PDO $pdo,array $state,array $event,array $context): ?array
+{
+    $id=strtolower(trim((string)($event['interactive_id']??'')));
+    if(!str_starts_with($id,'action:commercial:'))return null;
+    if(($state['identity']['kind']??'')!=='prospect'||is_array($state['flow']??null))return null;
+
+    $minAge=max(1,(int)($context['min_age']??12));$age=$state['commercial_context']['age']??null;
+    if(is_int($age)&&$age<$minAge){
+        if(function_exists('hache_sharky_whatsapp_underage_rejection'))return hache_sharky_whatsapp_underage_rejection($state,$minAge);
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_orchestrator_decision('prospect_age_rejected','Hache Natación atiende a partir de '.$minAge.' años; no puedo continuar con esta orientación para una persona de '.$age.' años.')];
+    }
+
+    $catalog=hache_sharky_commercial_catalog($pdo,$state,$context);
+    $next=hache_sharky_commercial_next($state);$slot=(string)($next['slot']??'');
+    $prefix='action:commercial:'.$slot.':';
+    if(!in_array($slot,['plan','schedule','course'],true)||!str_starts_with($id,$prefix)){
+        return [$state,hache_sharky_commercial_reply($state,'Esa opción corresponde a un paso anterior. Seguimos con la opción que toca ahora.',$catalog)];
+    }
+    $selectedId=substr($id,strlen($prefix));
+    if($selectedId==='')return [$state,hache_sharky_commercial_reply($state,'Esa opción ya no está disponible.',$catalog)];
+
+    $c=&$state['commercial_context'];$label='';$matched=null;
+    if($slot==='plan'){
+        foreach(hache_sharky_commercial_visible_plans($state,$catalog) as $plan)if(strtolower((string)($plan['id']??''))===$selectedId){$matched=$plan;break;}
+        if(is_array($matched)){
+            $c['plan_id']=(string)$matched['id'];$c['plan_name']=(string)$matched['nombre'];$c['sessions_per_week']=(int)$matched['sesiones_semana'];$c['plan_price']=(float)$matched['precio'];$label=(string)$matched['nombre'];
+        }
+    }elseif($slot==='schedule'){
+        foreach(hache_sharky_commercial_visible_schedules($state,$catalog) as $schedule)if(strtolower((string)($schedule['id']??''))===$selectedId){$matched=$schedule;break;}
+        if(is_array($matched)){
+            $c['schedule_id']=(string)$matched['id'];$c['schedule_label']=(string)$matched['label'];$label=(string)$matched['label'];
+        }
+    }else{
+        foreach(hache_sharky_commercial_visible_courses($state,$catalog) as $course)if(strtolower((string)($course['id']??''))===$selectedId){$matched=$course;break;}
+        if(is_array($matched)){
+            $c['course_id']=(string)$matched['id'];$c['fecha_inicio']=(string)$matched['fecha_inicio'];$c['course_price']=is_numeric($matched['precio']??null)?(float)$matched['precio']:null;unset($c['date_preference']);
+            $label=hache_sharky_commercial_human_date((string)$matched['fecha_inicio']);
+            if(!empty($c['schedule_id'])){
+                $valid=false;foreach($matched['schedules']??[] as $schedule)if((string)($schedule['id']??'')===(string)$c['schedule_id']){$valid=true;break;}
+                if(!$valid)unset($c['schedule_id'],$c['schedule_label']);
+            }
+        }
+    }
+
+    if(!is_array($matched))return [$state,hache_sharky_commercial_reply($state,'Esa opción ya no está disponible. Elige una de las opciones actuales.',$catalog)];
+    return [$state,hache_sharky_commercial_reply($state,'Listo, elegiste '.$label.'.',$catalog)];
+}
+
 /** Pure reducer; catalog must come from the same current backend as controlled registration. */
 function hache_sharky_commercial_capture(array $state,string $text,array $catalog,string $today): array
 {
@@ -165,7 +319,7 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
             $hour=(int)$m[1];if($hour>=1&&$hour<=12){if($m[3]!=='manana'&&$hour<12)$hour+=12;$start=sprintf('%02d:%02d',$hour,(int)($m[2]??0));}
         }
         if($start!==null){
-            $matches=array_values(array_filter($catalog['schedules']??[],static fn(array $s):bool=>substr((string)$s['label'],0,5)===$start&&($end===null||substr((string)$s['label'],-5)===$end)));
+            $matches=array_values(array_filter(hache_sharky_commercial_visible_schedules($state,$catalog),static fn(array $s):bool=>substr((string)$s['label'],0,5)===$start&&($end===null||substr((string)$s['label'],-5)===$end)));
             if(count($matches)===1){$c['schedule_id']=(string)$matches[0]['id'];$c['schedule_label']=(string)$matches[0]['label'];}
             else {unset($c['schedule_id'],$c['schedule_label']);}
         }
@@ -229,27 +383,18 @@ function hache_sharky_commercial_reply(array $state,string $answer,array $catalo
 {
     $next=hache_sharky_commercial_next($state);
     $answer=preg_replace('/¿[^?]*\?/u','',$answer)??$answer;
-    $message=trim($answer);
+    $message=trim($answer);$slot=(string)$next['slot'];
 
-    if($next['slot']==='plan'){
-        $message.=($message!==''?"\n\n":'').$next['prompt'];
-        $plans=array_values(array_filter($catalog['plans']??[],static fn(array $p):bool=>!isset($state['commercial_context']['sessions_per_week'])||(int)$p['sesiones_semana']===(int)$state['commercial_context']['sessions_per_week']));
-        if($plans)$message.="\n".implode("\n",array_map(static fn(array $p):string=>'• '.$p['nombre'].' ('.$p['sesiones_semana'].' sesiones): $'.number_format((float)$p['precio'],2,'.',','),$plans));
-    }elseif($next['slot']==='schedule'){
-        $message.=($message!==''?"\n\n":'').'Horarios disponibles:';
-        $schedules=array_slice(array_values($catalog['schedules']??[]),0,10);
-        if($schedules)$message.="\n".implode("\n",array_map(static fn(array $s):string=>'• '.(string)($s['label']??''),$schedules));
-        $message.="\n\n".'Puedes escribir el horario tal como aparece, por ejemplo “8 a 9”.';
-    }elseif($next['slot']==='course'){
-        $courses=array_slice(array_values($catalog['courses']??[]),0,10);
-        $message.=($message!==''?"\n\n":'').'Los cursos intensivos comienzan los lunes. Inicios disponibles:';
-        if($courses)$message.="\n".implode("\n",array_map(static fn(array $o):string=>'• Lunes '.hache_sharky_commercial_human_date((string)($o['fecha_inicio']??'')),$courses));
-        $message.="\n\n".'Puedes escribir “el próximo lunes”, “el 14” o una de las fechas mostradas.';
+    if($slot==='plan'){
+        $message.=($message!==''?"\n\n":'').$next['prompt'].' Toca una opción o escribe el nombre del plan.';
+    }elseif($slot==='schedule'){
+        $message.=($message!==''?"\n\n":'').'Elige uno de los horarios disponibles. Puedes tocarlo o escribirlo, por ejemplo “8 a 9”.';
+    }elseif($slot==='course'){
+        $message.=($message!==''?"\n\n":'').'Los cursos intensivos comienzan los lunes. Elige un inicio disponible; también puedes escribir “el próximo lunes” o una fecha mostrada.';
     }else{
         $message.=($message!==''?"\n\n":'').$next['prompt'];
     }
 
-    $ui=[];
-    if($next['slot']==='enroll')$ui=['type'=>'buttons','buttons'=>[hache_sharky_orchestrator_button(($state['commercial_context']['program']??'')==='regular'?'action:human':'action:register_intensive','Inscribirme')]];
+    $ui=hache_sharky_commercial_control_ui($state,$catalog,$next);
     return hache_sharky_orchestrator_decision('commercial_progress',$message,$ui);
 }

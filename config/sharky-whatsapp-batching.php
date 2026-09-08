@@ -473,6 +473,28 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
                     'payload'=>hache_sharky_whatsapp_render($contact,$decision),
                     'action_result'=>null,
                 ];
+            }elseif($directChat&&str_starts_with(strtolower(trim((string)($event['interactive_id']??''))),'action:commercial:')){
+                $commercialContext=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
+                $commercialHandled=hache_sharky_commercial_interactive_input($pdo,$deferredState,$event,$commercialContext);
+                if(!is_array($commercialHandled)){
+                    $result=hache_sharky_whatsapp_process($pdo,$event,$conversationAnswer,$extraContext);
+                }else{
+                    $hash=hache_sharky_orchestrator_contact_hash($contact);
+                    if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                        hache_sharky_orchestrator_unlock($lock);
+                        return ['skip'=>true,'code'=>'DUPLICATE'];
+                    }
+                    [$state,$decision]=$commercialHandled;
+                    [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
+                    $state['updated_at']=$now;$state['last_user_text']=trim((string)($event['text']??''));
+                    $ref=hache_sharky_orchestrator_referral($event,$now);if($ref)$state=hache_sharky_orchestrator_capture_referral($state,$ref);
+                    hache_sharky_db_state_save($pdo,$contact,$state);
+                    hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                    $result=[
+                        'skip'=>false,'code'=>'COMMERCIAL_GUIDED_SELECTION','state'=>$state,'decision'=>$decision,
+                        'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null,
+                    ];
+                }
             }elseif(hache_sharky_whatsapp_student_claim_requires_handoff($state,$event)){
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
                 if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
