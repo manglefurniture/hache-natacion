@@ -41,10 +41,17 @@ sharky_entry_expect(str_contains($palapasBlock,"strtoupper((string)(\$identity['
 sharky_entry_expect(str_contains($palapasBlock,"['id'=>'member:class_today','title'=>'Mi clase hoy']"),'Palapas menu must keep class-today access.');
 sharky_entry_expect(str_contains($palapasBlock,'Por ahora los temas de pagos de Palapas los está revisando directamente el equipo de Hache.'),'Palapas accounting requests must be answered without balances or checkout.');
 
-// Codex P1: a professor who is also a Palapas student must keep ownership of an
-// already active teacher flow, including free-form cancellation reasons.
-sharky_entry_expect(str_contains($palapasBlock,"str_starts_with((string)(\$routingFlow['name']??''),'teacher_')"),'Palapas gate must recognize an already-active teacher flow.');
-sharky_entry_expect(str_contains($palapasBlock,"in_array(\$intent,['greeting','teacher_agenda','teacher_cancel'"),'Teacher greeting and explicit teacher intents must bypass the student gate.');
+// Codex P1 follow-up: a professor who is also a Palapas student may bypass the
+// gate only for teacher-owned controls or the free-text cancellation reason.
+$teacherOwnerStart=strpos($routing,'function hache_sharky_member_teacher_owned_event');
+$teacherOwnerEnd=strpos($routing,'function hache_sharky_member_palapas_restricted_route',$teacherOwnerStart?:0);
+sharky_entry_expect($teacherOwnerStart!==false&&$teacherOwnerEnd!==false,'Teacher ownership helper must exist before the Palapas route.');
+$teacherOwner=substr($routing,$teacherOwnerStart,$teacherOwnerEnd-$teacherOwnerStart);
+sharky_entry_expect(str_contains($teacherOwner,"(\$flow['name']??'')!=='teacher_cancel'"),'Free text bypass must be limited to teacher_cancel.');
+sharky_entry_expect(str_contains($teacherOwner,"(\$flow['step']??'')!=='reason'"),'Only the cancellation reason step may own free text.');
+sharky_entry_expect(str_contains($teacherOwner,"trim((string)(\$event['interactive_id']??''))!==''"),'Interactive member buttons must never inherit teacher-flow ownership.');
+sharky_entry_expect(str_contains($teacherOwner,"return \$intent!=='payments';"),'Payment-like text must remain behind the Palapas red-light gate.');
+sharky_entry_expect(str_contains($palapasBlock,'hache_sharky_member_teacher_owned_event($teacher,$routingFlow,$event,$intent)'),'Palapas gate must use the narrow teacher ownership helper.');
 
 // Codex P1: an explicit human request containing a payment word must escape
 // member-ops before its payment parser can expose a balance.
