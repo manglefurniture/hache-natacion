@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-runtime.php';
 require_once __DIR__.'/sharky-whatsapp-batching.php';
+require_once __DIR__.'/sharky-entry-guidance.php';
 require_once __DIR__.'/sharky-brain-shadow-runtime.php';
 require_once __DIR__.'/sharky-whatsapp-echoes.php';
 require_once __DIR__.'/sharky-draft-parity.php';
@@ -57,9 +58,9 @@ function hache_sharky_lab_present_once(array $payload,array $state,string $userT
     if(hache_sharky_lab_presentation_queued($state)){
         $body=hache_sharky_whatsapp_enforce_no_reintroduction($body,$state,$userText);
     }else{
-        // Strip a model-written identity, then supply the exact disclosure once.
+        // Strip a model-written identity, then supply one deterministic, source-aware disclosure.
         $body=preg_replace('/^(?:¡Hola!\s*)?Soy Sharky[^.]*\.\s*/iu','',$body)??$body;
-        $body='Soy Sharky 🦈, el asistente IA de Hache Natación.'."\n\n".$body;
+        $body=hache_sharky_entry_intro($state,$userText)."\n\n".$body;
     }
     // Reapply the transport limits after disclosure/no-reintroduction transforms.
     $body=mb_substr(trim($body),0,(($payload['type']??'')==='interactive'?1024:4000));
@@ -72,6 +73,8 @@ function hache_sharky_lab_mark_presentation_queued(?array $deferredState,array $
 {
     if(!is_array($deferredState)||!is_array($deferredState['state']??null))return $deferredState;
     if(hache_sharky_lab_presentation_queued($deferredState['state']))return $deferredState;
+    $userText=(string)($deferredState['state']['last_user_text']??'');
+    $deferredState['state']=hache_sharky_entry_apply($deferredState['state'],$userText);
     $answer=hache_sharky_draft_payload_text($payload);
     if($answer!==''&&hache_sharky_lab_answer_contains_presentation($answer))$deferredState['state']['assistant_presentation_queued']=true;
     return $deferredState;
@@ -79,11 +82,16 @@ function hache_sharky_lab_mark_presentation_queued(?array $deferredState,array $
 
 function hache_sharky_lab_answer(string $text,string $instruction,array $state,array $context): string
 {
+    $relative=hache_sharky_relative_date_answer($text,$state,$context);
+    if($relative!==null)return $relative;
+
     $history=[];$ref=$state['referral']['latest']??null;
     $previous=trim((string)($context['previous_user_text']??''));
     if($previous!=='')$history[]=['role'=>'user','content'=>mb_substr($previous,0,700)];
     if(is_array($ref)&&!empty($ref['headline']))$history[]=['role'=>'system','content'=>'Origen de campaña: '.mb_substr((string)$ref['headline'],0,180)];
     $instruction=rtrim($instruction)."\n\n".hache_sharky_post72_whatsapp_style_policy();
+    $today=trim((string)($context['today']??''));
+    if($today!=='')$instruction.="\nFecha operativa actual en Cancún: ".$today.'. Si el usuario usa una fecha relativa, resuélvela contra esta fecha; nunca digas que depende de conocer el día de hoy.';
     $history[]=['role'=>'system','content'=>$instruction];
     if(hache_sharky_lab_presentation_queued($state))$history[]=['role'=>'assistant','content'=>'Ya me presenté como Sharky; la conversación ya está en curso.'];
     $payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp','commercial_context'=>hache_sharky_commercial_snapshot($state)],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
