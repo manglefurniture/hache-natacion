@@ -184,6 +184,12 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
         return $select('preserve_deterministic_decision', 'orchestrator_decision_is_authoritative', 'deterministic');
     }
 
+    if (($signals['commercial_progress'] ?? false) === true) {
+        return ($signals['commercial_enrollment_ready'] ?? false) === true
+            ? $select('show_commercial_menu', 'confirmed_selections_ready_for_enrollment', 'commercial')
+            : $select('answer_user', 'commercial_answer_continues_missing_selection', 'conversation');
+    }
+
     if (($before['identity_kind'] ?? 'unknown') === 'unknown'
         && ($after['identity_kind'] ?? 'unknown') === 'prospect') {
         return $select('start_guided_qualification', 'identity_transitioned_to_prospect', 'guided');

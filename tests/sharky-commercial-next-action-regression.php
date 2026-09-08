@@ -47,7 +47,7 @@ commercial_next_ok(!hache_sharky_whatsapp_low_information_reengagement('Quiero c
 $regular=$state;
 $regular['commercial_context']['program']='regular';
 $regularMenu=hache_sharky_whatsapp_commercial_next_action($regular);
-commercial_next_ok(array_column($regularMenu['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],'Regular menu must not offer automatic intensive registration.');
+commercial_next_ok(array_column($regularMenu['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price','action:human'],'Regular menu must offer a controlled team handoff, never intensive registration.');
 commercial_next_ok(!hache_sharky_whatsapp_interactive_is_current($regular,['interactive_id'=>'action:register_intensive']),'An old intensive registration button must become stale after the confirmed program changes to regular.');
 
 $pdo=new PDO('sqlite::memory:');
@@ -55,7 +55,7 @@ $regularSedeFlow=hache_sharky_orchestrator_flow($regular,'qualify_prospect','sed
 [$regularAfterSede,$regularAfterSedeDecision]=hache_sharky_whatsapp_qualification_input($pdo,$regularSedeFlow,['text'=>'Palapas','interactive_id'=>'sede:palapas'],1788460011,12);
 commercial_next_ok(($regularAfterSede['flow']??null)===null,'Selecting a regular venue must finish guided discovery instead of opening a daypart gate.');
 commercial_next_ok(($regularAfterSedeDecision['kind']??null)==='commercial_next_action','The normal regular venue path must converge on the next-action menu.');
-commercial_next_ok(array_column($regularAfterSedeDecision['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],'The normal regular path must expose Horarios and Precio immediately after venue selection.');
+commercial_next_ok(array_column($regularAfterSedeDecision['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price','action:human'],'The normal regular path must expose schedules, price and controlled handoff after venue selection.');
 
 // Historical production regression: once regular + Palapas is confirmed, the LLM
 // cannot make Sharky ask the venue again or resurrect Monteverde as a new choice.

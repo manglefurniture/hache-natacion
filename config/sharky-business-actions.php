@@ -89,7 +89,7 @@ function hache_sharky_business_intensive_options(PDO $pdo, int $weeks = 10): arr
 
         foreach ($dates as $date) {
             if (!intensivo_inscripcion_abierta($date)) continue;
-            $st = $pdo->prepare('SELECT id,estado FROM cursos_intensivos WHERE sede_id=:s AND fecha_inicio=:f LIMIT 1');
+            $st = $pdo->prepare('SELECT id,estado,precio FROM cursos_intensivos WHERE sede_id=:s AND fecha_inicio=:f LIMIT 1');
             $st->execute([':s'=>$site['id'], ':f'=>$date]);
             $course = $st->fetch(PDO::FETCH_ASSOC) ?: null;
             if ($course && in_array((string)$course['estado'], ['FINALIZADO','CANCELADO'], true)) continue;

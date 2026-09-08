@@ -21,6 +21,7 @@ function hache_sharky_brain_shadow_live_action(array $beforeState,array $afterSt
     $after=hache_sharky_brain_snapshot($afterState);
     if(($after['flow_name']??null)!==null)return 'continue_controlled_flow';
     if($kind==='commercial_next_action')return 'show_commercial_menu';
+    if($kind==='commercial_progress')return !empty($decision['ui']['buttons'])?'show_commercial_menu':'answer_user';
     if($kind==='conversation_identity_prompt')return 'ask_identity';
     if($kind==='conversation')return 'answer_user';
     return 'preserve_deterministic_decision';
@@ -47,7 +48,7 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
     // These adapter-owned presentation decisions are conversational policy for
     // Brain comparison. A real side_question is explicitly included so the
     // protected-decision guard does not suppress legitimate flow interruptions.
-    $brainDecisionKind=in_array($decisionKind,['commercial_next_action','conversation_identity_prompt','side_question'],true)
+    $brainDecisionKind=in_array($decisionKind,['commercial_next_action','commercial_progress','conversation_identity_prompt','side_question'],true)
         ?'conversation':($decisionKind!==''?$decisionKind:'conversation');
 
     $heuristicSideQuestion=function_exists('hache_sharky_whatsapp_is_side_question')
@@ -60,6 +61,8 @@ function hache_sharky_brain_shadow_evaluate(array $beforeState,array $afterState
 
     $signals=[
         'decision_kind'=>$brainDecisionKind,
+        'commercial_progress'=>$decisionKind==='commercial_progress',
+        'commercial_enrollment_ready'=>function_exists('hache_sharky_commercial_next')&&hache_sharky_commercial_next($afterState)['slot']==='enroll',
         'direct_chat'=>$directChat,
         'human_takeover_active'=>$decisionKind==='silent_human_takeover',
         'known_student'=>$knownStudent,

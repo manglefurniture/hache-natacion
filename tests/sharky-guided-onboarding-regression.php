@@ -71,7 +71,7 @@ guided_ok(
     'Known regular program and venue must converge on the deterministic next-action menu.'
 );
 guided_ok(
-    array_column($knownRegularDecision['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price'],
+    array_column($knownRegularDecision['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price','action:human'],
     'Known regular context must offer Horarios and Precio without re-asking venue.'
 );
 

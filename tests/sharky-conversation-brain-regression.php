@@ -252,7 +252,7 @@ brain_ok(str_contains($shadowSource,'hache_sharky_brain_diag_observed_metric_key
 brain_ok(str_contains($shadowSource,'hache_sharky_brain_diag_metric_key($live,$brainAction)'),'Live mismatches must be classified by bounded v3 action pair.');
 brain_ok(str_contains($shadowSource,'function hache_sharky_brain_shadow_member_evaluate'),'Brain shadow must understand deterministic member lanes.');
 brain_ok(str_contains($shadowSource,'function hache_sharky_brain_shadow_observe_member'),'Production observer must expose a member-lane hook.');
-brain_ok(str_contains($shadowSource,"['commercial_next_action','conversation_identity_prompt','side_question']"),'Confirmed side-question decisions must stay normalized as conversational policy.');
+brain_ok(str_contains($shadowSource,"['commercial_next_action','commercial_progress','conversation_identity_prompt','side_question']"),'Confirmed side-question decisions must stay normalized as conversational policy.');
 
 $routerSource=(string)file_get_contents(__DIR__.'/../config/sharky-member-routing.php');
 brain_ok(str_contains($routerSource,'hache_sharky_brain_shadow_observe_member'),'Shared realtime/recovery member router must feed the read-only Brain observer.');

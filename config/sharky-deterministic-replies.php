@@ -116,6 +116,10 @@ function hache_sharky_deterministic_price_message(array $state): ?string
         $label=is_numeric($selected)?'Precio del curso seleccionado':'Precio general';
         return '💰 Curso intensivo'."\n\n".'• '.$label.': $'.$priceText.' MXN'."\n".'• Duración: 3 semanas, lunes a viernes'."\n".'• No cobra inscripción.';
     }
+    $selection=$state['commercial_context']??[];
+    if(!empty($selection['plan_id'])&&is_numeric($selection['plan_price']??null)){
+        return 'El plan '.$selection['plan_name'].' de '.$selection['sessions_per_week'].' sesiones por semana cuesta $'.number_format((float)$selection['plan_price'],2,'.',',').' MXN mensuales.';
+    }
     $p3=hache_sharky_config_int($business,'sharky_precio_regular_3',1000,0,100000);
     $p5=hache_sharky_config_int($business,'sharky_precio_regular_5',1200,0,100000);
     $feeKey=$commercial['sede']==='MONTEVERDE'?'sharky_inscripcion_monteverde':'sharky_inscripcion_palapas';
@@ -146,7 +150,7 @@ function hache_sharky_deterministic_schedule_selection_message(string $text,arra
     if(!in_array($needle,$hours,true))return null;
     $label=hache_sharky_deterministic_sede_label($commercial['sede']);
     if($commercial['program']==='regular'){
-        return 'Perfecto 😊 Ya tengo: clases regulares en '.$label.', horario '.$needle.'. Para seguir, dime si prefieres 3 o 5 clases por semana.';
+        return 'El horario '.$needle.' está activo para clases regulares en '.$label.'.';
     }
     return 'Sí, el horario '.$needle.' está activo para curso intensivo en '.$label.'. Si quieres, te digo el precio o continuamos con el siguiente paso.';
 }

@@ -319,7 +319,9 @@ function hache_sharky_whatsapp_historical_venue_reselection(array $state,array $
     // Program, swim level and age remain valid. The controlled flow may contain
     // a course/schedule/payment tied to the previous venue, so discard only that
     // pending flow before returning to the commercial menu for the new sede.
+    $before=$state['commercial_context'];
     $state['commercial_context']['sede_clave']=$target;
+    $state=hache_sharky_commercial_invalidate($state,$before);
     if(is_array($state['flow']??null))$state=hache_sharky_orchestrator_clear_flow($state);
     return [$state,hache_sharky_whatsapp_commercial_next_action($state,'Perfecto, cambiamos a '.$label.'.')];
 }
