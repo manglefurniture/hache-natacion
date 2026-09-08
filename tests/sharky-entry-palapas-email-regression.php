@@ -33,13 +33,34 @@ sharky_entry_expect($genericProcess!==false&&$genericMail!==false&&$genericProce
 
 // Palapas red light: identity stays available, but the route intercepts before
 // payments and exposes only the "Mi clase hoy" self-service action.
-sharky_entry_expect(str_contains($routing,'function hache_sharky_member_palapas_restricted_route'),'Palapas must have an explicit restricted member route.');
-sharky_entry_expect(str_contains($routing,"strtoupper((string)(\$identity['sede_clave']??''))!=='PALAPAS'"),'Restriction must be scoped only to Palapas.');
-$palapasCall=strpos($routing,'hache_sharky_member_palapas_restricted_route($pdo,$event)');
-$paymentCall=strpos($routing,'hache_sharky_member_payment_process_event($pdo,$event,$business)');
-sharky_entry_expect($palapasCall!==false&&$paymentCall!==false&&$palapasCall<$paymentCall,'Palapas restriction must execute before member payments.');
-sharky_entry_expect(str_contains($routing,"['id'=>'member:class_today','title'=>'Mi clase hoy']"),'Palapas menu must keep class-today access.');
-sharky_entry_expect(str_contains($routing,'Por ahora los temas de pagos de Palapas los está revisando directamente el equipo de Hache.'),'Palapas accounting requests must be answered without balances or checkout.');
+$palapasStart=strpos($routing,'function hache_sharky_member_palapas_restricted_route');
+$palapasEnd=strpos($routing,'function hache_sharky_member_deterministic_event',$palapasStart?:0);
+sharky_entry_expect($palapasStart!==false&&$palapasEnd!==false,'Palapas must have an explicit restricted member route.');
+$palapasBlock=substr($routing,$palapasStart,$palapasEnd-$palapasStart);
+sharky_entry_expect(str_contains($palapasBlock,"strtoupper((string)(\$identity['sede_clave']??''))!=='PALAPAS'"),'Restriction must be scoped only to Palapas.');
+sharky_entry_expect(str_contains($palapasBlock,"['id'=>'member:class_today','title'=>'Mi clase hoy']"),'Palapas menu must keep class-today access.');
+sharky_entry_expect(str_contains($palapasBlock,'Por ahora los temas de pagos de Palapas los está revisando directamente el equipo de Hache.'),'Palapas accounting requests must be answered without balances or checkout.');
+
+// Codex P1: a professor who is also a Palapas student must keep ownership of an
+// already active teacher flow, including free-form cancellation reasons.
+sharky_entry_expect(str_contains($palapasBlock,"str_starts_with((string)(\$routingFlow['name']??''),'teacher_')"),'Palapas gate must recognize an already-active teacher flow.');
+sharky_entry_expect(str_contains($palapasBlock,"in_array(\$intent,['greeting','teacher_agenda','teacher_cancel'"),'Teacher greeting and explicit teacher intents must bypass the student gate.');
+
+// Codex P1: an explicit human request containing a payment word must escape
+// member-ops before its payment parser can expose a balance.
+$routeStart=strpos($routing,'function hache_sharky_member_route_event');
+sharky_entry_expect($routeStart!==false,'Shared member route must exist.');
+$routeBlock=substr($routing,$routeStart);
+$routeHandoff=strpos($routeBlock,'hache_sharky_member_routing_handoff_requested((string)($event[\'text\']??\'\'))');
+$routePayment=strpos($routeBlock,'hache_sharky_member_payment_process_event($pdo,$event,$business)');
+sharky_entry_expect($routeHandoff!==false&&$routePayment!==false&&$routeHandoff<$routePayment,'Palapas human handoff must escape before payment processing.');
+
+// Codex P2: a merely PENDIENTE record is identifiable but must never receive a
+// positive class-today answer as though its enrollment were active.
+$pendingPos=strpos($palapasBlock,'hache_sharky_member_pending_registration($student)');
+$classPos=strpos($palapasBlock,"if(\$intent==='class_today')");
+sharky_entry_expect($pendingPos!==false&&$classPos!==false&&$pendingPos<$classPos,'Pending-registration guard must run before Palapas class-today replies.');
+sharky_entry_expect(str_contains($palapasBlock,'no puedo confirmar una clase activa'),'Pending Palapas records need a neutral non-active-class reply.');
 
 // This package must not rewrite the already-approved Brain runtime.
 sharky_entry_expect(str_contains($brain,"if(\$kind==='conversation_identity_prompt')return 'ask_identity';"),'Brain shadow contract remains present and untouched by this package.');
