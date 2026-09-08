@@ -208,6 +208,15 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
 
     if (($after['identity_kind'] ?? 'unknown') === 'prospect'
         && ($after['commercial_ready'] ?? false) !== true) {
+        // The realtime entrypoint has already persisted an unmatched WhatsApp
+        // contact as a prospect before the worker snapshots the turn. For that
+        // production shape, keep the normal conversational answer instead of
+        // manufacturing an identity/discovery mismatch in the shadow cohort.
+        if ($directChat
+            && $decisionKind === 'conversation'
+            && ($signals['default_prospect_if_unmatched'] ?? false) === true) {
+            return $select('answer_user', 'unmatched_prospect_conversation_already_classified', 'conversation');
+        }
         return $select('continue_discovery', 'prospect_context_incomplete', 'guided');
     }
 
