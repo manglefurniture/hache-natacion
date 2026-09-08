@@ -69,7 +69,9 @@ function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $ident
             'sede_clave'=>null,
             'status'=>null,
         ]);
-        $state['updated_at']=time();
+        $now=time();
+        $state=hache_sharky_entry_guided_first_prospect($state,(string)($event['text']??''),$now);
+        $state['updated_at']=$now;
         hache_sharky_db_state_save($pdo,$contact,$state,86400);
     }catch(Throwable $e){
         error_log('[sharky-entry] No se pudo asumir prospecto para contacto no identificado.');
