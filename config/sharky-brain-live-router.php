@@ -143,15 +143,17 @@ function hache_sharky_brain_2ba_plan(
     $pct=hache_sharky_brain_2ba_canary_percent($business);
     if(!hache_sharky_brain_2ba_contact_in_canary($contact,$pct))return ['status'=>'outside_canary','action'=>null,'evaluation'=>null];
 
+    // Protected live results are an absolute barrier. They never enter the live
+    // Brain comparator, even when shadow already agrees with the current route.
+    if(hache_sharky_brain_2ba_result_protected($result))return ['status'=>'blocked_protected','action'=>null,'evaluation'=>null];
+
     $evaluation=hache_sharky_brain_shadow_evaluate($beforeState,$state,$event,$result,true);
     $brain=is_array($evaluation['brain']??null)?$evaluation['brain']:[];
     $action=(string)($brain['action']??'');
 
-    // If current live already made the same routing choice, leave its exact
-    // payload/state untouched. Brain has authority to agree without rewriting.
+    // If current live already made the same eligible routing choice, leave its
+    // exact payload/state untouched instead of rewriting an aligned result.
     if(($evaluation['match']??false)===true)return ['status'=>'aligned','action'=>$action,'evaluation'=>$evaluation];
-
-    if(hache_sharky_brain_2ba_result_protected($result))return ['status'=>'blocked_protected','action'=>$action,'evaluation'=>$evaluation];
 
     // These are intentionally explicit so a future Brain change cannot silently
     // turn Phase 2B-A into an open conversational router.
