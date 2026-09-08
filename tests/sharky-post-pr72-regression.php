@@ -135,10 +135,11 @@ post72_expect(str_contains($worker,'if(!hache_sharky_orchestrator_mark_processed
 post72_expect(str_contains($recovery,'function hache_sharky_action_delivery_queued_by_message(PDO $pdo,string $messageId): bool'),'Delivery queue marker must return success/failure.');
 post72_expect(str_contains($store,'function hache_sharky_orchestrator_mark_processed(PDO $pdo,string $messageId): bool'),'Receipt marker must return success/failure.');
 
-// P1 Codex follow-up: echo manual no puede despachar si takeover no quedó persistido.
+// P1 Codex follow-up: el echo manual ordinario no puede despachar si takeover no quedó persistido.
 $echoGuard=strpos($worker,"if(!hache_sharky_takeover_mark(\$contact,'manual'");
-$echoDispatch=strpos($worker,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_lab_send',20,\$contact)");
-post72_expect($echoGuard!==false&&$echoDispatch!==false&&$echoGuard<$echoDispatch,'Manual takeover must persist before pending outbox dispatch/cancellation.');
+$echoDispatch=$echoGuard===false?false:strpos($worker,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_lab_send',20,\$contact)",$echoGuard);
+post72_expect($echoGuard!==false&&$echoDispatch!==false&&$echoGuard<$echoDispatch,'Ordinary manual takeover must persist before its pending outbox dispatch/cancellation.');
+post72_expect(strpos($worker,'hache_sharky_whatsapp_echo_resume_requested($event)')!==false&&strpos($worker,'hache_sharky_whatsapp_echo_resume_requested($event)')<$echoGuard,'Operator resume command must be handled before generic manual takeover.');
 
 // P2 Codex: cada envío reclama su fila justo antes de mandar a Meta.
 post72_expect(str_contains($outbox,'hache_sharky_outbox_claim($pdo,1)'),'Outbox dispatcher must claim one row immediately before send.');
