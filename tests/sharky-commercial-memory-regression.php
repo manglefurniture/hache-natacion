@@ -124,6 +124,40 @@ $limitedPayload=hache_sharky_lab_present_once($longPayload,memory_new(),'Hola');
 $limitedBody=hache_sharky_draft_payload_text($limitedPayload);
 memory_ok(mb_strlen($limitedBody)<=1024,'Presentation must reapply the Meta 1024-character interactive body cap.');
 memory_ok(str_starts_with($limitedBody,'Soy Sharky 🦈, el asistente IA de Hache Natación.'),'Length limiting must preserve the AI disclosure at the beginning.');
+
+// Production regression: Sharky had recommended intensive, answered a venue side question,
+// then forgot the recommendation and asked the swim-level question again.
+$guided=memory_new();
+$guided['commercial_context']['swim_level']='swims';
+$guided=hache_sharky_orchestrator_flow($guided,'qualify_prospect','background',[],$now);
+$guided=hache_sharky_commercial_capture($guided,'No nunca',$catalog,$today);
+memory_ok(($guided['commercial_context']['background']??null)==='no_formal','Guided memory must normalize “No nunca” as no formal classes.');
+memory_ok(($guided['commercial_context']['recommended_program']??null)==='intensive','No-formal background must persist the intensive recommendation.');
+memory_ok(empty($guided['commercial_context']['program']),'A recommendation must not masquerade as an explicit program selection.');
+memory_ok(($guided['flow']['name']??null)==='qualify_prospect'&&($guided['flow']['step']??null)==='program','Recommendation must keep the prospect inside the guided program step.');
+$pdoGuided=new PDO('sqlite::memory:');
+[$guidedPromptState,$guidedPrompt]=hache_sharky_whatsapp_qualification_input($pdoGuided,$guided,['text'=>'No nunca','interactive_id'=>''],$now,12);
+$guidedIds=array_column($guidedPrompt['ui']['buttons']??[],'id');
+memory_ok($guidedIds===['qualify:intensive','qualify:regular'],'Recommendation must resolve with program buttons instead of free-form discovery.');
+$sideResult=[
+    'state'=>$guided,
+    'decision'=>['kind'=>'side_question','message'=>'Sí, por lo que me contaste te recomendé el intensivo.','ui'=>[],'action'=>null],
+    'payload'=>hache_sharky_whatsapp_text_payload('529981112233','Sí, por lo que me contaste te recomendé el intensivo.'),
+];
+$resumed=hache_sharky_whatsapp_batch_resume_qualification_controls($pdoGuided,'529981112233',$sideResult,['now'=>$now,'min_age'=>12]);
+$resumeIds=array_column($resumed['decision']['ui']['buttons']??[],'id');
+memory_ok($resumeIds===['qualify:intensive','qualify:regular'],'A side question about the recommendation must resume the exact guided buttons.');
+memory_ok(!str_contains((string)($resumed['decision']['message']??''),'¿Ya sabes nadar'),'Recommendation resume must never regress to swim-level discovery.');
+$guidedYes=hache_sharky_commercial_capture($guided,'Sí',$catalog,$today);
+memory_ok(($guidedYes['commercial_context']['program']??null)==='intensive','Typed “Sí” at the recommendation step must confirm the recommended program.');
+memory_ok(($guidedYes['flow']['step']??null)==='sede','Without a known venue, confirming the recommendation must advance to the venue step.');
+[$guidedVenueState,$guidedVenue]=hache_sharky_whatsapp_qualification_input($pdoGuided,$guidedYes,['text'=>'Sí','interactive_id'=>''],$now,12);
+$venueIds=array_column($guidedVenue['ui']['buttons']??[],'id');
+memory_ok($venueIds===['sede:monteverde','sede:palapas'],'After confirming the recommendation Sharky must guide venue selection with buttons.');
+$guidedKnown=$guided;$guidedKnown['commercial_context']['sede_clave']='MONTEVERDE';
+$guidedKnown=hache_sharky_commercial_capture($guidedKnown,'Sí',$catalog,$today);
+memory_ok(($guidedKnown['commercial_context']['program']??null)==='intensive'&&!is_array($guidedKnown['flow']??null),'A known venue plus recommendation confirmation must finish qualification without reopening old discovery.');
+
 $shadow=hache_sharky_brain_shadow_evaluate($ignacia,$ignacia,['text'=>'14 de septiembre de 2026'],['decision'=>hache_sharky_commercial_reply($ignacia,'Listo.')]);
 memory_ok($shadow['match']===true&&$shadow['live_action']==='show_commercial_menu','Brain shadow observes immediate enrollment invitation accurately');
 $shadow=hache_sharky_brain_shadow_evaluate($base,$base,['text'=>'Hola'],['decision'=>hache_sharky_commercial_reply($base,'Seguimos.')]);
