@@ -25,7 +25,6 @@ function hache_sharky_brain_precedence(): array
 {
     return [
         'wait_for_human',
-        'handoff_policy_exception',
         'serve_teacher',
         'serve_pending_student',
         'serve_palapas_restricted',
@@ -33,6 +32,7 @@ function hache_sharky_brain_precedence(): array
         'handoff_known_student',
         'close_age_scope',
         'pause_commercial_intent',
+        'handoff_policy_exception',
         'answer_side_question',
         'continue_controlled_flow',
         'preserve_deterministic_decision',
@@ -130,9 +130,6 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
     if (($signals['human_takeover_active'] ?? false) === true) {
         return $select('wait_for_human', 'human_takeover_active', 'silent');
     }
-    if (($signals['policy_handoff_required'] ?? false) === true) {
-        return $select('handoff_policy_exception', 'business_policy_requires_human', 'human');
-    }
 
     // Member service is a protected deterministic lane. Brain chooses WHO owns
     // the turn; the existing member modules remain the only executors of money,
@@ -156,11 +153,16 @@ function hache_sharky_brain_next_best_action(array $beforeState, array $afterSta
         return $select('handoff_known_student', 'known_student_member_service_unavailable', 'human');
     }
 
+    // Preserve the established prospect-policy precedence from v2. v3 changes
+    // member ownership, not the already-tested commercial rules below it.
     if (($signals['family_age_unavailable'] ?? false) === true) {
         return $select('close_age_scope', 'baby_or_maternal_swim_out_of_scope', 'deterministic');
     }
     if (($signals['pause_eligible'] ?? false) === true) {
         return $select('pause_commercial_intent', 'user_requested_eligible_pause', 'deterministic');
+    }
+    if (($signals['policy_handoff_required'] ?? false) === true) {
+        return $select('handoff_policy_exception', 'business_policy_requires_human', 'human');
     }
 
     // A side-question may interrupt a controlled flow only when the live turn is
