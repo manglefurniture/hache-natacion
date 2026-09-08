@@ -37,6 +37,10 @@ function hache_sharky_dispatcher_state_from_history(array $data): array
         elseif(str_contains($t,'sede: colegio monteverde')||str_contains($t,'sede: monteverde'))$state['commercial_context']['sede_clave']='MONTEVERDE';
         if(preg_match('/\bedad:\s*(\d{1,3})\s+anos\b/u',$t,$m)===1){$age=(int)$m[1];if($age>=1&&$age<=120)$state['commercial_context']['age']=$age;}
     }
+    // Only the loopback WhatsApp entry invokes this reducer. Prefer the server's
+    // structured state to lossy reconstruction of prose in history.
+    if(is_array($data['commercial_context']??null))$state['commercial_context']=$data['commercial_context'];
+    if(is_numeric($state['commercial_context']['course_price']??null))$state['selected_course_price']=(float)$state['commercial_context']['course_price'];
     return $state;
 }
 

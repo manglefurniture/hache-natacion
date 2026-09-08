@@ -50,6 +50,22 @@ function hache_sharky_lab_answer_contains_presentation(string $answer): bool
     return str_contains($head,'soy sharky')&&str_contains($head,'hache natacion');
 }
 
+function hache_sharky_lab_present_once(array $payload,array $state,string $userText=''): array
+{
+    $body=hache_sharky_draft_payload_text($payload);
+    if($body==='')return $payload;
+    if(hache_sharky_lab_presentation_queued($state)){
+        $body=hache_sharky_whatsapp_enforce_no_reintroduction($body,$state,$userText);
+    }else{
+        // Strip a model-written identity, then supply the exact disclosure once.
+        $body=preg_replace('/^(?:¡Hola!\s*)?Soy Sharky[^.]*\.\s*/iu','',$body)??$body;
+        $body='Soy Sharky 🦈, el asistente IA de Hache Natación.'."\n\n".$body;
+    }
+    if(($payload['type']??'')==='text')$payload['text']['body']=$body;
+    elseif(($payload['type']??'')==='interactive')$payload['interactive']['body']['text']=$body;
+    return $payload;
+}
+
 function hache_sharky_lab_mark_presentation_queued(?array $deferredState,array $payload): ?array
 {
     if(!is_array($deferredState)||!is_array($deferredState['state']??null))return $deferredState;
@@ -68,7 +84,7 @@ function hache_sharky_lab_answer(string $text,string $instruction,array $state,a
     $instruction=rtrim($instruction)."\n\n".hache_sharky_post72_whatsapp_style_policy();
     $history[]=['role'=>'system','content'=>$instruction];
     if(hache_sharky_lab_presentation_queued($state))$history[]=['role'=>'assistant','content'=>'Ya me presenté como Sharky; la conversación ya está en curso.'];
-    $payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
+    $payload=json_encode(['message'=>$text,'history'=>$history,'channel'=>'whatsapp','commercial_context'=>hache_sharky_commercial_snapshot($state)],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($payload===false)return '';
     $ch=curl_init('https://hnatacion.com/api/sharky.php');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_POSTFIELDS=>$payload,CURLOPT_RESOLVE=>['hnatacion.com:443:127.0.0.1']]);
     $response=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);if($response===false||$status<200||$status>=300)return '';
     $data=json_decode((string)$response,true);
@@ -119,6 +135,10 @@ function hache_sharky_lab_queue_and_complete(PDO $pdo,string $contact,array $pay
 {
     try{
         if($pdo->inTransaction())throw new RuntimeException('Unexpected open transaction before Sharky delivery boundary');
+        if(($payload['_sharky_group']??false)!==true&&is_array($deferredState['state']??null)){
+            $payload=hache_sharky_lab_present_once($payload,$deferredState['state'],(string)($deferredState['state']['last_user_text']??''));
+            $deferredState=hache_sharky_lab_mark_presentation_queued($deferredState,$payload);
+        }
         $pdo->beginTransaction();
         hache_sharky_lab_persist_deferred_state($pdo,$deferredState);
         $queued=($payload['_sharky_group']??false)===true
@@ -281,7 +301,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         if($shouldTakeover){
             if(!hache_sharky_lab_mark_handoff_pending($pdo,$deliverySource,$batchedIds))return false;
             $reason=$decisionKind==='conversation'?'unresolved':((string)($actionResult['code']??'')==='START_DATE_REQUIRES_HUMAN'?'start_date_exception':'requested_human');
-            if(!hache_sharky_takeover_mark($contact,$reason,'Sharky 2.0 controlled handoff')){
+            if(!hache_sharky_takeover_mark($contact,$reason,'Sharky 2.0 controlled handoff'.(($result['state']['commercial_context']['program']??'')==='regular'?' — Contexto comercial: '.json_encode(hache_sharky_commercial_snapshot($result['state']),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES):''))){
                 error_log('[sharky-lab] controlled takeover persistence failed reason='.$reason);
                 return false;
             }
@@ -292,7 +312,6 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $deliveryPending=hache_sharky_action_delivery_pending_for_message($pdo,$deliverySource);
         if($deliveryPending&&!is_array($out))return false;
         if(is_array($out)){
-            $deferredState=hache_sharky_lab_mark_presentation_queued($deferredState,$out);
             $payloadHash=hash('sha256',json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?:'');
             return hache_sharky_lab_queue_and_complete($pdo,$contact,$out,$deliverySource.'|'.$decisionKind.'|'.$payloadHash,$deliverySource,$batchedIds,$deferredState);
         }

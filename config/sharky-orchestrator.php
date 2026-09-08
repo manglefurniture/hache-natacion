@@ -400,6 +400,11 @@ function hache_sharky_orchestrator_expire_flow(array $state, int $now): array
 
 function hache_sharky_orchestrator_flow(array $state, string $name, string $step, array $data, int $now): array
 {
+    if($name==='register_intensive'){
+        foreach(['sede_clave','course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key){
+            if(array_key_exists($key,$data))$state['commercial_context'][$key]=$data[$key];
+        }
+    }
     $state['mode'] = 'controlled';
     $state['flow'] = ['name'=>$name,'step'=>$step,'data'=>$data,'updated_at'=>$now];
     return $state;
@@ -480,6 +485,23 @@ function hache_sharky_orchestrator_registration_course_step(array $state,array $
 {
     $sede=(string)($data['sede_clave']??'');
     $options=array_values(array_filter($context['intensive_options']??[],static fn($o):bool=>is_array($o)&&strtoupper((string)($o['sede_clave']??''))===$sede));
+    $known=$state['commercial_context']??[];
+    foreach($options as $course){
+        if((string)($course['id']??'')!==(string)($known['course_id']??''))continue;
+        $data['course_id']=(string)$course['id'];$data['fecha_inicio']=$course['fecha_inicio'];
+        $data['course_price']=is_numeric($course['precio']??null)?(float)$course['precio']:null;
+        $schedules=is_array($course['schedules']??null)?$course['schedules']:[];
+        foreach($schedules as $schedule){
+            if((string)$schedule['id']!==(string)($known['schedule_id']??''))continue;
+            $data['schedule_id']=(string)$schedule['id'];$data['schedule_label']=(string)$schedule['label'];
+            $state=hache_sharky_orchestrator_flow($state,'register_intensive','name',$data,$now);
+            return [$state,hache_sharky_orchestrator_decision('registration_name','Escribe el nombre completo de la persona que tomará el curso.')];
+        }
+        unset($state['commercial_context']['schedule_id'],$state['commercial_context']['schedule_label']);
+        $state=hache_sharky_orchestrator_flow($state,'register_intensive','schedule',$data,$now);
+        return [$state,hache_sharky_orchestrator_decision('registration_schedule','Elige el horario que prefieres.',['type'=>'list','list_id'=>'schedules','options'=>array_map(static fn($s):array=>['id'=>'schedule:'.$s['id'],'title'=>$s['label'],'description'=>''],array_slice($schedules,0,10))])];
+    }
+    unset($state['commercial_context']['course_id'],$state['commercial_context']['fecha_inicio'],$state['commercial_context']['course_price']);
     $state=hache_sharky_orchestrator_flow($state,'register_intensive','course',$data,$now);
     return [$state,hache_sharky_orchestrator_decision('registration_course','Elige una fecha de inicio disponible.',['type'=>'list','list_id'=>'courses','options'=>array_map(static fn($o):array=>[
         'id'=>'course:'.(string)($o['id']??''),
@@ -604,6 +626,13 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
             $data['fecha_inicio']=$course['fecha_inicio']??null;
             $data['course_price']=is_numeric($course['precio']??null)?(float)$course['precio']:null;
             $schedules = is_array($course['schedules']??null)?$course['schedules']:[];
+            foreach($schedules as $schedule){
+                if((string)$schedule['id']!==(string)($state['commercial_context']['schedule_id']??''))continue;
+                $data['schedule_id']=(string)$schedule['id'];$data['schedule_label']=(string)$schedule['label'];
+                $state=hache_sharky_orchestrator_flow($state,'register_intensive','name',$data,$now);
+                return [$state,hache_sharky_orchestrator_decision('registration_name','Escribe el nombre completo de la persona que tomará el curso.')];
+            }
+            unset($state['commercial_context']['schedule_id'],$state['commercial_context']['schedule_label']);
             $state = hache_sharky_orchestrator_flow($state,'register_intensive','schedule',$data,$now);
             return [$state, hache_sharky_orchestrator_decision('registration_schedule','Elige el horario que prefieres.', ['type'=>'list','list_id'=>'schedules','options'=>array_map(static fn($s): array => [
                 'id'=>'schedule:'.(string)($s['id']??''),
@@ -614,6 +643,13 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
         if ($step === 'schedule') {
             $scheduleId = str_starts_with($interactive,'schedule:') ? substr($interactive,9) : '';
             if ($scheduleId === '') return [$state, hache_sharky_orchestrator_decision('registration_schedule_invalid','Selecciona uno de los horarios disponibles.')];
+            $selectedSchedule=null;
+            foreach($context['intensive_options']??[] as $course){
+                if((string)($course['id']??'')!==(string)($data['course_id']??'')||($course['sede_clave']??'')!==($data['sede_clave']??''))continue;
+                foreach($course['schedules']??[] as $schedule)if((string)$schedule['id']===$scheduleId)$selectedSchedule=$schedule;
+            }
+            if($selectedSchedule===null)return [$state,hache_sharky_orchestrator_decision('registration_schedule_invalid','Ese horario ya no está disponible para el curso seleccionado.')];
+            $data['schedule_label']=(string)$selectedSchedule['label'];
             $data['schedule_id']=$scheduleId;
             $state = hache_sharky_orchestrator_flow($state,'register_intensive','name',$data,$now);
             return [$state, hache_sharky_orchestrator_decision('registration_name','Escribe el nombre completo de la persona que tomará el curso.')];
