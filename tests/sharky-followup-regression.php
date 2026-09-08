@@ -38,6 +38,33 @@ $state['commercial_context']['sede_clave']='PALAPAS';
 $state['last_user_text']='Quiero información';
 followup_ok(hache_sharky_followup_commercial_ready($state),'A commercially ready prospect must be eligible.');
 
+$registrationPayload=[
+    'type'=>'text',
+    'text'=>['body'=>"✅ Registro recibido\nTu inscripción quedó pendiente de confirmación/pago."],
+];
+$proofPayload=[
+    'type'=>'text',
+    'text'=>['body'=>'✅ Recibí tu comprobante. Tu inscripción sigue pendiente hasta que el pago sea validado por el equipo. No necesitas volver a enviar la captura.'],
+];
+$ordinaryPayload=[
+    'type'=>'text',
+    'text'=>['body'=>'El curso intensivo cuesta $1,200 MXN.'],
+];
+followup_ok(hache_sharky_followup_payload_closes_registration($registrationPayload),'Successful registration must close the prospect sales follow-up.');
+followup_ok(hache_sharky_followup_payload_closes_registration($proofPayload),'Payment-proof acknowledgement must close the prospect sales follow-up.');
+followup_ok(!hache_sharky_followup_payload_closes_registration($ordinaryPayload),'Ordinary commercial replies must remain follow-up eligible.');
+
+$armedRegistration=hache_sharky_followup_set_state($state,[
+    'status'=>'armed','token'=>'scheduled-before-registration','user_turn_at'=>(int)$state['updated_at'],
+    'sent_count'=>0,'next_stage'=>1,'first_due_at'=>$ts('2026-09-03 19:15:00'),
+    'first_sent_at'=>null,'second_due_at'=>null,'completed_at'=>null,
+]);
+$completedRegistration=hache_sharky_followup_complete_registration($armedRegistration,$ts('2026-09-03 19:02:00'));
+$completedRegistrationFollowup=hache_sharky_followup_state($completedRegistration);
+followup_ok(($completedRegistrationFollowup['status']??'')==='completed_registration','Registration completion must persist a terminal follow-up status.');
+followup_ok(($completedRegistrationFollowup['token']??'x')===null&&($completedRegistrationFollowup['next_stage']??'x')===null,'Registration completion must invalidate any already-scheduled sales reminder token.');
+followup_ok(!hache_sharky_followup_commercial_ready($completedRegistration),'A registered prospect must never be offered registration again by idle follow-up.');
+
 $arm=hache_sharky_followup_arm_meta($state,'529980000000','message-1');
 followup_ok(is_array($arm)&&strlen((string)($arm['token']??''))===40,'A delivered-reply arm must carry a deterministic opaque token.');
 followup_ok(($arm['user_turn_at']??0)===$state['updated_at'],'The arm must be bound to the exact user-turn version.');
@@ -109,6 +136,10 @@ followup_ok(str_contains($outboxSource,'hache_sharky_outbox_reschedule_owner'),'
 followup_ok(str_contains($outboxSource,'hache_sharky_followup_after_sent'),'Only a successfully sent first reminder may schedule the second reminder.');
 followup_ok(str_contains($followSource,'processed_at IS NULL')&&str_contains($followSource,'received_at>FROM_UNIXTIME(:u)'),'A persisted newer inbound message must cancel a due reminder even before that inbound turn is processed.');
 followup_ok(str_contains($followSource,"'completed_optout'")&&str_contains($followSource,'hache_sharky_followup_user_opted_out((string)($state[\'last_user_text\']??\'\'))'),'A direct do-not-contact turn must be persisted as completed before any new reminder can arm.');
+$closePos=strpos($followSource,'hache_sharky_followup_payload_closes_registration($payload)');
+$armablePos=strpos($followSource,'hache_sharky_followup_payload_armable($payload)');
+followup_ok($closePos!==false&&$armablePos!==false&&$closePos<$armablePos,'Registration/payment-proof closure must invalidate sales follow-up before any new reminder can arm.');
+followup_ok(str_contains($followSource,"'completed_registration'"),'Registration closure must remain a durable terminal status for prospect sales follow-up.');
 followup_ok(substr_count($followSource,"'idle-followup|'.\$token.'|1'")===1,'The first reminder must have exactly one scheduling site, after normal delivery succeeds.');
 followup_ok(substr_count($followSource,"'idle-followup|'.\$token.'|2'")===1,'The second reminder must have exactly one scheduling site, after the first send succeeds.');
 
