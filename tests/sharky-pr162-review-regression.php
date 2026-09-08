@@ -17,7 +17,7 @@ $fresh=hache_sharky_orchestrator_state(null,$now);
 $fresh['identity']=array_replace($fresh['identity'],[
     'kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched',
 ]);
-$firstText='Quiero clases regulares en Monteverde';
+$firstText="Quiero clases regulares\nMonteverde";
 $guided=hache_sharky_entry_guided_first_prospect($fresh,$firstText,$now);
 pr162_review_ok(($guided['flow']['name']??null)==='qualify_prospect'&&($guided['flow']['step']??null)==='swim','Fresh unmatched prospect must stay on swim qualification.');
 pr162_review_ok(($guided['flow']['data']['entry_bootstrap']??false)===true,'First-turn guided flow must be explicitly marked as entry bootstrap.');
