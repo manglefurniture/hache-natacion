@@ -21,7 +21,11 @@ function hache_sharky_brain_shadow_live_action(array $beforeState,array $afterSt
     $after=hache_sharky_brain_snapshot($afterState);
     if(($after['flow_name']??null)!==null)return 'continue_controlled_flow';
     if($kind==='commercial_next_action')return 'show_commercial_menu';
-    if($kind==='commercial_progress')return !empty($decision['ui']['buttons'])?'show_commercial_menu':'answer_user';
+    if($kind==='commercial_progress'){
+        $enrollmentReady=function_exists('hache_sharky_commercial_next')
+            &&(hache_sharky_commercial_next($afterState)['slot']??null)==='enroll';
+        return $enrollmentReady?'show_commercial_menu':'answer_user';
+    }
     if($kind==='conversation_identity_prompt')return 'ask_identity';
     if($kind==='conversation')return 'answer_user';
     return 'preserve_deterministic_decision';
