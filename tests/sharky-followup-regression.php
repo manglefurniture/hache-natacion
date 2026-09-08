@@ -62,7 +62,7 @@ $armedRegistration=hache_sharky_followup_set_state($state,[
 $completedRegistration=hache_sharky_followup_complete_registration($armedRegistration,$ts('2026-09-03 19:02:00'));
 $completedRegistrationFollowup=hache_sharky_followup_state($completedRegistration);
 followup_ok(($completedRegistrationFollowup['status']??'')==='completed_registration','Registration completion must persist a terminal follow-up status.');
-followup_ok(($completedRegistrationFollowup['token']??'x')===null&&($completedRegistrationFollowup['next_stage']??'x')===null,'Registration completion must invalidate any already-scheduled sales reminder token.');
+followup_ok(array_key_exists('token',$completedRegistrationFollowup)&&$completedRegistrationFollowup['token']===null&&array_key_exists('next_stage',$completedRegistrationFollowup)&&$completedRegistrationFollowup['next_stage']===null,'Registration completion must invalidate any already-scheduled sales reminder token.');
 followup_ok(!hache_sharky_followup_commercial_ready($completedRegistration),'A registered prospect must never be offered registration again by idle follow-up.');
 
 $arm=hache_sharky_followup_arm_meta($state,'529980000000','message-1');
