@@ -70,6 +70,8 @@ function hache_sharky_followup_commercial_ready(array $state): bool
     if(($state['identity']['kind']??'')!=='prospect')return false;
     if(is_array($state['flow']??null))return false;
     $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $followup=hache_sharky_followup_state($state);
+    if(($followup['status']??'')==='completed_registration')return false;
     if(!in_array(($commercial['program']??null),['intensive','regular'],true))return false;
     if(!in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))return false;
     if(hache_sharky_followup_user_opted_out((string)($state['last_user_text']??'')))return false;
@@ -81,6 +83,25 @@ function hache_sharky_followup_payload_body(array $payload): string
     if(($payload['type']??'')==='text')return trim((string)($payload['text']['body']??''));
     if(($payload['type']??'')==='interactive')return trim((string)($payload['interactive']['body']['text']??''));
     return '';
+}
+
+function hache_sharky_followup_payload_closes_registration(array $payload): bool
+{
+    $body=hache_sharky_followup_payload_body($payload);
+    if($body==='')return false;
+    $t=hache_sharky_orchestrator_normalize($body);
+    return (str_contains($t,'registro recibido')&&str_contains($t,'pendiente de confirmacion/pago'))
+        ||(str_contains($t,'recibi tu comprobante')&&str_contains($t,'inscripcion sigue pendiente'));
+}
+
+function hache_sharky_followup_complete_registration(array $state,int $now): array
+{
+    $followup=hache_sharky_followup_state($state);
+    $followup['status']='completed_registration';
+    $followup['next_stage']=null;
+    $followup['completed_at']=$now;
+    $followup['token']=null;
+    return hache_sharky_followup_set_state($state,$followup);
 }
 
 function hache_sharky_followup_payload_armable(array $payload): bool
@@ -151,6 +172,12 @@ function hache_sharky_followup_prepare_normal_outbound(PDO $pdo,string $contact,
     $now??=time();
     try{
         $state=hache_sharky_db_state_load($pdo,$contact);$followup=hache_sharky_followup_state($state);
+        if(hache_sharky_followup_payload_closes_registration($payload)){
+            $state=hache_sharky_followup_complete_registration($state,$now);
+            hache_sharky_db_state_save_now($pdo,$contact,$state);
+            unset($payload['_sharky_followup_arm']);
+            return $payload;
+        }
         if(hache_sharky_followup_user_opted_out((string)($state['last_user_text']??''))){
             $followup['status']='completed_optout';$followup['next_stage']=null;$followup['completed_at']=$now;$followup['token']=null;
             hache_sharky_db_state_save_now($pdo,$contact,hache_sharky_followup_set_state($state,$followup));
