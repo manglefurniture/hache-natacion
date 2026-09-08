@@ -193,6 +193,23 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
         try{
             if(!hache_sharky_lab_claim_early($pdo,$event,$contact,'echo'))return false;
+            if(hache_sharky_whatsapp_echo_resume_requested($event)){
+                $eventId=(string)($event['id']??'echo');
+                $payload=hache_sharky_whatsapp_text_payload($contact,'Hola, ya estoy de vuelta. ¿Continuamos?');
+                if(!hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,'manual-resume|'.$eventId,time())){
+                    error_log('[sharky-lab] unable to queue manual resume acknowledgement');
+                    return false;
+                }
+                if(hache_sharky_takeover_active($contact)&&!hache_sharky_takeover_resume_hash(hache_sharky_contact_hash($contact))){
+                    error_log('[sharky-lab] manual resume command could not release takeover');
+                    hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20,$contact);
+                    return false;
+                }
+                hache_sharky_metric_increment('takeover_manual_resume');
+                $processed=hache_sharky_orchestrator_mark_processed($pdo,$eventId);
+                hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20,$contact);
+                return $processed;
+            }
             if(!hache_sharky_takeover_mark($contact,'manual','Respuesta manual detectada por WhatsApp coexistence.')){
                 error_log('[sharky-lab] manual takeover persistence failed; automatic outbox remains blocked from dispatch in this worker');
                 return false;
