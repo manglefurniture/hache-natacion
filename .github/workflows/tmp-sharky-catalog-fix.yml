@@ -26,21 +26,13 @@ jobs:
 
           adapter = Path('config/sharky-whatsapp-adapter.php')
           src = adapter.read_text()
-          old = """        if(($decision['kind']??'')==='conversation'&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)){
-              $decision=hache_sharky_commercial_reply($state,(string)$conversation,$catalog??[]);
-              $conversation=null;
-          }
-          """
-          new = """        if(($decision['kind']??'')==='conversation'&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)){
-              if(!isset($catalog))$catalog=hache_sharky_commercial_catalog($pdo,$state,$context);
+          target = "$decision=hache_sharky_commercial_reply($state,(string)$conversation,$catalog??[]);"
+          replacement = """if(!isset($catalog))$catalog=hache_sharky_commercial_catalog($pdo,$state,$context);
               $decision=hache_sharky_commercial_reply($state,(string)$conversation,$catalog);
-              [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);
-              $conversation=null;
-          }
-          """
-          if src.count(old) != 1:
-              raise SystemExit(f'Expected one adapter target, found {src.count(old)}')
-          adapter.write_text(src.replace(old, new, 1))
+              [$state,$decision]=hache_sharky_whatsapp_empty_options_guard($state,$decision);"""
+          if src.count(target) != 1:
+              raise SystemExit(f'Expected one adapter target, found {src.count(target)}')
+          adapter.write_text(src.replace(target, replacement, 1))
 
           test = Path('tests/sharky-commercial-memory-adapter-regression.php')
           body = test.read_text()
