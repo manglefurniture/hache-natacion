@@ -22,6 +22,10 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
         return null;
     };
 
+    // Lo que el usuario escribe en el turno actual siempre tiene prioridad sobre
+    // la inferencia de campaña. El referral conserva la fuente, no el control del funnel.
+    $explicitInterest=$programFrom($userText);
+
     $ref=is_array($state['referral']['latest']??null)?$state['referral']['latest']
         :(is_array($state['referral']['first']??null)?$state['referral']['first']:null);
     if(is_array($ref)){
@@ -29,11 +33,12 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
         $combined=implode(' ',array_filter([
             (string)($ref['headline']??''),(string)($ref['body']??''),(string)($ref['source_url']??''),
         ],static fn(string $v):bool=>trim($v)!==''));
-        $interest=$programFrom($combined);
+        $interest=$explicitInterest??$programFrom($combined);
         $isMetaAd=$sourceType==='ad'||trim((string)($ref['ctwa_clid']??''))!=='';
         if($isMetaAd){
             // Regla operativa vigente 2026-09: el único anuncio Meta activo es de
-            // intensivos. El texto del referral prevalece cuando Meta lo entrega.
+            // intensivos. Solo funciona como fallback cuando el usuario no expresó
+            // un interés distinto en su mensaje actual.
             $interest??='intensive';
             return ['source'=>'meta_ad','interest'=>$interest];
         }
@@ -43,7 +48,7 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
     }
 
     $t=$normalize($userText);
-    $interest=$programFrom($userText);
+    $interest=$explicitInterest;
     $looksLikeWebPrefill=preg_match('/\bhola\s+hache\s+natacion\b/u',$t)===1
         &&preg_match('/\b(?:quiero|busco|necesito)\s+informacion\b/u',$t)===1;
     if($looksLikeWebPrefill&&$interest!==null)return ['source'=>'web','interest'=>$interest];
@@ -73,6 +78,9 @@ function hache_sharky_entry_intro(array $state,string $userText=''): string
     $base='Soy Sharky 🦈, el asistente IA de Hache Natación.';
     if($entry['source']==='meta_ad'&&$entry['interest']==='intensive'){
         return $base."\n\n".'Veo que llegaste desde nuestro anuncio del curso intensivo. Te doy una previa y te voy guiando desde aquí.';
+    }
+    if($entry['source']==='meta_ad'&&$entry['interest']==='regular'){
+        return $base."\n\n".'Veo que llegaste desde uno de nuestros anuncios y ahora buscas información sobre las clases regulares. Te voy guiando desde aquí.';
     }
     if($entry['source']==='web'&&$entry['interest']==='intensive'){
         return $base."\n\n".'Veo que vienes desde nuestra página buscando información sobre el curso intensivo. Te voy guiando desde aquí.';
