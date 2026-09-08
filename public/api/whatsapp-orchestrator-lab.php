@@ -70,6 +70,8 @@ function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $ident
             'status'=>null,
         ]);
         $now=time();
+        $referral=hache_sharky_orchestrator_referral($event,$now);
+        if($referral)$state=hache_sharky_orchestrator_capture_referral($state,$referral);
         $state=hache_sharky_entry_guided_first_prospect($state,(string)($event['text']??''),$now);
         $state['updated_at']=$now;
         hache_sharky_db_state_save($pdo,$contact,$state,86400);
