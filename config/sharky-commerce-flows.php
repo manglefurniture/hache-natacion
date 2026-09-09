@@ -564,8 +564,8 @@ function hache_sharky_commerce_upgrade_direct_payload(array $payload): array
     $data=hache_sharky_commerce_enrollment_launch_data($pdo,$state,$minAge);
     if (!is_array($data)) return $payload;
     $message=$isPostReserveName
-        ?'Ya tengo tu sede, fecha y horario. Completa tus datos en este formulario para continuar con la inscripción.'
-        :'Completa en un solo formulario los datos de tu inscripción. La sede queda fija en '.(string)$data['venue_label'].'.';
+        ?'✅ Ya tengo tu sede, fecha y horario. ✍️ Completa tus datos en este formulario para continuar con la inscripción.'
+        :'✍️ Completa en un solo formulario los datos de tu inscripción. 📍 La sede queda fija en '.(string)$data['venue_label'].'.';
     return hache_sharky_commerce_flow_payload(
         $contact,
         $message,
@@ -658,7 +658,7 @@ function hache_sharky_commerce_handle_event(PDO $pdo,array $state,array $event,a
         if ($action==='cancel') {
             $state=hache_sharky_orchestrator_clear_flow($state);
             $decision=function_exists('hache_sharky_whatsapp_commercial_next_action')
-                ?hache_sharky_whatsapp_commercial_next_action($state,'Entendido, cancelé el formulario. Conservé tu curso y sede.')
+                ?hache_sharky_whatsapp_commercial_next_action($state,'Entendido 😊 Cancelé el formulario. Conservé tu curso y sede.')
                 :hache_sharky_orchestrator_decision('commerce_enrollment_cancelled','Entendido, cancelé el formulario. No registré nada.');
             return ['state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }

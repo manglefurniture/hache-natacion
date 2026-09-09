@@ -590,7 +590,9 @@ function hache_sharky_whatsapp_intensive_information_message(array $state,string
     $configured=function_exists('hache_sharky_config_int')?hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000):1200;
     $price=is_numeric($selected)?(float)$selected:(float)$configured;
     $priceText=number_format($price,0,'.',',');
-    $message=rtrim($prefix).' En '.$sedeLabel.', el curso intensivo tiene un precio total de $'.$priceText.' MXN. Es un solo pago por el curso completo.';
+    $lead=rtrim($prefix);
+    if($lead==='Perfecto.')$lead='¡Perfecto! 🏊‍♂️';
+    $message=$lead."\n\n📍 Ya tengo tu sede: ".$sedeLabel.".\n\n💰 El curso intensivo tiene un precio total de $".$priceText." MXN.\n✅ Es un solo pago por el curso completo.";
     $hours=[];
     if($pdo instanceof PDO){
         try{
@@ -606,18 +608,19 @@ function hache_sharky_whatsapp_intensive_information_message(array $state,string
     if($hours){
         $message.="
 
-Horarios disponibles:
+🕒 Horarios disponibles:
 ".implode("
 ",array_map(static fn(string $hour):string=>'• '.$hour,$hours));
     }elseif($pdo instanceof PDO){
         $message.="
 
-Ahora mismo no encuentro horarios activos para esta sede.";
+🕒 Ahora mismo no encuentro horarios activos para esta sede.";
     }else{
         $message.="
 
-No pude consultar los horarios activos en este momento. Prefiero no inventarte datos.";
+🕒 No pude consultar los horarios activos en este momento. Prefiero no inventarte datos.";
     }
+    $message.="\n\nSi quieres, puedes inscribirte ahora mismo ✍️";
     return $message;
 }
 

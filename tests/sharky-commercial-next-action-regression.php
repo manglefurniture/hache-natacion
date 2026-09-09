@@ -26,6 +26,10 @@ $payload=hache_sharky_whatsapp_render('529980000000',$menu);
 commercial_next_ok(($payload['type']??null)==='interactive','Next-action decision must render as WhatsApp interactive buttons.');
 commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===2,'Intensive information block must render exactly two buttons.');
 commercial_next_ok(str_contains((string)($menu['message']??''),'precio total')&&str_contains((string)($menu['message']??''),'un solo pago'),'Intensive venue completion must provide price automatically.');
+$intensiveMessage=(string)($menu['message']??'');
+foreach(['🏊‍♂️','📍','💰','✅','🕒','✍️'] as $emoji){
+    commercial_next_ok(str_contains($intensiveMessage,$emoji),'Intensive prospect information should keep the warmer visual cue '.$emoji.'.');
+}
 
 // Schedule/price buttons deliberately remain contextual questions: their visible titles
 // reach the normal conversation path with program + venue memory. Registration keeps the
