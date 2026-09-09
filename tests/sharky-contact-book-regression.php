@@ -85,6 +85,7 @@ contact_book_expect(!str_contains($sql,'whatsapp VARCHAR')&&!str_contains($sql,'
 contact_book_expect(str_contains($inbox,"require_once __DIR__.'/sharky-contact-book.php'")&&str_contains($inbox,'hache_sharky_contact_book_capture_event($pdo,$event)'),'Every durable direct inbound/echo must feed the contact authority.');
 contact_book_expect(str_contains($profiles,"\$contact['profile']['name']")&&str_contains($profiles,"\$contact['wa_id']"),'Meta contacts profile name must be captured only with its wa_id.');
 contact_book_expect(str_contains($profiles,"metadata']['phone_number_id")&&str_contains($profiles,'hash_equals($configuredPhoneId,$phoneId)'),'Profile capture must reject events for another WhatsApp business number.');
+contact_book_expect(str_contains($profiles,"message['group_id']")&&str_contains($profiles,'$directSenders[$from]'),'Raw profile capture must require a matching direct sender and exclude group-only participants.');
 contact_book_expect(str_contains($delivery,'hache_sharky_contact_book_capture_profiles_payload($pdo,$payload,$configuredPhoneId)'),'Signed raw webhook processing must feed profile names with the same configured phone-number gate.');
 contact_book_expect(str_contains($worker,'hache_sharky_contact_book_apply_additive_migration($pdo)'),'Only the CLI worker may apply the additive contact migration.');
 contact_book_expect(str_contains($worker,"__DIR__.'/../database/migrations/20260908_sharky_contact_book.sql'"),'CLI migration must use the tracked SQL source of truth.');
@@ -93,6 +94,7 @@ contact_book_expect(str_contains($source,"GET_LOCK('")&&str_contains($source,'GO
 contact_book_expect(str_contains($source,'people:createContact')&&str_contains($source,':updateContact'),'Google sync must support both contact creation and updates.');
 contact_book_expect(str_contains($source,'GOOGLE_DUPLICATE_PHONE')&&str_contains($source,'updatePersonFields\'=>\'names,organizations,userDefined'),'Google exact-phone duplicates must fail closed while unique matches can be renamed without replacing phones.');
 contact_book_expect(str_contains($source,'GOOGLE_SEARCH_FAILED')&&str_contains($source,"return ['ok'=>false,'matches'=>[]]"),'A failed Google lookup must never be treated as a clean no-match/create decision.');
+contact_book_expect(str_contains($source,'WHERE contact_hash=:c AND desired_hash=:d')&&str_contains($source,"'desired_hash'=>\$desiredHash"),'Sync completion must be optimistic and scoped to the exact desired contact version selected by the worker.');
 contact_book_expect(str_contains($naming,"'MONTEVERDE')return 'MV'")&&str_contains($naming,"'PALAPAS')return 'PAL'"),'Current venue siglas must remain explicit defaults.');
 contact_book_expect(str_contains($admin,'hache_sharky_contact_naming_config_rows($pdo)'),'Sharky Admin must expose contact siglas dynamically for every active venue.');
 contact_book_expect(str_contains($business,"'kind'=>'registration_created'")&&str_contains($business,'hache_sharky_contact_book_capture_event'),'Successful registration must refresh the contact immediately.');
