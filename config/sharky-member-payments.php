@@ -163,6 +163,13 @@ function hache_sharky_member_payment_current_state(PDO $pdo,string $contact): ar
     try{return hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return [];}
 }
 
+function hache_sharky_member_payment_restart_state(array $state,int $now): array
+{
+    $flow=hache_sharky_member_flow($state);
+    if(is_array($flow)&&($flow['name']??'')==='member_payment_transfer')return hache_sharky_member_set_flow($state,null,$now);
+    return $state;
+}
+
 function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $business): ?bool
 {
     if(trim((string)($event['group_id']??''))!=='')return null;
@@ -205,9 +212,12 @@ function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $
     }
 
     if($id==='member:pay'){
-        $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
-        return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method');
-    }
+    // Reopening payment choice clears only a stale SPEI-proof wait so
+    // an unpaid student can safely change method without changing the debt.
+    $state=hache_sharky_member_payment_restart_state(hache_sharky_member_payment_current_state($pdo,$contact),time());
+    $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
+    return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method',$state);
+}
 
     if($method==='cash'){
         $state=hache_sharky_member_payment_current_state($pdo,$contact);$state=hache_sharky_member_set_flow($state,null,time());
