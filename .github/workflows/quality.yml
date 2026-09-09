@@ -86,6 +86,14 @@ jobs:
           DELIVERY_DB_USER: root
           DELIVERY_DB_PASS: root
         run: php tests/sharky-contact-book-mariadb.php
+      - name: Intensive partial payments MariaDB regression
+        env:
+          DELIVERY_DB_HOST: 127.0.0.1
+          DELIVERY_DB_PORT: 3306
+          DELIVERY_DB_NAME: hache_delivery_test
+          DELIVERY_DB_USER: root
+          DELIVERY_DB_PASS: root
+        run: php tests/intensive-partial-payments-mariadb.php
       - name: Production readiness RUM MariaDB regression
         env:
           DELIVERY_DB_HOST: 127.0.0.1

@@ -72,17 +72,18 @@ function regla_intensivo_pagado(PDO $pdo,string $alumnoId,string $sedeId,?string
         'cia.alumno_id=:a',
         'ci.sede_id=:s',
         "ci.estado IN ('PROGRAMADO','EN_CURSO')",
-        "p.tipo='INTENSIVO'",
-        "p.estado='VALIDO'",
     ];
     $params=[':a'=>$alumnoId,':s'=>$sedeId];
     if($cursoId!==null && $cursoId!==''){$where[]='ci.id=:c';$params[':c']=$cursoId;}
     if($horarioId!==null && $horarioId!==''){$where[]='cia.horario_id=:h';$params[':h']=$horarioId;}
     if($referencia!==null){$where[]=':f BETWEEN ci.fecha_inicio AND ci.fecha_fin';$params[':f']=$referencia->format('Y-m-d');}
-    $sql="SELECT 1 FROM curso_intensivo_alumnos cia
+    $sql="SELECT ci.id FROM curso_intensivo_alumnos cia
         INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
-        INNER JOIN pagos p ON p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id
-        WHERE ".implode(' AND ',$where).' LIMIT 1';
+        LEFT JOIN pagos p ON p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO'
+        WHERE ".implode(' AND ',$where)."
+        GROUP BY ci.id,ci.precio
+        HAVING COALESCE(SUM(p.importe),0)+0.009>=ci.precio
+        LIMIT 1";
     $st=$pdo->prepare($sql);$st->execute($params);
     return (bool)$st->fetchColumn();
 }

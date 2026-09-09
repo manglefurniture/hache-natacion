@@ -194,6 +194,14 @@ validate_expected_sha() {
   [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "se requiere un SHA Git completo de 40 caracteres."
 }
 
+apply_release_migrations() {
+  require_command php
+  local partial_payments="$REPO/bin/migrate-intensive-partial-payments.php"
+  if [[ -f "$partial_payments" ]]; then
+    php "$partial_payments"
+  fi
+}
+
 deploy_sha() {
   local expected_sha="$1" remote local_sha base deployed
   require_root
@@ -222,6 +230,7 @@ deploy_sha() {
   base="$(git merge-base HEAD origin/main)"
 
   if [[ "$local_sha" == "$remote" ]]; then
+    apply_release_migrations
     publish_deployed_sha "$local_sha"
     echo "Ya esta actualizado: $local_sha"
     exit 0
@@ -237,6 +246,7 @@ deploy_sha() {
   git merge --ff-only origin/main
   deployed="$(git rev-parse HEAD)"
   [[ "$deployed" == "$expected_sha" ]] || fail "el SHA desplegado no coincide con el SHA aprobado."
+  apply_release_migrations
   publish_deployed_sha "$deployed"
   echo "Deploy OK: $deployed"
 }

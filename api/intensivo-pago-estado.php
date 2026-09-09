@@ -46,15 +46,15 @@ try {
     }
 
     $stmt = $pdo->prepare(
-        "SELECT cia.curso_intensivo_id,cia.alumno_id,
-            EXISTS(
-                SELECT 1
+        "SELECT cia.curso_intensivo_id,cia.alumno_id,ci.precio,
+            COALESCE((
+                SELECT SUM(p.importe)
                 FROM pagos p
                 WHERE p.alumno_id=cia.alumno_id
                   AND p.intensivo_id=cia.curso_intensivo_id
                   AND p.tipo='INTENSIVO'
                   AND p.estado='VALIDO'
-            ) AS pagado
+            ),0) AS pagado_total
          FROM curso_intensivo_alumnos cia
          INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
          INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id
@@ -73,11 +73,18 @@ try {
         intensive_payment_status_out(['ok' => false, 'error' => 'El alumno no pertenece a este curso intensivo'], 404);
     }
 
+    $price=(float)$relation['precio'];
+    $paid=(float)$relation['pagado_total'];
+    $balance=max(0.0,round($price-$paid,2));
     intensive_payment_status_out([
         'ok' => true,
         'curso_id' => (string)$relation['curso_intensivo_id'],
         'alumno_id' => (string)$relation['alumno_id'],
-        'pagado' => (int)$relation['pagado'] === 1,
+        'precio' => $price,
+        'pagado_total' => $paid,
+        'saldo' => $balance,
+        'estado_pago' => $balance<=0.009?'PAGADO':($paid>0.009?'ANTICIPO':'PENDIENTE'),
+        'pagado' => $balance<=0.009,
     ]);
 } catch (Throwable $e) {
     error_log('[intensivo-pago-estado] ' . $e->getMessage());

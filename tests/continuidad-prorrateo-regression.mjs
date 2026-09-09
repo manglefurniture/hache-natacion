@@ -142,8 +142,8 @@ assert.match(
 
 assert.match(
   quickPay,
-  /const price = usarObligacion \? mensualidadPendiente\.importe_a_cobrar : btn\.dataset\.price/,
-  'el importe sugerido debe venir de importe_a_cobrar cuando existe obligación pendiente'
+  /const price = usarObligacion \? mensualidadPendiente\.importe_a_cobrar : \(type === 'INTENSIVO' && btn\.dataset\.intensiveBalance \? btn\.dataset\.intensiveBalance : btn\.dataset\.price\);/,
+  'el importe sugerido debe seguir viniendo de importe_a_cobrar para mensualidad y usar saldo real solo en intensivos'
 );
 
 assert.match(

@@ -9,10 +9,27 @@ function hache_sharky_member_payments_schema_ready(PDO $pdo): bool
     try{$st=$pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='sharky_member_payment_intents'");$st->execute();return (int)$st->fetchColumn()===1;}catch(Throwable $e){return false;}
 }
 
-function hache_sharky_member_payment_external(string $studentId,string $kind,string $resourceId): string
+function hache_sharky_member_payment_external(string $studentId,string $kind,string $resourceId,int $installment=1): string
 {
     $prefix=strtoupper($kind)==='MENSUALIDAD'?'m':'i';
-    return 'sharky:member:'.$prefix.':'.substr(hash('sha256',$studentId.'|'.$kind.'|'.$resourceId),0,32);
+    $base='sharky:member:'.$prefix.':'.substr(hash('sha256',$studentId.'|'.$kind.'|'.$resourceId),0,32);
+    if(strtoupper($kind)==='INTENSIVO'&&$installment>1)return $base.':'.$installment;
+    return $base;
+}
+
+function hache_sharky_member_payment_checkout_external(PDO $pdo,array $pending): ?string
+{
+    $studentId=trim((string)($pending['student_id']??''));$kind=strtoupper(trim((string)($pending['kind']??'')));$resourceId=trim((string)($pending['resource_id']??''));$base=(float)($pending['base']??0);
+    if($studentId===''||$resourceId===''||$base<=0)return null;
+    $root=hache_sharky_member_payment_external($studentId,$kind,$resourceId);
+    if($kind!=='INTENSIVO')return $root;
+    if(!hache_sharky_member_payments_schema_ready($pdo))return null;
+    try{
+        $st=$pdo->prepare("SELECT external_reference FROM sharky_member_payment_intents WHERE alumno_id=:a AND payment_kind='INTENSIVO' AND intensivo_id=:i AND status='PENDING' AND ABS(base_amount-:b)<=0.009 ORDER BY created_at DESC LIMIT 1");
+        $st->execute([':a'=>$studentId,':i'=>$resourceId,':b'=>number_format($base,2,'.','')]);$pendingExternal=trim((string)($st->fetchColumn()?:''));if($pendingExternal!=='')return $pendingExternal;
+        $st=$pdo->prepare("SELECT COUNT(*) FROM sharky_member_payment_intents WHERE alumno_id=:a AND payment_kind='INTENSIVO' AND intensivo_id=:i");$st->execute([':a'=>$studentId,':i'=>$resourceId]);$installment=max(1,(int)$st->fetchColumn()+1);
+        return hache_sharky_member_payment_external($studentId,$kind,$resourceId,$installment);
+    }catch(Throwable $e){error_log('[sharky-member-payment] external slot failed');return null;}
 }
 
 function hache_sharky_member_payment_partial_intensive(array $payment): bool
@@ -27,13 +44,12 @@ function hache_sharky_member_payment_partial_message(array $payment): string
 {
     $paid=number_format((float)($payment['paid']??0),2,'.',',');
     $due=number_format((float)($payment['due']??0),2,'.',',');
-    return 'Ya tienes $'.$paid.' MXN registrados en tu curso y quedan $'.$due.' MXN pendientes. 😊 Para completar ese saldo, escríbenos por aquí y te ayudamos sin crear un cobro duplicado.';
+    return 'Ya tienes $'.$paid.' MXN registrados en tu curso y quedan $'.$due.' MXN pendientes. 😊 Puedes completar ese saldo desde aquí eligiendo nuevamente tu forma de pago.';
 }
 
 function hache_sharky_member_payment_pending_from_context(array $ctx): ?array
 {
     $payment=$ctx['payment']??null;if(!is_array($payment)||($payment['pending']??false)!==true||(float)($payment['due']??0)<=0)return null;
-    if(hache_sharky_member_payment_partial_intensive($payment))return null;
     $studentId=trim((string)($ctx['identity']['student_id']??''));if($studentId==='')return null;
     if(($payment['kind']??'')==='monthly'){
         $resource=trim((string)($payment['monthly_id']??''));if($resource==='')return null;
@@ -48,7 +64,7 @@ function hache_sharky_member_payment_create_preference(array $pending,array $bus
     $studentId=(string)$pending['student_id'];$kind=(string)$pending['kind'];$resourceId=(string)$pending['resource_id'];$base=(float)$pending['base'];
     if($studentId===''||$resourceId===''||$base<=0)return ['ok'=>false,'reason'=>'INVALID_PAYMENT'];
     $credential=hache_sharky_mp_credentials();if(!is_array($credential)||($credential['active']??false)!==true)return ['ok'=>false,'reason'=>'MP_UNAVAILABLE'];$token=trim((string)($credential['access_token']??''));if($token==='')return ['ok'=>false,'reason'=>'MP_UNAVAILABLE'];
-    $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;$pct=max(0.0,min(30.0,$pct));$charged=hache_sharky_mp_card_total($base,$pct);$external=hache_sharky_member_payment_external($studentId,$kind,$resourceId);
+    $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;$pct=max(0.0,min(30.0,$pct));$charged=hache_sharky_mp_card_total($base,$pct);$external=trim((string)($pending['external_reference']??''));if($external==='')$external=hache_sharky_member_payment_external($studentId,$kind,$resourceId);
     $title=$kind==='MENSUALIDAD'?'Mensualidad Hache Natación':'Curso intensivo Hache Natación';
     $metadata=['source'=>'sharky_member','student_id'=>$studentId,'payment_kind'=>strtolower($kind)];if($kind==='MENSUALIDAD')$metadata['monthly_id']=$resourceId;else $metadata['course_id']=$resourceId;
     $response=hache_sharky_mp_request('POST','/checkout/preferences',$token,['items'=>[['id'=>$kind==='MENSUALIDAD'?'sharky-mensualidad':'sharky-intensivo-member','title'=>$title,'description'=>'Pago iniciado por alumno registrado con Sharky','quantity'=>1,'currency_id'=>'MXN','unit_price'=>$charged]],'external_reference'=>$external,'metadata'=>$metadata,'statement_descriptor'=>'HACHE NATACION']);
@@ -76,9 +92,9 @@ function hache_sharky_member_payment_reconcile_intent(PDO $pdo,array $intent): a
         $st=$pdo->prepare("SELECT id FROM pagos WHERE alumno_id=:a AND estado='VALIDO' AND observacion=:o LIMIT 1");$st->execute([':a'=>$studentId,':o'=>$marker]);$existing=$st->fetchColumn();
         if(!$existing){
             if($kind==='INTENSIVO'&&!empty($row['intensivo_id'])){
-                $guard=$pdo->prepare("SELECT id FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE");
-                $guard->execute([':a'=>$studentId,':i'=>$row['intensivo_id']]);
-                if($guard->fetchColumn())throw new RuntimeException('Intensive already has a valid payment; approved MP intent requires manual reconciliation');
+                $course=$pdo->prepare("SELECT precio FROM cursos_intensivos WHERE id=:i LIMIT 1 FOR UPDATE");$course->execute([':i'=>$row['intensivo_id']]);$coursePrice=$course->fetchColumn();if($coursePrice===false)throw new RuntimeException('Intensive payment target missing');
+                $guard=$pdo->prepare("SELECT id,importe FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE");$guard->execute([':a'=>$studentId,':i'=>$row['intensivo_id']]);$alreadyPaid=0.0;foreach($guard->fetchAll(PDO::FETCH_ASSOC) as $existingPayment){$alreadyPaid+=(float)$existingPayment['importe'];}
+                if($alreadyPaid+$base>(float)$coursePrice+0.009)throw new RuntimeException('Approved MP payment exceeds the remaining intensive balance; manual reconciliation required');
             }
             $actor=hache_sharky_business_actor_id($pdo);$paymentId=(string)$pdo->query('SELECT UUID()')->fetchColumn();$st=$pdo->prepare("INSERT INTO pagos(id,alumno_id,mensualidad_id,intensivo_id,tipo,importe,metodo,fecha,estado,observacion,created_by) VALUES(:id,:a,:m,:i,:t,:imp,'MERCADO_PAGO',NOW(),'VALIDO',:o,:u)");$st->execute([':id'=>$paymentId,':a'=>$studentId,':m'=>$row['mensualidad_id'],':i'=>$row['intensivo_id'],':t'=>$kind,':imp'=>number_format($base,2,'.',''),':o'=>$marker,':u'=>$actor]);
             if($kind==='MENSUALIDAD'&&!empty($row['mensualidad_id'])){$m=$pdo->prepare("SELECT importe_a_cobrar,COALESCE(importe_cobrado,0) importe_cobrado FROM mensualidades WHERE id=:id AND alumno_id=:a LIMIT 1 FOR UPDATE");$m->execute([':id'=>$row['mensualidad_id'],':a'=>$studentId]);$monthly=$m->fetch(PDO::FETCH_ASSOC);if(!$monthly)throw new RuntimeException('Monthly payment target missing');$newPaid=min((float)$monthly['importe_a_cobrar'],(float)$monthly['importe_cobrado']+$base);$newState=$newPaid+0.009>=(float)$monthly['importe_a_cobrar']?'PAGADA':'PENDIENTE';$u=$pdo->prepare("UPDATE mensualidades SET importe_cobrado=:p,estado=:e,fecha_pago=IF(:e2='PAGADA',NOW(),fecha_pago) WHERE id=:id");$u->execute([':p'=>number_format($newPaid,2,'.',''),':e'=>$newState,':e2'=>$newState,':id'=>$row['mensualidad_id']]);}
@@ -192,9 +208,6 @@ function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $
         hache_sharky_member_payment_reconcile_student($pdo,$studentId);
         $ctx=hache_sharky_member_student_context($pdo,$contact);
         $payment=$ctx['payment']??null;
-        if($id!=='member:pay'&&is_array($payment)&&hache_sharky_member_payment_partial_intensive($payment)){
-            return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,hache_sharky_member_payment_partial_message($payment),'member-payment-partial');
-        }
     }
 
     $method=null;
@@ -234,6 +247,9 @@ function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $
     }
 
     if(!hache_sharky_member_payments_schema_ready($pdo))return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,'No pude abrir Mercado Pago en este momento. Puedes elegir efectivo o transferencia SPEI y te ayudo por aquí.','member-payment-schema');
+    $external=hache_sharky_member_payment_checkout_external($pdo,$pending);
+    if($external===null)return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,'No pude preparar el pago con tarjeta en este momento. Puedes elegir efectivo o transferencia SPEI.','member-payment-external');
+    $pending['external_reference']=$external;
     $card=hache_sharky_member_payment_card_payload($contact,$pending,$business);
     if(($card['ok']??false)!==true)return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,$card['payload'],'member-payment-unavailable');
     if(!hache_sharky_member_payment_store_intent($pdo,$pending,$card['checkout']))return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,'No pude dejar listo el pago con tarjeta. No se hizo ningún cargo. Puedes elegir efectivo o transferencia SPEI.','member-payment-store-failed');

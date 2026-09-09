@@ -40,13 +40,7 @@ try{
     $st=$pdo->prepare(
         "SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,
                 h.hora_inicio,h.hora_fin,
-                EXISTS(
-                    SELECT 1 FROM pagos p
-                    WHERE p.alumno_id=cia.alumno_id
-                      AND p.intensivo_id=ci.id
-                      AND p.tipo='INTENSIVO'
-                      AND p.estado='VALIDO'
-                ) pagado
+                COALESCE((SELECT SUM(p.importe) FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=ci.id AND p.tipo='INTENSIVO' AND p.estado='VALIDO'),0) pagado_total
          FROM curso_intensivo_alumnos cia
          INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
          INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id
@@ -59,7 +53,7 @@ try{
     $today=intensivo_hoy_operativo()->format('Y-m-d');
 
     foreach($courses as &$course){
-        $course['pagado']=(int)$course['pagado']===1;
+        $course['pagado_total']=(float)($course['pagado_total']??0);$course['saldo']=max(0.0,round((float)$course['precio']-$course['pagado_total'],2));$course['pagado']=$course['saldo']<=0.009;$course['estado_pago']=$course['pagado']?'PAGADO':($course['pagado_total']>0.009?'ANTICIPO':'PENDIENTE');
         $course['historico']=(string)$course['fecha_fin']<$today;
     }
     unset($course);

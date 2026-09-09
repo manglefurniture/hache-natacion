@@ -117,7 +117,7 @@ async function cargarCursosIntensivosAlumno(preseleccionar=''){
             const legacyParams=new URLSearchParams({alumno_id:alumnoSelect.value});
             intensiveCourses=await leerCatalogoIntensivos('/api/alumno-intensivos-pago.php?'+legacyParams.toString());
         }
-        intensiveCourses.forEach(curso=>{const option=document.createElement('option');option.value=curso.id;option.dataset.price=curso.precio??'';option.dataset.historico=curso.historico?'1':'0';option.disabled=curso.pagado===true;option.textContent=fechaCorta(curso.fecha_inicio)+' · '+(curso.historico?'HISTÓRICO':curso.estado)+(curso.pagado?' · PAGADO':'')+' · '+money(curso.precio);cursoSelect.appendChild(option);});
+        intensiveCourses.forEach(curso=>{const option=document.createElement('option');option.value=curso.id;option.dataset.price=curso.precio??'';option.dataset.balance=curso.saldo??curso.precio??'';option.dataset.historico=curso.historico?'1':'0';option.disabled=curso.pagado===true;const pago=curso.pagado?'PAGADO':Number(curso.pagado_total||0)>0?'ANTICIPO '+money(curso.pagado_total)+' · SALDO '+money(curso.saldo):'PENDIENTE · SALDO '+money(curso.saldo??curso.precio);option.textContent=fechaCorta(curso.fecha_inicio)+' · '+(curso.historico?'HISTÓRICO':curso.estado)+' · '+pago+' · CURSO '+money(curso.precio);cursoSelect.appendChild(option);});
         const wanted=preseleccionar||cursoSolicitado();
         if(wanted&&[...cursoSelect.options].some(o=>o.value===wanted&&!o.disabled))cursoSelect.value=wanted;
         else{
@@ -132,7 +132,7 @@ async function cargarCursosIntensivosAlumno(preseleccionar=''){
 function actualizarCursoSeleccionado(){
     if(tipoSelect.value!=='INTENSIVO')return;
     const selected=cursoSelect.selectedOptions[0];
-    if(selected?.dataset.price)importeInput.value=selected.dataset.price;
+    if(selected?.dataset.balance)importeInput.value=selected.dataset.balance;else if(selected?.dataset.price)importeInput.value=selected.dataset.price;
     if(selected?.dataset.historico==='1'){
         cursoHelp.className='help history-help';
         cursoHelp.textContent='Corrección histórica de ADMIN: este pago se registrará en el curso seleccionado sin reabrirlo ni activar al alumno por una fecha pasada.';

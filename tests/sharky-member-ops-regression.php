@@ -75,14 +75,16 @@ member_ok(!str_contains(mb_strtolower($classMessage),'backend'),'Student-facing 
 $externalMonthly=hache_sharky_member_payment_external('student-1','MENSUALIDAD','monthly-1');
 $externalMonthlyAgain=hache_sharky_member_payment_external('student-1','MENSUALIDAD','monthly-1');
 $externalIntensive=hache_sharky_member_payment_external('student-1','INTENSIVO','course-1');
+$externalIntensiveSecond=hache_sharky_member_payment_external('student-1','INTENSIVO','course-1',2);
 member_eq($externalMonthly,$externalMonthlyAgain,'Payment external references must be deterministic for reconciliation.');
 member_ok($externalMonthly!==$externalIntensive,'Monthly and intensive payments need separate external references.');
+member_ok($externalIntensive!==$externalIntensiveSecond&&str_starts_with($externalIntensiveSecond,$externalIntensive.':'),'Each intensive installment needs a distinct deterministic external reference.');
 member_ok(!str_contains($externalMonthly,'student-1'),'External references must not leak student identifiers.');
 
 $partialPayment=['kind'=>'intensive','course_id'=>'course-1','price'=>1200.0,'paid'=>400.0,'due'=>800.0,'pending'=>true];
 member_ok(hache_sharky_member_payment_partial_intensive($partialPayment),'An intensive with a valid partial payment must be detected.');
 $partialContext=['identity'=>['student_id'=>'student-1'],'payment'=>$partialPayment];
-member_eq(hache_sharky_member_payment_pending_from_context($partialContext),null,'A residual intensive balance must never create a second checkout.');
+member_ok(is_array(hache_sharky_member_payment_pending_from_context($partialContext)),'A residual intensive balance must remain payable through the existing method selector.');
 member_ok(str_contains(hache_sharky_member_payment_partial_message($partialPayment),'$800.00'),'Partial-payment answer must preserve the real remaining balance.');
 $zeroPaidContext=['identity'=>['student_id'=>'student-1'],'payment'=>['kind'=>'intensive','course_id'=>'course-1','price'=>1200.0,'paid'=>0.0,'due'=>1200.0,'pending'=>true]];
 member_ok(is_array(hache_sharky_member_payment_pending_from_context($zeroPaidContext)),'A zero-paid intensive may still open its first valid checkout.');
@@ -120,7 +122,10 @@ member_ok(str_contains($webhook,'hache_sharky_member_route_event'),'Webhook must
 member_ok(str_contains($memberRouter,'hache_sharky_member_payment_process_event'),'Shared member router must run payment self-service before general member operations.');
 member_ok(str_contains($memberRouter,'hache_sharky_member_supported_event'),'Member operations must be explicitly gated before claiming an inbox event.');
 $payments=(string)file_get_contents($root.'/config/sharky-member-payments.php');
-member_ok(str_contains($payments,"tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE"),'MP reconciliation must revalidate the one-valid-intensive-payment invariant inside the transaction.');
+member_ok(str_contains($payments,"SELECT id,importe FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE"),'MP reconciliation must lock and sum prior intensive installments before adding another one.');
+member_ok(str_contains($payments,'exceeds the remaining intensive balance'),'MP reconciliation must reject an overpayment race instead of blocking every second installment.');
+member_ok(str_contains($payments,'hache_sharky_member_payment_checkout_external'),'Card checkout must allocate a new intensive external reference after a reconciled installment.');
+member_ok(!str_contains($payments,"$id!=='member:pay'&&is_array($payment)&&hache_sharky_member_payment_partial_intensive"),'A typed payment request with an intensive deposit must fall through to member ops and recover the Pagar ahora button.');
 member_ok(str_contains($payments,"'name'=>'member_payment_transfer','step'=>'evidence'"),'SPEI choice must arm a bounded member-owned proof flow.');
 member_ok(str_contains($payments,"is_array(\$event['member_payment']??null)"),'Transfer proof must be consumed by the registered-student payment processor.');
 $memberOps=(string)file_get_contents($root.'/config/sharky-member-ops.php');
