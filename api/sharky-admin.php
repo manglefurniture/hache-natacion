@@ -8,6 +8,7 @@ require_once __DIR__.'/../config/sharky-runtime.php';
 require_once __DIR__.'/../config/sharky-groups.php';
 require_once __DIR__.'/../config/sharky-brain-diagnostics.php';
 require_once __DIR__.'/../config/sharky-brain-live-router.php';
+require_once __DIR__.'/../config/sharky-contact-naming.php';
 
 $me = auth_require(['ADMIN']);
 
@@ -34,6 +35,8 @@ if ($method === 'GET') {
             'tipo'=>'text',
         ];
     }
+    foreach(hache_sharky_contact_naming_config_rows($pdo) as $row)$config[]=$row;
+
     $groupConfig=hache_sharky_groups_config_row();
     $groupConfig['valor']=hache_sharky_groups_enabled($pdo)?'1':'0';
     $groupConfig['tipo']='checkbox';
@@ -92,6 +95,13 @@ if ($action === 'CONFIG') {
         foreach(hache_sharky_brain_2ba_config_rows([$key=>$value]) as $row){
             if(($row['clave']??'')===$key){$description=(string)$row['descripcion'];break;}
         }
+    } elseif(str_starts_with($key,HACHE_SHARKY_CONTACT_SIGLA_PREFIX)) {
+        if(!hache_sharky_contact_naming_config_value_valid($key,$value))sharky_admin_out(['ok'=>false,'error'=>'Sigla de contacto inválida'],422);
+        $validKey=false;
+        foreach(hache_sharky_contact_naming_config_rows($pdo) as $row){if(($row['clave']??'')===$key){$validKey=true;break;}}
+        if(!$validKey)sharky_admin_out(['ok'=>false,'error'=>'La sede de esa sigla no está activa'],422);
+        $value=strtoupper($value);
+        $description=hache_sharky_contact_naming_config_description($pdo,$key);
     } else {
         if (!isset($defaults[$key]) || !hache_sharky_config_value_valid($key, $value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
         if ($key === 'sharky_whatsapp') $value = preg_replace('/\D+/', '', $value) ?: '';
