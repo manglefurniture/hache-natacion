@@ -49,7 +49,7 @@ function hache_sharky_whatsapp_now_not_request(array $event): bool
 {
     $id=strtolower(trim((string)($event['interactive_id']??'')));
     $t=hache_sharky_orchestrator_normalize((string)($event['text']??''));
-    $isPauseText=preg_match('/^(?:ahora\s+no|por\s+ahora\s+no|no\s+por\s+ahora|todavia\s+no|aun\s+no)[.! ]*$/u',$t)===1;
+    $isPauseText=preg_match('/^(?:ahora\s+no|por\s+ahora\s+no|no\s+por\s+ahora|no\s+por\s+el\s+momento|por\s+el\s+momento\s+no|todavia\s+no|aun\s+no)[.! ]*$/u',$t)===1;
     if($id==='flow:pause')return true;
     // Compatibilidad con botones “Ahora no” ya enviados antes de introducir
     // flow:pause. Un flow:no cuyo título visible es solo “No” conserva la

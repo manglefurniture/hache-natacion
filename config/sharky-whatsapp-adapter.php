@@ -576,20 +576,84 @@ function hache_sharky_whatsapp_commercial_ready_message(array $state,string $pre
     return rtrim($prefix).' Ya tengo: '.$summary.'. Puedes preguntarme por horarios o precios.';
 }
 
+function hache_sharky_whatsapp_intensive_information_message(array $state,string $prefix='Perfecto.'): string
+{
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $sede=(string)($commercial['sede_clave']??'');
+    if(($commercial['program']??null)!=='intensive'||!in_array($sede,['MONTEVERDE','PALAPAS'],true)){
+        return hache_sharky_whatsapp_commercial_ready_message($state,$prefix);
+    }
+    $sedeLabel=hache_sharky_whatsapp_venue_label($sede);
+    $pdo=function_exists('hache_sharky_pdo')?hache_sharky_pdo():null;
+    $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo instanceof PDO?$pdo:null):[];
+    $selected=$commercial['course_price']??($state['selected_course_price']??null);
+    $configured=function_exists('hache_sharky_config_int')?hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000):1200;
+    $price=is_numeric($selected)?(float)$selected:(float)$configured;
+    $priceText=number_format($price,0,'.',',');
+    $message=rtrim($prefix).' En '.$sedeLabel.', el curso intensivo tiene un precio total de $'.$priceText.' MXN. Es un solo pago por el curso completo.';
+    $hours=[];
+    if($pdo instanceof PDO){
+        try{
+            $st=$pdo->prepare("SELECT h.hora_inicio,h.hora_fin FROM horarios h JOIN sedes s ON s.id=h.sede_id WHERE s.clave=:c AND s.activo=1 AND h.activo=1 AND h.intensivo=1 ORDER BY h.hora_inicio");
+            $st->execute([':c'=>$sede]);
+            foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+                $start=substr((string)($row['hora_inicio']??''),0,5);$end=substr((string)($row['hora_fin']??''),0,5);
+                if($start!==''&&$end!=='')$hours[]=$start.'–'.$end;
+            }
+            $hours=array_values(array_unique($hours));
+        }catch(Throwable $ignored){}
+    }
+    if($hours){
+        $message.="
+
+Horarios disponibles:
+".implode("
+",array_map(static fn(string $hour):string=>'• '.$hour,$hours));
+    }elseif($pdo instanceof PDO){
+        $message.="
+
+Ahora mismo no encuentro horarios activos para esta sede.";
+    }else{
+        $message.="
+
+No pude consultar los horarios activos en este momento. Prefiero no inventarte datos.";
+    }
+    return $message;
+}
+
 function hache_sharky_whatsapp_commercial_next_action(array $state,string $prefix='Perfecto.'): array
 {
     $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
-    $program=($commercial['program']??null)==='regular'?'clases regulares':'curso intensivo';
+    if(($commercial['program']??null)==='intensive'){
+        $message=hache_sharky_whatsapp_intensive_information_message($state,$prefix);
+        return hache_sharky_orchestrator_decision('commercial_next_action',$message,['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('action:register_intensive','Inscribirme'),
+            hache_sharky_orchestrator_button('flow:pause','No por el momento'),
+        ]]);
+    }
+    $program='clases regulares';
     $sede=hache_sharky_whatsapp_venue_label((string)($commercial['sede_clave']??''));
     $age=is_int($commercial['age']??null)?' para una persona de '.(int)$commercial['age'].' años':'';
     $message=rtrim($prefix).' Ya tengo: '.$program.' en '.$sede.$age.'. ¿Qué quieres ver ahora?';
-    $buttons=[
+    return hache_sharky_orchestrator_decision('commercial_next_action',$message,['type'=>'buttons','buttons'=>[
         hache_sharky_orchestrator_button('action:commercial_schedules','Horarios'),
         hache_sharky_orchestrator_button('action:commercial_price','Precio'),
-    ];
-    if(($commercial['program']??null)==='intensive')$buttons[]=hache_sharky_orchestrator_button('action:register_intensive','Inscribirme');
-    elseif(($commercial['program']??null)==='regular')$buttons[]=hache_sharky_orchestrator_button('action:human','Inscribirme');
-    return hache_sharky_orchestrator_decision('commercial_next_action',$message,['type'=>'buttons','buttons'=>$buttons]);
+        hache_sharky_orchestrator_button('action:human','Inscribirme'),
+    ]]);
+}
+
+function hache_sharky_whatsapp_registration_form_from_context(array $state,array $context,int $now,string $prefix='Perfecto.'): array
+{
+    if(!hache_sharky_whatsapp_commercial_ready($state)||($state['commercial_context']['program']??null)!=='intensive'){
+        return [$state,hache_sharky_orchestrator_decision('conversation',hache_sharky_whatsapp_commercial_ready_message($state,$prefix))];
+    }
+    $sede=(string)($state['commercial_context']['sede_clave']??'');
+    foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key)unset($state['commercial_context'][$key]);
+    [$state,$decision]=hache_sharky_orchestrator_registration_course_step($state,['sede_clave'=>$sede],$context,$now);
+    if(($decision['kind']??'')==='registration_course'){
+        $decision['message']=rtrim($prefix).' Completa en el formulario la fecha de inicio, el horario y tus datos para inscribirte.';
+    }
+    return [$state,$decision];
 }
 
 function hache_sharky_whatsapp_registration_offer_from_context(array $state,int $now,string $prefix='Perfecto.'): array
@@ -1024,6 +1088,17 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         if(trim((string)($event['interactive_id']??''))===''&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)&&($state['commercial_context']['program']??null)==='intensive'&&hache_sharky_whatsapp_registration_help_continuation((string)($event['text']??''))){
             [$state,$decision]=hache_sharky_whatsapp_registration_offer_from_context($state,(int)$context['now'],'Sí, puedo ayudarte yo desde aquí.');
             hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+            return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+        }
+
+        if(trim((string)($event['interactive_id']??''))==='action:register_intensive'
+            &&!is_array($state['flow']??null)
+            &&($state['identity']['kind']??'')==='prospect'
+            &&hache_sharky_whatsapp_commercial_ready($state)
+            &&($state['commercial_context']['program']??null)==='intensive'){
+            [$state,$decision]=hache_sharky_whatsapp_registration_form_from_context($state,$context,(int)($context['now']??time()),'Perfecto.');
+            hache_sharky_db_state_save($pdo,$contact,$state);
+            hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
             return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
 

@@ -153,14 +153,14 @@ function hache_sharky_followup_payload(string $contact,array $state,int $stage,s
 {
     [$program,$sede]=hache_sharky_followup_label($state);
     if($stage===1&&$program==='intensive'){
-        $message='¿Te gustaría que te ayude a iniciar la inscripción al curso intensivo en '.$sede.'?';
-        $buttons=[hache_sharky_followup_button('action:register_intensive','Inscribirme'),hache_sharky_followup_button('action:commercial_schedules','Horarios'),hache_sharky_followup_button('action:commercial_price','Precio')];
+        $message='¿Quieres continuar con la inscripción al curso intensivo en '.$sede.'?';
+        $buttons=[hache_sharky_followup_button('action:register_intensive','Inscribirme'),hache_sharky_followup_button('flow:pause','No por el momento')];
     }elseif($stage===1){
         $message='¿Quieres que te muestre horarios y precio de las clases regulares en '.$sede.'?';
         $buttons=[hache_sharky_followup_button('action:commercial_schedules','Horarios'),hache_sharky_followup_button('action:commercial_price','Precio')];
     }elseif($program==='intensive'){
-        $message='Si prefieres decidirlo con calma, también puedo mostrarte horarios y precio del curso intensivo en '.$sede.'. ¿Te los comparto?';
-        $buttons=[hache_sharky_followup_button('action:commercial_schedules','Horarios'),hache_sharky_followup_button('action:commercial_price','Precio')];
+        $message='Si todavía te interesa el curso intensivo en '.$sede.', puedes inscribirte desde aquí. Si prefieres dejarlo para después, no hay problema.';
+        $buttons=[hache_sharky_followup_button('action:register_intensive','Inscribirme'),hache_sharky_followup_button('flow:pause','No por el momento')];
     }else{
         $message='Si quieres, puedo dejarte aquí horarios y precio de las clases regulares en '.$sede.' para que los revises con calma. ¿Te los comparto?';
         $buttons=[hache_sharky_followup_button('action:commercial_schedules','Horarios'),hache_sharky_followup_button('action:commercial_price','Precio')];
