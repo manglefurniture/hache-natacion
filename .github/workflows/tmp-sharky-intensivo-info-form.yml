@@ -16,40 +16,25 @@ jobs:
         with:
           ref: feat/sharky-intensivo-info-form
           fetch-depth: 0
-      - name: Apply scoped Sharky changes
-        env:
-          PATCH_B64: >-
-            CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKCmRlZiByZXBsYWNlX29uY2UocGF0aCwgb2xkLCBuZXcsIGxhYmVsKToKICAgIHA9UGF0
-            aChwYXRoKQogICAgcz1wLnJlYWRfdGV4dCgpCiAgICBuPXMuY291bnQob2xkKQogICAgaWYgbiAhPSAxOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQo
-            ZiJ7bGFiZWx9OiBleHBlY3RlZCAxIG1hdGNoLCBnb3Qge259IikKICAgIHAud3JpdGVfdGV4dChzLnJlcGxhY2Uob2xkLCBuZXcsIDEpKQoKZGVmIHN1
-            Yl9vbmNlKHBhdGgsIHBhdHRlcm4sIHJlcGwsIGxhYmVsLCBmbGFncz1yZS5TKToKICAgIHA9UGF0aChwYXRoKQogICAgcz1wLnJlYWRfdGV4dCgpCiAg
-            ICBvdXQsIG49cmUuc3VibihwYXR0ZXJuLCByZXBsLCBzLCBjb3VudD0xLCBmbGFncz1mbGFncykKICAgIGlmIG4gIT0gMToKICAgICAgICByYWlzZSBT
-            eXN0ZW1FeGl0KGYie2xhYmVsfTogZXhwZWN0ZWQgMSBtYXRjaCwgZ290IHtufSIpCiAgICBwLndyaXRlX3RleHQob3V0KQoKcmVwbGFjZV9vbmNlKAog
-            ICAgImNvbmZpZy9zaGFya3ktd2hhdHNhcHAtYWRhcHRlci5waHAiLAogICAgInJlcXVpcmVfb25jZSBfX0RJUl9fLicvc2hhcmt5LW9yY2hlc3RyYXRv
-            ci1kYi5waHAnO1xucmVxdWlyZV9vbmNlIF9fRElSX18uJy9zaGFya3ktY29tbWVyY2lhbC1tZW1vcnkucGhwJzsiLAogICAgInJlcXVpcmVfb25jZSBf
-            X0RJUl9fLicvc2hhcmt5LW9yY2hlc3RyYXRvci1kYi5waHAnO1xucmVxdWlyZV9vbmNlIF9fRElSX18uJy9zaGFya3ktY29tbWVyY2lhbC1tZW1vcnku
-            cGhwJztcbnJlcXVpcmVfb25jZSBfX0RJUl9fLicvc2hhcmt5LWRldGVybWluaXN0aWMtcmVwbGllcy5waHAnOyIsCiAgICAiYWRhcHRlciBkZXRlcm1p
-            bmlzdGljIGluY2x1ZGUiLAopCgpuZXdfYmxvY2sgPSByJycnZnVuY3Rpb24gaGFjaGVfc2hhcmt5X3doYXRzYXBwX2ludGVuc2l2ZV9pbmZvcm1hdGlv
-            bl9tZXNzYWdlKGFycmF5ICRzdGF0ZSxzdHJpbmcgJHByZWZpeD0nUGVyZmVjdG8uJyk6IHN0cmluZwp7CiAgICAkY29tbWVyY2lhbD1pc19hcnJheSgk
-            c3RhdGVbJ2NvbW1lcmNpYWxfY29udGV4dCddPz9udWxsKT8kc3RhdGVbJ2NvbW1lcmNpYWxfY29udGV4dCddOltdOwogICAgJHNlZGU9KHN0cmluZyko
-            JGNvbW1lcmNpYWxbJ3NlZGVfY2xhdmUnXT8/JycpOwogICAgaWYoKCRjb21tZXJjaWFsWydwcm9ncmFtJ10/P251bGwpIT09J2ludGVuc2l2ZSd8fCFp
-            bl9hcnJheSgkc2VkZSxbJ01PTlRFVkVSREUnLCdQQUxBUEFTJ10sdHJ1ZSkpewogICAgICAgIHJldHVybiBoYWNoZV9zaGFya3lfd2hhdHNhcHBfY29t
-            bWVyY2lhbF9yZWFkeV9tZXNzYWdlKCRzdGF0ZSwkcHJlZml4KTsKICAgIH0KCiAgICAkc2VkZUxhYmVsPWhhY2hlX3NoYXJreV93aGF0c2FwcF92ZW51
-            ZV9sYWJlbCgkc2VkZSk7CiAgICAkcGRvPWhhY2hlX3NoYXJreV9wZG8oKTsKICAgICRidXNpbmVzcz1oYWNoZV9zaGFya3lfYnVzaW5lc3NfdmFsdWVz
-            KCRwZG8gaW5zdGFuY2VvZiBQRE8/JHBkbzpudWxsKTsKICAgICRzZWxlY3RlZD0kY29tbWVyY2lhbFsnY291cnNlX3ByaWNlJ10/Pygkc3RhdGVbJ3Nl
-            bGVjdGVkX2NvdXJzZV9wcmljZSddPz9udWxsKTsKICAgICRwcmljZT1pc19udW1lcmljKCRzZWxlY3RlZCkKICAgICAgICA/KGZsb2F0KSRzZWxlY3Rl
-            ZAogICAgICAgIDooZmxvYXQpaGFjaGVfc2hhcmt5X2NvbmZpZ19pbnQoJGJ1c2luZXNzLCdzaGFya3lfcHJlY2lvX2ludGVuc2l2bycsMTIwMCwwLDEw
-            MDAwMCk7CiAgICAkcHJpY2VUZXh0PW51bWJlcl9mb3JtYXQoJHByaWNlLDAsJy4nLCcsJyk7CgogICAgJG1lc3NhZ2U9cnRyaW0oJHByZWZpeCkuJyBF
-            biAnLiRzZWRlTGFiZWwuJywglbMgY3Vyc28gaW50ZW5zaXZvIHRpZW5lIHVuIHByZWNpbyB0b3RhbCBkZSAkJy4kcHJpY2VUZXh0LicgTVhOLiBFcyB1
-            biBzb2xvIHBhZ28gcG9yIGVsIGN1cnNvIGNvbXBsZXRvLic7CiAgICAkaG91cnM9W107CiAgICBpZigkcGRvIGluc3RhbmNlb2YgUERPKXsKICAgICAg
-            ICB0cnl7JGhvdXJzPWhhY2hlX3NoYXJreV9kZXRlcm1pbmlzdGljX2FjdGl2ZV9zY2hlZHVsZXMoJHBkbywnaW50ZW5zaXZlJywkc2VkZSk7fWNhdGNo
-            KFRocm93YWJsZSAkaWdub3JlZCl7fQogICAgfQogICAgaWYoJGhvdXJzKXsKICAgICAgICAkbWVzc2FnZS49IlxuXG5Ib3JhcmlvcyBkaXNwb25pYmxl
-            czpcbiIuaW1wbG9kZSgiXG4iLGFycmF5X21hcChzdGF0aWMgZm4oc3RyaW5nICRob3VyKTpzdHJpbmc9Pic4oCAnLiRob3VyLCRob3VycykpOwogICAg
-            fWVsc2VpZigkcGRvIGluc3RhbmNlb2YgUERPKXsKICAgICAgICAkbWVzc2FnZS49IlxuXG5BaG9yYSBtaXNtbyBubyBlbmN1ZW50cm8gaG9yYXJpb3Mg
-            YWN0aXZvcyBwYXJhIGVzdGEgc2VkZS4iOwogICAgfWVsc2V7CiAgICAgICAgJG1lc3NhZ2UuPSJcblxuTm8gcHVkZSBjb25zdWx0YXIgbG9zIGhvcmFy
-            aW9zIGFjdGl2b3MgZW4gZXN0ZSBtb21lbnRvLiBQcmVmaWVybyBubyBpbnZlbnRhcnRlIGRhdG9zLiI7CiAgICB9CiAgICByZXR1cm4gJG1lc3NhZ2U7
-            Cn0KCmZ1bmN0aW9uIGhhY2hlX3NoYXJreV93aGF0c2FwcF9jb21tZXJjaWFsX25leHRfYWN0aW9uKGFycmF5ICRzdGF0ZSxzdHJpbmcgJHByZWZpeD0n
-            UGVyZmVjdG8uJyk6IGFycmF5CnsKICAgICRjb21tZXJjaWFsPWlzX2FycmF5KCRzdGF0ZVsnY29tbWVyY2lhbF9jb250ZXh0J10/P251bGwpPyRzdGF0
-            ZVsnY29tbWVyY2lhbF9jb250ZXh0J106W107CiAgICBpZigoJGNvbW1lcmNpYWxbJ3Byb2dyYW0nXT8/bnVsbCk9PT0naW50ZW5zaXZlJyl7CiAgICAg
-            ICAgJG1lc3NhZ2U9aGFjaGVfc2hhcmt5X3doYXRzYXBwX2ludGVuc2l2ZV9pbmZvcm1hdGlvbl9tZXNzYWdlKCRzdGF0ZSwkcHJlZml4KTsKICAgICAg
-            ICBidXR0b25zPVtcaHRleHRcXHJcXGhcXHdcXGYKVFJVTkNBVEQ=
+      - name: Apply patch when ready
+        run: |
+          if [ ! -f .tmp-sharky-patch-ready ]; then
+            echo "Patch parts not ready yet"
+            exit 0
+          fi
+          python .tmp-sharky-patch-adapter.py
+          python .tmp-sharky-patch-followup.py
+          python .tmp-sharky-patch-tests.py
+          php -l config/sharky-whatsapp-adapter.php
+          php -l config/sharky-whatsapp-batching.php
+          php -l config/sharky-followup.php
+          php tests/sharky-commercial-next-action-regression.php
+          php tests/sharky-followup-regression.php
+          php tests/sharky-batch-context-regression.php
+          php tests/sharky-guided-onboarding-regression.php
+          rm -f .tmp-sharky-patch-ready .tmp-sharky-patch-adapter.py .tmp-sharky-patch-followup.py .tmp-sharky-patch-tests.py .github/workflows/tmp-sharky-intensivo-info-form.yml
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git add -A
+          git commit -m "feat: simplificar conversión de prospectos intensivos"
+          git push origin HEAD:feat/sharky-intensivo-info-form
