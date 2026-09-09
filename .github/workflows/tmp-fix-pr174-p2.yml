@@ -1,0 +1,82 @@
+name: Temporary fix PR174 P2 emoji policy
+
+on:
+  push:
+    branches: [fix/sharky-pr174-p2-emoji-policy]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    if: ${{ !contains(github.event.head_commit.message, '[p2-emoji-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/sharky-pr174-p2-emoji-policy
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Apply P2 fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected 1 occurrence, found {count}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          adapter = 'config/sharky-whatsapp-adapter.php'
+          replace_once(
+              adapter,
+              'Separa precios de horarios. Puedes usar un emoji funcional en un encabezado (por ejemplo 📍, 🕐, 💰 o ✅), pero no en cada línea ni como infografía. No inventes horarios, precios ni disponibilidad:',
+              'Separa precios de horarios. No inventes horarios, precios ni disponibilidad:'
+          )
+          replace_once(
+              adapter,
+              "Cuando menciones la sede MONTEVERDE al usuario, llámala siempre Colegio Monteverde.';\n    $latest=$state['referral']['latest']??null;",
+              "Cuando menciones la sede MONTEVERDE al usuario, llámala siempre Colegio Monteverde.';\n    $identityKind=(string)($state['identity']['kind']??'unknown');\n    if($identityKind==='student'){\n        $instruction.=' En mensajes operativos para alumnos registrados, usa normalmente de 1 a 3 emojis funcionales cuando aporten claridad; evita saturar o convertir la respuesta en una infografía.';\n    }else{\n        $instruction.=' En orientación comercial para prospectos, usa de 2 a 5 emojis funcionales y naturales por respuesta para dar un tono más alegre sin saturar; evita poner un emoji en cada línea.';\n    }\n    $latest=$state['referral']['latest']??null;"
+          )
+          replace_once(adapter, "if($lead==='Perfecto.')$lead='¡Perfecto! 🏊‍♂️';", "if($lead==='Perfecto.')$lead='¡Perfecto!';")
+
+          flows = 'config/sharky-commerce-flows.php'
+          replace_once(
+              flows,
+              "hache_sharky_whatsapp_commercial_next_action($state,'Entendido 😊 Cancelé el formulario. Conservé tu curso y sede.')",
+              "hache_sharky_whatsapp_commercial_next_action($state,'Entendido. Cancelé el formulario. Conservé tu curso y sede.')"
+          )
+
+          test = 'tests/sharky-commercial-next-action-regression.php'
+          replace_once(
+              test,
+              "foreach(['🏊‍♂️','📍','💰','✅','🕒','✍️'] as $emoji){",
+              "foreach(['📍','💰','✅','🕒','✍️'] as $emoji){"
+          )
+          replace_once(
+              test,
+              "}\n\n// Schedule/price buttons deliberately remain contextual questions:",
+              "}\ncommercial_next_ok(!str_contains($intensiveMessage,'🏊‍♂️'),'Deterministic intensive reply must stay within the five-emoji prospect policy.');\n\n$prospectStyle=hache_sharky_whatsapp_style_instruction(['kind'=>'conversation'],$state);\ncommercial_next_ok(str_contains($prospectStyle,'2 a 5 emojis'),'Base WhatsApp instruction must align with the prospect emoji policy.');\n$studentState=$state;\n$studentState['identity']['kind']='student';\n$studentStyle=hache_sharky_whatsapp_style_instruction(['kind'=>'conversation'],$studentState);\ncommercial_next_ok(str_contains($studentStyle,'1 a 3 emojis'),'Base WhatsApp instruction must use the contained emoji policy for registered students.');\ncommercial_next_ok(!str_contains($studentStyle,'2 a 5 emojis'),'Student instruction must not inherit the prospect emoji range.');\n$flowsSource=file_get_contents(__DIR__.'/../config/sharky-commerce-flows.php')?:'';\ncommercial_next_ok(!str_contains($flowsSource,'Entendido 😊 Cancelé el formulario'),'Cancellation copy must not add a sixth decorative emoji.');\n\n// Schedule/price buttons deliberately remain contextual questions:"
+          )
+          PY
+
+      - name: Validate targeted regressions
+        run: |
+          php -l config/sharky-whatsapp-adapter.php
+          php -l config/sharky-commerce-flows.php
+          php tests/sharky-commercial-next-action-regression.php
+          php tests/sharky-commerce-flows-regression.php
+          php tests/sharky-context-drift-regression.php
+
+      - name: Commit fixes
+        run: |
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git add config/sharky-whatsapp-adapter.php config/sharky-commerce-flows.php tests/sharky-commercial-next-action-regression.php
+          git commit -m "fix: alinear política de emojis de Sharky [p2-emoji-fix]"
+          git push origin HEAD:fix/sharky-pr174-p2-emoji-policy
