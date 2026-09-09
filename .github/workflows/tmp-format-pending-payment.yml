@@ -1,0 +1,86 @@
+name: Temporary format pending payment
+
+on:
+  push:
+    branches: [fix/sharky-pending-payment-priority]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/sharky-pending-payment-priority
+          fetch-depth: 0
+      - name: Gate
+        id: gate
+        run: |
+          if git log -1 --pretty=%B | grep -Fq '[pending-payment-format]'; then echo "skip=true" >> "$GITHUB_OUTPUT"; else echo "skip=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Format touched blocks
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path); text=p.read_text(); n=text.count(old)
+              if n!=1: raise SystemExit(f'{path}: expected 1 occurrence, found {n}')
+              p.write_text(text.replace(old,new,1))
+
+          replace_once('config/sharky-member-routing.php',
+          """        if(hache_sharky_member_pending_registration($student)){
+    if(!hache_sharky_member_pending_schedule_problem($text)){
+        $paymentPayload=hache_sharky_member_pending_payment_payload($contact,$student);
+        if(is_array($paymentPayload))return hache_sharky_member_queue($pdo,$contact,$event,$state,$paymentPayload,'student-pending-payment');
+    }
+    $body=hache_sharky_member_pending_message($student,$text,$intent);
+    $payload=hache_sharky_whatsapp_text_payload($contact,$body);
+    return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
+}
+""",
+          """        if(hache_sharky_member_pending_registration($student)){
+            if(!hache_sharky_member_pending_schedule_problem($text)){
+                $paymentPayload=hache_sharky_member_pending_payment_payload($contact,$student);
+                if(is_array($paymentPayload))return hache_sharky_member_queue($pdo,$contact,$event,$state,$paymentPayload,'student-pending-payment');
+            }
+            $body=hache_sharky_member_pending_message($student,$text,$intent);
+            $payload=hache_sharky_whatsapp_text_payload($contact,$body);
+            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
+        }
+""")
+
+          replace_once('config/sharky-member-payments.php',
+          """    if($id==='member:pay'){
+    // Reopening payment choice clears only a stale SPEI-proof wait so
+    // an unpaid student can safely change method without changing the debt.
+    $state=hache_sharky_member_payment_restart_state(hache_sharky_member_payment_current_state($pdo,$contact),time());
+    $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
+    return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method',$state);
+}
+""",
+          """    if($id==='member:pay'){
+        // Reopening payment choice clears only a stale SPEI-proof wait so
+        // an unpaid student can safely change method without changing the debt.
+        $state=hache_sharky_member_payment_restart_state(hache_sharky_member_payment_current_state($pdo,$contact),time());
+        $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
+        return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method',$state);
+    }
+""")
+          PY
+      - name: Validate
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          php -l config/sharky-member-payments.php
+          php -l config/sharky-member-routing.php
+          php tests/sharky-member-ops-regression.php
+      - name: Commit
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git add config/sharky-member-payments.php config/sharky-member-routing.php
+          git commit -m "style: ordenar bloques de pago pendiente [pending-payment-format]"
+          git push origin HEAD:fix/sharky-pending-payment-priority
