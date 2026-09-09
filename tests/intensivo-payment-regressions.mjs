@@ -114,7 +114,7 @@ assert.ok(paymentPage.includes('/api/alumno-intensivos-pago.php?'));
 assert.ok(paymentPage.includes("if(tipo==='INTENSIVO')datos.curso_intensivo_id=cursoId"));
 assert.ok(paymentPage.includes("option.dataset.balance=curso.saldo??curso.precio??''"));
 assert.ok(paymentPage.includes("option.disabled=curso.pagado===true"));
-assert.ok(paymentPage.includes('ANTICIPO '+money(curso.pagado_total)));
+assert.ok(paymentPage.includes("'ANTICIPO '+money(curso.pagado_total)"));
 assert.ok(paymentPage.includes("query.get('curso_intensivo_id')"));
 assert.ok(paymentPage.includes("query.get('curso_id')"));
 assert.match(historicalPaymentCourses, /WHERE cia\.alumno_id=:a AND ci\.sede_id=:s/);
