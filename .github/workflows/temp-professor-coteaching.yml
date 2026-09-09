@@ -1,0 +1,239 @@
+name: Temp professor co-teaching patch
+
+on:
+  push:
+    branches: [feat/profesor-coteaching-20260909]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/profesor-coteaching-20260909
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Apply professor co-teaching changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'missing replacement target: {label}')
+              return text.replace(old, new, 1)
+
+          p=Path('config/sharky-member-ops.php')
+          text=p.read_text()
+
+          new_sessions=r'''function hache_sharky_member_teacher_sessions(PDO $pdo,string $teacherId,string $from,string $to): array
+          {
+              $st=$pdo->prepare("SELECT se.id session_id,se.fecha,se.estado,se.motivo_cancelacion,se.cerrada,h.id horario_id,h.hora_inicio,h.hora_fin,s.clave sede_clave,s.nombre sede_nombre,pc.id teacher_cancel_id,pc.motivo teacher_cancel_reason FROM profesor_horarios ph JOIN horarios h ON h.id=ph.horario_id JOIN sedes s ON s.id=h.sede_id JOIN sesiones se ON se.horario_id=h.id LEFT JOIN profesor_cancelaciones pc ON pc.profesor_id=ph.profesor_id AND pc.sesion_id=se.id WHERE ph.profesor_id=:p AND ph.activo=1 AND h.activo=1 AND se.fecha BETWEEN :d AND :h ORDER BY se.fecha,h.hora_inicio LIMIT 20");
+              $st->execute([':p'=>$teacherId,':d'=>$from,':h'=>$to]);return $st->fetchAll(PDO::FETCH_ASSOC);
+          }'''
+          text,n=re.subn(r"function hache_sharky_member_teacher_sessions\(PDO \$pdo,string \$teacherId,string \$from,string \$to\): array\n\{.*?\n\}\n\nfunction hache_sharky_member_cancel_teacher_session",new_sessions+"\n\nfunction hache_sharky_member_cancel_teacher_session",text,count=1,flags=re.S)
+          if n!=1: raise SystemExit('teacher sessions function replacement failed')
+
+          new_cancel=r'''function hache_sharky_member_cancel_teacher_session(PDO $pdo,string $teacherId,string $sessionId,string $reason,string $actionKey): array
+          {
+              $reason=preg_replace('/\\s+/u',' ',trim($reason))??'';if($reason===''||mb_strlen($reason)>500)throw new HacheSharkyBusinessException('El motivo es obligatorio y no puede exceder 500 caracteres.','INVALID_REASON',422);
+              $actor=hache_sharky_business_actor_id($pdo);
+              $pdo->beginTransaction();
+              try{
+                  $st=$pdo->prepare("SELECT se.id,se.fecha,se.horario_id,se.estado,se.cerrada,h.sede_id FROM sesiones se JOIN horarios h ON h.id=se.horario_id JOIN profesor_horarios ph ON ph.horario_id=h.id AND ph.profesor_id=:p AND ph.activo=1 JOIN profesores pr ON pr.id=ph.profesor_id AND pr.activo=1 WHERE se.id=:s LIMIT 1 FOR UPDATE");
+                  $st->execute([':p'=>$teacherId,':s'=>$sessionId]);$session=$st->fetch(PDO::FETCH_ASSOC);
+                  if(!$session)throw new HacheSharkyBusinessException('Esa clase no está asignada al profesor o ya no existe.','TEACHER_SESSION_SCOPE',403);
+                  $existing=$pdo->prepare("SELECT id FROM profesor_cancelaciones WHERE profesor_id=:p AND sesion_id=:s LIMIT 1 FOR UPDATE");$existing->execute([':p'=>$teacherId,':s'=>$sessionId]);
+                  if($existing->fetchColumn()){$pdo->rollBack();return ['ok'=>true,'duplicate'=>true,'class_cancelled'=>(string)$session['estado']==='CANCELADA','session_id'=>$sessionId,'remaining_teachers'=>0,'reposiciones_intensivo_generadas'=>0,'code'=>'TEACHER_ALREADY_UNAVAILABLE'];}
+                  if((string)$session['estado']==='CANCELADA'){$pdo->rollBack();return ['ok'=>true,'duplicate'=>true,'class_cancelled'=>true,'session_id'=>$sessionId,'remaining_teachers'=>0,'reposiciones_intensivo_generadas'=>0,'code'=>'ALREADY_CANCELLED'];}
+                  if((int)($session['cerrada']??0)===1)throw new HacheSharkyBusinessException('Esa clase ya fue cerrada y no puede modificarse desde Sharky.','SESSION_ALREADY_CLOSED',409);
+
+                  $id=(string)$pdo->query('SELECT UUID()')->fetchColumn();$st=$pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,action_key) VALUES(:id,:p,:s,:m,'SHARKY',:a)");$st->execute([':id'=>$id,':p'=>$teacherId,':s'=>$sessionId,':m'=>$reason,':a'=>hash('sha256',$actionKey)]);
+
+                  $coverage=$pdo->prepare("SELECT COUNT(*) FROM profesor_horarios ph JOIN profesores pr ON pr.id=ph.profesor_id AND pr.activo=1 LEFT JOIN profesor_cancelaciones pc ON pc.profesor_id=ph.profesor_id AND pc.sesion_id=:s WHERE ph.horario_id=:h AND ph.activo=1 AND pc.id IS NULL");
+                  $coverage->execute([':s'=>$sessionId,':h'=>$session['horario_id']]);$remaining=(int)$coverage->fetchColumn();
+                  if($remaining>0){$pdo->commit();return ['ok'=>true,'duplicate'=>false,'class_cancelled'=>false,'session_id'=>$sessionId,'remaining_teachers'=>$remaining,'reposiciones_intensivo_generadas'=>0,'code'=>'TEACHER_UNAVAILABLE'];}
+
+                  $st=$pdo->prepare("UPDATE sesiones SET estado='CANCELADA',motivo_cancelacion=:m,cerrada=1,fecha_cierre=NOW(),cerrada_por=:u WHERE id=:s AND estado<>'CANCELADA' AND cerrada=0");
+                  $st->execute([':m'=>$reason,':u'=>$actor,':s'=>$sessionId]);if($st->rowCount()!==1)throw new HacheSharkyBusinessException('La clase cambió de estado antes de confirmar.','SESSION_CHANGED',409);
+                  $repos=0;
+                  if(!empty($session['horario_id'])){$r=$pdo->prepare("UPDATE curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id SET cia.reposiciones_cancelacion=cia.reposiciones_cancelacion+1 WHERE cia.horario_id=:h AND ci.sede_id=:site AND ci.estado IN ('PROGRAMADO','EN_CURSO') AND :f BETWEEN ci.fecha_inicio AND ci.fecha_fin");$r->execute([':h'=>$session['horario_id'],':site'=>$session['sede_id'],':f'=>$session['fecha']]);$repos=$r->rowCount();}
+                  $pdo->commit();return ['ok'=>true,'duplicate'=>false,'class_cancelled'=>true,'session_id'=>$sessionId,'remaining_teachers'=>0,'reposiciones_intensivo_generadas'=>$repos,'code'=>'SESSION_CANCELLED'];
+              }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+          }'''
+          text,n=re.subn(r"function hache_sharky_member_cancel_teacher_session\(PDO \$pdo,string \$teacherId,string \$sessionId,string \$reason,string \$actionKey\): array\n\{.*?\n\}\n\nfunction hache_sharky_member_execute_teacher_cancel",new_cancel+"\n\nfunction hache_sharky_member_execute_teacher_cancel",text,count=1,flags=re.S)
+          if n!=1: raise SystemExit('teacher cancellation function replacement failed')
+
+          new_execute=r'''function hache_sharky_member_execute_teacher_cancel(PDO $pdo,string $contact,array $action,string $idempotencyKey): array
+          {
+              $teacherId=trim((string)($action['teacher_id']??''));$sessionId=trim((string)($action['session_id']??''));
+              if(($action['requires_revalidation']??false)!==true)return ['ok'=>false,'code'=>'REVALIDATION_REQUIRED','message'=>'El cambio necesita revalidación.'];
+              $contactHash=hache_sharky_orchestrator_contact_hash($contact);$existing=hache_sharky_action_recovery_status($pdo,$idempotencyKey);
+              if($existing&&(string)$existing['status']==='COMPLETED')return ['ok'=>true,'duplicate'=>true,'code'=>(string)($existing['result_code']??'ALREADY_COMPLETED'),'message'=>(string)($existing['result_message']??'Ese cambio ya había sido procesado.'),'result'=>$existing['result']??null];
+              $owner=null;if(!hache_sharky_action_recovery_claim($pdo,$idempotencyKey,'cancel_teacher_session',$contactHash,null,$action,$owner)||!is_string($owner)||$owner==='')return ['ok'=>false,'retryable'=>true,'code'=>'ACTION_CLAIM_FAILED','message'=>'No pude asegurar el cambio.'];
+              try{
+                  $identity=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);if(($identity['found']??false)!==true||(string)$identity['teacher_id']!==$teacherId)throw new HacheSharkyBusinessException('No pude revalidar la identidad del profesor.','TEACHER_IDENTITY_MISMATCH',403);
+                  $result=hache_sharky_member_cancel_teacher_session($pdo,$teacherId,$sessionId,(string)($action['reason']??''),$idempotencyKey);$code=(string)($result['code']??'TEACHER_UNAVAILABLE');$remaining=(int)($result['remaining_teachers']??0);
+                  if($code==='TEACHER_UNAVAILABLE')$message='Listo. Registré que no podrás asistir. La clase sigue programada porque '.($remaining===1?'queda otro profesor asignado.':'quedan '.$remaining.' profesores asignados.');
+                  elseif($code==='SESSION_CANCELLED')$message='Listo. Registré que no podrás asistir y, como ya no queda otro profesor disponible, la clase quedó cancelada. El cambio ya está visible para los alumnos.';
+                  elseif($code==='TEACHER_ALREADY_UNAVAILABLE')$message='Ya estaba registrado que no asistirás a esa clase.';
+                  elseif($code==='ALREADY_CANCELLED')$message='Esa clase ya estaba cancelada.';
+                  else $message='Listo. El cambio quedó registrado.';
+                  if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,$code,$result,$message,$owner))return hache_sharky_action_audit_pending_result();
+                  return ['ok'=>true,'code'=>$code,'message'=>$message,'result'=>$result];
+              }catch(HacheSharkyBusinessException $e){hache_sharky_action_recovery_finish($pdo,$idempotencyKey,false,$e->codeName,null,$e->getMessage(),$owner);return ['ok'=>false,'code'=>$e->codeName,'message'=>$e->getMessage()];}
+              catch(Throwable $e){hache_sharky_action_recovery_finish($pdo,$idempotencyKey,false,'INTERNAL',null,'No se pudo registrar el cambio.',$owner);return ['ok'=>false,'code'=>'INTERNAL','message'=>'No se pudo registrar el cambio.'];}
+          }'''
+          text,n=re.subn(r"function hache_sharky_member_execute_teacher_cancel\(PDO \$pdo,string \$contact,array \$action,string \$idempotencyKey\): array\n\{.*?\n\}\n\nfunction hache_sharky_member_parse_date",new_execute+"\n\nfunction hache_sharky_member_parse_date",text,count=1,flags=re.S)
+          if n!=1: raise SystemExit('teacher execute function replacement failed')
+
+          text=replace_once(text,"$payload=hache_sharky_member_buttons($contact,'Voy a cancelar esa clase y avisaremos a los alumnos del turno. ¿Confirmas?',[['id'=>'member:tc_confirm','title'=>'Sí, cancelar'],['id'=>'member:tc_abort','title'=>'No']]);","$payload=hache_sharky_member_buttons($contact,'Voy a registrar que no podrás asistir a esa clase. Si queda otro profesor asignado, la clase seguirá programada; si no queda ninguno, se cancelará y avisaremos a los alumnos. ¿Confirmas?',[['id'=>'member:tc_confirm','title'=>'Sí, confirmar'],['id'=>'member:tc_abort','title'=>'No']]);",'teacher confirmation copy')
+          text=replace_once(text,"if((string)$s['session_id']===$sessionId&&(int)($s['cerrada']??0)===0){$match=$s;break;}","if((string)$s['session_id']===$sessionId&&(int)($s['cerrada']??0)===0&&empty($s['teacher_cancel_id'])){$match=$s;break;}",'teacher stale button revalidation')
+          text=replace_once(text,"$payload=hache_sharky_whatsapp_text_payload($contact,'Cuéntame brevemente el motivo de la cancelación.');","$payload=hache_sharky_whatsapp_text_payload($contact,'Cuéntame brevemente por qué no podrás asistir.');",'teacher reason copy')
+          text=replace_once(text,"if((string)$s['estado']==='CANCELADA'||(int)($s['cerrada']??0)===1)continue;","if((string)$s['estado']==='CANCELADA'||(int)($s['cerrada']??0)===1||!empty($s['teacher_cancel_id']))continue;",'teacher cancel list coverage')
+          text=replace_once(text,"$payload=$rows?hache_sharky_member_list($contact,'¿Qué clase quieres cancelar? Solo te muestro tus turnos asignados.','Elegir clase',$rows):hache_sharky_whatsapp_text_payload($contact,'No encuentro clases activas asignadas a ti en los próximos 7 días.');","$payload=$rows?hache_sharky_member_list($contact,'¿A cuál clase no podrás asistir? Solo te muestro tus turnos asignados.','Elegir clase',$rows):hache_sharky_whatsapp_text_payload($contact,'No encuentro clases pendientes de confirmar contigo en los próximos 7 días.');",'teacher list copy')
+          old_line="$todayRows=array_values(array_filter($sessions,static fn(array $s):bool=>(string)$s['fecha']===$today));$lines=[];foreach($todayRows as $s)$lines[]=substr((string)$s['hora_inicio'],0,5).' · '.(string)$s['sede_nombre'].' · '.((string)$s['estado']==='CANCELADA'?'CANCELADA':((int)($s['cerrada']??0)===1?'cerrada':'programada'));$body='¡Hola, '.(preg_split('/\\s+/u',$name)[0]??$name).'! 👋'.($lines?\"\\n\\nHoy tienes:\\n• \".implode(\"\\n• \",$lines):' Hoy no encuentro sesiones asignadas a ti.');$payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:teacher_agenda','title'=>'Mi agenda'],['id'=>'member:teacher_cancel','title'=>'Cancelar clase']]);"
+          new_line="$todayRows=array_values(array_filter($sessions,static fn(array $s):bool=>(string)$s['fecha']===$today));$lines=[];foreach($todayRows as $s){$status=!empty($s['teacher_cancel_id'])?'NO ASISTIRÁS':((string)$s['estado']==='CANCELADA'?'CANCELADA':((int)($s['cerrada']??0)===1?'cerrada':'programada'));$lines[]=substr((string)$s['hora_inicio'],0,5).' · '.(string)$s['sede_nombre'].' · '.$status;}$body='¡Hola, '.(preg_split('/\\s+/u',$name)[0]??$name).'! 👋'.($lines?\"\\n\\nHoy tienes:\\n• \".implode(\"\\n• \",$lines):' Hoy no encuentro sesiones asignadas a ti.');$payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:teacher_agenda','title'=>'Mi agenda'],['id'=>'member:teacher_cancel','title'=>'No podré asistir']]);"
+          text=replace_once(text,old_line,new_line,'teacher home status')
+          p.write_text(text)
+
+          Path('database/migrations/20260909_professor_coteaching.sql').write_text('''-- Professors can share the same class. A cancellation row now means that\n-- one professor cannot attend a session; the session is cancelled only when\n-- no active assigned professor remains available.\n\nDROP INDEX IF EXISTS uq_profesor_cancelacion_sesion ON profesor_cancelaciones;\nCREATE UNIQUE INDEX IF NOT EXISTS uq_profesor_cancelacion_profesor_sesion\n  ON profesor_cancelaciones (profesor_id, sesion_id);\n''')
+
+          Path('bin/migrate-professor-coteaching.php').write_text(r'''<?php
+          declare(strict_types=1);
+          require_once __DIR__.'/../config/sharky-activation.php';
+          if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
+          $root=dirname(__DIR__);
+          try{
+              /** @var PDO $pdo */
+              $pdo=require $root.'/config/pdo.php';
+              $lock=(int)$pdo->query("SELECT GET_LOCK('hache_professor_coteaching_migration',10)")->fetchColumn();
+              if($lock!==1)throw new RuntimeException('Could not acquire professor co-teaching migration lock.');
+              try{
+                  $file=$root.'/database/migrations/20260909_professor_coteaching.sql';
+                  $sql=file_get_contents($file);if(!is_string($sql))throw new RuntimeException('Unable to read professor co-teaching migration.');
+                  foreach(hache_sharky_activation_split_sql($sql) as $statement)$pdo->exec($statement);
+                  $st=$pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_profesor_sesion' AND non_unique=0");$st->execute();
+                  if((int)$st->fetchColumn()!==2)throw new RuntimeException('Professor co-teaching unique index verification failed.');
+                  $old=$pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_sesion'");$old->execute();
+                  if((int)$old->fetchColumn()!==0)throw new RuntimeException('Legacy session-only professor cancellation index is still present.');
+                  fwrite(STDOUT,"PROFESSOR_COTEACHING_MIGRATION_OK\n");
+              }finally{try{$pdo->query("SELECT RELEASE_LOCK('hache_professor_coteaching_migration')");}catch(Throwable $e){}}
+          }catch(Throwable $e){fwrite(STDERR,'Professor co-teaching migration: '.$e->getMessage().PHP_EOL);exit(1);}
+          ''')
+
+          p=Path('bin/migrate-sharky-orchestrator.php'); t=p.read_text()
+          t=replace_once(t,"['table'=>'profesor_cancelaciones','index'=>'uq_profesor_cancelacion_sesion'],","['table'=>'profesor_cancelaciones','index'=>'uq_profesor_cancelacion_profesor_sesion'],",'orchestrator unique verification')
+          t=replace_once(t,"    $root.'/database/migrations/20260907_sharky_member_payments.sql',\n","    $root.'/database/migrations/20260907_sharky_member_payments.sql',\n    $root.'/database/migrations/20260909_professor_coteaching.sql',\n",'orchestrator migration list')
+          p.write_text(t)
+
+          p=Path('ops/production-readiness/deploy-hache-natacion'); t=p.read_text()
+          t=replace_once(t,"  if [[ -f \"$partial_payments\" ]]; then\n    php \"$partial_payments\"\n  fi\n","  if [[ -f \"$partial_payments\" ]]; then\n    php \"$partial_payments\"\n  fi\n  local professor_coteaching=\"$REPO/bin/migrate-professor-coteaching.php\"\n  if [[ -f \"$professor_coteaching\" ]]; then\n    php \"$professor_coteaching\"\n  fi\n",'deploy migration hook')
+          p.write_text(t)
+
+          p=Path('public/profesores.php'); t=p.read_text()
+          t=replace_once(t,'Registra el WhatsApp del profe y asigna únicamente los horarios que puede operar desde Sharky.','Registra el WhatsApp del profe. Puedes asignarle varios horarios y también tener varios profes en el mismo horario.', 'professor UI guidance')
+          p.write_text(t)
+
+          p=Path('tests/sharky-member-ops-mariadb.php'); t=p.read_text()
+          t=replace_once(t,"$apply($pdo,$root.'/database/migrations/20260907_sharky_member_payments.sql');\n","$apply($pdo,$root.'/database/migrations/20260907_sharky_member_payments.sql');\n$apply($pdo,$root.'/database/migrations/20260909_professor_coteaching.sql');\n",'member mariadb migration apply')
+          old=r'''$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo,created_by) VALUES(UUID(),:p,:h,1,:u)")->execute([':p'=>$teacher,':h'=>$schedule,':u'=>$admin]);
+          $duplicateAssignmentBlocked=false;
+          try{$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo) VALUES(UUID(),:p,:h,1)")->execute([':p'=>$teacher,':h'=>$schedule]);}catch(PDOException $e){$duplicateAssignmentBlocked=true;}
+          member_db_expect($duplicateAssignmentBlocked,'Professor/schedule assignment must be unique.');
+
+          $pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,action_key) VALUES(UUID(),:p,:s,'Prueba','SHARKY',:a)")->execute([':p'=>$teacher,':s'=>$session,':a'=>str_repeat('a',64)]);
+          $duplicateCancellationBlocked=false;
+          try{$pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo) VALUES(UUID(),:p,:s,'Otra')")->execute([':p'=>$teacher,':s'=>$session]);}catch(PDOException $e){$duplicateCancellationBlocked=true;}
+          member_db_expect($duplicateCancellationBlocked,'One session must have at most one professor cancellation audit row.');'''
+          new=r'''$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo,created_by) VALUES(UUID(),:p,:h,1,:u)")->execute([':p'=>$teacher,':h'=>$schedule,':u'=>$admin]);
+          $duplicateAssignmentBlocked=false;
+          try{$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo) VALUES(UUID(),:p,:h,1)")->execute([':p'=>$teacher,':h'=>$schedule]);}catch(PDOException $e){$duplicateAssignmentBlocked=true;}
+          member_db_expect($duplicateAssignmentBlocked,'Professor/schedule assignment must be unique per pair.');
+          $teacher2='00000000-0000-0000-0000-000000000011';
+          $pdo->prepare("INSERT INTO profesores(id,nombre,whatsapp,activo,created_by) VALUES(:id,'Profe Dos','+529981112244',1,:u)")->execute([':id'=>$teacher2,':u'=>$admin]);
+          $pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo,created_by) VALUES(UUID(),:p,:h,1,:u)")->execute([':p'=>$teacher2,':h'=>$schedule,':u'=>$admin]);
+          member_db_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_horarios WHERE horario_id='{$schedule}' AND activo=1")->fetchColumn()===2,'One schedule must allow multiple active professors.');
+
+          $pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,action_key) VALUES(UUID(),:p,:s,'Prueba','SHARKY',:a)")->execute([':p'=>$teacher,':s'=>$session,':a'=>str_repeat('a',64)]);
+          $pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,action_key) VALUES(UUID(),:p,:s,'Cobertura compartida','SHARKY',:a)")->execute([':p'=>$teacher2,':s'=>$session,':a'=>str_repeat('b',64)]);
+          member_db_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_cancelaciones WHERE sesion_id='{$session}'")->fetchColumn()===2,'Co-teachers must be able to declare unavailability independently for the same session.');
+          $duplicateCancellationBlocked=false;
+          try{$pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo) VALUES(UUID(),:p,:s,'Otra')")->execute([':p'=>$teacher,':s'=>$session]);}catch(PDOException $e){$duplicateCancellationBlocked=true;}
+          member_db_expect($duplicateCancellationBlocked,'The same professor/session unavailability must remain unique.');'''
+          if old not in t: raise SystemExit('member mariadb cancellation block target missing')
+          p.write_text(t.replace(old,new,1))
+
+          Path('tests/sharky-professor-coteaching-mariadb.php').write_text(r'''<?php
+          declare(strict_types=1);
+          function coteach_expect(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
+          $host=(string)(getenv('DELIVERY_DB_HOST')?:'127.0.0.1');$port=(int)(getenv('DELIVERY_DB_PORT')?:3306);$db=(string)(getenv('DELIVERY_DB_NAME')?:'hache_delivery_test');$user=(string)(getenv('DELIVERY_DB_USER')?:'root');$pass=(string)(getenv('DELIVERY_DB_PASS')?:'root');
+          $pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+          $pdo->exec('SET FOREIGN_KEY_CHECKS=0');foreach(['curso_intensivo_alumnos','cursos_intensivos','profesor_cancelaciones','profesor_horarios','profesores','sesiones','horarios','usuarios'] as $table)$pdo->exec('DROP TABLE IF EXISTS `'.$table.'`');$pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+          $c='ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+          $pdo->exec("CREATE TABLE usuarios(id CHAR(36) PRIMARY KEY,rol VARCHAR(30) NOT NULL,activo TINYINT(1) NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) {$c}");
+          $pdo->exec("CREATE TABLE profesores(id CHAR(36) PRIMARY KEY,nombre VARCHAR(180) NOT NULL,whatsapp VARCHAR(20) NOT NULL,activo TINYINT(1) NOT NULL DEFAULT 1) {$c}");
+          $pdo->exec("CREATE TABLE horarios(id CHAR(36) PRIMARY KEY,sede_id CHAR(36) NOT NULL,hora_inicio TIME NOT NULL,hora_fin TIME NOT NULL,activo TINYINT(1) NOT NULL DEFAULT 1) {$c}");
+          $pdo->exec("CREATE TABLE profesor_horarios(id CHAR(36) PRIMARY KEY,profesor_id CHAR(36) NOT NULL,horario_id CHAR(36) NOT NULL,activo TINYINT(1) NOT NULL DEFAULT 1,UNIQUE KEY uq_profesor_horario(profesor_id,horario_id)) {$c}");
+          $pdo->exec("CREATE TABLE sesiones(id CHAR(36) PRIMARY KEY,fecha DATE NOT NULL,horario_id CHAR(36) NOT NULL,estado VARCHAR(30) NOT NULL DEFAULT 'PROGRAMADA',motivo_cancelacion VARCHAR(500) NULL,cerrada TINYINT(1) NOT NULL DEFAULT 0,fecha_cierre DATETIME NULL,cerrada_por CHAR(36) NULL) {$c}");
+          $pdo->exec("CREATE TABLE profesor_cancelaciones(id CHAR(36) PRIMARY KEY,profesor_id CHAR(36) NOT NULL,sesion_id CHAR(36) NOT NULL,motivo VARCHAR(500) NOT NULL,source VARCHAR(20) NOT NULL DEFAULT 'SHARKY',action_key CHAR(64) NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE KEY uq_profesor_cancelacion_profesor_sesion(profesor_id,sesion_id)) {$c}");
+          $pdo->exec("CREATE TABLE cursos_intensivos(id CHAR(36) PRIMARY KEY,sede_id CHAR(36) NOT NULL,estado VARCHAR(30) NOT NULL,fecha_inicio DATE NOT NULL,fecha_fin DATE NOT NULL) {$c}");
+          $pdo->exec("CREATE TABLE curso_intensivo_alumnos(id CHAR(36) PRIMARY KEY,curso_intensivo_id CHAR(36) NOT NULL,alumno_id CHAR(36) NOT NULL,horario_id CHAR(36) NOT NULL,reposiciones_cancelacion INT NOT NULL DEFAULT 0) {$c}");
+          require_once __DIR__.'/../config/sharky-member-ops.php';
+          $admin='00000000-0000-0000-0000-000000000001';$t1='00000000-0000-0000-0000-000000000010';$t2='00000000-0000-0000-0000-000000000011';$schedule='00000000-0000-0000-0000-000000000020';$session='00000000-0000-0000-0000-000000000030';$course='00000000-0000-0000-0000-000000000040';$cia='00000000-0000-0000-0000-000000000050';$site='00000000-0000-0000-0000-000000000060';
+          $pdo->prepare("INSERT INTO usuarios(id,rol,activo) VALUES(:id,'ADMIN',1)")->execute([':id'=>$admin]);
+          foreach([[$t1,'Profe Uno','+529981112233'],[$t2,'Profe Dos','+529981112244']] as [$id,$name,$phone])$pdo->prepare("INSERT INTO profesores(id,nombre,whatsapp,activo) VALUES(:id,:n,:w,1)")->execute([':id'=>$id,':n'=>$name,':w'=>$phone]);
+          $pdo->prepare("INSERT INTO horarios(id,sede_id,hora_inicio,hora_fin,activo) VALUES(:id,:s,'08:00:00','09:00:00',1)")->execute([':id'=>$schedule,':s'=>$site]);
+          foreach([$t1,$t2] as $teacher)$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo) VALUES(UUID(),:p,:h,1)")->execute([':p'=>$teacher,':h'=>$schedule]);
+          $pdo->prepare("INSERT INTO sesiones(id,fecha,horario_id,estado,cerrada) VALUES(:id,'2026-09-14',:h,'PROGRAMADA',0)")->execute([':id'=>$session,':h'=>$schedule]);
+          $pdo->prepare("INSERT INTO cursos_intensivos(id,sede_id,estado,fecha_inicio,fecha_fin) VALUES(:id,:s,'PROGRAMADO','2026-09-14','2026-10-02')")->execute([':id'=>$course,':s'=>$site]);
+          $pdo->prepare("INSERT INTO curso_intensivo_alumnos(id,curso_intensivo_id,alumno_id,horario_id,reposiciones_cancelacion) VALUES(:id,:c,'student-1',:h,0)")->execute([':id'=>$cia,':c'=>$course,':h'=>$schedule]);
+          $first=hache_sharky_member_cancel_teacher_session($pdo,$t1,$session,'No podré asistir','action-one');
+          coteach_expect(($first['code']??'')==='TEACHER_UNAVAILABLE','First unavailable co-teacher must not cancel the class.');
+          coteach_expect(($first['class_cancelled']??true)===false&&($first['remaining_teachers']??0)===1,'One remaining co-teacher must preserve the class.');
+          $row=$pdo->query("SELECT estado,cerrada FROM sesiones WHERE id='{$session}'")->fetch();coteach_expect($row['estado']==='PROGRAMADA'&&(int)$row['cerrada']===0,'Session must remain programmed after the first teacher declines.');
+          coteach_expect((int)$pdo->query("SELECT reposiciones_cancelacion FROM curso_intensivo_alumnos WHERE id='{$cia}'")->fetchColumn()===0,'No reposition may be generated while coverage remains.');
+          $dup=hache_sharky_member_cancel_teacher_session($pdo,$t1,$session,'Otra vez','action-dup');coteach_expect(($dup['code']??'')==='TEACHER_ALREADY_UNAVAILABLE','Repeated decline by the same teacher must be idempotent.');
+          $second=hache_sharky_member_cancel_teacher_session($pdo,$t2,$session,'Tampoco podré asistir','action-two');
+          coteach_expect(($second['code']??'')==='SESSION_CANCELLED'&&($second['class_cancelled']??false)===true,'Last available teacher must cancel the class.');
+          $row=$pdo->query("SELECT estado,cerrada FROM sesiones WHERE id='{$session}'")->fetch();coteach_expect($row['estado']==='CANCELADA'&&(int)$row['cerrada']===1,'Session must close only when no active teacher remains.');
+          coteach_expect((int)$pdo->query("SELECT reposiciones_cancelacion FROM curso_intensivo_alumnos WHERE id='{$cia}'")->fetchColumn()===1,'Exactly one intensive reposition must be generated when the class is finally cancelled.');
+          coteach_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_cancelaciones WHERE sesion_id='{$session}'")->fetchColumn()===2,'Both professor unavailability declarations must remain auditable.');
+          echo "SHARKY_PROFESSOR_COTEACHING_MARIADB_OK\n";
+          ''')
+
+          p=Path('tests/sharky-member-ops-regression.php'); t=p.read_text()
+          marker="member_ok(str_contains($memberMigration,'sharky_ausencia_evidencias'),'Absence evidence metadata must be durable.');\n"
+          addition=marker+"$coTeachingMigration=(string)file_get_contents($root.'/database/migrations/20260909_professor_coteaching.sql');\nmember_ok(str_contains($coTeachingMigration,'DROP INDEX IF EXISTS uq_profesor_cancelacion_sesion'),'Co-teaching migration must remove the legacy session-wide cancellation uniqueness.');\nmember_ok(str_contains($coTeachingMigration,'uq_profesor_cancelacion_profesor_sesion'),'Co-teaching migration must make unavailability unique per professor/session pair.');\n"
+          t=replace_once(t,marker,addition,'static co-teaching migration assertions')
+          marker2="member_ok(!str_contains($memberOps,'Sharky lo tomará del backend'),'Member copy must not expose backend internals.');\n"
+          addition2=marker2+"member_ok(str_contains($memberOps,'remaining_teachers'),'Teacher unavailability must evaluate remaining co-teacher coverage.');\nmember_ok(str_contains($memberOps,\"'class_cancelled'=>false\"),'A professor decline must be able to preserve the class.');\nmember_ok(str_contains($memberOps,\"'code'=>'SESSION_CANCELLED'\"),'The class must cancel only when teacher coverage reaches zero.');\n"
+          t=replace_once(t,marker2,addition2,'static member co-teaching assertions')
+          marker3="member_ok(str_contains($professorPage,'csrf:model.csrf'),'Professor administration UI must send the current CSRF token on mutations.');\n"
+          addition3=marker3+"member_ok(str_contains($professorPage,'varios horarios')&&str_contains($professorPage,'varios profes'),'Professor UI must explain many-to-many schedule assignment.');\n$deploy=(string)file_get_contents($root.'/ops/production-readiness/deploy-hache-natacion');\nmember_ok(str_contains($deploy,'bin/migrate-professor-coteaching.php'),'Deploy must apply the co-teaching migration before publishing the deployed SHA.');\n"
+          t=replace_once(t,marker3,addition3,'static UI/deploy co-teaching assertions')
+          p.write_text(t)
+
+          p=Path('.github/workflows/quality.yml'); t=p.read_text()
+          needle="      - name: Sharky contact book MariaDB regression\n"
+          block="      - name: Sharky professor co-teaching MariaDB regression\n        env:\n          DELIVERY_DB_HOST: 127.0.0.1\n          DELIVERY_DB_PORT: 3306\n          DELIVERY_DB_NAME: hache_delivery_test\n          DELIVERY_DB_USER: root\n          DELIVERY_DB_PASS: root\n        run: php tests/sharky-professor-coteaching-mariadb.php\n"
+          t=replace_once(t,needle,block+needle,'quality co-teaching MariaDB step')
+          p.write_text(t)
+          PY
+          php -l config/sharky-member-ops.php
+          php -l bin/migrate-professor-coteaching.php
+          php -l tests/sharky-professor-coteaching-mariadb.php
+          php tests/sharky-member-ops-regression.php
+          rm -f .github/workflows/temp-professor-coteaching.yml
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git add -A
+          git commit -m "feat: soportar co-docencia y ausencias por profesor"
+          git push origin HEAD:feat/profesor-coteaching-20260909
