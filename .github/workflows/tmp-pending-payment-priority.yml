@@ -74,12 +74,21 @@ jobs:
           sub_once(routing,pending_pattern,pending_repl)
 
           payments='config/sharky-member-payments.php'
+          process_marker="function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $business): ?bool\n{"
+          restart_helper=r'''function hache_sharky_member_payment_restart_state(array $state,int $now): array
+          {
+              $flow=hache_sharky_member_flow($state);
+              if(is_array($flow)&&($flow['name']??'')==='member_payment_transfer')return hache_sharky_member_set_flow($state,null,$now);
+              return $state;
+          }
+
+          '''
+          replace_once(payments,process_marker,restart_helper+process_marker)
           method_pattern=r"    if\(\$id==='member:pay'\)\{\n\s+\$pct=is_numeric\(\$business\['sharky_recargo_tarjeta_pct'\]\?\?null\)\?\(float\)\$business\['sharky_recargo_tarjeta_pct'\]:5\.0;\n\s+return hache_sharky_member_payment_queue_payload_owned\(\$pdo,\$contact,\$event,hache_sharky_member_payment_method_payload\(\$contact,\$pct\),'member-payment-method'\);\n\s+\}"
           method_repl="""    if($id==='member:pay'){
-              // Starting/restarting payment-method selection cancels only a stale SPEI
-              // evidence wait. It does not alter the debt, registration or other member flows.
-              $state=hache_sharky_member_payment_current_state($pdo,$contact);$flow=hache_sharky_member_flow($state);
-              if(is_array($flow)&&($flow['name']??'')==='member_payment_transfer')$state=hache_sharky_member_set_flow($state,null,time());
+              // Reopening payment choice clears only a stale SPEI-proof wait so
+              // an unpaid student can safely change method without changing the debt.
+              $state=hache_sharky_member_payment_restart_state(hache_sharky_member_payment_current_state($pdo,$contact),time());
               $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
               return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method',$state);
           }"""
@@ -101,9 +110,14 @@ jobs:
           member_eq($pendingPaymentPayload['interactive']['action']['buttons'][0]['reply']['id']??null,'member:pay','Pending registration must offer one direct Pagar ahora button.');
           member_ok(hache_sharky_member_pending_schedule_problem('Ese horario se me complica'),'Schedule questions must remain available instead of being trapped in payment.');
 
+          $transferState=['commercial_context'=>['_member_ops'=>['name'=>'member_payment_transfer','step'=>'evidence','updated_at'=>100]]];
+          $restartedState=hache_sharky_member_payment_restart_state($transferState,200);
+          member_eq(hache_sharky_member_flow($restartedState),null,'Reopening payment choice must clear a stale SPEI proof wait.');
+          $otherState=['commercial_context'=>['_member_ops'=>['name'=>'absence','step'=>'date','updated_at'=>100]]];
+          member_eq(hache_sharky_member_payment_restart_state($otherState,200),$otherState,'Reopening payment choice must not erase unrelated member flows.');
+
           '''
           replace_once(test,"$classCtx=[\n",pending_tests+"$classCtx=[\n")
-          replace_once(test,"member_ok(str_contains($payments,\"is_array(\\$event['member_payment']??null)\"),'Transfer proof must be consumed by the registered-student payment processor.');\n","member_ok(str_contains($payments,\"is_array(\\$event['member_payment']??null)\"),'Transfer proof must be consumed by the registered-student payment processor.');\nmember_ok(str_contains($payments,\"($flow['name']??'')==='member_payment_transfer'\"),'Pagar ahora must clear a stale SPEI evidence wait before changing payment method.');\nmember_ok(str_contains($payments,\"'member-payment-method',$state\"),'Payment-method restart must persist the cleaned member state.');\nmember_ok(str_contains($memberRouter,'hache_sharky_member_pending_payment_payload'),'Pending registrations must prioritize the payment CTA without changing Palapas restrictions.');\n")
           PY
       - name: Validate targeted regressions
         if: steps.gate.outputs.skip != 'true'
@@ -111,6 +125,7 @@ jobs:
           php -l config/sharky-member-ops.php
           php -l config/sharky-member-payments.php
           php -l config/sharky-member-routing.php
+          php -l tests/sharky-member-ops-regression.php
           php tests/sharky-member-ops-regression.php
           php tests/sharky-member-routing-midnight-regression.php
           php tests/sharky-entry-palapas-email-regression.php
