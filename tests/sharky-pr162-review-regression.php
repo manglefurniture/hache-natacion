@@ -65,8 +65,22 @@ $metaState=hache_sharky_orchestrator_capture_referral($metaState,$ref);
 $metaGuided=hache_sharky_entry_guided_first_prospect($metaState,'Hola',$now);
 pr162_review_ok(($metaGuided['commercial_context']['entry_source']??null)==='meta_ad','First CTWA turn must retain Meta-ad source.');
 pr162_review_ok(($metaGuided['commercial_context']['entry_interest']??null)==='intensive','Current Meta ad must retain intensive entry interest.');
-pr162_review_ok(($metaGuided['flow']['data']['preferred_program']??null)==='intensive','Meta intensive context must guide qualification without confirming the program.');
+pr162_review_ok(empty($metaGuided['flow']['data']['preferred_program']),'Meta intensive context must remain a recommendation until the user chooses a program.');
 pr162_review_ok(empty($metaGuided['commercial_context']['program']),'Referral interest must not become canonical program by itself.');
+
+// Regression: arriving from the intensive ad is not the same as choosing intensive.
+// A swimmer who has taken classes must still choose between intensive and regular.
+[$metaSwims,$metaSwimsDecision]=hache_sharky_whatsapp_qualification_input($pdo,$metaGuided,[
+    'text'=>'Ya sé nadar','interactive_id'=>'qualify:swims',
+],$now+1,12);
+pr162_review_ok(($metaSwims['flow']['step']??null)==='background','A swimmer from an intensive ad must still reach the background question.');
+pr162_review_ok(array_column($metaSwimsDecision['ui']['buttons']??[],'id')===['qualify:formal','qualify:self'],'Background question must retain both guided choices.');
+[$metaFormal,$metaFormalDecision]=hache_sharky_whatsapp_qualification_input($pdo,$metaSwims,[
+    'text'=>'He tomado clases','interactive_id'=>'qualify:formal',
+],$now+2,12);
+pr162_review_ok(empty($metaFormal['commercial_context']['program']),'Formal experience must not auto-confirm the intensive ad program.');
+pr162_review_ok(($metaFormal['flow']['step']??null)==='program','A formal swimmer must explicitly choose intensive or regular before venue selection.');
+pr162_review_ok(array_column($metaFormalDecision['ui']['buttons']??[],'id')===['qualify:intensive','qualify:regular'],'Formal swimmer must receive Intensivo and Regulares buttons, not venue buttons.');
 
 // P2: a course button that went stale must invalidate the old selected course and
 // refresh the course controls; it must never expose enrollment for the old date.
