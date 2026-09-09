@@ -99,6 +99,8 @@ function hache_sharky_entry_intro(array $state,string $userText=''): string
 {
     $entry=hache_sharky_entry_context($state,$userText);
     $base='Soy Sharky 🦈, el asistente IA de Hache Natación.';
+    // Un alumno ya identificado no necesita el bloque comercial de captación.
+    if(($state['identity']['kind']??'unknown')==='student')return $base;
     if($entry['source']==='meta_ad'&&$entry['interest']==='intensive'){
         return $base."\n\n".'Veo que llegaste desde nuestro anuncio del curso intensivo. Te doy una previa y te voy guiando desde aquí.';
     }
