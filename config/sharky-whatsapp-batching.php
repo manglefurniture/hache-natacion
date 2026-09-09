@@ -548,10 +548,29 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
 }
 
 /**
- * Text turns wait for the normal debounce window. A safe discovery button may
- * join an already-open direct-chat question burst, so Sharky applies the button
- * choice before answering the customer's question. Groups and business-changing
- * actions continue to bypass batching.
+ * The first real direct-chat turn of a newly assumed WhatsApp prospect must not
+ * be stranded in the text debounce queue. Contact capture happens before reply
+ * processing, so this narrow fast path is limited to the untouched bootstrap
+ * state created by hache_sharky_entry_guided_first_prospect().
+ */
+function hache_sharky_whatsapp_first_prospect_welcome_turn(array $state,array $event): bool
+{
+    if(trim((string)($event['group_id']??''))!=='')return false;
+    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!=='')return false;
+    if(($state['identity']['kind']??'unknown')!=='prospect'||($state['identity']['source']??'')!=='whatsapp_unmatched')return false;
+    if(($state['assistant_presentation_queued']??false)===true||trim((string)($state['last_user_text']??''))!=='')return false;
+    $flow=is_array($state['flow']??null)?$state['flow']:[];
+    $data=is_array($flow['data']??null)?$flow['data']:[];
+    return ($flow['name']??'')==='qualify_prospect'
+        &&($flow['step']??'')==='swim'
+        &&($data['entry_bootstrap']??false)===true;
+}
+
+/**
+ * Text turns wait for the normal debounce window. The only text exception is
+ * the untouched first turn of a newly assumed prospect, whose welcome must be
+ * delivered immediately. A safe discovery button may join an already-open
+ * direct-chat question burst; groups and business-changing actions bypass batching.
  */
 function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
@@ -560,6 +579,12 @@ function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversat
     $groupId=trim((string)($event['group_id']??''));$interactiveId=trim((string)($event['interactive_id']??''));
     $isInteractive=(string)($event['type']??'')==='interactive'||$interactiveId!=='';
     if($groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+    if(!$isInteractive){
+        try{$entryState=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $ignored){$entryState=[];}
+        if(hache_sharky_whatsapp_first_prospect_welcome_turn($entryState,$event)){
+            return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+        }
+    }
     $joinInteractive=$isInteractive
         &&hache_sharky_whatsapp_batch_joinable_interactive($interactiveId)
         &&hache_sharky_whatsapp_batch_pending_question($contact);
