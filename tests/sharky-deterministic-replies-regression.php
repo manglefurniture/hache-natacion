@@ -83,6 +83,20 @@ $regularMonteverde=[
 $regularPrice=hache_sharky_deterministic_price_message($regularMonteverde)??'';
 deterministic_ok(str_contains($regularPrice,'Clases regulares en Colegio Monteverde'),'Regular Monteverde price must answer directly with the already-confirmed venue.');
 deterministic_ok(str_contains($regularPrice,'$1,000')&&str_contains($regularPrice,'$1,200'),'Regular price reply must include both configured monthly plans.');
+deterministic_ok(str_contains($regularPrice,'Inscripción: $500 MXN'),'Every regular Monteverde price reply must include the $500 enrollment fee.');
+
+$regularPalapas=$regularMonteverde;
+$regularPalapas['commercial_context']['sede_clave']='PALAPAS';
+$regularPalapasPrice=hache_sharky_deterministic_price_message($regularPalapas)??'';
+deterministic_ok(str_contains($regularPalapasPrice,'Clases regulares en Palapas Protudec')&&str_contains($regularPalapasPrice,'Inscripción: $400 MXN'),'Every regular Palapas price reply must include the $400 enrollment fee.');
+
+$selectedRegular=$regularMonteverde;
+$selectedRegular['commercial_context']=array_replace($selectedRegular['commercial_context'],[
+    'plan_id'=>'regular-5','plan_name'=>'Regular 5','sessions_per_week'=>5,'plan_price'=>1200,
+]);
+$selectedRegularPrice=hache_sharky_deterministic_price_message($selectedRegular)??'';
+deterministic_ok(str_contains($selectedRegularPrice,'Regular 5')&&str_contains($selectedRegularPrice,'$1,200.00')&&!str_contains($selectedRegularPrice,'$1,000'),'Selected regular plan reply must keep only the confirmed monthly plan.');
+deterministic_ok(str_contains($selectedRegularPrice,'Inscripción: $500 MXN'),'Selected regular plan reply must still include the venue enrollment fee.');
 
 $followupState=$state;
 $followupState['previous_user_text']='Me envías la ubicación';

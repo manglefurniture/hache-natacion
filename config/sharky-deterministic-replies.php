@@ -157,16 +157,16 @@ function hache_sharky_deterministic_price_message(array $state): ?string
         $label=is_numeric($selected)?'Precio del curso seleccionado':'Precio general';
         return '💰 Curso intensivo'."\n\n".'• '.$label.': $'.$priceText.' MXN'."\n".'• Duración: 3 semanas, lunes a viernes'."\n".'• No cobra inscripción.';
     }
-    $selection=$state['commercial_context']??[];
-    if(!empty($selection['plan_id'])&&is_numeric($selection['plan_price']??null)){
-        return 'El plan '.$selection['plan_name'].' de '.$selection['sessions_per_week'].' sesiones por semana cuesta $'.number_format((float)$selection['plan_price'],2,'.',',').' MXN mensuales.';
-    }
-    $p3=hache_sharky_config_int($business,'sharky_precio_regular_3',1000,0,100000);
-    $p5=hache_sharky_config_int($business,'sharky_precio_regular_5',1200,0,100000);
     $feeKey=$commercial['sede']==='MONTEVERDE'?'sharky_inscripcion_monteverde':'sharky_inscripcion_palapas';
     $fee=hache_sharky_config_int($business,$feeKey,$commercial['sede']==='MONTEVERDE'?500:400,0,100000);
     $label=hache_sharky_deterministic_sede_label($commercial['sede']);
-    return '💰 Clases regulares en '.$label.':'."\n\n".'• 3 clases por semana: $'.number_format($p3,0,'.',',').' MXN mensuales'."\n".'• 5 clases por semana: $'.number_format($p5,0,'.',',').' MXN mensuales'."\n".'• Inscripción para entrada directa: $'.number_format($fee,0,'.',',').' MXN.';
+    $selection=$state['commercial_context']??[];
+    if(!empty($selection['plan_id'])&&is_numeric($selection['plan_price']??null)){
+        return '💰 Clases regulares en '.$label.':'."\n\n".'• El plan '.$selection['plan_name'].' de '.$selection['sessions_per_week'].' sesiones por semana cuesta $'.number_format((float)$selection['plan_price'],2,'.',',').' MXN mensuales'."\n".'• Inscripción: $'.number_format($fee,0,'.',',').' MXN.';
+    }
+    $p3=hache_sharky_config_int($business,'sharky_precio_regular_3',1000,0,100000);
+    $p5=hache_sharky_config_int($business,'sharky_precio_regular_5',1200,0,100000);
+    return '💰 Clases regulares en '.$label.':'."\n\n".'• 3 clases por semana: $'.number_format($p3,0,'.',',').' MXN mensuales'."\n".'• 5 clases por semana: $'.number_format($p5,0,'.',',').' MXN mensuales'."\n".'• Inscripción: $'.number_format($fee,0,'.',',').' MXN.';
 }
 
 function hache_sharky_deterministic_location_message(string $text,array $state): ?string
