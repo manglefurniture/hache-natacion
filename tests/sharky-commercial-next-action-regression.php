@@ -27,9 +27,20 @@ commercial_next_ok(($payload['type']??null)==='interactive','Next-action decisio
 commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===2,'Intensive information block must render exactly two buttons.');
 commercial_next_ok(str_contains((string)($menu['message']??''),'precio total')&&str_contains((string)($menu['message']??''),'un solo pago'),'Intensive venue completion must provide price automatically.');
 $intensiveMessage=(string)($menu['message']??'');
-foreach(['🏊‍♂️','📍','💰','✅','🕒','✍️'] as $emoji){
+foreach(['📍','💰','✅','🕒','✍️'] as $emoji){
     commercial_next_ok(str_contains($intensiveMessage,$emoji),'Intensive prospect information should keep the warmer visual cue '.$emoji.'.');
 }
+commercial_next_ok(!str_contains($intensiveMessage,'🏊‍♂️'),'Deterministic intensive reply must stay within the five-emoji prospect policy.');
+
+$prospectStyle=hache_sharky_whatsapp_style_instruction(['kind'=>'conversation'],$state);
+commercial_next_ok(str_contains($prospectStyle,'2 a 5 emojis'),'Base WhatsApp instruction must align with the prospect emoji policy.');
+$studentState=$state;
+$studentState['identity']['kind']='student';
+$studentStyle=hache_sharky_whatsapp_style_instruction(['kind'=>'conversation'],$studentState);
+commercial_next_ok(str_contains($studentStyle,'1 a 3 emojis'),'Base WhatsApp instruction must use the contained emoji policy for registered students.');
+commercial_next_ok(!str_contains($studentStyle,'2 a 5 emojis'),'Student instruction must not inherit the prospect emoji range.');
+$flowsSource=file_get_contents(__DIR__.'/../config/sharky-commerce-flows.php')?:'';
+commercial_next_ok(!str_contains($flowsSource,'Entendido 😊 Cancelé el formulario'),'Cancellation copy must not add a sixth decorative emoji.');
 
 // Schedule/price buttons deliberately remain contextual questions: their visible titles
 // reach the normal conversation path with program + venue memory. Registration keeps the
