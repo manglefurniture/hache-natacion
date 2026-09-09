@@ -6,6 +6,7 @@ putenv('SHARKY_STATE_ENCRYPTION_KEY=contact-book-mariadb-state-key-2026-abcdef')
 putenv('SHARKY_CONTACT_HASH_KEY=contact-book-mariadb-hash-key-2026-abcdef');
 putenv('GOOGLE_CONTACTS_SYNC_ENABLED=0');
 require_once __DIR__.'/../config/sharky-contact-book.php';
+require_once __DIR__.'/../config/sharky-contact-profiles.php';
 
 function contact_book_db_expect(bool $ok,string $message): void
 {
@@ -28,6 +29,17 @@ $sql=file_get_contents(__DIR__.'/../database/migrations/20260908_sharky_contact_
 contact_book_db_expect(is_string($sql)&&trim($sql)!=='','Migration SQL must be readable.');
 $pdo->exec($sql);
 contact_book_db_expect(hache_sharky_contact_book_schema_ready($pdo),'Migration must create the verified contact-book schema.');
+
+$profilePayload=['entry'=>[['changes'=>[['value'=>[
+    'contacts'=>[['wa_id'=>'529981111222','profile'=>['name'=>'María de la Cruz']]],
+    'messages'=>[['id'=>'wamid.profile','from'=>'529981111222','type'=>'text','text'=>['body'=>'Hola']]],
+]]]]]];
+contact_book_db_expect(hache_sharky_contact_book_capture_profiles_payload($pdo,$profilePayload)===1,'Signed WhatsApp contacts profile must be captured once.');
+$profileHash=hache_sharky_orchestrator_contact_hash('529981111222');
+$st=$pdo->prepare('SELECT * FROM sharky_contacts WHERE contact_hash=:c');$st->execute([':c'=>$profileHash]);$profileRow=$st->fetch();
+contact_book_db_expect(is_array($profileRow)&&$profileRow['role']==='PROSPECT','WhatsApp profile must seed a prospect contact.');
+$profileContact=hache_sharky_contact_book_decrypt($profileRow);
+contact_book_db_expect(($profileContact['managed_name']??'')==='María de la Cruz — Prospecto Hache','WhatsApp profile name must be used before enrollment asks for a legal/full name.');
 
 $event=['id'=>'wamid.prospect','from'=>'529981234567','kind'=>'commerce_flow','commerce'=>['full_name'=>'Juan Pérez']];
 contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,$event),'Prospect event must be captured.');
