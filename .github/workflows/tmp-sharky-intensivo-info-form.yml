@@ -2,14 +2,14 @@ name: Temporary Sharky intensive guided patch
 
 on:
   push:
-    branches: ["feat/sharky-intensivo-info-form"]
+    branches:
+      - feat/sharky-intensivo-info-form
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,212 +17,39 @@ jobs:
           ref: feat/sharky-intensivo-info-form
           fetch-depth: 0
       - name: Apply scoped Sharky changes
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          def replace_once(path, old, new, label):
-              p=Path(path); s=p.read_text()
-              if s.count(old)!=1:
-                  raise SystemExit(f'{label}: expected exactly one match, got {s.count(old)}')
-              p.write_text(s.replace(old,new,1))
-
-          def regex_once(path, pattern, replacement, label):
-              p=Path(path); s=p.read_text()
-              out,n=re.subn(pattern,replacement,s,count=1,flags=re.S)
-              if n!=1:
-                  raise SystemExit(f'{label}: expected exactly one regex match, got {n}')
-              p.write_text(out)
-
-          # Adapter: reuse the existing deterministic backend readers for price/schedules.
-          replace_once(
-              'config/sharky-whatsapp-adapter.php',
-              "require_once __DIR__.'/sharky-orchestrator-db.php';\nrequire_once __DIR__.'/sharky-commercial-memory.php';",
-              "require_once __DIR__.'/sharky-orchestrator-db.php';\nrequire_once __DIR__.'/sharky-commercial-memory.php';\nrequire_once __DIR__.'/sharky-deterministic-replies.php';",
-              'adapter deterministic include'
-          )
-
-          adapter_block=r'''function hache_sharky_whatsapp_intensive_information_message(array $state,string $prefix='Perfecto.'): string
-          {
-              $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
-              $sede=(string)($commercial['sede_clave']??'');
-              if(($commercial['program']??null)!=='intensive'||!in_array($sede,['MONTEVERDE','PALAPAS'],true)){
-                  return hache_sharky_whatsapp_commercial_ready_message($state,$prefix);
-              }
-              $sedeLabel=hache_sharky_whatsapp_venue_label($sede);
-              $pdo=hache_sharky_pdo();
-              $business=hache_sharky_business_values($pdo instanceof PDO?$pdo:null);
-              $selected=$commercial['course_price']??($state['selected_course_price']??null);
-              $price=is_numeric($selected)?(float)$selected:(float)hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000);
-              $priceText=number_format($price,0,'.',',');
-              $message=rtrim($prefix).' En '.$sedeLabel.', el curso intensivo tiene un precio total de $'.$priceText.' MXN. Es un solo pago por el curso completo.';
-              $hours=[];
-              if($pdo instanceof PDO){
-                  try{$hours=hache_sharky_deterministic_active_schedules($pdo,'intensive',$sede);}catch(Throwable $ignored){}
-              }
-              if($hours){
-                  $message.="\n\nHorarios disponibles:\n".implode("\n",array_map(static fn(string $hour):string=>'• '.$hour,$hours));
-              }elseif($pdo instanceof PDO){
-                  $message.="\n\nAhora mismo no encuentro horarios activos para esta sede.";
-              }else{
-                  $message.="\n\nNo pude consultar los horarios activos en este momento. Prefiero no inventarte datos.";
-              }
-              return $message;
-          }
-
-          function hache_sharky_whatsapp_commercial_next_action(array $state,string $prefix='Perfecto.'): array
-          {
-              $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
-              if(($commercial['program']??null)==='intensive'){
-                  $message=hache_sharky_whatsapp_intensive_information_message($state,$prefix);
-                  $buttons=[
-                      hache_sharky_orchestrator_button('action:register_intensive','Inscribirme'),
-                      hache_sharky_orchestrator_button('flow:pause','No por el momento'),
-                  ];
-                  return hache_sharky_orchestrator_decision('commercial_next_action',$message,['type'=>'buttons','buttons'=>$buttons]);
-              }
-              $program='clases regulares';
-              $sede=hache_sharky_whatsapp_venue_label((string)($commercial['sede_clave']??''));
-              $age=is_int($commercial['age']??null)?' para una persona de '.(int)$commercial['age'].' años':'';
-              $message=rtrim($prefix).' Ya tengo: '.$program.' en '.$sede.$age.'. ¿Qué quieres ver ahora?';
-              $buttons=[
-                  hache_sharky_orchestrator_button('action:commercial_schedules','Horarios'),
-                  hache_sharky_orchestrator_button('action:commercial_price','Precio'),
-                  hache_sharky_orchestrator_button('action:human','Inscribirme'),
-              ];
-              return hache_sharky_orchestrator_decision('commercial_next_action',$message,['type'=>'buttons','buttons'=>$buttons]);
-          }
-
-          function hache_sharky_whatsapp_registration_form_from_context(array $state,array $context,int $now,string $prefix='Perfecto.'): array
-          {
-              if(!hache_sharky_whatsapp_commercial_ready($state)||($state['commercial_context']['program']??null)!=='intensive'){
-                  return [$state,hache_sharky_orchestrator_decision('conversation',hache_sharky_whatsapp_commercial_ready_message($state,$prefix))];
-              }
-              $sede=(string)($state['commercial_context']['sede_clave']??'');
-              foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key)unset($state['commercial_context'][$key]);
-              $data=['sede_clave'=>$sede];
-              [$state,$decision]=hache_sharky_orchestrator_registration_course_step($state,$data,$context,$now);
-              if(($decision['kind']??'')==='registration_course'){
-                  $decision['message']=rtrim($prefix).' Completa en el formulario la fecha de inicio, el horario y tus datos para inscribirte.';
-              }
-              return [$state,$decision];
-          }
-
-          function hache_sharky_whatsapp_registration_offer_from_context'''
-
-          regex_once(
-              'config/sharky-whatsapp-adapter.php',
-              r"function hache_sharky_whatsapp_commercial_next_action\(array \$state,string \$prefix='Perfecto\.'\): array\n\{.*?\n\}\n\nfunction hache_sharky_whatsapp_registration_offer_from_context",
-              adapter_block,
-              'adapter intensive menu block'
-          )
-
-          marker="        if(trim((string)($event['interactive_id']??''))===''&&!is_array($state['flow']??null)&&hache_sharky_whatsapp_commercial_ready($state)&&($state['commercial_context']['program']??null)==='intensive'&&hache_sharky_whatsapp_offer_affirmation((string)($event['text']??''))){"
-          direct_form=r'''        if(trim((string)($event['interactive_id']??''))==='action:register_intensive'
-              &&!is_array($state['flow']??null)
-              &&($state['identity']['kind']??'')==='prospect'
-              &&hache_sharky_whatsapp_commercial_ready($state)
-              &&($state['commercial_context']['program']??null)==='intensive'){
-              [$state,$decision]=hache_sharky_whatsapp_registration_form_from_context($state,$context,(int)($context['now']??time()),'Perfecto.');
-              hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
-              return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
-          }
-
-'''
-          replace_once('config/sharky-whatsapp-adapter.php',marker,direct_form+marker,'adapter direct enrollment form')
-
-          # Typed equivalent of the dedicated pause button; button flow:pause was already supported.
-          replace_once(
-              'config/sharky-whatsapp-batching.php',
-              "$isPauseText=preg_match('/^(?:ahora\\s+no|por\\s+ahora\\s+no|no\\s+por\\s+ahora|todavia\\s+no|aun\\s+no)[.! ]*$/u',$t)===1;",
-              "$isPauseText=preg_match('/^(?:ahora\\s+no|por\\s+ahora\\s+no|no\\s+por\\s+ahora|no\\s+por\\s+el\\s+momento|por\\s+el\\s+momento\\s+no|todavia\\s+no|aun\\s+no)[.! ]*$/u',$t)===1;",
-              'pause natural wording'
-          )
-
-          # Follow-ups keep the same durable 15/90-minute lifecycle, but intensive CTAs now
-          # mirror the main two-action close. flow:pause already terminates both reminders.
-          replace_once(
-              'config/sharky-followup.php',
-              "        $message='¿Te gustaría que te ayude a iniciar la inscripción al curso intensivo en '.$sede.'?';\n        $buttons=[hache_sharky_followup_button('action:register_intensive','Inscribirme'),hache_sharky_followup_button('action:commercial_schedules','Horarios'),hache_sharky_followup_button('action:commercial_price','Precio')];",
-              "        $message='¿Quieres continuar con la inscripción al curso intensivo en '.$sede.'?';\n        $buttons=[hache_sharky_followup_button('action:register_intensive','Inscribirme'),hache_sharky_followup_button('flow:pause','No por el momento')];",
-              'first intensive followup'
-          )
-          replace_once(
-              'config/sharky-followup.php',
-              "        $message='Si prefieres decidirlo con calma, también puedo mostrarte horarios y precio del curso intensivo en '.$sede.'. ¿Te los comparto?';\n        $buttons=[hache_sharky_followup_button('action:commercial_schedules','Horarios'),hache_sharky_followup_button('action:commercial_price','Precio')];",
-              "        $message='Si todavía te interesa el curso intensivo en '.$sede.', puedes inscribirte desde aquí. Si prefieres dejarlo para después, no hay problema.';\n        $buttons=[hache_sharky_followup_button('action:register_intensive','Inscribirme'),hache_sharky_followup_button('flow:pause','No por el momento')];",
-              'second intensive followup'
-          )
-
-          # Core regression: intensive menu is now information-first + two actions.
-          replace_once(
-              'tests/sharky-commercial-next-action-regression.php',
-              "    array_column($menu['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price','action:register_intensive'],\n    'Intensive menu must expose Horarios, Precio and Inscribirme in that order.'",
-              "    array_column($menu['ui']['buttons']??[],'id')===['action:register_intensive','flow:pause'],\n    'Intensive information block must expose only Inscribirme and No por el momento.'",
-              'commercial next button expectation'
-          )
-          replace_once(
-              'tests/sharky-commercial-next-action-regression.php',
-              "commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===3,'Intensive menu must render exactly three buttons.');",
-              "commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===2,'Intensive information block must render exactly two buttons.');\ncommercial_next_ok(str_contains((string)($menu['message']??''),'precio total')&&str_contains((string)($menu['message']??''),'un solo pago'),'Intensive venue completion must provide price automatically instead of asking what to show.');\ncommercial_next_ok(hache_sharky_whatsapp_now_not_request(['text'=>'No por el momento','interactive_id'=>'flow:pause']),'The dedicated decline button must reuse the existing pause semantics.');",
-              'commercial next payload expectation'
-          )
-          insert_after="commercial_next_ok(hache_sharky_orchestrator_intent('Inscribirme','action:register_intensive')==='register_intensive','Registration action must keep the existing controlled registration intent.');"
-          form_test=r'''commercial_next_ok(hache_sharky_orchestrator_intent('Inscribirme','action:register_intensive')==='register_intensive','Registration action must keep the existing controlled registration intent.');
-
-          $formContext=['intensive_options'=>[
-              ['id'=>'c1','sede_clave'=>'PALAPAS','fecha_inicio'=>'2026-09-14','precio'=>1200,'schedules'=>[['id'=>'h8','label'=>'08:00–09:00']]],
-              ['id'=>'c2','sede_clave'=>'PALAPAS','fecha_inicio'=>'2026-09-21','precio'=>1200,'schedules'=>[['id'=>'h8','label'=>'08:00–09:00']]],
-          ]];
-          [$formState,$formDecision]=hache_sharky_whatsapp_registration_form_from_context($state,$formContext,1788460005);
-          commercial_next_ok(($formState['flow']['name']??null)==='register_intensive'&&($formState['flow']['step']??null)==='course','Inscribirme must enter the existing registration course step directly, with no extra consent question.');
-          commercial_next_ok(($formDecision['ui']['type']??null)==='list','The direct enrollment path must emit the existing course list so the commerce layer can upgrade it to the WhatsApp form.');'''
-          replace_once('tests/sharky-commercial-next-action-regression.php',insert_after,form_test,'commercial direct form regression')
-
-          # Venue-correction regression must now return the same information-first intensive block.
-          p=Path('tests/sharky-batch-context-regression.php'); s=p.read_text()
-          s,n=re.subn(
-              r"batch_context_ok\(str_contains\(\(string\)\(\$venueChangedDecision\['message'\]\?\?''\),'Palapas Protudec'\)&&str_contains\(\(string\)\(\$venueChangedDecision\['message'\]\?\?''\),'¿Qué quieres ver ahora\?'\),'Venue correction must acknowledge the new venue and ask what the customer wants next\.'\);",
-              "batch_context_ok(str_contains((string)($venueChangedDecision['message']??''),'Palapas Protudec')&&str_contains((string)($venueChangedDecision['message']??''),'precio total'),'Venue correction must acknowledge the new venue and automatically provide the intensive information block.');",
-              s,count=1
-          )
-          if n!=1: raise SystemExit(f'batch venue message expectation: {n}')
-          s,n=re.subn(
-              r"batch_context_ok\(in_array\('action:commercial_schedules',\$venueButtons,true\)&&in_array\('action:commercial_price',\$venueButtons,true\)&&in_array\('action:register_intensive',\$venueButtons,true\),'Intensive venue correction must offer schedules, price and registration\.'\);",
-              "batch_context_ok($venueButtons===['action:register_intensive','flow:pause'],'Intensive venue correction must offer only registration or deferral after showing price and schedules.');",
-              s,count=1
-          )
-          if n!=1: raise SystemExit(f'batch venue button expectation: {n}')
-          p.write_text(s)
-
-          # Follow-up regression: same two actions, with flow:pause terminating both reminders.
-          replace_once(
-              'tests/sharky-followup-regression.php',
-              "followup_ok(array_column(array_map(static fn(array $b):array=>$b['reply'],$p1['interactive']['action']['buttons']??[]),'id')===['action:register_intensive','action:commercial_schedules','action:commercial_price'],'Intensive first follow-up must offer registration, schedules and price.');",
-              "followup_ok(array_column(array_map(static fn(array $b):array=>$b['reply'],$p1['interactive']['action']['buttons']??[]),'id')===['action:register_intensive','flow:pause'],'Intensive first follow-up must offer registration or the durable pause action.');",
-              'followup first button expectation'
-          )
-          replace_once(
-              'tests/sharky-followup-regression.php',
-              "followup_ok(count($p2['interactive']['action']['buttons']??[])===2,'Second follow-up must be softer and avoid repeating the registration push.');",
-              "followup_ok(array_column(array_map(static fn(array $b):array=>$b['reply'],$p2['interactive']['action']['buttons']??[]),'id')===['action:register_intensive','flow:pause'],'Second intensive follow-up must keep the same explicit registration/pause choice.');",
-              'followup second button expectation'
-          )
-
-          # The temporary workflow must not survive the implementation commit.
-          Path('.github/workflows/tmp-sharky-intensivo-info-form.yml').unlink()
-          PY
-
-          php -l config/sharky-whatsapp-adapter.php
-          php -l config/sharky-whatsapp-batching.php
-          php -l config/sharky-followup.php
-          php tests/sharky-commercial-next-action-regression.php
-          php tests/sharky-followup-regression.php
-
-          git config user.name "Hache Interactive"
-          git config user.email "manglefurniture@gmail.com"
-          git add -A
-          git commit -m "feat: simplificar conversión de prospectos intensivos"
-          git push origin HEAD:feat/sharky-intensivo-info-form
+        env:
+          PATCH_B64: >-
+            CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKCmRlZiByZXBsYWNlX29uY2UocGF0aCwgb2xkLCBuZXcsIGxhYmVsKToKICAgIHA9UGF0
+            aChwYXRoKQogICAgcz1wLnJlYWRfdGV4dCgpCiAgICBuPXMuY291bnQob2xkKQogICAgaWYgbiAhPSAxOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQo
+            ZiJ7bGFiZWx9OiBleHBlY3RlZCAxIG1hdGNoLCBnb3Qge259IikKICAgIHAud3JpdGVfdGV4dChzLnJlcGxhY2Uob2xkLCBuZXcsIDEpKQoKZGVmIHN1
+            Yl9vbmNlKHBhdGgsIHBhdHRlcm4sIHJlcGwsIGxhYmVsLCBmbGFncz1yZS5TKToKICAgIHA9UGF0aChwYXRoKQogICAgcz1wLnJlYWRfdGV4dCgpCiAg
+            ICBvdXQsIG49cmUuc3VibihwYXR0ZXJuLCByZXBsLCBzLCBjb3VudD0xLCBmbGFncz1mbGFncykKICAgIGlmIG4gIT0gMToKICAgICAgICByYWlzZSBT
+            eXN0ZW1FeGl0KGYie2xhYmVsfTogZXhwZWN0ZWQgMSBtYXRjaCwgZ290IHtufSIpCiAgICBwLndyaXRlX3RleHQob3V0KQoKcmVwbGFjZV9vbmNlKAog
+            ICAgImNvbmZpZy9zaGFya3ktd2hhdHNhcHAtYWRhcHRlci5waHAiLAogICAgInJlcXVpcmVfb25jZSBfX0RJUl9fLicvc2hhcmt5LW9yY2hlc3RyYXRv
+            ci1kYi5waHAnO1xucmVxdWlyZV9vbmNlIF9fRElSX18uJy9zaGFya3ktY29tbWVyY2lhbC1tZW1vcnkucGhwJzsiLAogICAgInJlcXVpcmVfb25jZSBf
+            X0RJUl9fLicvc2hhcmt5LW9yY2hlc3RyYXRvci1kYi5waHAnO1xucmVxdWlyZV9vbmNlIF9fRElSX18uJy9zaGFya3ktY29tbWVyY2lhbC1tZW1vcnku
+            cGhwJztcbnJlcXVpcmVfb25jZSBfX0RJUl9fLicvc2hhcmt5LWRldGVybWluaXN0aWMtcmVwbGllcy5waHAnOyIsCiAgICAiYWRhcHRlciBkZXRlcm1p
+            bmlzdGljIGluY2x1ZGUiLAopCgpuZXdfYmxvY2sgPSByJycnZnVuY3Rpb24gaGFjaGVfc2hhcmt5X3doYXRzYXBwX2ludGVuc2l2ZV9pbmZvcm1hdGlv
+            bl9tZXNzYWdlKGFycmF5ICRzdGF0ZSxzdHJpbmcgJHByZWZpeD0nUGVyZmVjdG8uJyk6IHN0cmluZwp7CiAgICAkY29tbWVyY2lhbD1pc19hcnJheSgk
+            c3RhdGVbJ2NvbW1lcmNpYWxfY29udGV4dCddPz9udWxsKT8kc3RhdGVbJ2NvbW1lcmNpYWxfY29udGV4dCddOltdOwogICAgJHNlZGU9KHN0cmluZyko
+            JGNvbW1lcmNpYWxbJ3NlZGVfY2xhdmUnXT8/JycpOwogICAgaWYoKCRjb21tZXJjaWFsWydwcm9ncmFtJ10/P251bGwpIT09J2ludGVuc2l2ZSd8fCFp
+            bl9hcnJheSgkc2VkZSxbJ01PTlRFVkVSREUnLCdQQUxBUEFTJ10sdHJ1ZSkpewogICAgICAgIHJldHVybiBoYWNoZV9zaGFya3lfd2hhdHNhcHBfY29t
+            bWVyY2lhbF9yZWFkeV9tZXNzYWdlKCRzdGF0ZSwkcHJlZml4KTsKICAgIH0KCiAgICAkc2VkZUxhYmVsPWhhY2hlX3NoYXJreV93aGF0c2FwcF92ZW51
+            ZV9sYWJlbCgkc2VkZSk7CiAgICAkcGRvPWhhY2hlX3NoYXJreV9wZG8oKTsKICAgICRidXNpbmVzcz1oYWNoZV9zaGFya3lfYnVzaW5lc3NfdmFsdWVz
+            KCRwZG8gaW5zdGFuY2VvZiBQRE8/JHBkbzpudWxsKTsKICAgICRzZWxlY3RlZD0kY29tbWVyY2lhbFsnY291cnNlX3ByaWNlJ10/Pygkc3RhdGVbJ3Nl
+            bGVjdGVkX2NvdXJzZV9wcmljZSddPz9udWxsKTsKICAgICRwcmljZT1pc19udW1lcmljKCRzZWxlY3RlZCkKICAgICAgICA/KGZsb2F0KSRzZWxlY3Rl
+            ZAogICAgICAgIDooZmxvYXQpaGFjaGVfc2hhcmt5X2NvbmZpZ19pbnQoJGJ1c2luZXNzLCdzaGFya3lfcHJlY2lvX2ludGVuc2l2bycsMTIwMCwwLDEw
+            MDAwMCk7CiAgICAkcHJpY2VUZXh0PW51bWJlcl9mb3JtYXQoJHByaWNlLDAsJy4nLCcsJyk7CgogICAgJG1lc3NhZ2U9cnRyaW0oJHByZWZpeCkuJyBF
+            biAnLiRzZWRlTGFiZWwuJywglbMgY3Vyc28gaW50ZW5zaXZvIHRpZW5lIHVuIHByZWNpbyB0b3RhbCBkZSAkJy4kcHJpY2VUZXh0LicgTVhOLiBFcyB1
+            biBzb2xvIHBhZ28gcG9yIGVsIGN1cnNvIGNvbXBsZXRvLic7CiAgICAkaG91cnM9W107CiAgICBpZigkcGRvIGluc3RhbmNlb2YgUERPKXsKICAgICAg
+            ICB0cnl7JGhvdXJzPWhhY2hlX3NoYXJreV9kZXRlcm1pbmlzdGljX2FjdGl2ZV9zY2hlZHVsZXMoJHBkbywnaW50ZW5zaXZlJywkc2VkZSk7fWNhdGNo
+            KFRocm93YWJsZSAkaWdub3JlZCl7fQogICAgfQogICAgaWYoJGhvdXJzKXsKICAgICAgICAkbWVzc2FnZS49IlxuXG5Ib3JhcmlvcyBkaXNwb25pYmxl
+            czpcbiIuaW1wbG9kZSgiXG4iLGFycmF5X21hcChzdGF0aWMgZm4oc3RyaW5nICRob3VyKTpzdHJpbmc9Pic4oCAnLiRob3VyLCRob3VycykpOwogICAg
+            fWVsc2VpZigkcGRvIGluc3RhbmNlb2YgUERPKXsKICAgICAgICAkbWVzc2FnZS49IlxuXG5BaG9yYSBtaXNtbyBubyBlbmN1ZW50cm8gaG9yYXJpb3Mg
+            YWN0aXZvcyBwYXJhIGVzdGEgc2VkZS4iOwogICAgfWVsc2V7CiAgICAgICAgJG1lc3NhZ2UuPSJcblxuTm8gcHVkZSBjb25zdWx0YXIgbG9zIGhvcmFy
+            aW9zIGFjdGl2b3MgZW4gZXN0ZSBtb21lbnRvLiBQcmVmaWVybyBubyBpbnZlbnRhcnRlIGRhdG9zLiI7CiAgICB9CiAgICByZXR1cm4gJG1lc3NhZ2U7
+            Cn0KCmZ1bmN0aW9uIGhhY2hlX3NoYXJreV93aGF0c2FwcF9jb21tZXJjaWFsX25leHRfYWN0aW9uKGFycmF5ICRzdGF0ZSxzdHJpbmcgJHByZWZpeD0n
+            UGVyZmVjdG8uJyk6IGFycmF5CnsKICAgICRjb21tZXJjaWFsPWlzX2FycmF5KCRzdGF0ZVsnY29tbWVyY2lhbF9jb250ZXh0J10/P251bGwpPyRzdGF0
+            ZVsnY29tbWVyY2lhbF9jb250ZXh0J106W107CiAgICBpZigoJGNvbW1lcmNpYWxbJ3Byb2dyYW0nXT8/bnVsbCk9PT0naW50ZW5zaXZlJyl7CiAgICAg
+            ICAgJG1lc3NhZ2U9aGFjaGVfc2hhcmt5X3doYXRzYXBwX2ludGVuc2l2ZV9pbmZvcm1hdGlvbl9tZXNzYWdlKCRzdGF0ZSwkcHJlZml4KTsKICAgICAg
+            ICBidXR0b25zPVtcaHRleHRcXHJcXGhcXHdcXGYKVFJVTkNBVEQ=
