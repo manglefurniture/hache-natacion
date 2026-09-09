@@ -31,10 +31,12 @@ $pdo->exec($sql);
 contact_book_db_expect(hache_sharky_contact_book_schema_ready($pdo),'Migration must create the verified contact-book schema.');
 
 $profilePayload=['entry'=>[['changes'=>[['value'=>[
+    'metadata'=>['phone_number_id'=>'PHONE-HACHE'],
     'contacts'=>[['wa_id'=>'529981111222','profile'=>['name'=>'María de la Cruz']]],
     'messages'=>[['id'=>'wamid.profile','from'=>'529981111222','type'=>'text','text'=>['body'=>'Hola']]],
 ]]]]]];
-contact_book_db_expect(hache_sharky_contact_book_capture_profiles_payload($pdo,$profilePayload)===1,'Signed WhatsApp contacts profile must be captured once.');
+contact_book_db_expect(hache_sharky_contact_book_capture_profiles_payload($pdo,$profilePayload,'PHONE-OTHER')===0,'A profile delivered for another WhatsApp business number must be ignored.');
+contact_book_db_expect(hache_sharky_contact_book_capture_profiles_payload($pdo,$profilePayload,'PHONE-HACHE')===1,'Signed WhatsApp contacts profile must be captured once for the configured number.');
 $profileHash=hache_sharky_orchestrator_contact_hash('529981111222');
 $st=$pdo->prepare('SELECT * FROM sharky_contacts WHERE contact_hash=:c');$st->execute([':c'=>$profileHash]);$profileRow=$st->fetch();
 contact_book_db_expect(is_array($profileRow)&&$profileRow['role']==='PROSPECT','WhatsApp profile must seed a prospect contact.');
