@@ -5,6 +5,7 @@ declare(strict_types=1);
 putenv('SHARKY_STATE_ENCRYPTION_KEY=contact-book-regression-state-key-2026-abcdef');
 putenv('SHARKY_CONTACT_HASH_KEY=contact-book-regression-hash-key-2026-abcdef');
 require_once __DIR__.'/../config/sharky-contact-book.php';
+require_once __DIR__.'/../config/sharky-contact-profiles.php';
 
 function contact_book_expect(bool $ok,string $message): void
 {
@@ -17,6 +18,7 @@ contact_book_expect(hache_sharky_contact_book_normalize_phone('abc')===null,'Inv
 
 $name=hache_sharky_contact_book_event_name(['commerce'=>['full_name'=>'  Juan   Pérez  ']]);
 contact_book_expect($name==='Juan Pérez','Enrollment full_name must become the durable contact base name.');
+contact_book_expect(hache_sharky_contact_book_event_name(['profile_name'=>'  María   López '])==='María López','WhatsApp profile name must be accepted as a naming hint.');
 contact_book_expect(hache_sharky_contact_book_event_name(['text'=>'hola'])==='','Ordinary text must not be guessed as a person name.');
 
 contact_book_expect(hache_sharky_contact_book_managed_name('Juan Pérez','PROSPECT','529981234567')==='Juan Pérez — Prospecto Hache','Prospect naming contract changed.');
@@ -48,15 +50,20 @@ $sql=file_get_contents(__DIR__.'/../database/migrations/20260908_sharky_contact_
 $inbox=file_get_contents(__DIR__.'/../config/sharky-inbox.php')?:'';
 $worker=file_get_contents(__DIR__.'/../bin/sharky-inbox-dispatch.php')?:'';
 $source=file_get_contents(__DIR__.'/../config/sharky-contact-book.php')?:'';
+$profiles=file_get_contents(__DIR__.'/../config/sharky-contact-profiles.php')?:'';
+$delivery=file_get_contents(__DIR__.'/../config/sharky-delivery-status.php')?:'';
 contact_book_expect(str_contains($sql,'CREATE TABLE IF NOT EXISTS sharky_contacts'),'Contact book migration must be additive/idempotent.');
 contact_book_expect(str_contains($sql,'contact_ciphertext MEDIUMTEXT')&&str_contains($sql,'desired_hash CHAR(64)'),'Contact book must encrypt PII and keep only a deterministic desired-state hash searchable.');
 contact_book_expect(!str_contains($sql,'whatsapp VARCHAR')&&!str_contains($sql,'nombre VARCHAR')&&!str_contains($sql,'phone VARCHAR'),'Migration must not create searchable plaintext phone/name columns.');
 contact_book_expect(str_contains($inbox,"require_once __DIR__.'/sharky-contact-book.php'")&&str_contains($inbox,'hache_sharky_contact_book_capture_event($pdo,$event)'),'Every durable direct inbound/echo must feed the contact authority.');
+contact_book_expect(str_contains($profiles,"\$contact['profile']['name']")&&str_contains($profiles,"\$contact['wa_id']"),'Meta contacts profile name must be captured only with its wa_id.');
+contact_book_expect(str_contains($delivery,'hache_sharky_contact_book_capture_profiles_payload($pdo,$payload)'),'Signed raw webhook processing must feed WhatsApp profile names into the local contact authority.');
 contact_book_expect(str_contains($worker,'hache_sharky_contact_book_apply_additive_migration($pdo)'),'Only the CLI worker may apply the additive contact migration.');
 contact_book_expect(str_contains($worker,"__DIR__.'/../database/migrations/20260908_sharky_contact_book.sql'"),'CLI migration must use the tracked SQL source of truth.');
 contact_book_expect(str_contains($worker,'hache_sharky_contact_book_sync_pending($pdo,10)'),'Existing one-minute worker must drive external contact sync outside webhook latency.');
 contact_book_expect(str_contains($source,"GET_LOCK('")&&str_contains($source,'GOOGLE_CONTACTS_SYNC_ENABLED'),'Google writes must be serialized and explicitly enabled.');
 contact_book_expect(str_contains($source,'people:createContact')&&str_contains($source,':updateContact'),'Google sync must support both contact creation and managed-contact updates.');
 contact_book_expect(str_contains($source,'GOOGLE_DUPLICATE_PHONE')&&str_contains($source,"'UNMANAGED'"),'Ambiguous matches and pre-existing unmanaged contacts must fail/skip safely.');
+contact_book_expect(str_contains($source,'GOOGLE_SEARCH_FAILED')&&str_contains($source,"return ['ok'=>false,'matches'=>[]]"),'A failed Google lookup must never be treated as a clean no-match/create decision.');
 
 fwrite(STDOUT,"SHARKY_CONTACT_BOOK_OK\n");
