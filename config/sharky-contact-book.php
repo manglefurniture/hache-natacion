@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/telefono.php';
+require_once __DIR__.'/sharky-contact-naming.php';
 
 const HACHE_SHARKY_CONTACT_BOOK_MARKER_KEY='Hache Natación';
 const HACHE_SHARKY_CONTACT_BOOK_MARKER_VALUE='managed-contact-v1';
@@ -102,11 +103,7 @@ function hache_sharky_contact_book_role_label(string $role): string
 
 function hache_sharky_contact_book_managed_name(string $baseName,string $role,string $digits): string
 {
-    $baseName=hache_sharky_contact_book_clean_name($baseName);
-    $label=hache_sharky_contact_book_role_label($role);
-    if($baseName!=='')return mb_substr($baseName.' — '.$label,0,180);
-    $last4=substr($digits,-4);
-    return $label.($last4!==''?' · '.$last4:'');
+    return hache_sharky_contact_naming_generic($baseName,$role,$digits);
 }
 
 function hache_sharky_contact_book_table_exists(PDO $pdo,string $table): bool
@@ -167,7 +164,7 @@ function hache_sharky_contact_book_capture_event(PDO $pdo,array $event): bool
         $eventName=hache_sharky_contact_book_event_name($event);
         $fallbackName=$eventName!==''?$eventName:hache_sharky_contact_book_clean_name((string)($existing['base_name']??''));
         $identity=hache_sharky_contact_book_identity($pdo,$normalized['e164'],$fallbackName);
-        $managedName=hache_sharky_contact_book_managed_name((string)$identity['base_name'],(string)$identity['role'],$normalized['digits']);
+        $managedName=hache_sharky_contact_naming_desired($pdo,$identity,$normalized['digits']);
         $payload=[
             'e164'=>$normalized['e164'],
             'base_name'=>(string)$identity['base_name'],
@@ -266,6 +263,33 @@ function hache_sharky_google_contacts_person_body(array $contact,?array $metadat
     return $body;
 }
 
+function hache_sharky_google_contacts_update_body(array $contact,array $latest): array
+{
+    $organizations=[];
+    foreach(($latest['organizations']??[]) as $organization){
+        if(!is_array($organization))continue;
+        if(mb_strtolower(trim((string)($organization['name']??'')),'UTF-8')==='hache natación')continue;
+        $organizations[]=$organization;
+    }
+    $organizations[]=['name'=>'Hache Natación','title'=>hache_sharky_contact_book_role_label((string)$contact['role']),'type'=>'work'];
+
+    $userDefined=[];
+    foreach(($latest['userDefined']??[]) as $field){
+        if(!is_array($field))continue;
+        if((string)($field['key']??'')===HACHE_SHARKY_CONTACT_BOOK_MARKER_KEY)continue;
+        $userDefined[]=$field;
+    }
+    $userDefined[]=['key'=>HACHE_SHARKY_CONTACT_BOOK_MARKER_KEY,'value'=>HACHE_SHARKY_CONTACT_BOOK_MARKER_VALUE];
+
+    $body=[
+        'names'=>[['givenName'=>(string)$contact['managed_name']]],
+        'organizations'=>$organizations,
+        'userDefined'=>$userDefined,
+    ];
+    if(is_array($latest['metadata']??null))$body['metadata']=$latest['metadata'];
+    return $body;
+}
+
 /** @return array{ok:bool,matches:array<int,array>} */
 function hache_sharky_google_contacts_search_exact(string $accessToken,string $e164): array
 {
@@ -301,10 +325,10 @@ function hache_sharky_google_contacts_update(string $accessToken,string $resourc
 {
     $parts=explode('/',$resourceName,2);if(count($parts)!==2)return ['status'=>0,'json'=>null];
     $url='https://people.googleapis.com/v1/'.rawurlencode($parts[0]).'/'.rawurlencode($parts[1]).':updateContact?'.http_build_query([
-        'updatePersonFields'=>'names,phoneNumbers,organizations,userDefined',
+        'updatePersonFields'=>'names,organizations,userDefined',
         'personFields'=>'names,phoneNumbers,organizations,userDefined,metadata',
     ]);
-    $body=hache_sharky_google_contacts_person_body($contact,is_array($latest['metadata']??null)?$latest['metadata']:null);
+    $body=hache_sharky_google_contacts_update_body($contact,$latest);
     $body['resourceName']=$resourceName;
     return hache_sharky_google_contacts_http('PATCH',$url,['Authorization: Bearer '.$accessToken,'Content-Type: application/json'],$body);
 }
@@ -328,7 +352,7 @@ function hache_sharky_contact_book_pending(PDO $pdo,int $limit=20): array
 {
     $limit=max(1,min(50,$limit));$out=[];
     try{
-        $rows=$pdo->query("SELECT contact_hash,google_resource_name,contact_ciphertext,contact_iv,contact_tag FROM sharky_contacts WHERE sync_status='PENDING' OR (sync_status='FAILED' AND (last_sync_attempt_at IS NULL OR last_sync_attempt_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE))) ORDER BY last_seen_at,contact_hash LIMIT ".$limit)->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$pdo->query("SELECT contact_hash,google_resource_name,contact_ciphertext,contact_iv,contact_tag FROM sharky_contacts WHERE sync_status IN ('PENDING','UNMANAGED') OR (sync_status='FAILED' AND (last_sync_attempt_at IS NULL OR last_sync_attempt_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE))) ORDER BY last_seen_at,contact_hash LIMIT ".$limit)->fetchAll(PDO::FETCH_ASSOC);
         foreach($rows as $row){
             $contact=hache_sharky_contact_book_decrypt($row);if(!is_array($contact))continue;
             $out[]=['contact_hash'=>(string)$row['contact_hash'],'google_resource_name'=>(string)($row['google_resource_name']??''),'contact'=>$contact];
@@ -370,10 +394,10 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
                     }
                 }
 
-                if(is_array($latest)&&!hache_sharky_google_contacts_person_managed($latest)){
-                    hache_sharky_contact_book_mark_sync($pdo,$hash,'UNMANAGED',$resource,'');$stats['unmanaged']++;continue;
-                }
-
+                // A unique exact phone match is intentionally writable even when
+                // the contact was originally created by the owner. Only the name,
+                // Hache organization marker and Hache custom marker are updated;
+                // phone numbers, email addresses, notes and other fields are left intact.
                 $response=$resource===''
                     ?hache_sharky_google_contacts_create($token,$contact)
                     :hache_sharky_google_contacts_update($token,$resource,$contact,$latest??[]);
