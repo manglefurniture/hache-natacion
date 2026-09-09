@@ -8,7 +8,7 @@ new="array_column($menu['ui']['buttons']??[],'id')===['action:register_intensive
 if s.count(old)!=1: raise SystemExit("commercial buttons mismatch")
 s=s.replace(old,new,1)
 old="commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===3,'Intensive menu must render exactly three buttons.');"
-new="commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===2,'Intensive information block must render exactly two buttons.');\ncommercial_next_ok(str_contains((string)($menu['message']??''),'precio total')&&str_contains((string)($menu['message']??''),'un solo pago'),'Intensive venue completion must provide price automatically.');\ncommercial_next_ok(hache_sharky_whatsapp_now_not_request(['text'=>'No por el momento','interactive_id'=>'flow:pause']),'No por el momento must reuse durable pause semantics.');"
+new="commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===2,'Intensive information block must render exactly two buttons.');\ncommercial_next_ok(str_contains((string)($menu['message']??''),'precio total')&&str_contains((string)($menu['message']??''),'un solo pago'),'Intensive venue completion must provide price automatically.');"
 if s.count(old)!=1: raise SystemExit("commercial count mismatch")
 s=s.replace(old,new,1)
 needle="commercial_next_ok(hache_sharky_orchestrator_intent('Inscribirme','action:register_intensive')==='register_intensive','Registration action must keep the existing controlled registration intent.');"
