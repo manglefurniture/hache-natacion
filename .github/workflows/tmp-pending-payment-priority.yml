@@ -21,33 +21,32 @@ jobs:
       - name: Gate
         id: gate
         run: |
-          if git log -1 --pretty=%B | grep -Fq '[pending-payment-priority]'; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
+          if git log -1 --pretty=%B | grep -Fq '[pending-payment-priority]'; then echo "skip=true" >> "$GITHUB_OUTPUT"; else echo "skip=false" >> "$GITHUB_OUTPUT"; fi
       - name: Apply pending-payment priority changes
         if: steps.gate.outputs.skip != 'true'
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{path}: expected 1 occurrence, found {count}: {old[:120]!r}')
-              p.write_text(text.replace(old, new, 1))
+              p=Path(path); text=p.read_text(); n=text.count(old)
+              if n!=1: raise SystemExit(f'{path}: expected 1 occurrence, found {n}: {old[:100]!r}')
+              p.write_text(text.replace(old,new,1))
 
-          ops = 'config/sharky-member-ops.php'
+          def sub_once(path, pattern, repl):
+              p=Path(path); text=p.read_text(); out,n=re.subn(pattern,repl,text,count=1,flags=re.S)
+              if n!=1: raise SystemExit(f'{path}: regex expected 1 occurrence, found {n}: {pattern[:100]!r}')
+              p.write_text(out)
+
+          ops='config/sharky-member-ops.php'
           replace_once(ops,
               "    if($id==='member:payments'||$id==='member:pay')return 'payments';",
               "    if($id==='member:payments'||$id==='member:pay'||str_starts_with($id,'member:pay:'))return 'payments';")
 
-          routing = 'config/sharky-member-routing.php'
-          marker = "function hache_sharky_member_teacher_owned_event(array $teacher,?array $flow,array $event,?string $intent=null): bool\n{"
-          helper = r'''function hache_sharky_member_pending_payment_payload(string $contact,array $student): ?array
+          routing='config/sharky-member-routing.php'
+          marker="function hache_sharky_member_teacher_owned_event(array $teacher,?array $flow,array $event,?string $intent=null): bool\n{"
+          helper=r'''function hache_sharky_member_pending_payment_payload(string $contact,array $student): ?array
           {
               if(!hache_sharky_member_pending_registration($student))return null;
               $pending=hache_sharky_member_payment_pending_from_context($student);if(!is_array($pending))return null;
@@ -61,15 +60,9 @@ jobs:
           }
 
           '''
-          replace_once(routing, marker, helper + marker)
-
-          old_pending = r'''        if(hache_sharky_member_pending_registration($student)){
-              $body=hache_sharky_member_pending_message($student,$text,$intent);
-              $payload=hache_sharky_whatsapp_text_payload($contact,$body);
-              return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
-          }
-          '''
-          new_pending = r'''        if(hache_sharky_member_pending_registration($student)){
+          replace_once(routing,marker,helper+marker)
+          pending_pattern=r"        if\(hache_sharky_member_pending_registration\(\$student\)\)\{\n\s+\$body=hache_sharky_member_pending_message\(\$student,\$text,\$intent\);\n\s+\$payload=hache_sharky_whatsapp_text_payload\(\$contact,\$body\);\n\s+return hache_sharky_member_queue\(\$pdo,\$contact,\$event,\$state,\$payload,'student-pending'\);\n\s+\}"
+          pending_repl="""        if(hache_sharky_member_pending_registration($student)){
               if(!hache_sharky_member_pending_schedule_problem($text)){
                   $paymentPayload=hache_sharky_member_pending_payment_payload($contact,$student);
                   if(is_array($paymentPayload))return hache_sharky_member_queue($pdo,$contact,$event,$state,$paymentPayload,'student-pending-payment');
@@ -77,35 +70,25 @@ jobs:
               $body=hache_sharky_member_pending_message($student,$text,$intent);
               $payload=hache_sharky_whatsapp_text_payload($contact,$body);
               return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
-          }
-          '''
-          replace_once(routing, old_pending, new_pending)
+          }"""
+          sub_once(routing,pending_pattern,pending_repl)
 
-          payments = 'config/sharky-member-payments.php'
-          old_method = r'''    if($id==='member:pay'){
-              $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
-              return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method');
-          }
-          '''
-          new_method = r'''    if($id==='member:pay'){
+          payments='config/sharky-member-payments.php'
+          method_pattern=r"    if\(\$id==='member:pay'\)\{\n\s+\$pct=is_numeric\(\$business\['sharky_recargo_tarjeta_pct'\]\?\?null\)\?\(float\)\$business\['sharky_recargo_tarjeta_pct'\]:5\.0;\n\s+return hache_sharky_member_payment_queue_payload_owned\(\$pdo,\$contact,\$event,hache_sharky_member_payment_method_payload\(\$contact,\$pct\),'member-payment-method'\);\n\s+\}"
+          method_repl="""    if($id==='member:pay'){
               // Starting/restarting payment-method selection cancels only a stale SPEI
               // evidence wait. It does not alter the debt, registration or other member flows.
               $state=hache_sharky_member_payment_current_state($pdo,$contact);$flow=hache_sharky_member_flow($state);
               if(is_array($flow)&&($flow['name']??'')==='member_payment_transfer')$state=hache_sharky_member_set_flow($state,null,time());
               $pct=is_numeric($business['sharky_recargo_tarjeta_pct']??null)?(float)$business['sharky_recargo_tarjeta_pct']:5.0;
               return hache_sharky_member_payment_queue_payload_owned($pdo,$contact,$event,hache_sharky_member_payment_method_payload($contact,$pct),'member-payment-method',$state);
-          }
-          '''
-          replace_once(payments, old_method, new_method)
+          }"""
+          sub_once(payments,method_pattern,method_repl)
 
-          test = 'tests/sharky-member-ops-regression.php'
-          replace_once(test,
-              "require_once __DIR__.'/../config/sharky-member-payments.php';\n",
-              "require_once __DIR__.'/../config/sharky-member-payments.php';\nrequire_once __DIR__.'/../config/sharky-member-routing.php';\n")
-          replace_once(test,
-              "member_eq(hache_sharky_member_intent('¿Cuánto debo de mensualidad?'),'payments','Payment questions must be deterministic.');\n",
-              "member_eq(hache_sharky_member_intent('¿Cuánto debo de mensualidad?'),'payments','Payment questions must be deterministic.');\nmember_eq(hache_sharky_member_intent('','member:pay'),'payments','Pay-now button must stay in the deterministic payment lane.');\nmember_eq(hache_sharky_member_intent('','member:pay:transfer'),'payments','Payment-method buttons must stay in the deterministic payment lane.');\n")
-          pending_tests = r'''$pendingRegistration=[
+          test='tests/sharky-member-ops-regression.php'
+          replace_once(test,"require_once __DIR__.'/../config/sharky-member-payments.php';\n","require_once __DIR__.'/../config/sharky-member-payments.php';\nrequire_once __DIR__.'/../config/sharky-member-routing.php';\n")
+          replace_once(test,"member_eq(hache_sharky_member_intent('¿Cuánto debo de mensualidad?'),'payments','Payment questions must be deterministic.');\n","member_eq(hache_sharky_member_intent('¿Cuánto debo de mensualidad?'),'payments','Payment questions must be deterministic.');\nmember_eq(hache_sharky_member_intent('','member:pay'),'payments','Pay-now button must stay in the deterministic payment lane.');\nmember_eq(hache_sharky_member_intent('','member:pay:transfer'),'payments','Payment-method buttons must stay in the deterministic payment lane.');\n")
+          pending_tests=r'''$pendingRegistration=[
               'identity'=>['name'=>'Juan Pérez','student_id'=>'student-1'],
               'student'=>['estado_administrativo'=>'PENDIENTE'],
               'program'=>'intensive',
@@ -119,10 +102,8 @@ jobs:
           member_ok(hache_sharky_member_pending_schedule_problem('Ese horario se me complica'),'Schedule questions must remain available instead of being trapped in payment.');
 
           '''
-          replace_once(test, "$classCtx=[\n", pending_tests + "$classCtx=[\n")
-          replace_once(test,
-              "member_ok(str_contains($payments,\"is_array(\\$event['member_payment']??null)\"),'Transfer proof must be consumed by the registered-student payment processor.');\n",
-              "member_ok(str_contains($payments,\"is_array(\\$event['member_payment']??null)\"),'Transfer proof must be consumed by the registered-student payment processor.');\nmember_ok(str_contains($payments,\"($flow['name']??'')==='member_payment_transfer'\"),'Pagar ahora must clear a stale SPEI evidence wait before changing payment method.');\nmember_ok(str_contains($payments,\"'member-payment-method',$state\"),'Payment-method restart must persist the cleaned member state.');\nmember_ok(str_contains($memberRouter,'hache_sharky_member_pending_payment_payload'),'Pending registrations must prioritize the payment CTA without changing Palapas restrictions.');\n")
+          replace_once(test,"$classCtx=[\n",pending_tests+"$classCtx=[\n")
+          replace_once(test,"member_ok(str_contains($payments,\"is_array(\\$event['member_payment']??null)\"),'Transfer proof must be consumed by the registered-student payment processor.');\n","member_ok(str_contains($payments,\"is_array(\\$event['member_payment']??null)\"),'Transfer proof must be consumed by the registered-student payment processor.');\nmember_ok(str_contains($payments,\"($flow['name']??'')==='member_payment_transfer'\"),'Pagar ahora must clear a stale SPEI evidence wait before changing payment method.');\nmember_ok(str_contains($payments,\"'member-payment-method',$state\"),'Payment-method restart must persist the cleaned member state.');\nmember_ok(str_contains($memberRouter,'hache_sharky_member_pending_payment_payload'),'Pending registrations must prioritize the payment CTA without changing Palapas restrictions.');\n")
           PY
       - name: Validate targeted regressions
         if: steps.gate.outputs.skip != 'true'
