@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/sharky-whatsapp-adapter.php';
 require_once __DIR__.'/../config/sharky-member-ops.php';
 require_once __DIR__.'/../config/sharky-member-payments.php';
+require_once __DIR__.'/../config/sharky-member-routing.php';
 
 function member_ok(bool $ok,string $message): void{if(!$ok){fwrite(STDERR,"FAIL: {$message}\n");exit(1);}}
 function member_eq(mixed $actual,mixed $expected,string $message): void{member_ok($actual===$expected,$message.' expected='.var_export($expected,true).' actual='.var_export($actual,true));}
@@ -12,6 +13,8 @@ function member_eq(mixed $actual,mixed $expected,string $message): void{member_o
 member_eq(hache_sharky_member_intent('Hola'),'greeting','Known members need a deterministic greeting route.');
 member_eq(hache_sharky_member_intent('¿Hay clase hoy?'),'class_today','Today-class questions must be deterministic.');
 member_eq(hache_sharky_member_intent('¿Cuánto debo de mensualidad?'),'payments','Payment questions must be deterministic.');
+member_eq(hache_sharky_member_intent('','member:pay'),'payments','Pay-now button must stay in the deterministic payment lane.');
+member_eq(hache_sharky_member_intent('','member:pay:transfer'),'payments','Payment-method buttons must stay in the deterministic payment lane.');
 member_eq(hache_sharky_member_intent('Hoy no voy a poder ir'),'absence','Natural absence language must start the absence flow.');
 member_eq(hache_sharky_member_intent('¿Cuántas reposiciones tengo?'),'repos','Repossession queries must be recognized.');
 member_eq(hache_sharky_member_intent('Cancela mi clase de hoy'),'teacher_cancel','Teacher cancellation intent must be recognized.');
@@ -38,6 +41,25 @@ $pendingGreeting=[
 $greeting=hache_sharky_member_student_greeting($pendingGreeting);
 member_ok(!str_contains($greeting,'1,200')&&!str_contains($greeting,'$'),'Initial greeting must never expose a pending balance amount.');
 member_ok(!str_contains(mb_strtolower($greeting),'identifi'),'Recognition must stay silent in student-facing copy.');
+
+$pendingRegistration=[
+    'identity'=>['name'=>'Juan Pérez','student_id'=>'student-1'],
+    'student'=>['estado_administrativo'=>'PENDIENTE'],
+    'program'=>'intensive',
+    'payment'=>['kind'=>'intensive','course_id'=>'course-1','price'=>1200.0,'paid'=>0.0,'due'=>1200.0,'pending'=>true],
+];
+$pendingPaymentPayload=hache_sharky_member_pending_payment_payload('529981234567',$pendingRegistration);
+member_ok(is_array($pendingPaymentPayload),'An unpaid pending registration must expose a payment-first prompt.');
+$pendingPaymentText=(string)($pendingPaymentPayload['interactive']['body']['text']??'');
+member_ok(str_contains($pendingPaymentText,'$1,200.00 MXN')&&str_contains($pendingPaymentText,'curso intensivo'),'Pending intensive prompt must show the real balance and program.');
+member_eq($pendingPaymentPayload['interactive']['action']['buttons'][0]['reply']['id']??null,'member:pay','Pending registration must offer one direct Pagar ahora button.');
+member_ok(hache_sharky_member_pending_schedule_problem('Ese horario se me complica'),'Schedule questions must remain available instead of being trapped in payment.');
+
+$transferState=['commercial_context'=>['_member_ops'=>['name'=>'member_payment_transfer','step'=>'evidence','updated_at'=>100]]];
+$restartedState=hache_sharky_member_payment_restart_state($transferState,200);
+member_eq(hache_sharky_member_flow($restartedState),null,'Reopening payment choice must clear a stale SPEI proof wait.');
+$otherState=['commercial_context'=>['_member_ops'=>['name'=>'absence','step'=>'date','updated_at'=>100]]];
+member_eq(hache_sharky_member_payment_restart_state($otherState,200),$otherState,'Reopening payment choice must not erase unrelated member flows.');
 
 $classCtx=[
     'identity'=>['name'=>'Ariel Fernández'],

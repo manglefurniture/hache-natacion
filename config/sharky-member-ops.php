@@ -70,7 +70,7 @@ function hache_sharky_member_intent(string $text,string $interactiveId=''): ?str
 {
     $id=strtolower(trim($interactiveId));
     if($id==='member:class_today')return 'class_today';
-    if($id==='member:payments'||$id==='member:pay')return 'payments';
+    if($id==='member:payments'||$id==='member:pay'||str_starts_with($id,'member:pay:'))return 'payments';
     if($id==='member:absence')return 'absence';
     if($id==='member:repos')return 'repos';
     if($id==='member:teacher_agenda')return 'teacher_agenda';

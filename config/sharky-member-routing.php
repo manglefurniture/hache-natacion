@@ -60,6 +60,19 @@ function hache_sharky_member_pending_message(array $student,string $text,string 
     return 'Claro'.$name.' 😊. Tu inscripción todavía está pendiente. Cuéntame qué necesitas y te ayudo a revisar cómo retomarla.';
 }
 
+function hache_sharky_member_pending_payment_payload(string $contact,array $student): ?array
+{
+    if(!hache_sharky_member_pending_registration($student))return null;
+    $pending=hache_sharky_member_payment_pending_from_context($student);if(!is_array($pending))return null;
+    $payment=$student['payment']??null;if(!is_array($payment)||($payment['pending']??false)!==true)return null;
+    $due=(float)($payment['due']??0);if($due<=0.009)return null;
+    $first=function_exists('hache_sharky_member_first_name')?hache_sharky_member_first_name($student):'';
+    $program=($payment['kind']??'')==='intensive'?'tu inscripción al curso intensivo':'tu inscripción';
+    $amount='$'.number_format($due,2,'.',',').' MXN';
+    $body='¡Hola'.($first!==''?', '.$first:'').'! 😊 '.$program.' sigue pendiente de pago. 💰 Tienes '.$amount.' pendientes. ¿Deseas pagar ahora o cambiar la forma de pago que habías elegido?';
+    return hache_sharky_member_buttons($contact,$body,[['id'=>'member:pay','title'=>'Pagar ahora']]);
+}
+
 function hache_sharky_member_teacher_owned_event(array $teacher,?array $flow,array $event,?string $intent=null): bool
 {
     if(($teacher['found']??false)!==true)return false;
@@ -224,10 +237,14 @@ function hache_sharky_member_student_fallback(PDO $pdo,array $event): bool
         }
 
         if(hache_sharky_member_pending_registration($student)){
-            $body=hache_sharky_member_pending_message($student,$text,$intent);
-            $payload=hache_sharky_whatsapp_text_payload($contact,$body);
-            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
-        }
+    if(!hache_sharky_member_pending_schedule_problem($text)){
+        $paymentPayload=hache_sharky_member_pending_payment_payload($contact,$student);
+        if(is_array($paymentPayload))return hache_sharky_member_queue($pdo,$contact,$event,$state,$paymentPayload,'student-pending-payment');
+    }
+    $body=hache_sharky_member_pending_message($student,$text,$intent);
+    $payload=hache_sharky_whatsapp_text_payload($contact,$body);
+    return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
+}
 
         $body='Claro'.($first!==''?', '.$first:'').' 😊 Dime qué necesitas. Puedo ayudarte con tus clases, pagos, ausencias y reposiciones; si es otra cosa, escríbemela con confianza.';
         $payload=hache_sharky_member_buttons($contact,$body,[
