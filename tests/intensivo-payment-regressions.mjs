@@ -24,6 +24,8 @@ const configApi = read('api/configuracion.php');
 const planVariantsMigration = read('database/migrations/20260907_allow_plan_variants_same_sessions.sql');
 const planVariantsRunner = read('bin/migrate-plan-variants.php');
 const deployImplementation = read('ops/production-readiness/deploy-hache-natacion');
+const accessRules = read('config/reglas-acceso.php');
+const alumnosPage = read('public/alumnos.php');
 
 // El estado de pago canónico sigue siendo alumno + curso + INTENSIVO + VALIDO.
 assert.match(statusApi, /SUM\(p\.importe\)/);
@@ -48,6 +50,12 @@ const paidBranch = detailFlow.indexOf('if(intensivoPagado)');
 const payLink = detailFlow.indexOf("pagar.href='/pagos.php?alumno_id='", paidBranch);
 assert.ok(paidBranch >= 0 && payLink > paidBranch, 'El enlace Pagar debe existir únicamente dentro de la rama no pagada');
 assert.ok(detailFlow.slice(paidBranch, payLink).includes('}else{'), 'Pagar debe quedar detrás del else del estado pagado');
+
+// Un anticipo no concede acceso y Control de Alumnos debe conservar el cobro del saldo.
+assert.match(accessRules, /HAVING COALESCE\(SUM\(p\.importe\),0\)\+0\.009>=ci\.precio/);
+assert.ok(alumnosPage.includes('intensivo_pagado_total'));
+assert.ok(alumnosPage.includes('ANTICIPO $'));
+assert.ok(alumnosPage.includes("$intAnticipo?'Pagar saldo':'Pagar curso'"));
 
 // La ruta general de pagos conoce el curso específico, acepta ambos nombres de
 // parámetro históricos y, cuando hay selección explícita, valida exactamente ese
