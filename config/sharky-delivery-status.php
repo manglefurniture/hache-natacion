@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/sharky-contact-profiles.php';
+
 /** @return array<string,int> */
 function hache_sharky_delivery_status_ranks(): array
 {
@@ -75,6 +77,10 @@ function hache_sharky_delivery_store_event(PDO $pdo,array $event): bool
 /** @return array{seen:int,eligible:int,stored:int,schema_ready:bool} */
 function hache_sharky_delivery_store_payload(PDO $pdo,array $payload,string $configuredPhoneId=''): array
 {
+    // This raw signed webhook payload is also the only reliable place where Meta
+    // gives us the WhatsApp profile name. Contact capture is local/noncritical;
+    // delivery-status semantics remain unchanged if the contact schema is absent.
+    hache_sharky_contact_book_capture_profiles_payload($pdo,$payload);
     $events=hache_sharky_delivery_extract($payload);$seen=count($events);$eligible=[];
     foreach($events as $event){
         $phoneId=(string)$event['phone_number_id'];
