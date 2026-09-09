@@ -20,7 +20,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-      - name: Recover and run controlled patch
+      - name: Apply non-workflow implementation
         env:
           PATCH_SOURCE_SHA: fd472f2090a2fdf6a9c0c9582455001d77cce59c
         run: |
@@ -38,6 +38,7 @@ jobs:
           Path('/tmp/apply-partials.py').write_text('\n'.join(lines)+'\n')
           PY
           python3 /tmp/apply-partials.py
+          git checkout HEAD -- .github/workflows/deploy.yml .github/workflows/quality.yml .github/workflows/tmp-intensive-partials.yml
           php -l config/intensive-partial-payment-triggers.php
           php -l bin/migrate-intensive-partial-payments.php
           php -l tests/intensive-partial-payments-mariadb.php
