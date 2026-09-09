@@ -333,29 +333,36 @@ function hache_sharky_google_contacts_update(string $accessToken,string $resourc
     return hache_sharky_google_contacts_http('PATCH',$url,['Authorization: Bearer '.$accessToken,'Content-Type: application/json'],$body);
 }
 
-function hache_sharky_contact_book_mark_sync(PDO $pdo,string $contactHash,string $status,?string $resourceName=null,string $error=''): void
+function hache_sharky_contact_book_mark_sync(PDO $pdo,string $contactHash,string $expectedDesiredHash,string $status,?string $resourceName=null,string $error=''): bool
 {
     $allowed=['SYNCED','FAILED','UNMANAGED'];if(!in_array($status,$allowed,true))$status='FAILED';
+    if(!preg_match('/^[a-f0-9]{64}$/',$expectedDesiredHash))return false;
     try{
-        $sql='UPDATE sharky_contacts SET sync_status=:s,last_sync_attempt_at=NOW(),last_error=:e,google_resource_name=COALESCE(:g,google_resource_name),synced_at=' . ($status==='SYNCED'?'NOW()':'synced_at') . ' WHERE contact_hash=:c';
-        $st=$pdo->prepare($sql);$st->execute([':s'=>$status,':e'=>$error===''?null:mb_substr($error,0,255),':g'=>$resourceName!==null&&$resourceName!==''?$resourceName:null,':c'=>$contactHash]);
-    }catch(Throwable $e){error_log('[sharky-contact-book] sync marker failed');}
+        $sql='UPDATE sharky_contacts SET sync_status=:s,last_sync_attempt_at=NOW(),last_error=:e,google_resource_name=COALESCE(:g,google_resource_name),synced_at=' . ($status==='SYNCED'?'NOW()':'synced_at') . ' WHERE contact_hash=:c AND desired_hash=:d';
+        $st=$pdo->prepare($sql);$st->execute([':s'=>$status,':e'=>$error===''?null:mb_substr($error,0,255),':g'=>$resourceName!==null&&$resourceName!==''?$resourceName:null,':c'=>$contactHash,':d'=>$expectedDesiredHash]);
+        return $st->rowCount()===1;
+    }catch(Throwable $e){error_log('[sharky-contact-book] sync marker failed');return false;}
 }
 
-function hache_sharky_contact_book_clear_google_resource(PDO $pdo,string $contactHash): void
+function hache_sharky_contact_book_clear_google_resource(PDO $pdo,string $contactHash,string $expectedDesiredHash): bool
 {
-    try{$st=$pdo->prepare("UPDATE sharky_contacts SET google_resource_name=NULL,sync_status='PENDING',last_error=NULL,last_sync_attempt_at=NULL WHERE contact_hash=:c");$st->execute([':c'=>$contactHash]);}catch(Throwable $e){}
+    if(!preg_match('/^[a-f0-9]{64}$/',$expectedDesiredHash))return false;
+    try{
+        $st=$pdo->prepare("UPDATE sharky_contacts SET google_resource_name=NULL,sync_status='PENDING',last_error=NULL,last_sync_attempt_at=NULL WHERE contact_hash=:c AND desired_hash=:d");
+        $st->execute([':c'=>$contactHash,':d'=>$expectedDesiredHash]);return $st->rowCount()===1;
+    }catch(Throwable $e){return false;}
 }
 
-/** @return array<int,array{contact_hash:string,google_resource_name:string,contact:array}> */
+/** @return array<int,array{contact_hash:string,desired_hash:string,google_resource_name:string,contact:array}> */
 function hache_sharky_contact_book_pending(PDO $pdo,int $limit=20): array
 {
     $limit=max(1,min(50,$limit));$out=[];
     try{
-        $rows=$pdo->query("SELECT contact_hash,google_resource_name,contact_ciphertext,contact_iv,contact_tag FROM sharky_contacts WHERE sync_status IN ('PENDING','UNMANAGED') OR (sync_status='FAILED' AND (last_sync_attempt_at IS NULL OR last_sync_attempt_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE))) ORDER BY last_seen_at,contact_hash LIMIT ".$limit)->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$pdo->query("SELECT contact_hash,desired_hash,google_resource_name,contact_ciphertext,contact_iv,contact_tag FROM sharky_contacts WHERE sync_status IN ('PENDING','UNMANAGED') OR (sync_status='FAILED' AND (last_sync_attempt_at IS NULL OR last_sync_attempt_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE))) ORDER BY last_seen_at,contact_hash LIMIT ".$limit)->fetchAll(PDO::FETCH_ASSOC);
         foreach($rows as $row){
             $contact=hache_sharky_contact_book_decrypt($row);if(!is_array($contact))continue;
-            $out[]=['contact_hash'=>(string)$row['contact_hash'],'google_resource_name'=>(string)($row['google_resource_name']??''),'contact'=>$contact];
+            $desiredHash=(string)($row['desired_hash']??'');if(!preg_match('/^[a-f0-9]{64}$/',$desiredHash))continue;
+            $out[]=['contact_hash'=>(string)$row['contact_hash'],'desired_hash'=>$desiredHash,'google_resource_name'=>(string)($row['google_resource_name']??''),'contact'=>$contact];
         }
     }catch(Throwable $e){error_log('[sharky-contact-book] pending read failed');}
     return $out;
@@ -373,24 +380,38 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
         $token=hache_sharky_google_contacts_access_token();
         if($token==='')return array_replace($stats,['failed'=>1]);
         foreach(hache_sharky_contact_book_pending($pdo,$limit) as $row){
-            $stats['processed']++;$hash=$row['contact_hash'];$contact=$row['contact'];$resource=trim($row['google_resource_name']);
+            $stats['processed']++;$hash=$row['contact_hash'];$expected=$row['desired_hash'];$contact=$row['contact'];$resource=trim($row['google_resource_name']);
             try{
                 $latest=null;
                 if($resource!==''){
                     $get=hache_sharky_google_contacts_get($token,$resource);
-                    if($get['status']===404){hache_sharky_contact_book_clear_google_resource($pdo,$hash);$resource='';}
-                    elseif($get['status']>=200&&$get['status']<300&&is_array($get['json']))$latest=$get['json'];
-                    else{hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',$resource,'GOOGLE_GET_FAILED');$stats['failed']++;continue;}
+                    if($get['status']===404){
+                        if(!hache_sharky_contact_book_clear_google_resource($pdo,$hash,$expected))continue;
+                        $resource='';
+                    }elseif($get['status']>=200&&$get['status']<300&&is_array($get['json']))$latest=$get['json'];
+                    else{
+                        if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'FAILED',$resource,'GOOGLE_GET_FAILED'))$stats['failed']++;
+                        continue;
+                    }
                 }
 
                 if($resource===''){
                     $search=hache_sharky_google_contacts_search_exact($token,(string)$contact['e164']);
-                    if(($search['ok']??false)!==true){hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',null,'GOOGLE_SEARCH_FAILED');$stats['failed']++;continue;}
+                    if(($search['ok']??false)!==true){
+                        if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'FAILED',null,'GOOGLE_SEARCH_FAILED'))$stats['failed']++;
+                        continue;
+                    }
                     $matches=is_array($search['matches']??null)?$search['matches']:[];
-                    if(count($matches)>1){hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',null,'GOOGLE_DUPLICATE_PHONE');$stats['failed']++;continue;}
+                    if(count($matches)>1){
+                        if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'FAILED',null,'GOOGLE_DUPLICATE_PHONE'))$stats['failed']++;
+                        continue;
+                    }
                     if(count($matches)===1){
                         $latest=$matches[0];$resource=trim((string)($latest['resourceName']??''));
-                        if($resource===''){hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',null,'GOOGLE_RESOURCE_MISSING');$stats['failed']++;continue;}
+                        if($resource===''){
+                            if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'FAILED',null,'GOOGLE_RESOURCE_MISSING'))$stats['failed']++;
+                            continue;
+                        }
                     }
                 }
 
@@ -402,11 +423,18 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
                     ?hache_sharky_google_contacts_create($token,$contact)
                     :hache_sharky_google_contacts_update($token,$resource,$contact,$latest??[]);
                 if($response['status']<200||$response['status']>=300||!is_array($response['json'])){
-                    hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',$resource,'GOOGLE_WRITE_FAILED');$stats['failed']++;continue;
+                    if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'FAILED',$resource,'GOOGLE_WRITE_FAILED'))$stats['failed']++;
+                    continue;
                 }
                 $savedResource=trim((string)($response['json']['resourceName']??$resource));
-                hache_sharky_contact_book_mark_sync($pdo,$hash,'SYNCED',$savedResource,'');$stats['synced']++;
-            }catch(Throwable $e){hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',$resource,'GOOGLE_SYNC_EXCEPTION');$stats['failed']++;}
+                // Optimistic completion: if a webhook changed the desired contact
+                // while Google was in flight, this stale worker result must not
+                // overwrite the newer row's PENDING status. The next tick will
+                // then push the new desired state.
+                if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'SYNCED',$savedResource,''))$stats['synced']++;
+            }catch(Throwable $e){
+                if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'FAILED',$resource,'GOOGLE_SYNC_EXCEPTION'))$stats['failed']++;
+            }
         }
     }finally{
         try{$pdo->query("SELECT RELEASE_LOCK('".HACHE_SHARKY_GOOGLE_CONTACTS_LOCK."')");}catch(Throwable $e){}
