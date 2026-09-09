@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-orchestrator-store.php';
+require_once __DIR__.'/sharky-contact-book.php';
 
 function hache_sharky_inbox_key(): string
 {
@@ -30,9 +31,13 @@ function hache_sharky_inbox_store(PDO $pdo,array $event): bool
         $sealed=hache_sharky_inbox_encrypt($event);$type=mb_substr((string)($event['kind']??$event['type']??'message'),0,30);$hash=hache_sharky_orchestrator_contact_hash($contact);
         $st=$pdo->prepare('INSERT IGNORE INTO sharky_message_receipts(message_id,contact_hash,message_type,payload_ciphertext,payload_iv,payload_tag,attempt_count) VALUES(:m,:c,:t,:p,:iv,:tag,0)');
         $st->execute([':m'=>$id,':c'=>$hash,':t'=>$type,':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag']]);
-        if($st->rowCount()===1)return true;
+        if($st->rowCount()===1){
+            hache_sharky_contact_book_capture_event($pdo,$event);
+            return true;
+        }
         $st=$pdo->prepare('UPDATE sharky_message_receipts SET payload_ciphertext=COALESCE(payload_ciphertext,:p),payload_iv=COALESCE(payload_iv,:iv),payload_tag=COALESCE(payload_tag,:tag) WHERE message_id=:m');
         $st->execute([':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':m'=>$id]);
+        hache_sharky_contact_book_capture_event($pdo,$event);
         return true;
     }catch(Throwable $e){error_log('[sharky-inbox] persist failed');return false;}
 }

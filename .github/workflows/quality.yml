@@ -20,6 +20,8 @@ jobs:
         run: find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
       - name: Static regressions and JavaScript syntax
         run: npm test
+      - name: Sharky contact book regression
+        run: php tests/sharky-contact-book-regression.php
       - name: Sharky member routing and midnight takeover regression
         run: php tests/sharky-member-routing-midnight-regression.php
       - name: Sharky entry, Palapas red light and registration email regression
@@ -76,6 +78,14 @@ jobs:
           DELIVERY_DB_USER: root
           DELIVERY_DB_PASS: root
         run: php tests/sharky-member-ops-mariadb.php
+      - name: Sharky contact book MariaDB regression
+        env:
+          DELIVERY_DB_HOST: 127.0.0.1
+          DELIVERY_DB_PORT: 3306
+          DELIVERY_DB_NAME: hache_delivery_test
+          DELIVERY_DB_USER: root
+          DELIVERY_DB_PASS: root
+        run: php tests/sharky-contact-book-mariadb.php
       - name: Production readiness RUM MariaDB regression
         env:
           DELIVERY_DB_HOST: 127.0.0.1

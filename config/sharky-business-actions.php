@@ -255,6 +255,23 @@ function hache_sharky_business_register_intensive(PDO $pdo, array $action, ?stri
         $st->execute([':id'=>hache_sharky_business_uuid($pdo), ':c'=>$courseId, ':a'=>$studentId, ':h'=>$scheduleId, ':o'=>'Inscripción automática desde WhatsApp/Sharky. Pendiente de confirmación/pago.', ':u'=>$actorId]);
         $pdo->commit();
 
+        // The enrollment transaction is already authoritative at this point.
+        // Refresh only the auxiliary contact book after commit so a prospect is
+        // promoted to “Alumno Hache” immediately. Contact-sync failures must
+        // never roll back or hide a successful enrollment.
+        if (function_exists('hache_sharky_contact_book_capture_event')) {
+            try {
+                hache_sharky_contact_book_capture_event($pdo, [
+                    'id'=>'registration:'.$studentId,
+                    'from'=>$digits,
+                    'kind'=>'registration_created',
+                    'data'=>['full_name'=>$name],
+                ]);
+            } catch (Throwable $contactError) {
+                error_log('[sharky-contact-book] post-registration refresh failed');
+            }
+        }
+
         return [
             'ok'=>true,
             'code'=>'CREATED',
