@@ -40,6 +40,9 @@ assert.ok(detailApi.includes("$alumnoCurso['intensivo_pagado']=$alumnoCurso['int
 
 // La pantalla real del detalle no debe ofrecer Pagar a quien ya está pagado.
 assert.ok(detailFlow.includes('const intensivoPagado=alumno.intensivo_pagado===true||Number(alumno.intensivo_pagado)===1'));
+assert.ok(detailFlow.includes('const pagadoTotal=Number(alumno.intensivo_pagado_total||0)'));
+assert.ok(detailFlow.includes("anticipo.textContent='Anticipo $'"));
+assert.ok(detailFlow.includes("pagar.textContent=pagadoTotal>0?'Pagar saldo':'Pagar'"));
 assert.ok(detailFlow.includes("pagado.textContent='Pagado ✓'"));
 const paidBranch = detailFlow.indexOf('if(intensivoPagado)');
 const payLink = detailFlow.indexOf("pagar.href='/pagos.php?alumno_id='", paidBranch);

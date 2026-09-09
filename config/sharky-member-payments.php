@@ -191,9 +191,6 @@ function hache_sharky_member_payment_process_event(PDO $pdo,array $event,array $
         hache_sharky_member_payment_reconcile_student($pdo,$studentId);
         $ctx=hache_sharky_member_student_context($pdo,$contact);
         $payment=$ctx['payment']??null;
-        if($id!=='member:pay'&&is_array($payment)&&hache_sharky_member_payment_partial_intensive($payment)){
-            return hache_sharky_member_payment_queue_owned($pdo,$contact,$event,hache_sharky_member_payment_partial_message($payment),'member-payment-partial');
-        }
     }
 
     $method=null;
