@@ -25,15 +25,17 @@ const planVariantsMigration = read('database/migrations/20260907_allow_plan_vari
 const planVariantsRunner = read('bin/migrate-plan-variants.php');
 
 // El estado de pago canónico sigue siendo alumno + curso + INTENSIVO + VALIDO.
+assert.match(statusApi, /SUM\(p\.importe\)/);
 assert.match(statusApi, /p\.alumno_id=cia\.alumno_id/);
 assert.match(statusApi, /p\.intensivo_id=cia\.curso_intensivo_id/);
 assert.match(statusApi, /p\.tipo='INTENSIVO'/);
 assert.match(statusApi, /p\.estado='VALIDO'/);
 assert.doesNotMatch(statusApi, /\b(?:INSERT|UPDATE|DELETE)\b/i, 'El endpoint puntual de estado debe ser solo lectura');
 
-// El API que alimenta exactamente las tarjetas de intensivo debe traer el pago en bloque.
-assert.match(detailApi, /EXISTS\(SELECT 1 FROM pagos p WHERE p\.alumno_id=cia\.alumno_id AND p\.intensivo_id=cia\.curso_intensivo_id AND p\.tipo='INTENSIVO' AND p\.estado='VALIDO'\) AS intensivo_pagado/);
-assert.ok(detailApi.includes("$alumnoCurso['intensivo_pagado']=(int)($alumnoCurso['intensivo_pagado']??0)===1"));
+// El API que alimenta exactamente las tarjetas de intensivo debe acumular abonos y solo marcar PAGADO al liquidar.
+assert.match(detailApi, /SUM\(p\.importe\).*AS intensivo_pagado_total/);
+assert.ok(detailApi.includes("$alumnoCurso['intensivo_saldo']=max(0.0,round((float)$curso['precio']-$alumnoCurso['intensivo_pagado_total'],2))"));
+assert.ok(detailApi.includes("$alumnoCurso['intensivo_pagado']=$alumnoCurso['intensivo_saldo']<=0.009"));
 
 // La pantalla real del detalle no debe ofrecer Pagar a quien ya está pagado.
 assert.ok(detailFlow.includes('const intensivoPagado=alumno.intensivo_pagado===true||Number(alumno.intensivo_pagado)===1'));
@@ -76,10 +78,10 @@ assert.ok(paymentPage.includes("intensiveCourses=await leerCatalogoIntensivos('/
 assert.ok(paymentPage.includes("intensiveCourses=await leerCatalogoIntensivos('/api/alumno-intensivos-pago.php?'"));
 assert.ok(paymentPage.includes("function cursoSolicitado(){return query.get('curso_intensivo_id')||query.get('curso_id')||'';}"));
 
-// La barrera transaccional auditada permanece intacta como defensa final.
-assert.match(paymentCore, /WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1/,
-  'La barrera transaccional contra pagos duplicados debe permanecer intacta');
-assert.ok(paymentCore.includes('Este alumno ya pagó este curso intensivo'), 'Debe conservarse el rechazo explícito del duplicado');
+// La barrera transaccional ahora acumula abonos válidos y rechaza únicamente exceder el saldo.
+assert.match(paymentCore, /SELECT id,importe FROM pagos WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE/);
+assert.ok(paymentCore.includes('El importe supera el saldo pendiente del curso intensivo'));
+assert.ok(paymentCore.includes("$estadoPagoIntensivo=$saldoIntensivoDespues<=0.009?'PAGADO':'ANTICIPO'"));
 
 // ADMIN puede seleccionar expresamente un curso histórico sin reabrirlo. La
 // selección explícita valida la relación alumno+curso+sede, pero no exige que el
@@ -94,11 +96,13 @@ assert.ok(paymentCore.includes("hache_admin_history($pdo,$alumnoId,'PAGO'"));
 
 // El formulario administrativo muestra todos los intensivos en los que el
 // alumno está inscrito, incluidos históricos, obliga a seleccionar uno y envía
-// su id al core de pagos. Un curso ya pagado no puede volver a elegirse.
+// su id al core de pagos. Un curso con anticipo sigue elegible y sugiere solo el saldo.
 assert.ok(paymentPage.includes('id="curso_intensivo_id"'));
 assert.ok(paymentPage.includes('/api/alumno-intensivos-pago.php?'));
 assert.ok(paymentPage.includes("if(tipo==='INTENSIVO')datos.curso_intensivo_id=cursoId"));
+assert.ok(paymentPage.includes("option.dataset.balance=curso.saldo??curso.precio??''"));
 assert.ok(paymentPage.includes("option.disabled=curso.pagado===true"));
+assert.ok(paymentPage.includes('ANTICIPO '+money(curso.pagado_total)));
 assert.ok(paymentPage.includes("query.get('curso_intensivo_id')"));
 assert.ok(paymentPage.includes("query.get('curso_id')"));
 assert.match(historicalPaymentCourses, /WHERE cia\.alumno_id=:a AND ci\.sede_id=:s/);
@@ -125,7 +129,7 @@ const preflight = quickPay.indexOf('consultarEstadoIntensivo(target.id, target.c
 const submit = quickPay.indexOf("fetch('/api/pagos-smart.php'", preflight);
 assert.ok(preflight >= 0 && submit > preflight, 'Debe volver a comprobar el estado antes de registrar un pago intensivo');
 assert.ok(quickPay.includes('const target = current'), 'El pago rápido debe congelar el objetivo antes de esperar');
-assert.ok(quickPay.includes('const pagado = await consultarEstadoIntensivo(target.id, target.courseId)'), 'La comprobación debe usar el objetivo congelado');
+assert.ok(quickPay.includes('const estado = await consultarEstadoIntensivo(target.id, target.courseId)'), 'La comprobación debe usar el objetivo congelado');
 assert.ok(quickPay.includes('if (current !== target) return;'), 'La operación debe abortar si el modal cambia durante la espera');
 assert.ok(quickPay.includes('let inFlight = null;'), 'El pago rápido debe conservar un bloqueo mientras el POST está pendiente');
 assert.ok(quickPay.includes('if (inFlight) return;'), 'Un segundo pago no debe iniciar mientras el primero sigue en vuelo');

@@ -50,7 +50,7 @@
     if (!response.ok || !data.ok) {
       throw new Error(data.error || 'No se pudo comprobar el estado del intensivo');
     }
-    return data.pagado === true;
+    return data;
   }
 
   function marcarIntensivoPagado(trigger) {
@@ -67,8 +67,9 @@
     if (type !== 'INTENSIVO' || !courseId) return false;
 
     try {
-      const pagado = await consultarEstadoIntensivo(trigger.dataset.id || '', courseId);
-      if (!pagado) return false;
+      const estado = await consultarEstadoIntensivo(trigger.dataset.id || '', courseId);
+      trigger.dataset.intensiveBalance = String(estado.saldo ?? '');
+      if (!estado.pagado) return false;
       marcarIntensivoPagado(trigger);
       if (!silencioso) {
         alert('Este curso intensivo ya aparece pagado. No se registrará otro cobro.');
@@ -87,7 +88,7 @@
     ensureModal();
     const type = (btn.dataset.paymentType || 'MENSUALIDAD').toUpperCase();
     const usarObligacion = type === 'MENSUALIDAD' && mensualidadPendiente;
-    const price = usarObligacion ? mensualidadPendiente.importe_a_cobrar : btn.dataset.price;
+    const price = usarObligacion ? mensualidadPendiente.importe_a_cobrar : (type === 'INTENSIVO' && btn.dataset.intensiveBalance ? btn.dataset.intensiveBalance : btn.dataset.price);
     const standardPrice = usarObligacion ? mensualidadPendiente.importe_estandar : btn.dataset.price;
     const periodMes = usarObligacion ? Number(mensualidadPendiente.mes) : null;
     const periodAnio = usarObligacion ? Number(mensualidadPendiente.anio) : null;
@@ -111,7 +112,7 @@
     const intensive = current.type === 'INTENSIVO';
     const inscription = current.type === 'INSCRIPCION';
     document.getElementById('hqp-title').textContent = (intensive ? 'Pago de intensivo · ' : inscription ? 'Pago de inscripción · ' : 'Pago de mensualidad · ') + current.name;
-    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad · ' + current.periodLabel + ' · importe pendiente ' + money(current.price);
+    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · saldo pendiente ' + money(current.price) : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad · ' + current.periodLabel + ' · importe pendiente ' + money(current.price);
     document.getElementById('hqp-amount').value = Number(current.price || 0);
     document.getElementById('hqp-error').style.display = 'none';
     document.getElementById('hqp-save').disabled = inFlight !== null;
@@ -147,9 +148,9 @@
 
       if (target.type === 'INTENSIVO' && target.courseId) {
         try {
-          const pagado = await consultarEstadoIntensivo(target.id, target.courseId);
+          const estado = await consultarEstadoIntensivo(target.id, target.courseId);
           if (current !== target) return;
-          if (pagado) {
+          if (estado.pagado) {
             const trigger = target.trigger;
             marcarIntensivoPagado(trigger);
             close();

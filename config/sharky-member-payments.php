@@ -27,13 +27,12 @@ function hache_sharky_member_payment_partial_message(array $payment): string
 {
     $paid=number_format((float)($payment['paid']??0),2,'.',',');
     $due=number_format((float)($payment['due']??0),2,'.',',');
-    return 'Ya tienes $'.$paid.' MXN registrados en tu curso y quedan $'.$due.' MXN pendientes. 😊 Para completar ese saldo, escríbenos por aquí y te ayudamos sin crear un cobro duplicado.';
+    return 'Ya tienes $'.$paid.' MXN registrados en tu curso y quedan $'.$due.' MXN pendientes. 😊 Puedes completar ese saldo desde aquí eligiendo nuevamente tu forma de pago.';
 }
 
 function hache_sharky_member_payment_pending_from_context(array $ctx): ?array
 {
     $payment=$ctx['payment']??null;if(!is_array($payment)||($payment['pending']??false)!==true||(float)($payment['due']??0)<=0)return null;
-    if(hache_sharky_member_payment_partial_intensive($payment))return null;
     $studentId=trim((string)($ctx['identity']['student_id']??''));if($studentId==='')return null;
     if(($payment['kind']??'')==='monthly'){
         $resource=trim((string)($payment['monthly_id']??''));if($resource==='')return null;
@@ -76,9 +75,9 @@ function hache_sharky_member_payment_reconcile_intent(PDO $pdo,array $intent): a
         $st=$pdo->prepare("SELECT id FROM pagos WHERE alumno_id=:a AND estado='VALIDO' AND observacion=:o LIMIT 1");$st->execute([':a'=>$studentId,':o'=>$marker]);$existing=$st->fetchColumn();
         if(!$existing){
             if($kind==='INTENSIVO'&&!empty($row['intensivo_id'])){
-                $guard=$pdo->prepare("SELECT id FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE");
-                $guard->execute([':a'=>$studentId,':i'=>$row['intensivo_id']]);
-                if($guard->fetchColumn())throw new RuntimeException('Intensive already has a valid payment; approved MP intent requires manual reconciliation');
+                $course=$pdo->prepare("SELECT precio FROM cursos_intensivos WHERE id=:i LIMIT 1 FOR UPDATE");$course->execute([':i'=>$row['intensivo_id']]);$coursePrice=$course->fetchColumn();if($coursePrice===false)throw new RuntimeException('Intensive payment target missing');
+                $guard=$pdo->prepare("SELECT id,importe FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE");$guard->execute([':a'=>$studentId,':i'=>$row['intensivo_id']]);$alreadyPaid=0.0;foreach($guard->fetchAll(PDO::FETCH_ASSOC) as $existingPayment){$alreadyPaid+=(float)$existingPayment['importe'];}
+                if($alreadyPaid+$base>(float)$coursePrice+0.009)throw new RuntimeException('Approved MP payment exceeds the remaining intensive balance; manual reconciliation required');
             }
             $actor=hache_sharky_business_actor_id($pdo);$paymentId=(string)$pdo->query('SELECT UUID()')->fetchColumn();$st=$pdo->prepare("INSERT INTO pagos(id,alumno_id,mensualidad_id,intensivo_id,tipo,importe,metodo,fecha,estado,observacion,created_by) VALUES(:id,:a,:m,:i,:t,:imp,'MERCADO_PAGO',NOW(),'VALIDO',:o,:u)");$st->execute([':id'=>$paymentId,':a'=>$studentId,':m'=>$row['mensualidad_id'],':i'=>$row['intensivo_id'],':t'=>$kind,':imp'=>number_format($base,2,'.',''),':o'=>$marker,':u'=>$actor]);
             if($kind==='MENSUALIDAD'&&!empty($row['mensualidad_id'])){$m=$pdo->prepare("SELECT importe_a_cobrar,COALESCE(importe_cobrado,0) importe_cobrado FROM mensualidades WHERE id=:id AND alumno_id=:a LIMIT 1 FOR UPDATE");$m->execute([':id'=>$row['mensualidad_id'],':a'=>$studentId]);$monthly=$m->fetch(PDO::FETCH_ASSOC);if(!$monthly)throw new RuntimeException('Monthly payment target missing');$newPaid=min((float)$monthly['importe_a_cobrar'],(float)$monthly['importe_cobrado']+$base);$newState=$newPaid+0.009>=(float)$monthly['importe_a_cobrar']?'PAGADA':'PENDIENTE';$u=$pdo->prepare("UPDATE mensualidades SET importe_cobrado=:p,estado=:e,fecha_pago=IF(:e2='PAGADA',NOW(),fecha_pago) WHERE id=:id");$u->execute([':p'=>number_format($newPaid,2,'.',''),':e'=>$newState,':e2'=>$newState,':id'=>$row['mensualidad_id']]);}
