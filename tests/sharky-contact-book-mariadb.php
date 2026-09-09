@@ -64,6 +64,16 @@ $profile=contact_book_db_payload($pdo,'529981111222');
 contact_book_db_expect(($profile['row']['role']??'')==='PROSPECT','WhatsApp profile must seed a prospect contact.');
 contact_book_db_expect(($profile['payload']['managed_name']??'')==='MARÍA LÓPEZ — PROSPECTO HACHE','Prospect contacts must be uppercase.');
 
+$groupPayload=['entry'=>[['changes'=>[['value'=>[
+    'metadata'=>['phone_number_id'=>'PHONE-HACHE'],
+    'contacts'=>[['wa_id'=>'529981111223','profile'=>['name'=>'Grupo Persona']]],
+    'messages'=>[['id'=>'wamid.group','from'=>'529981111223','group_id'=>'120363-group','type'=>'text','text'=>['body'=>'Hola grupo']]],
+]]]]]];
+contact_book_db_expect(hache_sharky_contact_book_capture_profiles_payload($pdo,$groupPayload,'PHONE-HACHE')===0,'Group participants must not enter the personal contact book.');
+$groupHash=hache_sharky_orchestrator_contact_hash('529981111223');
+$st=$pdo->prepare('SELECT COUNT(*) FROM sharky_contacts WHERE contact_hash=:c');$st->execute([':c'=>$groupHash]);
+contact_book_db_expect((int)$st->fetchColumn()===0,'Group-only profile must not create a contact row.');
+
 // MV intensive: MV SEP 14 - NAME SURNAME (8 AM)
 $mvIntensiveId='11111111-1111-1111-1111-111111111111';
 $pdo->prepare('INSERT INTO alumnos(id,nombre,whatsapp,sede_id,plan_actual_id,horario_preferido_id) VALUES(?,?,?,?,?,?)')->execute([$mvIntensiveId,'Juan Pérez Gómez','+529981234567','s-mv',null,'h-mv-19']);
@@ -95,6 +105,7 @@ $pdo->prepare('INSERT INTO alumnos(id,nombre,whatsapp,sede_id,plan_actual_id,hor
 contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>'529981234570','kind'=>'message']),'PAL regular student capture must succeed.');
 $palRegular=contact_book_db_payload($pdo,'529981234570');
 contact_book_db_expect(($palRegular['payload']['managed_name']??'')==='PAL - LUIS MORA (8 AM)','Palapas regular contact format is incorrect.');
+$palOldDesired=(string)($palRegular['row']['desired_hash']??'');
 
 // Backend override applies without changing naming code.
 $pdo->exec("INSERT INTO configuracion(clave,valor) VALUES('sharky_contact_sigla_palapas','PP')");
@@ -102,6 +113,15 @@ contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>'52
 $palOverride=contact_book_db_payload($pdo,'529981234570');
 contact_book_db_expect(($palOverride['payload']['managed_name']??'')==='PP - LUIS MORA (8 AM)','Configured venue sigla must override the default.');
 contact_book_db_expect(($palOverride['row']['sync_status']??'')==='PENDING','A naming change must re-arm Google synchronization.');
+contact_book_db_expect((string)($palOverride['row']['desired_hash']??'')!==$palOldDesired,'Naming change must produce a new desired hash.');
+$palHash=hache_sharky_orchestrator_contact_hash('529981234570');
+contact_book_db_expect(!hache_sharky_contact_book_mark_sync($pdo,$palHash,$palOldDesired,'SYNCED','people/stale',''),'A stale worker snapshot must not mark a newer desired state as synced.');
+$palAfterStale=contact_book_db_payload($pdo,'529981234570');
+contact_book_db_expect(($palAfterStale['row']['sync_status']??'')==='PENDING','Stale Google completion must leave the newer contact pending.');
+contact_book_db_expect((string)($palAfterStale['row']['desired_hash']??'')===(string)($palOverride['row']['desired_hash']??''),'Stale completion must not change the newer desired hash.');
+contact_book_db_expect(hache_sharky_contact_book_mark_sync($pdo,$palHash,(string)$palOverride['row']['desired_hash'],'SYNCED','people/current',''),'Current worker snapshot should mark the exact desired state as synced.');
+$palSynced=contact_book_db_payload($pdo,'529981234570');
+contact_book_db_expect(($palSynced['row']['sync_status']??'')==='SYNCED','Exact desired hash should complete synchronization.');
 
 // Teacher identity still wins over a student with the same phone and remains uppercase.
 $teacherId='55555555-5555-5555-5555-555555555555';
