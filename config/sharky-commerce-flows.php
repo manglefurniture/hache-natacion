@@ -658,7 +658,7 @@ function hache_sharky_commerce_handle_event(PDO $pdo,array $state,array $event,a
         if ($action==='cancel') {
             $state=hache_sharky_orchestrator_clear_flow($state);
             $decision=function_exists('hache_sharky_whatsapp_commercial_next_action')
-                ?hache_sharky_whatsapp_commercial_next_action($state,'Entendido 😊 Cancelé el formulario. Conservé tu curso y sede.')
+                ?hache_sharky_whatsapp_commercial_next_action($state,'Entendido. Cancelé el formulario. Conservé tu curso y sede.')
                 :hache_sharky_orchestrator_decision('commerce_enrollment_cancelled','Entendido, cancelé el formulario. No registré nada.');
             return ['state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
         }
