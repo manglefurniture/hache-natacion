@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-commercial-memory.php';
-require_once __DIR__.'/sharky-deterministic-replies.php';
 
 function hache_sharky_whatsapp_extract(array $payload): array
 {
@@ -585,15 +584,24 @@ function hache_sharky_whatsapp_intensive_information_message(array $state,string
         return hache_sharky_whatsapp_commercial_ready_message($state,$prefix);
     }
     $sedeLabel=hache_sharky_whatsapp_venue_label($sede);
-    $pdo=hache_sharky_pdo();
-    $business=hache_sharky_business_values($pdo instanceof PDO?$pdo:null);
+    $pdo=function_exists('hache_sharky_pdo')?hache_sharky_pdo():null;
+    $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo instanceof PDO?$pdo:null):[];
     $selected=$commercial['course_price']??($state['selected_course_price']??null);
-    $price=is_numeric($selected)?(float)$selected:(float)hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000);
+    $configured=function_exists('hache_sharky_config_int')?hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000):1200;
+    $price=is_numeric($selected)?(float)$selected:(float)$configured;
     $priceText=number_format($price,0,'.',',');
     $message=rtrim($prefix).' En '.$sedeLabel.', el curso intensivo tiene un precio total de $'.$priceText.' MXN. Es un solo pago por el curso completo.';
     $hours=[];
     if($pdo instanceof PDO){
-        try{$hours=hache_sharky_deterministic_active_schedules($pdo,'intensive',$sede);}catch(Throwable $ignored){}
+        try{
+            $st=$pdo->prepare("SELECT h.hora_inicio,h.hora_fin FROM horarios h JOIN sedes s ON s.id=h.sede_id WHERE s.clave=:c AND s.activo=1 AND h.activo=1 AND h.intensivo=1 ORDER BY h.hora_inicio");
+            $st->execute([':c'=>$sede]);
+            foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+                $start=substr((string)($row['hora_inicio']??''),0,5);$end=substr((string)($row['hora_fin']??''),0,5);
+                if($start!==''&&$end!=='')$hours[]=$start.'–'.$end;
+            }
+            $hours=array_values(array_unique($hours));
+        }catch(Throwable $ignored){}
     }
     if($hours){
         $message.="
