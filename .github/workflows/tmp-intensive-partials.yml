@@ -1,0 +1,309 @@
+name: Temp Intensive Partials Patch
+
+on:
+  push:
+    branches: [feat/intensive-partial-payments-20260909]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/intensive-partial-payments-20260909
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Apply controlled partial-payment patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p=Path(path); s=p.read_text()
+              n=s.count(old)
+              if n!=1:
+                  raise SystemExit(f'{path}: expected 1 exact match, got {n}')
+              p.write_text(s.replace(old,new,1))
+
+          def regex_once(path, pattern, repl, flags=0):
+              p=Path(path); s=p.read_text()
+              out,n=re.subn(pattern,repl,s,count=1,flags=flags)
+              if n!=1:
+                  raise SystemExit(f'{path}: expected 1 regex match, got {n}')
+              p.write_text(out)
+
+          # Core payment transaction: allow multiple installments but never exceed course balance.
+          replace_once('api/pagos-smart.php',
+              "$inscripcionId=null;$mensualidadId=null;$intensivoId=null;$cambioPlanProgramado=false;$pagoIntensivoHistorico=false;$cursoPago=null;",
+              "$inscripcionId=null;$mensualidadId=null;$intensivoId=null;$cambioPlanProgramado=false;$pagoIntensivoHistorico=false;$cursoPago=null;$saldoIntensivoDespues=null;$estadoPagoIntensivo=null;")
+          replace_once('api/pagos-smart.php',
+              " $stmt=$pdo->prepare(\"SELECT id FROM pagos WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1\");$stmt->execute([':curso'=>$intensivoId,':alumno'=>$alumnoId]);if($stmt->fetch())throw new RuntimeException('Este alumno ya pagó este curso intensivo');",
+              " $stmt=$pdo->prepare(\"SELECT id,importe FROM pagos WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE\");$stmt->execute([':curso'=>$intensivoId,':alumno'=>$alumnoId]);$pagadoIntensivo=0.0;foreach($stmt->fetchAll(PDO::FETCH_ASSOC) as $pagoPrevio){$pagadoIntensivo+=(float)$pagoPrevio['importe'];}$precioIntensivo=(float)$cursoPago['precio'];$saldoIntensivo=max(0.0,round($precioIntensivo-$pagadoIntensivo,2));if($saldoIntensivo<=0.009)throw new RuntimeException('Este curso intensivo ya está liquidado');if((float)$importeDecimal>$saldoIntensivo+0.009)throw new RuntimeException('El importe supera el saldo pendiente del curso intensivo: $'.number_format($saldoIntensivo,2,'.',','));$saldoIntensivoDespues=max(0.0,round($saldoIntensivo-(float)$importeDecimal,2));$estadoPagoIntensivo=$saldoIntensivoDespues<=0.009?'PAGADO':'ANTICIPO';")
+          replace_once('api/pagos-smart.php',
+              "'pago_intensivo_historico'=>$pagoIntensivoHistorico,'pago'=>$stmt->fetch()",
+              "'pago_intensivo_historico'=>$pagoIntensivoHistorico,'saldo_intensivo'=>$tipo==='INTENSIVO'?$saldoIntensivoDespues:null,'estado_pago_intensivo'=>$tipo==='INTENSIVO'?$estadoPagoIntensivo:null,'pago'=>$stmt->fetch()")
+
+          # Sharky: a residual intensive balance is now payable instead of being blocked as duplicate.
+          replace_once('config/sharky-member-payments.php',
+              "    if(hache_sharky_member_payment_partial_intensive($payment))return null;\n",
+              "")
+          replace_once('config/sharky-member-payments.php',
+              "    return 'Ya tienes $'.$paid.' MXN registrados en tu curso y quedan $'.$due.' MXN pendientes. 😊 Para completar ese saldo, escríbenos por aquí y te ayudamos sin crear un cobro duplicado.';",
+              "    return 'Ya tienes $'.$paid.' MXN registrados en tu curso y quedan $'.$due.' MXN pendientes. 😊 Puedes completar ese saldo desde aquí eligiendo nuevamente tu forma de pago.';")
+          replace_once('config/sharky-member-payments.php',
+              "            if($kind==='INTENSIVO'&&!empty($row['intensivo_id'])){\n                $guard=$pdo->prepare(\"SELECT id FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE\");\n                $guard->execute([':a'=>$studentId,':i'=>$row['intensivo_id']]);\n                if($guard->fetchColumn())throw new RuntimeException('Intensive already has a valid payment; approved MP intent requires manual reconciliation');\n            }",
+              "            if($kind==='INTENSIVO'&&!empty($row['intensivo_id'])){\n                $course=$pdo->prepare(\"SELECT precio FROM cursos_intensivos WHERE id=:i LIMIT 1 FOR UPDATE\");$course->execute([':i'=>$row['intensivo_id']]);$coursePrice=$course->fetchColumn();if($coursePrice===false)throw new RuntimeException('Intensive payment target missing');\n                $guard=$pdo->prepare(\"SELECT id,importe FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE\");$guard->execute([':a'=>$studentId,':i'=>$row['intensivo_id']]);$alreadyPaid=0.0;foreach($guard->fetchAll(PDO::FETCH_ASSOC) as $existingPayment){$alreadyPaid+=(float)$existingPayment['importe'];}\n                if($alreadyPaid+$base>(float)$coursePrice+0.009)throw new RuntimeException('Approved MP payment exceeds the remaining intensive balance; manual reconciliation required');\n            }")
+
+          # Admin course catalogs/status: paid means fully paid; expose accumulated payment and remaining balance.
+          for path in ['api/pagos.php','api/alumno-intensivos-pago.php']:
+              s=Path(path).read_text()
+              s2=re.sub(r"EXISTS\(\s*SELECT 1 FROM pagos p\s*WHERE p\.alumno_id=cia\.alumno_id\s*AND p\.intensivo_id=ci\.id\s*AND p\.tipo='INTENSIVO'\s*AND p\.estado='VALIDO'\s*\) pagado",
+                        "COALESCE((SELECT SUM(p.importe) FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=ci.id AND p.tipo='INTENSIVO' AND p.estado='VALIDO'),0) pagado_total",s,count=1,flags=re.S)
+              if s2==s: raise SystemExit(f'{path}: payment catalog SQL pattern not found')
+              old="        $course['pagado']=(int)$course['pagado']===1;" if path.endswith('alumno-intensivos-pago.php') else "                $curso['pagado']=(int)$curso['pagado']===1;"
+              if path.endswith('alumno-intensivos-pago.php'):
+                  new="        $course['pagado_total']=(float)($course['pagado_total']??0);$course['saldo']=max(0.0,round((float)$course['precio']-$course['pagado_total'],2));$course['pagado']=$course['saldo']<=0.009;$course['estado_pago']=$course['pagado']?'PAGADO':($course['pagado_total']>0.009?'ANTICIPO':'PENDIENTE');"
+              else:
+                  new="                $curso['pagado_total']=(float)($curso['pagado_total']??0);$curso['saldo']=max(0.0,round((float)$curso['precio']-$curso['pagado_total'],2));$curso['pagado']=$curso['saldo']<=0.009;$curso['estado_pago']=$curso['pagado']?'PAGADO':($curso['pagado_total']>0.009?'ANTICIPO':'PENDIENTE');"
+              if old not in s2: raise SystemExit(f'{path}: payment catalog mapping not found')
+              Path(path).write_text(s2.replace(old,new,1))
+
+          # Point status endpoint returns full balance snapshot, still read-only.
+          p=Path('api/intensivo-pago-estado.php'); s=p.read_text()
+          old='''        "SELECT cia.curso_intensivo_id,cia.alumno_id,\n            EXISTS(\n                SELECT 1\n                FROM pagos p\n                WHERE p.alumno_id=cia.alumno_id\n                  AND p.intensivo_id=cia.curso_intensivo_id\n                  AND p.tipo='INTENSIVO'\n                  AND p.estado='VALIDO'\n            ) AS pagado\n         FROM curso_intensivo_alumnos cia'''
+          new='''        "SELECT cia.curso_intensivo_id,cia.alumno_id,ci.precio,\n            COALESCE((\n                SELECT SUM(p.importe)\n                FROM pagos p\n                WHERE p.alumno_id=cia.alumno_id\n                  AND p.intensivo_id=cia.curso_intensivo_id\n                  AND p.tipo='INTENSIVO'\n                  AND p.estado='VALIDO'\n            ),0) AS pagado_total\n         FROM curso_intensivo_alumnos cia'''
+          if old not in s: raise SystemExit('api/intensivo-pago-estado.php: query block not found')
+          s=s.replace(old,new,1)
+          old="""    intensive_payment_status_out([\n        'ok' => true,\n        'curso_id' => (string)$relation['curso_intensivo_id'],\n        'alumno_id' => (string)$relation['alumno_id'],\n        'pagado' => (int)$relation['pagado'] === 1,\n    ]);"""
+          new="""    $price=(float)$relation['precio'];\n    $paid=(float)$relation['pagado_total'];\n    $balance=max(0.0,round($price-$paid,2));\n    intensive_payment_status_out([\n        'ok' => true,\n        'curso_id' => (string)$relation['curso_intensivo_id'],\n        'alumno_id' => (string)$relation['alumno_id'],\n        'precio' => $price,\n        'pagado_total' => $paid,\n        'saldo' => $balance,\n        'estado_pago' => $balance<=0.009?'PAGADO':($paid>0.009?'ANTICIPO':'PENDIENTE'),\n        'pagado' => $balance<=0.009,\n    ]);"""
+          if old not in s: raise SystemExit('api/intensivo-pago-estado.php: response block not found')
+          p.write_text(s.replace(old,new,1))
+
+          # Intensive detail roster must not label a 50% installment as fully paid.
+          p=Path('api/intensivo-alumnos.php'); s=p.read_text()
+          old="EXISTS(SELECT 1 FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=cia.curso_intensivo_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO') AS intensivo_pagado"
+          new="COALESCE((SELECT SUM(p.importe) FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=cia.curso_intensivo_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO'),0) AS intensivo_pagado_total"
+          if old not in s: raise SystemExit('api/intensivo-alumnos.php: roster payment SQL not found')
+          s=s.replace(old,new,1)
+          old="$alumnosCurso=$stmt->fetchAll();foreach($alumnosCurso as &$alumnoCurso){$alumnoCurso['intensivo_pagado']=(int)($alumnoCurso['intensivo_pagado']??0)===1;}unset($alumnoCurso);"
+          new="$alumnosCurso=$stmt->fetchAll();foreach($alumnosCurso as &$alumnoCurso){$alumnoCurso['intensivo_pagado_total']=(float)($alumnoCurso['intensivo_pagado_total']??0);$alumnoCurso['intensivo_saldo']=max(0.0,round((float)$curso['precio']-$alumnoCurso['intensivo_pagado_total'],2));$alumnoCurso['intensivo_pagado']=$alumnoCurso['intensivo_saldo']<=0.009;$alumnoCurso['intensivo_estado_pago']=$alumnoCurso['intensivo_pagado']?'PAGADO':($alumnoCurso['intensivo_pagado_total']>0.009?'ANTICIPO':'PENDIENTE');}unset($alumnoCurso);"
+          if old not in s: raise SystemExit('api/intensivo-alumnos.php: roster mapping not found')
+          p.write_text(s.replace(old,new,1))
+
+          # Payments page: keep partially paid courses selectable and suggest only the remaining balance.
+          replace_once('public/pagos.php',
+              "intensiveCourses.forEach(curso=>{const option=document.createElement('option');option.value=curso.id;option.dataset.price=curso.precio??'';option.dataset.historico=curso.historico?'1':'0';option.disabled=curso.pagado===true;option.textContent=fechaCorta(curso.fecha_inicio)+' · '+(curso.historico?'HISTÓRICO':curso.estado)+(curso.pagado?' · PAGADO':'')+' · '+money(curso.precio);cursoSelect.appendChild(option);});",
+              "intensiveCourses.forEach(curso=>{const option=document.createElement('option');option.value=curso.id;option.dataset.price=curso.precio??'';option.dataset.balance=curso.saldo??curso.precio??'';option.dataset.historico=curso.historico?'1':'0';option.disabled=curso.pagado===true;const pago=curso.pagado?'PAGADO':Number(curso.pagado_total||0)>0?'ANTICIPO '+money(curso.pagado_total)+' · SALDO '+money(curso.saldo):'PENDIENTE · SALDO '+money(curso.saldo??curso.precio);option.textContent=fechaCorta(curso.fecha_inicio)+' · '+(curso.historico?'HISTÓRICO':curso.estado)+' · '+pago+' · CURSO '+money(curso.precio);cursoSelect.appendChild(option);});")
+          replace_once('public/pagos.php',
+              "    if(selected?.dataset.price)importeInput.value=selected.dataset.price;",
+              "    if(selected?.dataset.balance)importeInput.value=selected.dataset.balance;else if(selected?.dataset.price)importeInput.value=selected.dataset.price;")
+
+          # Quick pay caches the server balance and pre-fills the remaining amount.
+          replace_once('public/assets/alumnos-quick-pay.js',
+              "    return data.pagado === true;",
+              "    return data;")
+          replace_once('public/assets/alumnos-quick-pay.js',
+              "      const pagado = await consultarEstadoIntensivo(trigger.dataset.id || '', courseId);\n      if (!pagado) return false;",
+              "      const estado = await consultarEstadoIntensivo(trigger.dataset.id || '', courseId);\n      trigger.dataset.intensiveBalance = String(estado.saldo ?? '');\n      if (!estado.pagado) return false;")
+          replace_once('public/assets/alumnos-quick-pay.js',
+              "    const price = usarObligacion ? mensualidadPendiente.importe_a_cobrar : btn.dataset.price;",
+              "    const price = usarObligacion ? mensualidadPendiente.importe_a_cobrar : (type === 'INTENSIVO' && btn.dataset.intensiveBalance ? btn.dataset.intensiveBalance : btn.dataset.price);")
+          replace_once('public/assets/alumnos-quick-pay.js',
+              "    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · importe sugerido según el curso' : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad · ' + current.periodLabel + ' · importe pendiente ' + money(current.price);",
+              "    document.getElementById('hqp-sub').textContent = intensive ? 'Curso intensivo · saldo pendiente ' + money(current.price) : inscription ? 'Inscripción administrativa · importe sugerido según sede' : 'Mensualidad · ' + current.periodLabel + ' · importe pendiente ' + money(current.price);")
+          replace_once('public/assets/alumnos-quick-pay.js',
+              "          const pagado = await consultarEstadoIntensivo(target.id, target.courseId);\n          if (current !== target) return;\n          if (pagado) {",
+              "          const estado = await consultarEstadoIntensivo(target.id, target.courseId);\n          if (current !== target) return;\n          if (estado.pagado) {")
+
+          # Regression expectations move from one-payment uniqueness to balance accumulation.
+          replace_once('tests/sharky-member-ops-regression.php',
+              "member_eq(hache_sharky_member_payment_pending_from_context($partialContext),null,'A residual intensive balance must never create a second checkout.');",
+              "member_ok(is_array(hache_sharky_member_payment_pending_from_context($partialContext)),'A residual intensive balance must remain payable through the existing method selector.');")
+          replace_once('tests/sharky-member-ops-regression.php',
+              "member_ok(str_contains($payments,\"tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1 FOR UPDATE\"),'MP reconciliation must revalidate the one-valid-intensive-payment invariant inside the transaction.');",
+              "member_ok(str_contains($payments,\"SELECT id,importe FROM pagos WHERE alumno_id=:a AND intensivo_id=:i AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE\"),'MP reconciliation must lock and sum prior intensive installments before adding another one.');\nmember_ok(str_contains($payments,'exceeds the remaining intensive balance'),'MP reconciliation must reject an overpayment race instead of blocking every second installment.');")
+
+          p=Path('tests/intensivo-payment-regressions.mjs'); s=p.read_text()
+          s=s.replace("assert.match(statusApi, /p\\.alumno_id=cia\\.alumno_id/);", "assert.match(statusApi, /SUM\\(p\\.importe\\)/);\nassert.match(statusApi, /p\\.alumno_id=cia\\.alumno_id/);",1)
+          old="""// El API que alimenta exactamente las tarjetas de intensivo debe traer el pago en bloque.\nassert.match(detailApi, /EXISTS\\(SELECT 1 FROM pagos p WHERE p\\.alumno_id=cia\\.alumno_id AND p\\.intensivo_id=cia\\.curso_intensivo_id AND p\\.tipo='INTENSIVO' AND p\\.estado='VALIDO'\\) AS intensivo_pagado/);\nassert.ok(detailApi.includes(\"$alumnoCurso['intensivo_pagado']=(int)($alumnoCurso['intensivo_pagado']??0)===1\"));"""
+          new="""// El API que alimenta exactamente las tarjetas de intensivo debe acumular abonos y solo marcar PAGADO al liquidar.\nassert.match(detailApi, /SUM\\(p\\.importe\\).*AS intensivo_pagado_total/);\nassert.ok(detailApi.includes(\"$alumnoCurso['intensivo_saldo']=max(0.0,round((float)$curso['precio']-$alumnoCurso['intensivo_pagado_total'],2))\"));\nassert.ok(detailApi.includes(\"$alumnoCurso['intensivo_pagado']=$alumnoCurso['intensivo_saldo']<=0.009\"));"""
+          if old not in s: raise SystemExit('tests/intensivo-payment-regressions.mjs: detail assertions not found')
+          s=s.replace(old,new,1)
+          old="""// La barrera transaccional auditada permanece intacta como defensa final.\nassert.match(paymentCore, /WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' LIMIT 1/,\n  'La barrera transaccional contra pagos duplicados debe permanecer intacta');\nassert.ok(paymentCore.includes('Este alumno ya pagó este curso intensivo'), 'Debe conservarse el rechazo explícito del duplicado');"""
+          new="""// La barrera transaccional ahora acumula abonos válidos y rechaza únicamente exceder el saldo.\nassert.match(paymentCore, /SELECT id,importe FROM pagos WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE/);\nassert.ok(paymentCore.includes('El importe supera el saldo pendiente del curso intensivo'));\nassert.ok(paymentCore.includes(\"$estadoPagoIntensivo=$saldoIntensivoDespues<=0.009?'PAGADO':'ANTICIPO'\"));"""
+          if old not in s: raise SystemExit('tests/intensivo-payment-regressions.mjs: core barrier assertions not found')
+          s=s.replace(old,new,1)
+          s=s.replace("// alumno está inscrito, incluidos históricos, obliga a seleccionar uno y envía\n// su id al core de pagos. Un curso ya pagado no puede volver a elegirse.","// alumno está inscrito, incluidos históricos, obliga a seleccionar uno y envía\n// su id al core de pagos. Un curso con anticipo sigue elegible y sugiere solo el saldo.",1)
+          s=s.replace("assert.ok(paymentPage.includes(\"option.disabled=curso.pagado===true\"));","assert.ok(paymentPage.includes(\"option.dataset.balance=curso.saldo??curso.precio??''\"));\nassert.ok(paymentPage.includes(\"option.disabled=curso.pagado===true\"));\nassert.ok(paymentPage.includes('ANTICIPO '+"+"money(curso.pagado_total)));",1)
+          s=s.replace("const pagado = await consultarEstadoIntensivo(target.id, target.courseId)","const estado = await consultarEstadoIntensivo(target.id, target.courseId)",1)
+          s=s.replace("assert.ok(quickPay.includes('const pagado = await consultarEstadoIntensivo(target.id, target.courseId)'), 'La comprobación debe usar el objetivo congelado');","assert.ok(quickPay.includes('const estado = await consultarEstadoIntensivo(target.id, target.courseId)'), 'La comprobación debe usar el objetivo congelado y conservar el saldo');\nassert.ok(quickPay.includes(\"trigger.dataset.intensiveBalance = String(estado.saldo ?? '')\"), 'Pago rápido debe precargar el saldo restante');",1)
+          p.write_text(s)
+
+          # Database trigger source: multiple valid installments, uniqueness for monthly/registration, overpayment protection for intensives.
+          Path('config/intensive-partial-payment-triggers.php').write_text(r'''<?php
+
+declare(strict_types=1);
+
+function hache_intensive_partial_payment_trigger_statements(): array
+{
+    $insert=<<<'SQL'
+CREATE TRIGGER trg_un_pago_valido_insert
+BEFORE INSERT ON pagos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado = 'VALIDO' THEN
+        IF NEW.inscripcion_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.inscripcion_id = NEW.inscripcion_id AND p.estado = 'VALIDO') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta inscripción';
+        END IF;
+        IF NEW.mensualidad_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id = NEW.mensualidad_id AND p.estado = 'VALIDO') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta mensualidad';
+        END IF;
+        IF NEW.intensivo_id IS NOT NULL AND (
+            COALESCE((SELECT SUM(p.importe) FROM pagos p WHERE p.intensivo_id=NEW.intensivo_id AND p.alumno_id=NEW.alumno_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO'),0) + NEW.importe
+        ) > COALESCE((SELECT ci.precio FROM cursos_intensivos ci WHERE ci.id=NEW.intensivo_id),0) + 0.009 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El abono supera el saldo pendiente del intensivo';
+        END IF;
+    END IF;
+END
+SQL;
+    $update=<<<'SQL'
+CREATE TRIGGER trg_un_pago_valido_update
+BEFORE UPDATE ON pagos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado = 'VALIDO' THEN
+        IF NEW.inscripcion_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.inscripcion_id = NEW.inscripcion_id AND p.estado = 'VALIDO' AND p.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta inscripción';
+        END IF;
+        IF NEW.mensualidad_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id = NEW.mensualidad_id AND p.estado = 'VALIDO' AND p.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta mensualidad';
+        END IF;
+        IF NEW.intensivo_id IS NOT NULL AND (
+            COALESCE((SELECT SUM(p.importe) FROM pagos p WHERE p.intensivo_id=NEW.intensivo_id AND p.alumno_id=NEW.alumno_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO' AND p.id <> NEW.id),0) + NEW.importe
+        ) > COALESCE((SELECT ci.precio FROM cursos_intensivos ci WHERE ci.id=NEW.intensivo_id),0) + 0.009 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El abono supera el saldo pendiente del intensivo';
+        END IF;
+    END IF;
+END
+SQL;
+    return ['DROP TRIGGER IF EXISTS trg_un_pago_valido_insert','DROP TRIGGER IF EXISTS trg_un_pago_valido_update',$insert,$update];
+}
+
+function hache_intensive_partial_payment_triggers_ready(PDO $pdo): bool
+{
+    $st=$pdo->prepare("SELECT TRIGGER_NAME,ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME IN ('trg_un_pago_valido_insert','trg_un_pago_valido_update')");
+    $st->execute();$rows=$st->fetchAll(PDO::FETCH_KEY_PAIR);
+    foreach(['trg_un_pago_valido_insert','trg_un_pago_valido_update'] as $name){$body=(string)($rows[$name]??'');if($body===''||!str_contains($body,'El abono supera el saldo pendiente del intensivo')||str_contains($body,'Este alumno ya tiene un pago válido para este intensivo'))return false;}
+    return true;
+}
+
+function hache_intensive_partial_payment_apply(PDO $pdo): void
+{
+    if(hache_intensive_partial_payment_triggers_ready($pdo))return;
+    foreach(hache_intensive_partial_payment_trigger_statements() as $sql)$pdo->exec($sql);
+    if(!hache_intensive_partial_payment_triggers_ready($pdo))throw new RuntimeException('No se pudieron verificar los triggers de abonos intensivos');
+}
+''')
+
+          Path('database/migrations/20260909_intensive_partial_payments.sql').write_text(r'''-- Hache Natación: abonos parciales de curso intensivo.
+-- Conserva unicidad en inscripción/mensualidad, permite varios pagos válidos
+-- por alumno+curso y bloquea que la suma exceda el precio del curso.
+DROP TRIGGER IF EXISTS trg_un_pago_valido_insert;
+DROP TRIGGER IF EXISTS trg_un_pago_valido_update;
+
+DELIMITER $$
+CREATE TRIGGER trg_un_pago_valido_insert
+BEFORE INSERT ON pagos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado = 'VALIDO' THEN
+        IF NEW.inscripcion_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.inscripcion_id = NEW.inscripcion_id AND p.estado = 'VALIDO') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta inscripción';
+        END IF;
+        IF NEW.mensualidad_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id = NEW.mensualidad_id AND p.estado = 'VALIDO') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta mensualidad';
+        END IF;
+        IF NEW.intensivo_id IS NOT NULL AND (COALESCE((SELECT SUM(p.importe) FROM pagos p WHERE p.intensivo_id=NEW.intensivo_id AND p.alumno_id=NEW.alumno_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO'),0) + NEW.importe) > COALESCE((SELECT ci.precio FROM cursos_intensivos ci WHERE ci.id=NEW.intensivo_id),0) + 0.009 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El abono supera el saldo pendiente del intensivo';
+        END IF;
+    END IF;
+END$$
+CREATE TRIGGER trg_un_pago_valido_update
+BEFORE UPDATE ON pagos
+FOR EACH ROW
+BEGIN
+    IF NEW.estado = 'VALIDO' THEN
+        IF NEW.inscripcion_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.inscripcion_id = NEW.inscripcion_id AND p.estado = 'VALIDO' AND p.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta inscripción';
+        END IF;
+        IF NEW.mensualidad_id IS NOT NULL AND EXISTS (SELECT 1 FROM pagos p WHERE p.mensualidad_id = NEW.mensualidad_id AND p.estado = 'VALIDO' AND p.id <> NEW.id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe un pago válido para esta mensualidad';
+        END IF;
+        IF NEW.intensivo_id IS NOT NULL AND (COALESCE((SELECT SUM(p.importe) FROM pagos p WHERE p.intensivo_id=NEW.intensivo_id AND p.alumno_id=NEW.alumno_id AND p.tipo='INTENSIVO' AND p.estado='VALIDO' AND p.id <> NEW.id),0) + NEW.importe) > COALESCE((SELECT ci.precio FROM cursos_intensivos ci WHERE ci.id=NEW.intensivo_id),0) + 0.009 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El abono supera el saldo pendiente del intensivo';
+        END IF;
+    END IF;
+END$$
+DELIMITER ;
+''')
+
+          Path('bin/migrate-intensive-partial-payments.php').write_text(r'''<?php
+
+declare(strict_types=1);
+
+require_once __DIR__.'/../config/intensive-partial-payment-triggers.php';
+$config=require __DIR__.'/../config/database.php';
+$pdo=new PDO("mysql:host={$config['host']};port=".((int)($config['port']??3306)).";dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+if(hache_intensive_partial_payment_triggers_ready($pdo)){fwrite(STDOUT,"INTENSIVE_PARTIAL_PAYMENTS_ALREADY_READY\n");exit(0);}
+hache_intensive_partial_payment_apply($pdo);
+fwrite(STDOUT,"INTENSIVE_PARTIAL_PAYMENTS_MIGRATION_OK\n");
+''')
+
+          Path('tests/intensive-partial-payments-mariadb.php').write_text(r'''<?php
+
+declare(strict_types=1);
+require_once __DIR__.'/../config/intensive-partial-payment-triggers.php';
+function part_ok(bool $ok,string $message):void{if(!$ok){fwrite(STDERR,"FAIL: {$message}\n");exit(1);}}
+$host=getenv('DELIVERY_DB_HOST')?:'127.0.0.1';$port=(int)(getenv('DELIVERY_DB_PORT')?:3306);$user=getenv('DELIVERY_DB_USER')?:'root';$pass=getenv('DELIVERY_DB_PASS')?:'root';
+$admin=new PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+$db='hache_partial_'.getmypid();$admin->exec("CREATE DATABASE `{$db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+try{$pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+$pdo->exec("CREATE TABLE cursos_intensivos(id CHAR(36) PRIMARY KEY,precio DECIMAL(10,2) NOT NULL) ENGINE=InnoDB");
+$pdo->exec("CREATE TABLE pagos(id CHAR(36) PRIMARY KEY,alumno_id CHAR(36) NOT NULL,inscripcion_id CHAR(36) NULL,mensualidad_id CHAR(36) NULL,intensivo_id CHAR(36) NULL,tipo ENUM('INSCRIPCION','MENSUALIDAD','INTENSIVO') NOT NULL,importe DECIMAL(10,2) NOT NULL,estado ENUM('VALIDO','INVALIDO') NOT NULL DEFAULT 'VALIDO') ENGINE=InnoDB");
+$pdo->prepare("INSERT INTO cursos_intensivos(id,precio) VALUES('course-1',1200.00)")->execute();hache_intensive_partial_payment_apply($pdo);part_ok(hache_intensive_partial_payment_triggers_ready($pdo),'Los triggers nuevos deben quedar verificables');
+$insert=$pdo->prepare("INSERT INTO pagos(id,alumno_id,intensivo_id,tipo,importe,estado) VALUES(:id,'student-1','course-1','INTENSIVO',:importe,'VALIDO')");$insert->execute([':id'=>'p1',':importe'=>'600.00']);$insert->execute([':id'=>'p2',':importe'=>'600.00']);$sum=(float)$pdo->query("SELECT SUM(importe) FROM pagos WHERE alumno_id='student-1' AND intensivo_id='course-1' AND estado='VALIDO'")->fetchColumn();part_ok(abs($sum-1200.0)<0.009,'Dos abonos de 600 deben liquidar un curso de 1200');
+$blocked=false;try{$insert->execute([':id'=>'p3',':importe'=>'1.00']);}catch(PDOException $e){$blocked=str_contains($e->getMessage(),'El abono supera el saldo pendiente del intensivo');}part_ok($blocked,'Un tercer abono que exceda el precio debe bloquearse');
+$pdo->exec("INSERT INTO pagos(id,alumno_id,mensualidad_id,tipo,importe,estado) VALUES('m1','student-1','monthly-1','MENSUALIDAD',1000,'VALIDO')");$monthlyBlocked=false;try{$pdo->exec("INSERT INTO pagos(id,alumno_id,mensualidad_id,tipo,importe,estado) VALUES('m2','student-1','monthly-1','MENSUALIDAD',1,'VALIDO')");}catch(PDOException $e){$monthlyBlocked=true;}part_ok($monthlyBlocked,'La unicidad de mensualidad debe permanecer intacta');
+$updateBlocked=false;try{$pdo->exec("UPDATE pagos SET importe=700 WHERE id='p2'");}catch(PDOException $e){$updateBlocked=str_contains($e->getMessage(),'El abono supera el saldo pendiente del intensivo');}part_ok($updateBlocked,'Editar un abono tampoco puede exceder el precio del curso');
+$sql=file_get_contents(__DIR__.'/../database/migrations/20260909_intensive_partial_payments.sql')?:'';part_ok(str_contains($sql,'SUM(p.importe)')&&str_contains($sql,'El abono supera el saldo pendiente del intensivo'),'La migración SQL debe documentar la misma protección');fwrite(STDOUT,"INTENSIVE_PARTIAL_PAYMENTS_MARIADB_OK\n");
+}finally{$admin->exec("DROP DATABASE IF EXISTS `{$db}`");}
+''')
+
+          # Run the migration automatically after an approved production deploy.
+          replace_once('.github/workflows/deploy.yml',
+              '            "sudo /usr/local/sbin/deploy-hache-natacion \'$APPROVED_SHA\'"',
+              '            "sudo /usr/local/sbin/deploy-hache-natacion \'$APPROVED_SHA\' && sudo php /var/www/hache-natacion/bin/migrate-intensive-partial-payments.php"')
+
+          # Exercise the trigger change against MariaDB 11.8 on every Quality run.
+          replace_once('.github/workflows/quality.yml',
+              "      - name: Production readiness RUM MariaDB regression\n        env:\n          DELIVERY_DB_HOST: 127.0.0.1",
+              "      - name: Intensive partial payments MariaDB regression\n        env:\n          DELIVERY_DB_HOST: 127.0.0.1\n          DELIVERY_DB_PORT: 3306\n          DELIVERY_DB_NAME: hache_delivery_test\n          DELIVERY_DB_USER: root\n          DELIVERY_DB_PASS: root\n        run: php tests/intensive-partial-payments-mariadb.php\n      - name: Production readiness RUM MariaDB regression\n        env:\n          DELIVERY_DB_HOST: 127.0.0.1")
+
+          # Remove this one-shot workflow from the resulting implementation commit.
+          Path('.github/workflows/tmp-intensive-partials.yml').unlink()
+          PY
+          php -l config/intensive-partial-payment-triggers.php
+          php -l bin/migrate-intensive-partial-payments.php
+          php -l tests/intensive-partial-payments-mariadb.php
+          git config user.name 'Hache Interactive'
+          git config user.email 'manglefurniture@gmail.com'
+          git add -A
+          git commit -m 'feat: soportar abonos parciales en intensivos'
+          git push origin HEAD:feat/intensive-partial-payments-20260909
