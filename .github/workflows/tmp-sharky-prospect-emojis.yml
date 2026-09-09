@@ -39,6 +39,8 @@ jobs:
               "$lead=rtrim($prefix);\n    if($lead==='Perfecto.')$lead='¡Perfecto! 🏊‍♂️';\n    $message=$lead.\"\\n\\n📍 Ya tengo tu sede: \".$sedeLabel.\".\\n\\n💰 El curso intensivo tiene un precio total de $\".$priceText.\" MXN.\\n✅ Es un solo pago por el curso completo.\";"
           )
           replace_once(adapter, 'Horarios disponibles:', '🕒 Horarios disponibles:')
+          replace_once(adapter, 'Ahora mismo no encuentro horarios activos para esta sede.', '🕒 Ahora mismo no encuentro horarios activos para esta sede.')
+          replace_once(adapter, 'No pude consultar los horarios activos en este momento. Prefiero no inventarte datos.', '🕒 No pude consultar los horarios activos en este momento. Prefiero no inventarte datos.')
           replace_once(
               adapter,
               '    }\n    return $message;\n}\n\nfunction hache_sharky_whatsapp_commercial_next_action',
