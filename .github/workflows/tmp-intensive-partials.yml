@@ -17,33 +17,77 @@ jobs:
         with:
           ref: feat/intensive-partial-payments-20260909
           fetch-depth: 0
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-      - name: Apply non-workflow implementation
-        env:
-          PATCH_SOURCE_SHA: fd472f2090a2fdf6a9c0c9582455001d77cce59c
+      - name: Wire idempotent migration into deploy implementation
         run: |
-          git show "$PATCH_SOURCE_SHA:.github/workflows/tmp-intensive-partials.yml" > /tmp/partial-source.yml
           python3 - <<'PY'
           from pathlib import Path
-          source=Path('/tmp/partial-source.yml').read_text()
-          marker="          python3 - <<'PY'\n"
-          start=source.index(marker)+len(marker)
-          end=source.index("\n          PY",start)
-          block=source[start:end]
-          lines=[]
-          for line in block.splitlines():
-              lines.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/apply-partials.py').write_text('\n'.join(lines)+'\n')
+          p=Path('ops/production-readiness/deploy-hache-natacion')
+          s=p.read_text()
+          anchor="""validate_expected_sha() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "se requiere un SHA Git completo de 40 caracteres."
+}
+
+"""
+          addition="""validate_expected_sha() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "se requiere un SHA Git completo de 40 caracteres."
+}
+
+apply_release_migrations() {
+  require_command php
+  local partial_payments="$REPO/bin/migrate-intensive-partial-payments.php"
+  if [[ -f "$partial_payments" ]]; then
+    php "$partial_payments"
+  fi
+}
+
+"""
+          if s.count(anchor)!=1:
+              raise SystemExit('deploy helper: validate anchor mismatch')
+          s=s.replace(anchor,addition,1)
+          old="""  if [[ "$local_sha" == "$remote" ]]; then
+    publish_deployed_sha "$local_sha"
+    echo "Ya esta actualizado: $local_sha"
+    exit 0
+  fi
+"""
+          new="""  if [[ "$local_sha" == "$remote" ]]; then
+    apply_release_migrations
+    publish_deployed_sha "$local_sha"
+    echo "Ya esta actualizado: $local_sha"
+    exit 0
+  fi
+"""
+          if s.count(old)!=1:
+              raise SystemExit('deploy helper: already-updated block mismatch')
+          s=s.replace(old,new,1)
+          old="""  deployed="$(git rev-parse HEAD)"
+  [[ "$deployed" == "$expected_sha" ]] || fail "el SHA desplegado no coincide con el SHA aprobado."
+  publish_deployed_sha "$deployed"
+"""
+          new="""  deployed="$(git rev-parse HEAD)"
+  [[ "$deployed" == "$expected_sha" ]] || fail "el SHA desplegado no coincide con el SHA aprobado."
+  apply_release_migrations
+  publish_deployed_sha "$deployed"
+"""
+          if s.count(old)!=1:
+              raise SystemExit('deploy helper: post-merge block mismatch')
+          p.write_text(s.replace(old,new,1))
+
+          t=Path('tests/intensivo-payment-regressions.mjs')
+          ts=t.read_text()
+          marker="const planVariantsRunner = read('bin/migrate-plan-variants.php');"
+          if marker not in ts:
+              raise SystemExit('regression: constants marker missing')
+          ts=ts.replace(marker,marker+"\nconst deployImplementation = read('ops/production-readiness/deploy-hache-natacion');",1)
+          marker2="assert.ok(!configApi.includes('nombre o número de sesiones'), 'La API no debe seguir comunicando sesiones_semana como clave única');"
+          addition2=marker2+"\n\n// El deploy aplica de forma idempotente la migración de abonos antes de publicar el SHA.\nassert.ok(deployImplementation.includes('apply_release_migrations()'));\nassert.ok(deployImplementation.includes('bin/migrate-intensive-partial-payments.php'));\nconst migrationCall = deployImplementation.indexOf('apply_release_migrations', deployImplementation.indexOf('deployed=\"$(git rev-parse HEAD)\"'));\nconst deployedMarker = deployImplementation.indexOf('publish_deployed_sha \"$deployed\"', migrationCall);\nassert.ok(migrationCall >= 0 && deployedMarker > migrationCall, 'La migración financiera debe completar antes del marcador de deploy');"
+          if marker2 not in ts:
+              raise SystemExit('regression: insertion marker missing')
+          t.write_text(ts.replace(marker2,addition2,1))
           PY
-          python3 /tmp/apply-partials.py
-          git checkout HEAD -- .github/workflows/deploy.yml .github/workflows/quality.yml .github/workflows/tmp-intensive-partials.yml
-          php -l config/intensive-partial-payment-triggers.php
-          php -l bin/migrate-intensive-partial-payments.php
-          php -l tests/intensive-partial-payments-mariadb.php
+          bash -n ops/production-readiness/deploy-hache-natacion
           git config user.name 'Hache Interactive'
           git config user.email 'manglefurniture@gmail.com'
-          git add -A
-          git commit -m 'feat: soportar abonos parciales en intensivos'
+          git add ops/production-readiness/deploy-hache-natacion tests/intensivo-payment-regressions.mjs
+          git commit -m 'ops: migrar abonos durante deploy'
           git push origin HEAD:feat/intensive-partial-payments-20260909
