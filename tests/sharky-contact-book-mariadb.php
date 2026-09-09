@@ -15,14 +15,14 @@ function contact_book_db_expect(bool $ok,string $message): void
 
 $host=(string)(getenv('DELIVERY_DB_HOST')?:'127.0.0.1');
 $port=(int)(getenv('DELIVERY_DB_PORT')?:3306);
-$db=(string)(getenv('DELIVERY_DB_NAME')?:'hache_delivery_test');
 $user=(string)(getenv('DELIVERY_DB_USER')?:'root');
 $pass=(string)(getenv('DELIVERY_DB_PASS')?:'root');
-$pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+$testDb='hache_contact_book_test';
+$admin=new PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+$admin->exec("DROP DATABASE IF EXISTS `{$testDb}`");
+$admin->exec("CREATE DATABASE `{$testDb}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+$pdo=new PDO("mysql:host={$host};port={$port};dbname={$testDb};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 
-$pdo->exec('DROP TABLE IF EXISTS sharky_contacts');
-$pdo->exec('DROP TABLE IF EXISTS alumnos');
-$pdo->exec('DROP TABLE IF EXISTS profesores');
 $pdo->exec("CREATE TABLE alumnos(id CHAR(36) PRIMARY KEY,nombre VARCHAR(180) NOT NULL,whatsapp VARCHAR(32) NOT NULL)");
 $pdo->exec("CREATE TABLE profesores(id CHAR(36) PRIMARY KEY,nombre VARCHAR(180) NOT NULL,whatsapp VARCHAR(32) NOT NULL,activo TINYINT(1) NOT NULL DEFAULT 1)");
 $sql=file_get_contents(__DIR__.'/../database/migrations/20260908_sharky_contact_book.sql');
@@ -68,4 +68,5 @@ contact_book_db_expect(is_array($teacherRow)&&$teacherRow['role']==='TEACHER'&&$
 $teacherPayload=hache_sharky_contact_book_decrypt($teacherRow);
 contact_book_db_expect(($teacherPayload['managed_name']??'')==='Heidy Coach — Coach Hache','Teacher contact must use the coach label.');
 
+$admin->exec("DROP DATABASE IF EXISTS `{$testDb}`");
 fwrite(STDOUT,"SHARKY_CONTACT_BOOK_MARIADB_OK\n");
