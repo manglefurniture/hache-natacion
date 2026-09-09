@@ -57,7 +57,8 @@ contact_book_expect(str_contains($sql,'contact_ciphertext MEDIUMTEXT')&&str_cont
 contact_book_expect(!str_contains($sql,'whatsapp VARCHAR')&&!str_contains($sql,'nombre VARCHAR')&&!str_contains($sql,'phone VARCHAR'),'Migration must not create searchable plaintext phone/name columns.');
 contact_book_expect(str_contains($inbox,"require_once __DIR__.'/sharky-contact-book.php'")&&str_contains($inbox,'hache_sharky_contact_book_capture_event($pdo,$event)'),'Every durable direct inbound/echo must feed the contact authority.');
 contact_book_expect(str_contains($profiles,"\$contact['profile']['name']")&&str_contains($profiles,"\$contact['wa_id']"),'Meta contacts profile name must be captured only with its wa_id.');
-contact_book_expect(str_contains($delivery,'hache_sharky_contact_book_capture_profiles_payload($pdo,$payload)'),'Signed raw webhook processing must feed WhatsApp profile names into the local contact authority.');
+contact_book_expect(str_contains($profiles,"metadata']['phone_number_id")&&str_contains($profiles,'hash_equals($configuredPhoneId,$phoneId)'),'Profile capture must reject events for another WhatsApp business number.');
+contact_book_expect(str_contains($delivery,'hache_sharky_contact_book_capture_profiles_payload($pdo,$payload,$configuredPhoneId)'),'Signed raw webhook processing must feed profile names with the same configured phone-number gate.');
 contact_book_expect(str_contains($worker,'hache_sharky_contact_book_apply_additive_migration($pdo)'),'Only the CLI worker may apply the additive contact migration.');
 contact_book_expect(str_contains($worker,"__DIR__.'/../database/migrations/20260908_sharky_contact_book.sql'"),'CLI migration must use the tracked SQL source of truth.');
 contact_book_expect(str_contains($worker,'hache_sharky_contact_book_sync_pending($pdo,10)'),'Existing one-minute worker must drive external contact sync outside webhook latency.');
