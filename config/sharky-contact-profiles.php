@@ -9,15 +9,17 @@ require_once __DIR__.'/sharky-contact-book.php';
  * Capture it as a naming hint only; student/teacher records remain authoritative.
  * This helper never creates schema and never makes an external request.
  */
-function hache_sharky_contact_book_capture_profiles_payload(PDO $pdo,array $payload): int
+function hache_sharky_contact_book_capture_profiles_payload(PDO $pdo,array $payload,string $configuredPhoneId=''): int
 {
     if(!hache_sharky_contact_book_schema_ready($pdo))return 0;
-    $captured=0;$seen=[];
+    $captured=0;$seen=[];$configuredPhoneId=trim($configuredPhoneId);
     foreach(($payload['entry']??[]) as $entry){
         if(!is_array($entry))continue;
         foreach(($entry['changes']??[]) as $change){
             if(!is_array($change))continue;
             $value=$change['value']??null;if(!is_array($value))continue;
+            $phoneId=trim((string)($value['metadata']['phone_number_id']??''));
+            if($configuredPhoneId!==''&&($phoneId===''||!hash_equals($configuredPhoneId,$phoneId)))continue;
             foreach(($value['contacts']??[]) as $contact){
                 if(!is_array($contact))continue;
                 $waId=preg_replace('/\D+/','',(string)($contact['wa_id']??''))?:'';
