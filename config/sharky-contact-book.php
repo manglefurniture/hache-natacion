@@ -266,21 +266,22 @@ function hache_sharky_google_contacts_person_body(array $contact,?array $metadat
     return $body;
 }
 
-/** @return array<int,array> */
+/** @return array{ok:bool,matches:array<int,array>} */
 function hache_sharky_google_contacts_search_exact(string $accessToken,string $e164): array
 {
     $readMask='names,phoneNumbers,organizations,userDefined,metadata';
     $base='https://people.googleapis.com/v1/people:searchContacts';
     // Google requires a warm-up query before searchContacts so the contact cache is fresh.
-    hache_sharky_google_contacts_http('GET',$base.'?'.http_build_query(['query'=>'','pageSize'=>1,'readMask'=>$readMask]),['Authorization: Bearer '.$accessToken]);
+    $warmup=hache_sharky_google_contacts_http('GET',$base.'?'.http_build_query(['query'=>'','pageSize'=>1,'readMask'=>$readMask]),['Authorization: Bearer '.$accessToken]);
+    if($warmup['status']<200||$warmup['status']>=300)return ['ok'=>false,'matches'=>[]];
     $response=hache_sharky_google_contacts_http('GET',$base.'?'.http_build_query(['query'=>$e164,'pageSize'=>30,'readMask'=>$readMask]),['Authorization: Bearer '.$accessToken]);
-    if($response['status']<200||$response['status']>=300||!is_array($response['json']))return [];
+    if($response['status']<200||$response['status']>=300||!is_array($response['json']))return ['ok'=>false,'matches'=>[]];
     $matches=[];
     foreach(($response['json']['results']??[]) as $result){
         $person=is_array($result['person']??null)?$result['person']:null;
         if($person!==null&&hache_sharky_google_contacts_person_has_phone($person,$e164))$matches[]=$person;
     }
-    return $matches;
+    return ['ok'=>true,'matches'=>$matches];
 }
 
 function hache_sharky_google_contacts_get(string $accessToken,string $resourceName): array
@@ -359,7 +360,9 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
                 }
 
                 if($resource===''){
-                    $matches=hache_sharky_google_contacts_search_exact($token,(string)$contact['e164']);
+                    $search=hache_sharky_google_contacts_search_exact($token,(string)$contact['e164']);
+                    if(($search['ok']??false)!==true){hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',null,'GOOGLE_SEARCH_FAILED');$stats['failed']++;continue;}
+                    $matches=is_array($search['matches']??null)?$search['matches']:[];
                     if(count($matches)>1){hache_sharky_contact_book_mark_sync($pdo,$hash,'FAILED',null,'GOOGLE_DUPLICATE_PHONE');$stats['failed']++;continue;}
                     if(count($matches)===1){
                         $latest=$matches[0];$resource=trim((string)($latest['resourceName']??''));
