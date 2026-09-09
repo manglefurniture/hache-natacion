@@ -108,6 +108,9 @@ $memberMigration=(string)file_get_contents($root.'/database/migrations/20260907_
 member_ok(str_contains($memberMigration,'CREATE TABLE IF NOT EXISTS profesores'),'Professor registry migration is required.');
 member_ok(str_contains($memberMigration,'profesor_horarios'),'Teacher cancellation must be scoped by assigned schedules.');
 member_ok(str_contains($memberMigration,'sharky_ausencia_evidencias'),'Absence evidence metadata must be durable.');
+$coTeachingMigration=(string)file_get_contents($root.'/database/migrations/20260909_professor_coteaching.sql');
+member_ok(str_contains($coTeachingMigration,'DROP INDEX IF EXISTS uq_profesor_cancelacion_sesion'),'Co-teaching migration must remove the legacy session-wide cancellation uniqueness.');
+member_ok(str_contains($coTeachingMigration,'uq_profesor_cancelacion_profesor_sesion'),'Co-teaching migration must make unavailability unique per professor/session pair.');
 $paymentMigration=(string)file_get_contents($root.'/database/migrations/20260907_sharky_member_payments.sql');
 member_ok(str_contains($paymentMigration,'sharky_member_payment_intents'),'Registered-student checkout needs durable payment intents.');
 
@@ -131,6 +134,9 @@ member_ok(str_contains($payments,"is_array(\$event['member_payment']??null)"),'T
 $memberOps=(string)file_get_contents($root.'/config/sharky-member-ops.php');
 member_ok(str_contains($memberOps,"['member_payment']=\$memberPayment"),'Member media extraction must bind transfer proof to the exact student payment context.');
 member_ok(!str_contains($memberOps,'Sharky lo tomará del backend'),'Member copy must not expose backend internals.');
+member_ok(str_contains($memberOps,'remaining_teachers'),'Teacher unavailability must evaluate remaining co-teacher coverage.');
+member_ok(str_contains($memberOps,"'class_cancelled'=>false"),'A professor decline must be able to preserve the class.');
+member_ok(str_contains($memberOps,"'code'=>'SESSION_CANCELLED'"),'The class must cancel only when teacher coverage reaches zero.');
 $api=(string)file_get_contents($root.'/api/profesores.php');
 member_ok(str_contains($api,"auth_require(['ADMIN'])"),'Only administrators may register or assign professors.');
 member_ok(str_contains($api,'auth_csrf_validate'),'Professor administration POSTs must validate CSRF.');
@@ -138,6 +144,9 @@ member_ok(str_contains($api,"'csrf'=>auth_csrf_token()"),'Professor administrati
 member_ok(str_contains($api,"accion:'")===false,'Professor API must not contain UI-side action literals.');
 $professorPage=(string)file_get_contents($root.'/public/profesores.php');
 member_ok(str_contains($professorPage,'csrf:model.csrf'),'Professor administration UI must send the current CSRF token on mutations.');
+member_ok(str_contains($professorPage,'varios horarios')&&str_contains($professorPage,'varios profes'),'Professor UI must explain many-to-many schedule assignment.');
+$deploy=(string)file_get_contents($root.'/ops/production-readiness/deploy-hache-natacion');
+member_ok(str_contains($deploy,'bin/migrate-professor-coteaching.php'),'Deploy must apply the co-teaching migration before publishing the deployed SHA.');
 $status=(string)file_get_contents($root.'/bin/sharky-orchestrator-status.php');
 member_ok(str_contains($status,"'member_ops'=>["),'Operational status must expose a member-ops readiness block.');
 member_ok(str_contains($status,"'routing_ready'=>"),'Operational status must distinguish schema presence from live routing readiness.');

@@ -43,7 +43,7 @@ function hache_sharky_migration_verify_member_schema(PDO $pdo): void
     $requiredUnique=[
         ['table'=>'profesores','index'=>'uq_profesores_whatsapp'],
         ['table'=>'profesor_horarios','index'=>'uq_profesor_horario'],
-        ['table'=>'profesor_cancelaciones','index'=>'uq_profesor_cancelacion_sesion'],
+        ['table'=>'profesor_cancelaciones','index'=>'uq_profesor_cancelacion_profesor_sesion'],
         ['table'=>'sharky_ausencia_evidencias','index'=>'uq_sharky_ausencia_evidencia_message'],
         ['table'=>'sharky_member_payment_intents','index'=>'uq_sharky_member_payment_external'],
     ];
@@ -61,6 +61,7 @@ $migrations=[
     $root.'/database/migrations/20260905_sharky_delivery_status.sql',
     $root.'/database/migrations/20260907_sharky_member_ops.sql',
     $root.'/database/migrations/20260907_sharky_member_payments.sql',
+    $root.'/database/migrations/20260909_professor_coteaching.sql',
 ];
 
 try{

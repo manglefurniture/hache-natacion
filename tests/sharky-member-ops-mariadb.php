@@ -44,6 +44,7 @@ $apply=static function(PDO $pdo,string $file):void{
 $root=dirname(__DIR__);
 $apply($pdo,$root.'/database/migrations/20260907_sharky_member_ops.sql');
 $apply($pdo,$root.'/database/migrations/20260907_sharky_member_payments.sql');
+$apply($pdo,$root.'/database/migrations/20260909_professor_coteaching.sql');
 
 $required=['profesores','profesor_horarios','profesor_cancelaciones','sharky_ausencia_evidencias','sharky_member_payment_intents'];
 $marks=implode(',',array_fill(0,count($required),'?'));
@@ -71,12 +72,18 @@ member_db_expect($duplicatePhoneBlocked,'Professor WhatsApp must remain unique.'
 $pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo,created_by) VALUES(UUID(),:p,:h,1,:u)")->execute([':p'=>$teacher,':h'=>$schedule,':u'=>$admin]);
 $duplicateAssignmentBlocked=false;
 try{$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo) VALUES(UUID(),:p,:h,1)")->execute([':p'=>$teacher,':h'=>$schedule]);}catch(PDOException $e){$duplicateAssignmentBlocked=true;}
-member_db_expect($duplicateAssignmentBlocked,'Professor/schedule assignment must be unique.');
+member_db_expect($duplicateAssignmentBlocked,'Professor/schedule assignment must be unique per pair.');
+$teacher2='00000000-0000-0000-0000-000000000011';
+$pdo->prepare("INSERT INTO profesores(id,nombre,whatsapp,activo,created_by) VALUES(:id,'Profe Dos','+529981112244',1,:u)")->execute([':id'=>$teacher2,':u'=>$admin]);
+$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo,created_by) VALUES(UUID(),:p,:h,1,:u)")->execute([':p'=>$teacher2,':h'=>$schedule,':u'=>$admin]);
+member_db_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_horarios WHERE horario_id='{$schedule}' AND activo=1")->fetchColumn()===2,'One schedule must allow multiple active professors.');
 
 $pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,action_key) VALUES(UUID(),:p,:s,'Prueba','SHARKY',:a)")->execute([':p'=>$teacher,':s'=>$session,':a'=>str_repeat('a',64)]);
+$pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,action_key) VALUES(UUID(),:p,:s,'Cobertura compartida','SHARKY',:a)")->execute([':p'=>$teacher2,':s'=>$session,':a'=>str_repeat('b',64)]);
+member_db_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_cancelaciones WHERE sesion_id='{$session}'")->fetchColumn()===2,'Co-teachers must be able to declare unavailability independently for the same session.');
 $duplicateCancellationBlocked=false;
 try{$pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo) VALUES(UUID(),:p,:s,'Otra')")->execute([':p'=>$teacher,':s'=>$session]);}catch(PDOException $e){$duplicateCancellationBlocked=true;}
-member_db_expect($duplicateCancellationBlocked,'One session must have at most one professor cancellation audit row.');
+member_db_expect($duplicateCancellationBlocked,'The same professor/session unavailability must remain unique.');
 
 $pdo->prepare("INSERT INTO sharky_ausencia_evidencias(id,ausencia_id,alumno_id,source_message_id,media_id,media_type) VALUES(UUID(),:aus,:a,'wamid.member.1','media-1','image')")->execute([':aus'=>$absence,':a'=>$student]);
 $duplicateEvidenceBlocked=false;

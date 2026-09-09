@@ -200,6 +200,10 @@ apply_release_migrations() {
   if [[ -f "$partial_payments" ]]; then
     php "$partial_payments"
   fi
+  local professor_coteaching="$REPO/bin/migrate-professor-coteaching.php"
+  if [[ -f "$professor_coteaching" ]]; then
+    php "$professor_coteaching"
+  fi
 }
 
 deploy_sha() {

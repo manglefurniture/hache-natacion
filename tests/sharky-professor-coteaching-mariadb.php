@@ -1,0 +1,36 @@
+<?php
+declare(strict_types=1);
+function coteach_expect(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
+$host=(string)(getenv('DELIVERY_DB_HOST')?:'127.0.0.1');$port=(int)(getenv('DELIVERY_DB_PORT')?:3306);$db=(string)(getenv('DELIVERY_DB_NAME')?:'hache_delivery_test');$user=(string)(getenv('DELIVERY_DB_USER')?:'root');$pass=(string)(getenv('DELIVERY_DB_PASS')?:'root');
+$pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+$pdo->exec('SET FOREIGN_KEY_CHECKS=0');foreach(['curso_intensivo_alumnos','cursos_intensivos','profesor_cancelaciones','profesor_horarios','profesores','sesiones','horarios','usuarios'] as $table)$pdo->exec('DROP TABLE IF EXISTS `'.$table.'`');$pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+$c='ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+$pdo->exec("CREATE TABLE usuarios(id CHAR(36) PRIMARY KEY,rol VARCHAR(30) NOT NULL,activo TINYINT(1) NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) {$c}");
+$pdo->exec("CREATE TABLE profesores(id CHAR(36) PRIMARY KEY,nombre VARCHAR(180) NOT NULL,whatsapp VARCHAR(20) NOT NULL,activo TINYINT(1) NOT NULL DEFAULT 1) {$c}");
+$pdo->exec("CREATE TABLE horarios(id CHAR(36) PRIMARY KEY,sede_id CHAR(36) NOT NULL,hora_inicio TIME NOT NULL,hora_fin TIME NOT NULL,activo TINYINT(1) NOT NULL DEFAULT 1) {$c}");
+$pdo->exec("CREATE TABLE profesor_horarios(id CHAR(36) PRIMARY KEY,profesor_id CHAR(36) NOT NULL,horario_id CHAR(36) NOT NULL,activo TINYINT(1) NOT NULL DEFAULT 1,UNIQUE KEY uq_profesor_horario(profesor_id,horario_id)) {$c}");
+$pdo->exec("CREATE TABLE sesiones(id CHAR(36) PRIMARY KEY,fecha DATE NOT NULL,horario_id CHAR(36) NOT NULL,estado VARCHAR(30) NOT NULL DEFAULT 'PROGRAMADA',motivo_cancelacion VARCHAR(500) NULL,cerrada TINYINT(1) NOT NULL DEFAULT 0,fecha_cierre DATETIME NULL,cerrada_por CHAR(36) NULL) {$c}");
+$pdo->exec("CREATE TABLE profesor_cancelaciones(id CHAR(36) PRIMARY KEY,profesor_id CHAR(36) NOT NULL,sesion_id CHAR(36) NOT NULL,motivo VARCHAR(500) NOT NULL,source VARCHAR(20) NOT NULL DEFAULT 'SHARKY',action_key CHAR(64) NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE KEY uq_profesor_cancelacion_profesor_sesion(profesor_id,sesion_id)) {$c}");
+$pdo->exec("CREATE TABLE cursos_intensivos(id CHAR(36) PRIMARY KEY,sede_id CHAR(36) NOT NULL,estado VARCHAR(30) NOT NULL,fecha_inicio DATE NOT NULL,fecha_fin DATE NOT NULL) {$c}");
+$pdo->exec("CREATE TABLE curso_intensivo_alumnos(id CHAR(36) PRIMARY KEY,curso_intensivo_id CHAR(36) NOT NULL,alumno_id CHAR(36) NOT NULL,horario_id CHAR(36) NOT NULL,reposiciones_cancelacion INT NOT NULL DEFAULT 0) {$c}");
+require_once __DIR__.'/../config/sharky-member-ops.php';
+$admin='00000000-0000-0000-0000-000000000001';$t1='00000000-0000-0000-0000-000000000010';$t2='00000000-0000-0000-0000-000000000011';$schedule='00000000-0000-0000-0000-000000000020';$session='00000000-0000-0000-0000-000000000030';$course='00000000-0000-0000-0000-000000000040';$cia='00000000-0000-0000-0000-000000000050';$site='00000000-0000-0000-0000-000000000060';
+$pdo->prepare("INSERT INTO usuarios(id,rol,activo) VALUES(:id,'ADMIN',1)")->execute([':id'=>$admin]);
+foreach([[$t1,'Profe Uno','+529981112233'],[$t2,'Profe Dos','+529981112244']] as [$id,$name,$phone])$pdo->prepare("INSERT INTO profesores(id,nombre,whatsapp,activo) VALUES(:id,:n,:w,1)")->execute([':id'=>$id,':n'=>$name,':w'=>$phone]);
+$pdo->prepare("INSERT INTO horarios(id,sede_id,hora_inicio,hora_fin,activo) VALUES(:id,:s,'08:00:00','09:00:00',1)")->execute([':id'=>$schedule,':s'=>$site]);
+foreach([$t1,$t2] as $teacher)$pdo->prepare("INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo) VALUES(UUID(),:p,:h,1)")->execute([':p'=>$teacher,':h'=>$schedule]);
+$pdo->prepare("INSERT INTO sesiones(id,fecha,horario_id,estado,cerrada) VALUES(:id,'2026-09-14',:h,'PROGRAMADA',0)")->execute([':id'=>$session,':h'=>$schedule]);
+$pdo->prepare("INSERT INTO cursos_intensivos(id,sede_id,estado,fecha_inicio,fecha_fin) VALUES(:id,:s,'PROGRAMADO','2026-09-14','2026-10-02')")->execute([':id'=>$course,':s'=>$site]);
+$pdo->prepare("INSERT INTO curso_intensivo_alumnos(id,curso_intensivo_id,alumno_id,horario_id,reposiciones_cancelacion) VALUES(:id,:c,'student-1',:h,0)")->execute([':id'=>$cia,':c'=>$course,':h'=>$schedule]);
+$first=hache_sharky_member_cancel_teacher_session($pdo,$t1,$session,'No podré asistir','action-one');
+coteach_expect(($first['code']??'')==='TEACHER_UNAVAILABLE','First unavailable co-teacher must not cancel the class.');
+coteach_expect(($first['class_cancelled']??true)===false&&($first['remaining_teachers']??0)===1,'One remaining co-teacher must preserve the class.');
+$row=$pdo->query("SELECT estado,cerrada FROM sesiones WHERE id='{$session}'")->fetch();coteach_expect($row['estado']==='PROGRAMADA'&&(int)$row['cerrada']===0,'Session must remain programmed after the first teacher declines.');
+coteach_expect((int)$pdo->query("SELECT reposiciones_cancelacion FROM curso_intensivo_alumnos WHERE id='{$cia}'")->fetchColumn()===0,'No reposition may be generated while coverage remains.');
+$dup=hache_sharky_member_cancel_teacher_session($pdo,$t1,$session,'Otra vez','action-dup');coteach_expect(($dup['code']??'')==='TEACHER_ALREADY_UNAVAILABLE','Repeated decline by the same teacher must be idempotent.');
+$second=hache_sharky_member_cancel_teacher_session($pdo,$t2,$session,'Tampoco podré asistir','action-two');
+coteach_expect(($second['code']??'')==='SESSION_CANCELLED'&&($second['class_cancelled']??false)===true,'Last available teacher must cancel the class.');
+$row=$pdo->query("SELECT estado,cerrada FROM sesiones WHERE id='{$session}'")->fetch();coteach_expect($row['estado']==='CANCELADA'&&(int)$row['cerrada']===1,'Session must close only when no active teacher remains.');
+coteach_expect((int)$pdo->query("SELECT reposiciones_cancelacion FROM curso_intensivo_alumnos WHERE id='{$cia}'")->fetchColumn()===1,'Exactly one intensive reposition must be generated when the class is finally cancelled.');
+coteach_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_cancelaciones WHERE sesion_id='{$session}'")->fetchColumn()===2,'Both professor unavailability declarations must remain auditable.');
+echo "SHARKY_PROFESSOR_COTEACHING_MARIADB_OK\n";
