@@ -18,6 +18,26 @@ $fresh=hache_sharky_orchestrator_state(null,$now);
 $fresh['identity']=array_replace($fresh['identity'],['kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched']);
 $guided=hache_sharky_entry_guided_first_prospect($fresh,'Hola',$now);
 guided_first_ok(($guided['flow']['name']??null)==='qualify_prospect'&&($guided['flow']['step']??null)==='swim','A clean unmatched prospect must enter the swim guided step immediately.');
+
+// The exact first real turn must bypass text debounce. Contact capture/rename is
+// durable before reply processing, so allowing this bootstrap turn to return
+// BATCH_DEFERRED can leave a visible prospect contact without Sharky's welcome.
+$firstEvent=['from'=>'529981112233','type'=>'text','text'=>'¡Hola! Quiero más información','interactive_id'=>'','group_id'=>''];
+guided_first_ok(hache_sharky_whatsapp_first_prospect_welcome_turn($guided,$firstEvent),'The untouched first prospect turn must be recognized as the welcome fast path.');
+$afterWelcome=$guided;$afterWelcome['last_user_text']='¡Hola! Quiero más información';
+guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($afterWelcome,$firstEvent),'Only the untouched first turn may bypass debounce.');
+$presented=$guided;$presented['assistant_presentation_queued']=true;
+guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($presented,$firstEvent),'A prospect that already received presentation must not reuse the welcome fast path.');
+$interactiveFirst=$firstEvent;$interactiveFirst['type']='interactive';$interactiveFirst['interactive_id']='qualify:swims';
+guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($guided,$interactiveFirst),'Interactive qualification replies must keep their normal structured routing.');
+$groupFirst=$firstEvent;$groupFirst['group_id']='group-1';
+guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($guided,$groupFirst),'Group traffic must never use the direct prospect welcome fast path.');
+$batchingSource=(string)file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php');
+$enqueuePos=strpos($batchingSource,'function hache_sharky_whatsapp_enqueue');
+$welcomeFastPos=$enqueuePos===false?false:strpos($batchingSource,'hache_sharky_whatsapp_first_prospect_welcome_turn($entryState,$event)',$enqueuePos);
+$debouncePos=$enqueuePos===false?false:strpos($batchingSource,'hache_sharky_orchestrator_batch_enqueue_and_wait',$enqueuePos);
+guided_first_ok($enqueuePos!==false&&$welcomeFastPos!==false&&$debouncePos!==false&&$welcomeFastPos<$debouncePos,'The first-prospect welcome fast path must execute before text debounce.');
+
 [$helloState,$helloDecision]=hache_sharky_whatsapp_qualification_input($pdo,$guided,['text'=>'Hola','interactive_id'=>''],$now+1,12);
 guided_first_ok(($helloDecision['ui']['type']??null)==='buttons','The first orientation step must use native buttons.');
 guided_first_ok(array_column($helloDecision['ui']['buttons']??[],'id')===['qualify:swims','qualify:beginner'],'First-turn buttons must expose deterministic swim-level IDs.');
