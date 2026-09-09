@@ -1,0 +1,121 @@
+name: Temporary formal swimmer program choice
+
+on:
+  push:
+    branches: [fix/sharky-formal-swimmer-program-choice]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/sharky-formal-swimmer-program-choice
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Gate
+        id: gate
+        run: |
+          if git log -1 --pretty=%B | grep -Fq '[formal-swimmer-program-choice]'; then echo "skip=true" >> "$GITHUB_OUTPUT"; else echo "skip=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Apply fix
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path)
+              text=p.read_text()
+              n=text.count(old)
+              if n!=1:
+                  raise SystemExit(f'{path}: expected 1 occurrence, found {n}')
+              p.write_text(text.replace(old,new,1))
+
+          adapter='config/sharky-whatsapp-adapter.php'
+          replace_once(adapter,
+              "    $preferred=(string)($state['commercial_context']['program']??'');\n    if(in_array($preferred,['intensive','regular'],true))$data['preferred_program']=$preferred;",
+              "    $confirmed=(string)($state['commercial_context']['program']??'');\n    if(in_array($confirmed,['intensive','regular'],true)){\n        $data['preferred_program']=$confirmed;\n        $data['confirmed_program']=$confirmed;\n    }")
+
+          old="""        $preferred=(string)($data['preferred_program']??'');
+        if(in_array($preferred,['intensive','regular'],true)){
+            $state['commercial_context']['program']=$preferred;
+            $why=$preferred==='intensive'?'Como ya tomaste clases, también puedes elegir el intensivo si buscas un bloque temporal o trabajar técnica.':'Como ya has tomado clases, las clases regulares son una buena opción para seguir técnica, resistencia y estilos.';
+            return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,$why);
+        }
+        $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',$data,$now);
+        return [$state,hache_sharky_orchestrator_decision('prospect_program_prompt','Como ya sabes nadar y has tomado clases, ¿qué buscas ahora: un curso intensivo temporal o clases regulares mensuales?',['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),
+            hache_sharky_orchestrator_button('qualify:regular','Regulares'),
+        ]])];"""
+          new="""        // A preferred program may come only from an ad, referral or entry wording.
+        // It is context, not a confirmed selection. Only a program that was already
+        // canonical before qualification may skip the explicit program-choice step.
+        $confirmed=(string)($data['confirmed_program']??'');
+        if(in_array($confirmed,['intensive','regular'],true)){
+            $state['commercial_context']['program']=$confirmed;
+            $why=$confirmed==='intensive'?'Como ya habías elegido el intensivo, seguimos con esa opción.':'Como ya habías elegido las clases regulares, seguimos con esa opción.';
+            return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,$why);
+        }
+        $preferred=(string)($data['preferred_program']??'');
+        if(in_array($preferred,['intensive','regular'],true))$state['commercial_context']['recommended_program']=$preferred;
+        $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',$data,$now);
+        return [$state,hache_sharky_orchestrator_decision('prospect_program_prompt','Como ya sabes nadar y has tomado clases, ¿qué buscas ahora: un curso intensivo temporal o clases regulares mensuales?',['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),
+            hache_sharky_orchestrator_button('qualify:regular','Regulares'),
+        ]])];"""
+          replace_once(adapter,old,new)
+
+          test='tests/sharky-guided-first-prospect-regression.php'
+          marker="""guided_first_ok(($swimsDecision['ui']['type']??null)==='buttons','Swimmer background choice must stay guided.');
+
+// “hola” and lateral commercial questions cannot move an active funnel backwards."""
+          inserted="""guided_first_ok(($swimsDecision['ui']['type']??null)==='buttons','Swimmer background choice must stay guided.');
+
+// An entry preference (for example from an intensive ad) must never become a
+// confirmed program merely because the swimmer has taken classes before.
+$entryPreferred=hache_sharky_orchestrator_state(null,$now);
+$entryPreferred['identity']=array_replace($entryPreferred['identity'],['kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched']);
+$entryPreferred=hache_sharky_orchestrator_flow($entryPreferred,'qualify_prospect','swim',['entry_bootstrap'=>true,'preferred_program'=>'intensive'],$now);
+[$entryPreferredSwims]=hache_sharky_whatsapp_qualification_input($pdo,$entryPreferred,['text'=>'Ya sé nadar','interactive_id'=>'qualify:swims'],$now+2,12);
+[$entryPreferredFormal,$entryPreferredDecision]=hache_sharky_whatsapp_qualification_input($pdo,$entryPreferredSwims,['text'=>'He tomado clases','interactive_id'=>'qualify:formal'],$now+3,12);
+guided_first_ok(empty($entryPreferredFormal['commercial_context']['program']),'An entry intensive preference must not auto-confirm intensive after formal swimming experience.');
+guided_first_ok(($entryPreferredFormal['flow']['step']??null)==='program','A formal swimmer with preference only must explicitly choose intensive or regular.');
+guided_first_ok(array_column($entryPreferredDecision['ui']['buttons']??[],'id')===['qualify:intensive','qualify:regular'],'The formal-swimmer program gate must expose both program choices.');
+[$entryPreferredChosen]=hache_sharky_whatsapp_qualification_input($pdo,$entryPreferredFormal,['text'=>'Intensivo','interactive_id'=>'qualify:intensive'],$now+4,12);
+guided_first_ok(($entryPreferredChosen['commercial_context']['program']??null)==='intensive','Only the explicit intensive tap may confirm the preferred intensive program.');
+guided_first_ok(($entryPreferredChosen['flow']['step']??null)==='sede','An explicit program choice must then advance to venue selection.');
+
+// A genuinely confirmed program from earlier in the conversation remains authoritative.
+$confirmedProgram=$fresh;
+$confirmedProgram['commercial_context']['program']='intensive';
+[$confirmedStart]=hache_sharky_whatsapp_qualification_start($confirmedProgram,$now);
+[$confirmedSwims]=hache_sharky_whatsapp_qualification_input($pdo,$confirmedStart,['text'=>'Ya sé nadar','interactive_id'=>'qualify:swims'],$now+2,12);
+[$confirmedFormal]=hache_sharky_whatsapp_qualification_input($pdo,$confirmedSwims,['text'=>'He tomado clases','interactive_id'=>'qualify:formal'],$now+3,12);
+guided_first_ok(($confirmedFormal['commercial_context']['program']??null)==='intensive','A program confirmed before qualification must remain confirmed.');
+guided_first_ok(($confirmedFormal['flow']['step']??null)==='sede','A previously confirmed program may proceed directly to venue after experience validation.');
+
+// “hola” and lateral commercial questions cannot move an active funnel backwards."""
+          replace_once(test,marker,inserted)
+          PY
+      - name: Validate targeted regressions
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          php -l config/sharky-whatsapp-adapter.php
+          php -l tests/sharky-guided-first-prospect-regression.php
+          php tests/sharky-guided-first-prospect-regression.php
+          php tests/sharky-guided-onboarding-regression.php
+          php tests/sharky-guided-referral-date-regression.php
+          php tests/sharky-pr162-review-regression.php
+      - name: Commit fix
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git add config/sharky-whatsapp-adapter.php tests/sharky-guided-first-prospect-regression.php
+          git commit -m "fix: exigir elección de programa a nadadores formales [formal-swimmer-program-choice]"
+          git push origin HEAD:fix/sharky-formal-swimmer-program-choice
