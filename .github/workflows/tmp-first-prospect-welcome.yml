@@ -1,0 +1,126 @@
+name: Patch first prospect welcome
+
+on:
+  push:
+    branches:
+      - fix/sharky-first-prospect-welcome
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[first-prospect-welcome]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/sharky-first-prospect-welcome
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Apply focused fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one target, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          batching = 'config/sharky-whatsapp-batching.php'
+          marker = '''/**
+ * Text turns wait for the normal debounce window. A safe discovery button may
+ * join an already-open direct-chat question burst, so Sharky applies the button
+ * choice before answering the customer's question. Groups and business-changing
+ * actions continue to bypass batching.
+ */
+function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
+'''
+          helper = '''/**
+ * The very first inbound turn of a newly assumed WhatsApp prospect must produce
+ * the deterministic welcome/qualification response immediately. Contact-book
+ * capture happens before the post-ACK reply pipeline, so sending this turn
+ * through the debounce queue can leave a saved/renamed prospect without the
+ * welcome message when that batch is deferred or abandoned.
+ */
+function hache_sharky_whatsapp_first_prospect_welcome_turn(array $state,array $event): bool
+{
+    if(trim((string)($event['group_id']??''))!=='')return false;
+    if((string)($event['type']??'')==='interactive'||trim((string)($event['interactive_id']??''))!=='')return false;
+    if(($state['identity']['kind']??'unknown')!=='prospect'||($state['identity']['source']??'')!=='whatsapp_unmatched')return false;
+    if(($state['assistant_presentation_queued']??false)===true||trim((string)($state['last_user_text']??''))!=='')return false;
+    $flow=is_array($state['flow']??null)?$state['flow']:[];
+    $data=is_array($flow['data']??null)?$flow['data']:[];
+    return ($flow['name']??'')==='qualify_prospect'
+        &&($flow['step']??'')==='swim'
+        &&($data['entry_bootstrap']??false)===true;
+}
+
+/**
+ * Text turns wait for the normal debounce window. The only text exception is
+ * the first turn of a newly assumed prospect: its welcome must be immediate and
+ * durable. A safe discovery button may join an already-open direct-chat question
+ * burst; groups and business-changing actions continue to bypass batching.
+ */
+function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
+'''
+          replace_once(batching, marker, helper)
+
+          old = '''    $isInteractive=(string)($event['type']??'')==='interactive'||$interactiveId!=='';
+    if($groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+    $joinInteractive=$isInteractive
+'''
+          new = '''    $isInteractive=(string)($event['type']??'')==='interactive'||$interactiveId!=='';
+    if($groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+    if(!$isInteractive){
+        try{$entryState=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $ignored){$entryState=[];}
+        if(hache_sharky_whatsapp_first_prospect_welcome_turn($entryState,$event)){
+            return hache_sharky_whatsapp_process_with_delivery_lock($pdo,$event,$conversationAnswer,$extraContext);
+        }
+    }
+    $joinInteractive=$isInteractive
+'''
+          replace_once(batching, old, new)
+
+          test = 'tests/sharky-guided-first-prospect-regression.php'
+          test_marker = '''guided_first_ok(($guided['flow']['name']??null)==='qualify_prospect'&&($guided['flow']['step']??null)==='swim','A clean unmatched prospect must enter the swim guided step immediately.');
+[$helloState,$helloDecision]=hache_sharky_whatsapp_qualification_input($pdo,$guided,['text'=>'Hola','interactive_id'=>''],$now+1,12);
+'''
+          test_insert = '''guided_first_ok(($guided['flow']['name']??null)==='qualify_prospect'&&($guided['flow']['step']??null)==='swim','A clean unmatched prospect must enter the swim guided step immediately.');
+$firstEvent=['from'=>'529981112233','type'=>'text','text'=>'¡Hola! Quiero más información','interactive_id'=>'','group_id'=>''];
+guided_first_ok(hache_sharky_whatsapp_first_prospect_welcome_turn($guided,$firstEvent),'The first real unmatched-prospect text must bypass debounce so the welcome cannot be stranded after contact capture.');
+$afterWelcome=$guided;$afterWelcome['last_user_text']='¡Hola! Quiero más información';
+guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($afterWelcome,$firstEvent),'Only the first prospect turn may use the welcome fast path.');
+$interactiveFirst=$firstEvent;$interactiveFirst['type']='interactive';$interactiveFirst['interactive_id']='qualify:swims';
+guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($guided,$interactiveFirst),'Interactive qualification replies must keep their normal fast/structured routing.');
+$batchingSource=(string)file_get_contents(__DIR__.'/../config/sharky-whatsapp-batching.php');
+$enqueuePos=strpos($batchingSource,'function hache_sharky_whatsapp_enqueue');
+$welcomeFastPos=$enqueuePos===false?false:strpos($batchingSource,'hache_sharky_whatsapp_first_prospect_welcome_turn($entryState,$event)',$enqueuePos);
+$debouncePos=$enqueuePos===false?false:strpos($batchingSource,'hache_sharky_orchestrator_batch_enqueue_and_wait',$enqueuePos);
+guided_first_ok($enqueuePos!==false&&$welcomeFastPos!==false&&$debouncePos!==false&&$welcomeFastPos<$debouncePos,'First-prospect welcome fast path must execute before text debounce.');
+[$helloState,$helloDecision]=hache_sharky_whatsapp_qualification_input($pdo,$guided,['text'=>'Hola','interactive_id'=>''],$now+1,12);
+'''
+          replace_once(test, test_marker, test_insert)
+          PY
+      - name: Validate targeted regressions
+        run: |
+          php -l config/sharky-whatsapp-batching.php
+          php -l tests/sharky-guided-first-prospect-regression.php
+          php tests/sharky-guided-first-prospect-regression.php
+          php tests/sharky-batch-context-regression.php
+          php tests/sharky-guided-onboarding-regression.php
+          php tests/sharky-pr162-review-regression.php
+      - name: Commit fix and remove temporary workflow
+        run: |
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git rm .github/workflows/tmp-first-prospect-welcome.yml
+          git add config/sharky-whatsapp-batching.php tests/sharky-guided-first-prospect-regression.php
+          git commit -m "fix: garantizar bienvenida al primer prospecto [first-prospect-welcome]"
+          git push origin HEAD:fix/sharky-first-prospect-welcome
