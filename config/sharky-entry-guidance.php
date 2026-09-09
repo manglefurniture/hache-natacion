@@ -62,21 +62,23 @@ function hache_sharky_entry_apply(array $state,string $userText=''): array
     $state['commercial_context']['entry_source']=$entry['source'];
     $state['commercial_context']['entry_interest']=$entry['interest'];
 
-    // Mantener el carril guiado contextualizado sin convertir una campaña en una
-    // selección confirmada. El programa real sigue siendo commercial_context.program.
+    // Fuente/campaña e interés sirven para contextualizar y recomendar. Solo una
+    // elección explícita del usuario puede alimentar preferred_program, porque el
+    // adaptador interpreta ese campo como autorización para continuar con ese programa.
+    $explicitProgram=hache_sharky_orchestrator_program_choice($userText);
     $flow=is_array($state['flow']??null)?$state['flow']:null;
-    if(is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&in_array($entry['interest'],['intensive','regular'],true)){
+    if(is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&in_array($explicitProgram,['intensive','regular'],true)){
         if(!is_array($state['flow']['data']??null))$state['flow']['data']=[];
-        if(empty($state['flow']['data']['preferred_program']))$state['flow']['data']['preferred_program']=$entry['interest'];
+        if(empty($state['flow']['data']['preferred_program']))$state['flow']['data']['preferred_program']=$explicitProgram;
     }
     return $state;
 }
 
 /**
  * Bootstrap exclusivo para el primer turno REAL de un número que WhatsApp ya
- * clasificó como prospecto no identificado. No confirma el programa de entrada:
- * abre el carril guiado de natación y lo conserva solo como preferencia hasta
- * que la calificación lo confirme de forma determinista.
+ * clasificó como prospecto no identificado. No confirma una campaña ni un simple
+ * interés informativo como programa elegido; solo conserva preferred_program si
+ * el usuario hizo una elección explícita en su propio texto.
  */
 function hache_sharky_entry_guided_first_prospect(array $state,string $userText='',int $now=0): array
 {
@@ -89,9 +91,9 @@ function hache_sharky_entry_guided_first_prospect(array $state,string $userText=
     foreach(['program','sede_clave','swim_level'] as $key)if(!empty($commercial[$key]))return $state;
 
     $state=hache_sharky_entry_apply($state,$userText);
-    $entry=hache_sharky_entry_context($state,$userText);
+    $explicitProgram=hache_sharky_orchestrator_program_choice($userText);
     $data=['entry_bootstrap'=>true];
-    if(in_array($entry['interest'],['intensive','regular'],true))$data['preferred_program']=$entry['interest'];
+    if(in_array($explicitProgram,['intensive','regular'],true))$data['preferred_program']=$explicitProgram;
     return hache_sharky_orchestrator_flow($state,'qualify_prospect','swim',$data,$now>0?$now:time());
 }
 
