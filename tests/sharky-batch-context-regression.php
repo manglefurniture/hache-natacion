@@ -104,9 +104,9 @@ batch_context_ok(($venueChangedState['commercial_context']['program']??'')==='in
 batch_context_ok(($venueChangedState['commercial_context']['swim_level']??'')==='beginner','Venue correction must preserve swim qualification.');
 batch_context_ok(($venueChangedState['commercial_context']['age']??null)===59,'Venue correction must preserve declared age.');
 batch_context_ok(($venueChangedDecision['kind']??'')==='commercial_next_action','Venue correction must return to the commercial menu instead of stale-button rejection.');
-batch_context_ok(str_contains((string)($venueChangedDecision['message']??''),'Palapas Protudec')&&str_contains((string)($venueChangedDecision['message']??''),'¿Qué quieres ver ahora?'),'Venue correction must acknowledge the new venue and ask what the customer wants next.');
+batch_context_ok(str_contains((string)($venueChangedDecision['message']??''),'Palapas Protudec')&&str_contains((string)($venueChangedDecision['message']??''),'precio total'),'Venue correction must acknowledge the new venue and show the intensive information block.');
 $venueButtons=array_map(static fn(array $button):string=>(string)($button['id']??''),(array)($venueChangedDecision['ui']['buttons']??[]));
-batch_context_ok(in_array('action:commercial_schedules',$venueButtons,true)&&in_array('action:commercial_price',$venueButtons,true)&&in_array('action:register_intensive',$venueButtons,true),'Intensive venue correction must offer schedules, price and registration.');
+batch_context_ok($venueButtons===['action:register_intensive','flow:pause'],'Intensive venue correction must offer only registration or deferral after the information block.');
 
 $sameVenue=hache_sharky_whatsapp_historical_venue_reselection($venueState,[
     'interactive_id'=>'sede:monteverde','text'=>'Colegio Monteverde',

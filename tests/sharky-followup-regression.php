@@ -72,11 +72,11 @@ followup_ok(($arm['program']??'')==='intensive'&&($arm['sede_clave']??'')==='PAL
 
 $p1=hache_sharky_followup_payload('529980000000',$state,1,'token-1',(int)$state['updated_at']);
 followup_ok(($p1['type']??'')==='interactive','First follow-up must be an interactive WhatsApp message.');
-followup_ok(array_column(array_map(static fn(array $b):array=>$b['reply'],$p1['interactive']['action']['buttons']??[]),'id')===['action:register_intensive','action:commercial_schedules','action:commercial_price'],'Intensive first follow-up must offer registration, schedules and price.');
+followup_ok(array_column(array_map(static fn(array $b):array=>$b['reply'],$p1['interactive']['action']['buttons']??[]),'id')===['action:register_intensive','flow:pause'],'Intensive first follow-up must offer registration or durable pause.');
 followup_ok(str_contains((string)($p1['interactive']['body']['text']??''),'Palapas Protudec'),'Follow-up must reuse the confirmed venue.');
 
 $p2=hache_sharky_followup_payload('529980000000',$state,2,'token-1',(int)$state['updated_at']);
-followup_ok(count($p2['interactive']['action']['buttons']??[])===2,'Second follow-up must be softer and avoid repeating the registration push.');
+followup_ok(array_column(array_map(static fn(array $b):array=>$b['reply'],$p2['interactive']['action']['buttons']??[]),'id')===['action:register_intensive','flow:pause'],'Second intensive follow-up must keep registration/pause choice.');
 followup_ok(!str_contains(hache_sharky_orchestrator_normalize((string)($p2['interactive']['body']['text']??'')),'te escribi antes'),'Second follow-up must not guilt the prospect about the previous message.');
 
 $regular=$state;$regular['commercial_context']['program']='regular';

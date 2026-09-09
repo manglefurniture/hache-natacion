@@ -19,12 +19,13 @@ $state['commercial_context']['sede_clave']='PALAPAS';
 $menu=hache_sharky_whatsapp_commercial_next_action($state);
 commercial_next_ok(($menu['kind']??null)==='commercial_next_action','Commercially ready intensive prospect must receive a next-action decision.');
 commercial_next_ok(
-    array_column($menu['ui']['buttons']??[],'id')===['action:commercial_schedules','action:commercial_price','action:register_intensive'],
-    'Intensive menu must expose Horarios, Precio and Inscribirme in that order.'
+    array_column($menu['ui']['buttons']??[],'id')===['action:register_intensive','flow:pause'],
+    'Intensive information block must expose only Inscribirme and No por el momento.'
 );
 $payload=hache_sharky_whatsapp_render('529980000000',$menu);
 commercial_next_ok(($payload['type']??null)==='interactive','Next-action decision must render as WhatsApp interactive buttons.');
-commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===3,'Intensive menu must render exactly three buttons.');
+commercial_next_ok(count($payload['interactive']['action']['buttons']??[])===2,'Intensive information block must render exactly two buttons.');
+commercial_next_ok(str_contains((string)($menu['message']??''),'precio total')&&str_contains((string)($menu['message']??''),'un solo pago'),'Intensive venue completion must provide price automatically.');
 
 // Schedule/price buttons deliberately remain contextual questions: their visible titles
 // reach the normal conversation path with program + venue memory. Registration keeps the
@@ -34,6 +35,14 @@ commercial_next_ok(hache_sharky_whatsapp_interactive_is_current($state,['interac
 commercial_next_ok(hache_sharky_orchestrator_intent('Horarios','action:commercial_schedules')==='conversation','Schedule action must reach contextual conversation using the confirmed commercial state.');
 commercial_next_ok(hache_sharky_orchestrator_intent('Precio','action:commercial_price')==='conversation','Price action must reach contextual conversation using the confirmed commercial state.');
 commercial_next_ok(hache_sharky_orchestrator_intent('Inscribirme','action:register_intensive')==='register_intensive','Registration action must keep the existing controlled registration intent.');
+
+$formContext=['intensive_options'=>[
+    ['id'=>'c1','sede_clave'=>'PALAPAS','fecha_inicio'=>'2026-09-14','precio'=>1200,'schedules'=>[['id'=>'h8','label'=>'08:00–09:00']]],
+    ['id'=>'c2','sede_clave'=>'PALAPAS','fecha_inicio'=>'2026-09-21','precio'=>1200,'schedules'=>[['id'=>'h8','label'=>'08:00–09:00']]],
+]];
+[$formState,$formDecision]=hache_sharky_whatsapp_registration_form_from_context($state,$formContext,1788460005);
+commercial_next_ok(($formState['flow']['name']??null)==='register_intensive'&&($formState['flow']['step']??null)==='course','Inscribirme must enter the existing course step directly, without another consent question.');
+commercial_next_ok(($formDecision['ui']['type']??null)==='list','Direct registration must emit the existing date list for WhatsApp Flow upgrade.');
 
 foreach(['Oki','Continuar','Información','Ok','Dale','Perfecto'] as $continuation){
     commercial_next_ok(
