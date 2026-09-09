@@ -23,6 +23,7 @@ const backendMenu = read('public/assets/backend-menu.js');
 const configApi = read('api/configuracion.php');
 const planVariantsMigration = read('database/migrations/20260907_allow_plan_variants_same_sessions.sql');
 const planVariantsRunner = read('bin/migrate-plan-variants.php');
+const deployImplementation = read('ops/production-readiness/deploy-hache-natacion');
 
 // El estado de pago canónico sigue siendo alumno + curso + INTENSIVO + VALIDO.
 assert.match(statusApi, /SUM\(p\.importe\)/);
@@ -122,6 +123,13 @@ assert.ok(planVariantsRunner.includes("index_name='uq_planes_sede_nombre'"));
 assert.ok(planVariantsRunner.includes('PLAN_VARIANTS_MIGRATION_OK'));
 assert.ok(configApi.includes('Ya existe un plan con ese nombre en esta sede'));
 assert.ok(!configApi.includes('nombre o número de sesiones'), 'La API no debe seguir comunicando sesiones_semana como clave única');
+
+// El deploy aplica de forma idempotente la migración de abonos antes de publicar el SHA.
+assert.ok(deployImplementation.includes('apply_release_migrations()'));
+assert.ok(deployImplementation.includes('bin/migrate-intensive-partial-payments.php'));
+const migrationCall = deployImplementation.indexOf('apply_release_migrations', deployImplementation.indexOf('deployed="$(git rev-parse HEAD)"'));
+const deployedMarker = deployImplementation.indexOf('publish_deployed_sha "$deployed"', migrationCall);
+assert.ok(migrationCall >= 0 && deployedMarker > migrationCall, 'La migración financiera debe completar antes del marcador de deploy');
 
 // El pago rápido del listado general mantiene su preflight añadido previamente.
 assert.ok(quickPay.includes('/api/intensivo-pago-estado.php?'), 'El pago rápido debe refrescar el estado del intensivo');
