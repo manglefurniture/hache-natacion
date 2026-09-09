@@ -48,7 +48,7 @@ $guided=hache_sharky_entry_apply($guided,$webIntensive);
 guided_entry_ok(($guided['commercial_context']['entry_source']??null)==='web','Entry source must persist.');
 guided_entry_ok(($guided['commercial_context']['entry_interest']??null)==='intensive','Entry interest must persist.');
 guided_entry_ok(empty($guided['commercial_context']['program']),'Entry interest must not masquerade as a confirmed program.');
-guided_entry_ok(($guided['flow']['data']['preferred_program']??null)==='intensive','Guided qualification must carry the entry program as a preference.');
+guided_entry_ok(empty($guided['flow']['data']['preferred_program']),'An informational website prefill must remain entry context, not an explicit program choice.');
 $metaGuided=hache_sharky_orchestrator_flow($meta,'qualify_prospect','swim',[],1788796800);
 $metaGuided=hache_sharky_entry_apply($metaGuided,'Quiero clases regulares');
 guided_entry_ok(($metaGuided['commercial_context']['entry_interest']??null)==='regular','Explicit regular interest must persist even when referral advertises intensive.');
