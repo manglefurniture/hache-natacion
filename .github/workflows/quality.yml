@@ -26,6 +26,10 @@ jobs:
         run: php tests/sharky-brain-human-edges-regression.php
       - name: Sharky emergency Brain disable regression
         run: php tests/sharky-emergency-brain-disable-regression.php
+      - name: Sharky Brain reactivation regression
+        run: php tests/sharky-brain-reactivation-regression.php
+      - name: Sharky Brain numeric context regression
+        run: php tests/sharky-brain-numeric-context-regression.php
       - name: Sharky contact book regression
         run: php tests/sharky-contact-book-regression.php
       - name: Sharky member routing and midnight takeover regression
