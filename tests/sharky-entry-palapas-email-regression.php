@@ -51,7 +51,7 @@ sharky_entry_expect(str_contains($teacherOwner,"(\$flow['name']??'')!=='teacher_
 sharky_entry_expect(str_contains($teacherOwner,"(\$flow['step']??'')!=='reason'"),'Only the cancellation reason step may own free text.');
 sharky_entry_expect(str_contains($teacherOwner,"trim((string)(\$event['interactive_id']??''))!==''"),'Interactive member buttons must never inherit teacher-flow ownership.');
 sharky_entry_expect(str_contains($teacherOwner,"return \$intent!=='payments';"),'Payment-like text must remain behind the Palapas red-light gate.');
-sharky_entry_expect(str_contains($palapasBlock,'hache_sharky_member_teacher_owned_event($teacher,$routingFlow,$event,$intent)'),'Palapas gate must use the narrow teacher ownership helper.');
+sharky_entry_expect(str_contains($palapasBlock,'hache_sharky_member_teacher_owned_event($pdo,$teacher,$routingFlow,$event,$intent)'),'Palapas gate must use the narrow teacher ownership helper with co-teaching readiness context.');
 
 // Codex P1: an explicit human request containing a payment word must escape
 // member-ops before its payment parser can expose a balance.
