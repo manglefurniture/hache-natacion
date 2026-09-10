@@ -73,9 +73,9 @@ function hache_sharky_member_pending_payment_payload(string $contact,array $stud
     return hache_sharky_member_buttons($contact,$body,[['id'=>'member:pay','title'=>'Pagar ahora']]);
 }
 
-function hache_sharky_member_teacher_owned_event(array $teacher,?array $flow,array $event,?string $intent=null): bool
+function hache_sharky_member_teacher_owned_event(PDO $pdo,array $teacher,?array $flow,array $event,?string $intent=null): bool
 {
-    if(($teacher['found']??false)!==true)return false;
+    if(($teacher['found']??false)!==true||!hache_sharky_member_coteaching_ready($pdo))return false;
     $intent=$intent??hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
     if(in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
 
@@ -115,7 +115,7 @@ function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?b
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
     $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
     try{$routingState=hache_sharky_db_state_load($pdo,$contact);$routingFlow=hache_sharky_member_flow($routingState);}catch(Throwable $e){$routingFlow=null;}
-    if(hache_sharky_member_teacher_owned_event($teacher,$routingFlow,$event,$intent))return null;
+    if(hache_sharky_member_teacher_owned_event($pdo,$teacher,$routingFlow,$event,$intent))return null;
 
     $student=hache_sharky_member_student_context($pdo,$contact);
     if(($student['found']??false)!==true)return null;
@@ -175,11 +175,12 @@ function hache_sharky_member_deterministic_event(PDO $pdo,array $event,array $st
     if(in_array($kind,[HACHE_SHARKY_MEMBER_EVIDENCE_KIND,HACHE_SHARKY_MEMBER_PAYMENT_PROOF_KIND],true))return true;
 
     $flow=hache_sharky_member_flow($state);$flowName=(string)($flow['name']??'');
-    if(in_array($flowName,['absence','teacher_cancel'],true))return true;
+    if($flowName==='absence')return true;
+    if($flowName==='teacher_cancel')return hache_sharky_member_coteaching_ready($pdo);
 
     $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,(string)($event['from']??''));
-    if(($teacher['found']??false)===true&&in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
+    if(($teacher['found']??false)===true&&hache_sharky_member_coteaching_ready($pdo)&&in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
 
     return in_array($intent,['greeting','class_today','payments','absence','repos','member:absence_no_evidence','member:absence_add_evidence','member:absence_confirm','member:absence_abort','absence_date'],true);
 }
@@ -342,7 +343,7 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
     $activeFlow=hache_sharky_member_flow($state);
     $teacherFlow=is_array($activeFlow)&&str_starts_with((string)($activeFlow['name']??''),'teacher_');
-    $teacherIntent=($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true));
+    $teacherIntent=($teacher['found']??false)===true&&hache_sharky_member_coteaching_ready($pdo)&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true));
     if(!$teacherIntent){
         $student=hache_sharky_member_student_context($pdo,$contact);
         if(($student['found']??false)===true&&hache_sharky_member_pending_registration($student)&&$intent!=='payments'){

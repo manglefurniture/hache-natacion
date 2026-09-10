@@ -116,6 +116,9 @@ member_ok(str_contains($paymentMigration,'sharky_member_payment_intents'),'Regis
 
 $webhook=(string)file_get_contents($root.'/public/api/whatsapp-orchestrator-lab.php');
 $memberRouter=(string)file_get_contents($root.'/config/sharky-member-routing.php');
+member_ok(str_contains($memberRouter,'hache_sharky_member_teacher_owned_event(PDO $pdo'),'Teacher event ownership must receive DB readiness context.');
+member_ok(str_contains($memberRouter,"flowName==='teacher_cancel'")&&str_contains($memberRouter,'return hache_sharky_member_coteaching_ready($pdo);'),'Teacher cancellation flows must remain dormant until co-teaching schema is ready.');
+member_ok(str_contains($memberRouter,'$teacherIntent=')&&str_contains($memberRouter,'&&hache_sharky_member_coteaching_ready($pdo)&&'),'Teacher route selection must be gated on co-teaching readiness without hiding teacher identity.');
 member_ok(str_contains($webhook,'$memberOpsReady=hache_sharky_member_schema_ready($pdo)&&hache_sharky_member_payments_schema_ready($pdo)'),'Member operations must stay dormant until both additive schemas are present.');
 member_ok(str_contains($webhook,'$memberEvidenceEvents=$memberOpsReady?hache_sharky_member_extract_media_events($pdo,$payload):[]'),'Member evidence extraction must stay dormant before migration.');
 member_ok(str_contains($webhook,'$memberEvidenceIds[$memberEvidenceId]=true'),'Member media must reserve its Meta message receipt.');
@@ -139,6 +142,12 @@ member_ok(str_contains($memberOps,"'class_cancelled'=>false"),'A professor decli
 member_ok(str_contains($memberOps,"'code'=>'SESSION_CANCELLED'"),'The class must cancel only when teacher coverage reaches zero.');
 member_ok(str_contains($memberOps,'function hache_sharky_member_coteaching_ready'),'Teacher routing must have an explicit co-teaching readiness gate.');
 member_ok(str_contains($memberOps,'uq_profesor_cancelacion_profesor_sesion')&&str_contains($memberOps,"profesor_id,sesion_id"),'Teacher routing must verify the composite professor/session index before accepting co-teaching operations.');
+member_ok(str_contains($memberOps,"index_name='uq_profesor_cancelacion_sesion'"),'Co-teaching readiness must reject a schema that still retains the legacy session-only unique index.');
+$teacherIdentityStart=strpos($memberOps,'function hache_sharky_member_teacher_by_whatsapp');
+$teacherIdentityEnd=$teacherIdentityStart===false?false:strpos($memberOps,'function hache_sharky_member_flow',$teacherIdentityStart);
+$teacherIdentity=($teacherIdentityStart!==false&&$teacherIdentityEnd!==false)?substr($memberOps,$teacherIdentityStart,$teacherIdentityEnd-$teacherIdentityStart):'';
+member_ok($teacherIdentity!==''&&!str_contains($teacherIdentity,'hache_sharky_member_coteaching_ready'),'Teacher identity recognition must remain independent from co-teaching migration readiness.');
+member_ok(str_contains($memberOps,'if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return null;'),'Teacher operations must stop before claiming an event when co-teaching schema is incomplete.');
 member_ok(str_contains($memberOps,"CANCELADA':(!empty"),'Cancelled class status must take precedence over teacher-specific unavailability.');
 $api=(string)file_get_contents($root.'/api/profesores.php');
 member_ok(str_contains($api,"auth_require(['ADMIN'])"),'Only administrators may register or assign professors.');

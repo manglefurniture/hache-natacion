@@ -33,13 +33,16 @@ function hache_sharky_member_coteaching_ready(PDO $pdo): bool
     try{
         $st=$pdo->prepare("SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') columns_in_order,MIN(non_unique) non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_profesor_sesion' GROUP BY index_name");
         $st->execute();$row=$st->fetch(PDO::FETCH_ASSOC);
-        return is_array($row)&&(string)($row['columns_in_order']??'')==='profesor_id,sesion_id'&&(int)($row['non_unique']??1)===0;
+        if(!is_array($row)||(string)($row['columns_in_order']??'')!=='profesor_id,sesion_id'||(int)($row['non_unique']??1)!==0)return false;
+        $legacy=$pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_sesion'");
+        $legacy->execute();
+        return (int)$legacy->fetchColumn()===0;
     }catch(Throwable $e){return false;}
 }
 
 function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
 {
-    if(!hache_sharky_member_schema_ready($pdo)||!hache_sharky_member_coteaching_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
+    if(!hache_sharky_member_schema_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
     $phone=hache_sharky_member_phone($contact);if($phone===null)return ['found'=>false,'reason'=>'invalid_phone'];
     $st=$pdo->prepare("SELECT id,nombre,whatsapp,correo,activo FROM profesores WHERE whatsapp=:w LIMIT 2");
     $st->execute([':w'=>$phone]);$rows=$st->fetchAll(PDO::FETCH_ASSOC);
@@ -319,6 +322,8 @@ function hache_sharky_member_process_event(PDO $pdo,array $event,array $business
     $isEvidence=(string)($event['kind']??'')===HACHE_SHARKY_MEMBER_EVIDENCE_KIND;
     $teacherFlow=is_array($flow)&&str_starts_with((string)($flow['name']??''),'teacher_');$studentFlow=is_array($flow)&&($flow['name']??'')==='absence';
     if(($teacher['found']??false)!==true&&($student['found']??false)!==true&&!$teacherFlow&&!$studentFlow)return null;
+    $teacherOwned=($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['teacher_agenda','teacher_cancel','teacher_cancel_select','greeting','member:tc_confirm','member:tc_abort'],true));
+    if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return null;
 
     $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
     hache_sharky_db_state_defer_begin();

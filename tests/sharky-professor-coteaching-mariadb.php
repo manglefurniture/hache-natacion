@@ -14,6 +14,11 @@ $pdo->exec("CREATE TABLE profesor_cancelaciones(id CHAR(36) PRIMARY KEY,profesor
 $pdo->exec("CREATE TABLE cursos_intensivos(id CHAR(36) PRIMARY KEY,sede_id CHAR(36) NOT NULL,estado VARCHAR(30) NOT NULL,fecha_inicio DATE NOT NULL,fecha_fin DATE NOT NULL) {$c}");
 $pdo->exec("CREATE TABLE curso_intensivo_alumnos(id CHAR(36) PRIMARY KEY,curso_intensivo_id CHAR(36) NOT NULL,alumno_id CHAR(36) NOT NULL,horario_id CHAR(36) NOT NULL,reposiciones_cancelacion INT NOT NULL DEFAULT 0) {$c}");
 require_once __DIR__.'/../config/sharky-member-ops.php';
+coteach_expect(hache_sharky_member_coteaching_ready($pdo),'Composite co-teaching index should be ready by itself.');
+$pdo->exec("CREATE UNIQUE INDEX uq_profesor_cancelacion_sesion ON profesor_cancelaciones(sesion_id)");
+coteach_expect(!hache_sharky_member_coteaching_ready($pdo),'Legacy session-only uniqueness must make co-teaching readiness fail closed.');
+$pdo->exec("DROP INDEX uq_profesor_cancelacion_sesion ON profesor_cancelaciones");
+coteach_expect(hache_sharky_member_coteaching_ready($pdo),'Dropping the legacy session-only index must restore co-teaching readiness.');
 $admin='00000000-0000-0000-0000-000000000001';$t1='00000000-0000-0000-0000-000000000010';$t2='00000000-0000-0000-0000-000000000011';$schedule='00000000-0000-0000-0000-000000000020';$session='00000000-0000-0000-0000-000000000030';$course='00000000-0000-0000-0000-000000000040';$cia='00000000-0000-0000-0000-000000000050';$site='00000000-0000-0000-0000-000000000060';
 $pdo->prepare("INSERT INTO usuarios(id,rol,activo) VALUES(:id,'ADMIN',1)")->execute([':id'=>$admin]);
 foreach([[$t1,'Profe Uno','+529981112233'],[$t2,'Profe Dos','+529981112244']] as [$id,$name,$phone])$pdo->prepare("INSERT INTO profesores(id,nombre,whatsapp,activo) VALUES(:id,:n,:w,1)")->execute([':id'=>$id,':n'=>$name,':w'=>$phone]);
