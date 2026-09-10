@@ -137,6 +137,9 @@ member_ok(!str_contains($memberOps,'Sharky lo tomará del backend'),'Member copy
 member_ok(str_contains($memberOps,'remaining_teachers'),'Teacher unavailability must evaluate remaining co-teacher coverage.');
 member_ok(str_contains($memberOps,"'class_cancelled'=>false"),'A professor decline must be able to preserve the class.');
 member_ok(str_contains($memberOps,"'code'=>'SESSION_CANCELLED'"),'The class must cancel only when teacher coverage reaches zero.');
+member_ok(str_contains($memberOps,'function hache_sharky_member_coteaching_ready'),'Teacher routing must have an explicit co-teaching readiness gate.');
+member_ok(str_contains($memberOps,'uq_profesor_cancelacion_profesor_sesion')&&str_contains($memberOps,"profesor_id,sesion_id"),'Teacher routing must verify the composite professor/session index before accepting co-teaching operations.');
+member_ok(str_contains($memberOps,"CANCELADA':(!empty"),'Cancelled class status must take precedence over teacher-specific unavailability.');
 $api=(string)file_get_contents($root.'/api/profesores.php');
 member_ok(str_contains($api,"auth_require(['ADMIN'])"),'Only administrators may register or assign professors.');
 member_ok(str_contains($api,'auth_csrf_validate'),'Professor administration POSTs must validate CSRF.');
@@ -145,6 +148,9 @@ member_ok(str_contains($api,"accion:'")===false,'Professor API must not contain 
 $professorPage=(string)file_get_contents($root.'/public/profesores.php');
 member_ok(str_contains($professorPage,'csrf:model.csrf'),'Professor administration UI must send the current CSRF token on mutations.');
 member_ok(str_contains($professorPage,'varios horarios')&&str_contains($professorPage,'varios profes'),'Professor UI must explain many-to-many schedule assignment.');
+member_ok(str_contains($professorPage,"b.closest('.assign')"),'Professor assignment button must resolve its own adjacent schedule selector.');
+member_ok(str_contains($professorPage,'Selecciona primero una clase u horario.'),'Professor assignment must never fail silently when no schedule is selected.');
+member_ok(str_contains($professorPage,"b.textContent='Asignando…'"),'Professor assignment must expose an in-progress state and prevent duplicate taps.');
 $deploy=(string)file_get_contents($root.'/ops/production-readiness/deploy-hache-natacion');
 member_ok(str_contains($deploy,'bin/migrate-professor-coteaching.php'),'Deploy must apply the co-teaching migration before publishing the deployed SHA.');
 $status=(string)file_get_contents($root.'/bin/sharky-orchestrator-status.php');
