@@ -153,7 +153,7 @@ foreach([
     'no asumas que esa es su elección final',
     'Una negación se aplica a su objeto inmediato',
     'domina la corrección final',
-    'no vuelvas a preguntar algo que ya vino en el mismo mensaje o burst',
+    'No vuelvas a preguntar algo que ya vino en el mismo mensaje o burst',
     '“ambas”, “los dos”, “las dos” o “todos”',
     'No termines cada respuesta con una pregunta por costumbre',
     'No pidas colonia, zona, domicilio, ubicación de casa o trabajo',
