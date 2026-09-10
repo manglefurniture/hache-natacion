@@ -293,6 +293,7 @@ function hache_sharky_member_brain_observe(PDO $pdo,?array $beforeState,array $e
 /**
  * Shared semantic lane for realtime webhook and inbox recovery.
  * Returns null when the event belongs to the legacy/general Sharky pipeline.
+ * Returns false for an owned event that must remain pending for a later retry.
  */
 function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[]): ?bool
 {
@@ -315,6 +316,18 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if(($routeIdentity['found']??false)===true
         && strtoupper((string)($routeIdentity['sede_clave']??''))==='PALAPAS'
         && hache_sharky_member_routing_handoff_requested((string)($event['text']??'')))return null;
+
+    // Teacher ownership must be recognized before Palapas, payments or the
+    // supported-member gate. When co-teaching is not ready, false is a deliberate
+    // non-null deferred result: realtime stops here and inbox recovery keeps the
+    // receipt pending instead of falling through to the generic Sharky pipeline.
+    try{$teacherPreState=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){$teacherPreState=null;}
+    if(is_array($teacherPreState)){
+        $teacherPreIntent=(string)(hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''))??'');
+        $teacherPre=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
+        $teacherPreFlow=hache_sharky_member_flow($teacherPreState);
+        if(hache_sharky_member_teacher_owned_event($pdo,$teacherPre,$teacherPreFlow,$event,$teacherPreIntent)&&!hache_sharky_member_coteaching_ready($pdo))return false;
+    }
 
     // Palapas is intentionally intercepted before member payments so no
     // accounting flow can open or resume while the temporary red light is on.
@@ -343,7 +356,7 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
     $activeFlow=hache_sharky_member_flow($state);
     $teacherOwned=hache_sharky_member_teacher_owned_event($pdo,$teacher,$activeFlow,$event,$intent);
-    if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return null;
+    if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return false;
     $teacherIntent=($teacher['found']??false)===true&&hache_sharky_member_coteaching_ready($pdo)&&$teacherOwned;
     if(!$teacherIntent){
         $student=hache_sharky_member_student_context($pdo,$contact);
