@@ -12,3 +12,25 @@
 @media(min-width:760px){.stories-section{padding:96px 40px 104px}.story-feature-card{grid-template-columns:1.05fr .95fr}.story-feature-media{min-height:470px}.story-feature-copy{padding:46px;align-self:center}.reaction-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.comments-layout{grid-template-columns:.85fr 1.15fr}.story-community{padding:96px 40px 108px}.comment-replies{margin-left:26px;padding-left:16px}.hub-nav{padding:22px 40px}.hub-hero{padding:100px 40px 82px}.hub-content{padding:76px 40px 110px}.hub-story-card{grid-template-columns:1.1fr .9fr}.hub-story-media{min-height:520px}.hub-story-copy{padding:46px;align-self:center}.hub-footer{padding:30px 40px}}
 @media(min-width:1100px){.stories-section,.story-community{padding-left:64px;padding-right:64px}.hub-nav,.hub-hero,.hub-content,.hub-footer{padding-left:64px;padding-right:64px}}
 @media(prefers-reduced-motion:reduce){.reply-button,.reply-cancel,.comment-form button,.reaction-button{transition:none!important}}
+
+/* Identidad Hache 2026 — cabecera del hub de Historias. */
+.hub-brand{
+  position:relative;
+  flex:0 0 auto;
+  width:95px;
+  height:65px;
+  gap:0;
+  background:url('/assets/brand/hache-logo-2026.webp') left center/contain no-repeat;
+}
+.hub-brand .hub-mark{display:none}
+.hub-brand>span:last-child{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
