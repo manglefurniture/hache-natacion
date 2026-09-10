@@ -10,13 +10,26 @@ No convertir cada frase rara en una regex. Separar tres capas:
 2. **Contextual**: depende del último turno, la última pregunta o la información que Sharky acaba de mostrar.
 3. **Semántico**: dejar que Brain interprete lenguaje libre, pero sin ejecutar operaciones protegidas.
 
+## H0 — Una sola autoridad para pausa, cierre y opt-out
+
+El sistema ya tiene detectores maduros en `sharky-followup.php`, especialmente `hache_sharky_followup_user_deferred()` y `hache_sharky_followup_user_opted_out()`. También existen detectores similares en el adaptador y en Brain.
+
+Regla arquitectónica candidata: **no mantener tres dialectos de la misma intención**. En la próxima intervención, Brain debe consultar una autoridad canónica compartida para:
+
+- cierre diferido (`te confirmo mañana`, `lo reviso y te digo`);
+- cierre suave (`gracias`, `solo quería información`, `no gracias`);
+- opt-out fuerte (`no me contacten`, `dejen de escribirme`, `borra mi número`);
+- pausa temporal (`ahora no`).
+
+Los casos ambiguos que dependen de contexto no deben entrar a esa autoridad como regex global.
+
 ## Subreglas propuestas
 
 ### H1 — Agradecimiento o acuse no es una invitación a vender
 
 Entradas típicas: `gracias`, `ok`, `va`, `sale`, `perfecto`, `👍`, `👌`, `🙏`.
 
-Regla candidata: si no hay una pregunta determinística obligatoria pendiente ni una operación incompleta, responder como máximo con un cierre breve o guardar silencio; **no abrir una pregunta comercial nueva**.
+El sistema de follow-up ya reconoce varios cierres simples. Regla candidata para Brain live: si no hay una pregunta determinística obligatoria pendiente ni una operación incompleta, responder como máximo con un cierre breve o guardar silencio; **no abrir una pregunta comercial nueva**.
 
 ### H2 — Negación local no equivale a rechazo global
 
@@ -51,7 +64,7 @@ No ampliar el detector determinístico de pausa con estas frases sin contexto.
 
 Entradas típicas: `lo pienso y te digo`, `lo consulto con mi esposa`, `te confirmo mañana`, `déjame revisarlo y te aviso`.
 
-Regla candidata: marcar pausa comercial y no hacer otra pregunta. Mantener contexto para cuando la persona vuelva.
+Ya existe una autoridad de follow-up para buena parte de estos cierres. Regla candidata: Brain debe **reutilizarla** y no inventar una segunda gramática. Al detectar cierre diferido, detener el empuje y mantener el contexto para cuando la persona vuelva.
 
 ### H7 — Pregunta lateral no reinicia el embudo
 
@@ -103,9 +116,9 @@ Regla candidata: ignorar risa/muletillas para clasificación y conservar la inte
 
 ### H15 — Opt-out fuerte distinto de pausa suave
 
-Entradas típicas: `no me escriban`, `ya no me contacten`, `déjenme de mandar mensajes`.
+El sistema de follow-up **ya distingue** buena parte de este lenguaje: `no me escriban`, `dejen de contactarme`, `borra mi número`, además de cierres suaves.
 
-Regla candidata: distinguirlo de `ahora no` o `lo pienso`. Un opt-out fuerte bloquea seguimientos automáticos hasta una nueva iniciativa explícita del usuario.
+Regla candidata para la próxima intervención: no crear otro detector; hacer que Brain respete la autoridad existente **antes de generar una respuesta comercial**. Un opt-out fuerte bloquea seguimientos automáticos hasta una nueva iniciativa explícita del usuario.
 
 ## Regresiones que sí conviene mantener desde ahora
 
@@ -115,10 +128,11 @@ Regla candidata: distinguirlo de `ahora no` o `lo pienso`. Un opt-out fuerte blo
 - Agradecimientos, emojis y autocorrecciones no deben entrar al detector de pausa.
 - El filtro de muletillas iniciales no debe borrar una frase significativa que empiece por `Perfecto, ...`.
 - Flujos protegidos y `action_result` nunca son reescritos por Brain.
+- Detectores existentes de follow-up/opt-out no deben divergir de la semántica usada por Brain.
 
 ## Orden sugerido para la próxima intervención
 
-**P1:** H1, H2, H5, H6 y H15. Son los que más fácilmente pueden volver molesto o invasivo al asistente.
+**P1:** H0, H1, H2, H5, H6 y H15. Primero unificar autoridad y evitar empuje comercial incorrecto.
 
 **P2:** H3, H4, H8 y H9. Mejoran memoria y reducen preguntas tontas/repetidas.
 
