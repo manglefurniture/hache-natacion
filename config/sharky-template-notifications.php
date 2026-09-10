@@ -90,6 +90,81 @@ function hache_sharky_payment_amount_text(float $amount): string
     return $formatted;
 }
 
+function hache_sharky_enrollment_date_text(string $date): string
+{
+    $parsed=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
+    if(!$parsed||$parsed->format('Y-m-d')!==$date)return hache_sharky_template_text($date,80);
+    $months=[1=>'enero',2=>'febrero',3=>'marzo',4=>'abril',5=>'mayo',6=>'junio',7=>'julio',8=>'agosto',9=>'septiembre',10=>'octubre',11=>'noviembre',12=>'diciembre'];
+    return (int)$parsed->format('j').' de '.$months[(int)$parsed->format('n')].' de '.$parsed->format('Y');
+}
+
+function hache_sharky_enrollment_time_text(string $time): string
+{
+    foreach(['H:i:s','H:i'] as $format){
+        $parsed=DateTimeImmutable::createFromFormat('!'.$format,$time);
+        if($parsed&&$parsed->format($format)===$time)return $parsed->format('g:i A');
+    }
+    return hache_sharky_template_text($time,80);
+}
+
+function hache_sharky_enrollment_schedule(PDO $pdo,array $row,array $detail=[]): string
+{
+    $scheduleId=trim((string)($row['horario_preferido_id']??''));
+    if($scheduleId===''){
+        $st=$pdo->prepare("SELECT cia.horario_id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a ORDER BY ci.fecha_inicio DESC LIMIT 1");
+        $st->execute([':a'=>(string)$row['id']]);
+        $scheduleId=trim((string)($st->fetchColumn()?:''));
+    }
+    if($scheduleId!==''){
+        $st=$pdo->prepare("SELECT hora_inicio FROM horarios WHERE id=:h LIMIT 1");
+        $st->execute([':h'=>$scheduleId]);
+        $start=trim((string)($st->fetchColumn()?:''));
+        if($start!=='')return hache_sharky_enrollment_time_text($start);
+    }
+    return hache_sharky_template_text((string)($detail['horario']??''),80);
+}
+
+/** @return array{ok:bool,reason:string,queued:bool} */
+function hache_sharky_notify_enrollment_confirmed(PDO $pdo,array $student,array $detail=[]): array
+{
+    try{
+        $studentId=trim((string)($student['id']??$student['alumno_id']??''));
+        $phone=trim((string)($student['whatsapp']??''));
+        if($studentId===''){
+            $normalized=hache_sharky_template_phone($phone);
+            if($normalized===null)return ['ok'=>false,'reason'=>'ENROLLMENT_CONTACT_INCOMPLETE','queued'=>false];
+            $st=$pdo->prepare("SELECT a.id,a.nombre,a.whatsapp,a.fecha_inicio,a.horario_preferido_id,a.estado_administrativo,s.nombre sede_nombre FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id WHERE a.whatsapp=:w LIMIT 1");
+            $st->execute([':w'=>$normalized['e164']]);
+        }else{
+            $st=$pdo->prepare("SELECT a.id,a.nombre,a.whatsapp,a.fecha_inicio,a.horario_preferido_id,a.estado_administrativo,s.nombre sede_nombre FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id WHERE a.id=:id LIMIT 1");
+            $st->execute([':id'=>$studentId]);
+        }
+        $row=$st->fetch(PDO::FETCH_ASSOC);
+        if(!$row)return ['ok'=>false,'reason'=>'ENROLLMENT_NOT_FOUND','queued'=>false];
+        if(strtoupper((string)$row['estado_administrativo'])==='BAJA')return ['ok'=>false,'reason'=>'ENROLLMENT_INACTIVE','queued'=>false];
+
+        $studentId=(string)$row['id'];
+        $name=hache_sharky_template_text((string)$row['nombre'],120);
+        $phone=trim((string)$row['whatsapp']);
+        $schedule=hache_sharky_enrollment_schedule($pdo,$row,$detail);
+        $site=hache_sharky_template_text((string)$row['sede_nombre'],120);
+        $startDate=hache_sharky_enrollment_date_text((string)$row['fecha_inicio']);
+        if($studentId===''||$name===''||$phone===''||$schedule===''||$site===''||$startDate===''){
+            return ['ok'=>false,'reason'=>'ENROLLMENT_CONTEXT_INCOMPLETE','queued'=>false];
+        }
+        return hache_sharky_template_enqueue(
+            $pdo,
+            $phone,
+            HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED,
+            [$name,$schedule,$site,$startDate],
+            'enrollment-confirmed|student:'.$studentId
+        );
+    }catch(Throwable $e){
+        error_log('[sharky-template] enrollment confirmation enqueue failed');
+        return ['ok'=>false,'reason'=>'INTERNAL_ERROR','queued'=>false];
+    }
+}
+
 /** @return array{ok:bool,reason:string,queued:bool} */
 function hache_sharky_notify_payment_confirmed(PDO $pdo,int $folio): array
 {
