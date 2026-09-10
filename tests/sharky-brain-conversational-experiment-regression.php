@@ -141,6 +141,14 @@ brain_conversational_ok(
     !hache_sharky_brain_conversational_explicit_pause('Quiero ver horarios por favor'),
     'A normal request to see information must never be mistaken for a pause.'
 );
+brain_conversational_ok(
+    !hache_sharky_brain_conversational_explicit_pause('Déjame ver los horarios'),
+    '“Déjame ver los horarios” is an information request and must not pause the conversation.'
+);
+brain_conversational_ok(
+    !hache_sharky_brain_conversational_explicit_pause('Permíteme ver las opciones'),
+    '“Permíteme ver las opciones” is an information request and must not opt out follow-ups.'
+);
 $pauseRaw=$open;
 unset($pauseRaw['_brain_2ba'],$pauseRaw['_brain_conversational']);
 $pauseRaw['state']['last_user_text']="Deje analizar distancia hogar, trabajo y horarios por favor\nQuedo pendiente";
