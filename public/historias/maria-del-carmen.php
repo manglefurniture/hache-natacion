@@ -104,7 +104,6 @@ declare(strict_types=1);
 
       <section class="chapter chapter-split">
         <div class="chapter-copy">
-          <span class="chapter-number">01</span>
           <h2>Empezar por salud.</h2>
           <p>Su decisión de tomar clases no comenzó como un reto deportivo. Por recomendación médica, decidió probar la natación como actividad física.</p>
           <p>El miedo seguía ahí. María del Carmen recuerda que al principio incluso acercarse a la alberca podía costarle trabajo. Su primer objetivo no era nadar rápido ni dominar un estilo: era sentirse segura en el agua.</p>
@@ -128,7 +127,6 @@ declare(strict_types=1);
           <figcaption>La constancia convirtió movimientos que parecían imposibles en avances reales.</figcaption>
         </figure>
         <div class="chapter-copy">
-          <span class="chapter-number">02</span>
           <h2>Aprender sin saltarse el proceso.</h2>
           <p>El aprendizaje fue pausado. Cada ejercicio sumaba una pequeña victoria y algunas habilidades necesitaron más tiempo que otras.</p>
           <p>Hasta que llegó ese momento que cambia todo: darse cuenta de que ya podía avanzar por sí misma dentro del agua.</p>
@@ -139,7 +137,6 @@ declare(strict_types=1);
 
       <section class="chapter chapter-split final-chapter">
         <div class="chapter-copy">
-          <span class="chapter-number">03</span>
           <h2>La confianza también se aprende.</h2>
           <p>Hoy María del Carmen habla del agua desde otro lugar. El miedo dejó de decidir por ella y la natación se convirtió en una actividad que disfruta.</p>
           <blockquote>“Ustedes fueron los que me dieron la confianza y la motivación para que yo aprendiera a nadar.”</blockquote>
