@@ -158,6 +158,21 @@ function hache_sharky_brain_conversational_explicit_pause(string $text): bool
     return preg_match('/^(?:voy\s+a\s+pensarlo|lo\s+pienso\s+y\s+te\s+(?:digo|aviso|confirmo)|dejame\s+pensarlo)(?:\s+por\s+favor)?[.! ]*$/u',$t)===1;
 }
 
+function hache_sharky_brain_conversational_ambiguous_numeric_age_drift(array $beforeState,array $state,string $message): bool
+{
+    $t=hache_sharky_orchestrator_normalize($message);
+    $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
+    if(preg_match('/^\d{1,3}[.! ]*$/u',$t)!==1)return false;
+
+    $beforeAge=$beforeState['commercial_context']['age']??null;
+    $afterAge=$state['commercial_context']['age']??null;
+    if($beforeAge!==null||!is_int($afterAge))return false;
+
+    $beforeFlow=is_array($beforeState['flow']??null)?$beforeState['flow']:null;
+    if(is_array($beforeFlow)&&($beforeFlow['name']??'')!=='qualify_prospect')return false;
+    return true;
+}
+
 function hache_sharky_brain_conversational_strip_opening_filler(string $answer): string
 {
     $answer=trim($answer);if($answer==='')return '';
@@ -219,6 +234,23 @@ function hache_sharky_brain_conversational_apply(
 
     $state=is_array($result['state']??null)?$result['state']:[];
     if(!hache_sharky_brain_2ba_unmatched_prospect($state))return $result;
+
+    // A bare number has no intrinsic semantic type in WhatsApp. If the generic
+    // age extractor just created an age from it, restore the pre-turn age and
+    // force Brain to resolve the number against the actual conversational context.
+    $message=trim((string)($state['last_user_text']??''));
+    if($message==='')$message=trim((string)($event['text']??''));
+    $ambiguousAgeDrift=hache_sharky_brain_conversational_ambiguous_numeric_age_drift($beforeState,$state,$message);
+    if($ambiguousAgeDrift){
+        $state['commercial_context']['age']=$beforeState['commercial_context']['age']??null;
+        $decisionBeforeRepair=is_array($result['decision']??null)?$result['decision']:[];
+        if(($decisionBeforeRepair['kind']??'')==='prospect_age_rejected'){
+            $state['flow']=$beforeState['flow']??null;
+        }
+        $result['state']=$state;
+        hache_sharky_brain_2ba_metric('brain_conversational_ambiguous_age_reverted');
+    }
+
     if(is_array($result['action_result']??null))return $result;
 
     $decision=is_array($result['decision']??null)?$result['decision']:[];
@@ -235,9 +267,9 @@ function hache_sharky_brain_conversational_apply(
     // Once the guided rail has been removed, keep the existing natural response
     // path. An explicit “déjame pensarlo/analizarlo” is the one deterministic
     // conversational intervention: stop the sales push and wait for the person.
-    if(!$qualificationFlow){
-        $message=trim((string)($state['last_user_text']??''));
-        if($message==='')$message=trim((string)($event['text']??''));
+    // Ambiguous numeric age drift is the other exception: the contaminated reply
+    // must be regenerated once with the corrected state instead of passed through.
+    if(!$qualificationFlow&&!$ambiguousAgeDrift){
         if(hache_sharky_brain_conversational_explicit_pause($message)){
             return hache_sharky_brain_conversational_pause_result($state,$result,$contact,$now);
         }
@@ -252,26 +284,21 @@ function hache_sharky_brain_conversational_apply(
         return $result;
     }
 
-    // The adapter may have processed a synthetic debounce event containing the
-    // complete customer burst. Prefer its durable last_user_text over the worker's
-    // original fragment so Brain answers the same coalesced turn as deterministic Sharky.
-    $message=trim((string)($state['last_user_text']??''));
-    if($message==='')$message=trim((string)($event['text']??''));
     if($message===''||!function_exists('hache_sharky_lab_answer')){
         hache_sharky_brain_2ba_metric('brain_conversational_fallback');
         return $result;
     }
 
-    $openState=function_exists('hache_sharky_orchestrator_clear_flow')
+    $openState=$qualificationFlow&&function_exists('hache_sharky_orchestrator_clear_flow')
         ?hache_sharky_orchestrator_clear_flow($state)
-        :array_replace($state,['flow'=>null]);
+        :$state;
     $now??=time();
     $openState['brain_conversational_experiment']=true;
     $openState['updated_at']=$now;
 
     $seed=hache_sharky_orchestrator_decision('conversation','');
     $instruction=hache_sharky_whatsapp_style_instruction($seed,$openState);
-    $instruction.="\n\nMODO BRAIN CONVERSACIONAL EXPERIMENTAL: responde primero a lo que realmente preguntó la persona y conduce la conversación con naturalidad. Haz como máximo una pregunta útil por turno cuando haga falta avanzar. En el primer turno no saludes ni añadas muletillas como ‘¡Claro!’ o ‘¡Con gusto!’: la presentación de Sharky se agrega de forma determinística aparte. Si commercial_context.entry_source es meta_ad y entry_interest es intensive, considera el curso intensivo como el tema actual y no preguntes intensivo vs. clases regulares salvo que la persona cambie explícitamente de interés. Mantén la respuesta breve y móvil: no vuelques todos los horarios, fechas o variantes cuando basta un resumen. Puedes explicar, comparar y cambiar de tema usando únicamente datos confirmados por el contexto de Hache Natación. No inventes precios, horarios, cupos, políticas ni datos del alumno. No afirmes haber ejecutado pagos, inscripciones, cancelaciones, reposiciones, cambios de datos ni ninguna operación sensible: esas acciones pertenecen exclusivamente a los flujos y ejecutores determinísticos del backend. Si una operación requiere un flujo protegido, deja que el backend tome el control.";
+    $instruction.="\n\nMODO BRAIN CONVERSACIONAL EXPERIMENTAL: responde primero a lo que realmente preguntó la persona y conduce la conversación con naturalidad. Haz como máximo una pregunta útil por turno cuando haga falta avanzar. En el primer turno no saludes ni añadas muletillas como ‘¡Claro!’ o ‘¡Con gusto!’: la presentación de Sharky se agrega de forma determinística aparte. Si commercial_context.entry_source es meta_ad y entry_interest es intensive, considera el curso intensivo como el tema actual y no preguntes intensivo vs. clases regulares salvo que la persona cambie explícitamente de interés. Mantén la respuesta breve y móvil: no vuelques todos los horarios, fechas o variantes cuando basta un resumen. Un número aislado es ambiguo: no lo conviertas en edad por tu cuenta; resuélvelo con el contexto conversacional anterior y, si sigue siendo ambiguo, pregunta brevemente qué significa. Solo trata una edad como confirmada cuando la persona la expresa inequívocamente (por ejemplo, ‘tengo 62 años’). Puedes explicar, comparar y cambiar de tema usando únicamente datos confirmados por el contexto de Hache Natación. No inventes precios, horarios, cupos, políticas ni datos del alumno. No afirmes haber ejecutado pagos, inscripciones, cancelaciones, reposiciones, cambios de datos ni ninguna operación sensible: esas acciones pertenecen exclusivamente a los flujos y ejecutores determinísticos del backend. Si una operación requiere un flujo protegido, deja que el backend tome el control.";
 
     $context=[
         'today'=>function_exists('hache_sharky_lab_today')?hache_sharky_lab_today():date('Y-m-d'),
