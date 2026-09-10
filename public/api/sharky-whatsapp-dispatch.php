@@ -6,6 +6,7 @@ require_once __DIR__.'/../../config/rate-limit.php';
 require_once __DIR__.'/../../config/sharky-runtime.php';
 require_once __DIR__.'/../../config/sharky-deterministic-replies.php';
 require_once __DIR__.'/../../config/sharky-schedule-scope-guard.php';
+require_once __DIR__.'/../../config/sharky-product-boundary-guard.php';
 
 function hache_sharky_dispatcher_is_loopback_whatsapp(array $data): bool
 {
@@ -83,8 +84,13 @@ if(!is_array($data)||!hache_sharky_dispatcher_is_loopback_whatsapp($data)){
 $state=hache_sharky_dispatcher_state_from_history($data);
 $message=trim((string)($data['message']??''));
 $deterministicInput=hache_sharky_schedule_guard_canonicalize_venue_spacing($message);
-$deterministic=$message!==''?hache_sharky_deterministic_reply($deterministicInput,$state):null;
-if($deterministic===null&&$message!=='')$deterministic=hache_sharky_schedule_guard_reply($deterministicInput,$state);
+$deterministic=$message!==''?hache_sharky_product_boundary_reply($deterministicInput,$state):null;
+$deterministicSource=$deterministic!==null?'deterministic_product_boundary':'deterministic';
+if($deterministic===null&&$message!=='')$deterministic=hache_sharky_deterministic_reply($deterministicInput,$state);
+if($deterministic===null&&$message!==''){
+    $deterministic=hache_sharky_schedule_guard_reply($deterministicInput,$state);
+    if($deterministic!==null)$deterministicSource='deterministic_schedule_guard';
+}
 if(is_string($deterministic)&&trim($deterministic)!==''){
     $rate=security_rate_limit_record('sharky-internal-whatsapp','loopback',300,300);
     if(!$rate['allowed']){
@@ -93,7 +99,8 @@ if(is_string($deterministic)&&trim($deterministic)!==''){
     }
     hache_sharky_metric_increment('answers_whatsapp');
     hache_sharky_metric_increment('deterministic_replies');
-    hache_sharky_dispatcher_out(['ok'=>true,'answer'=>trim($deterministic),'channel'=>'whatsapp','source'=>'deterministic']);
+    if($deterministicSource==='deterministic_product_boundary')hache_sharky_metric_increment('guarded_product_boundary');
+    hache_sharky_dispatcher_out(['ok'=>true,'answer'=>trim($deterministic),'channel'=>'whatsapp','source'=>$deterministicSource]);
 }
 
 $underway=hache_sharky_dispatcher_conversation_underway($state);
