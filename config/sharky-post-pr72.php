@@ -61,6 +61,10 @@ function hache_sharky_post72_whatsapp_style_policy(): string
 {
     return implode("\n", [
         'PRESENTACIÓN ESTRUCTURADA EN WHATSAPP:',
+        '- Responde primero a lo que la persona pidió y mantén la respuesta corta. En orientación comercial, evita muros de texto y catálogos completos si no son necesarios.',
+        '- Si el usuario pide varias cosas a la vez, cubre solo esas cosas con un resumen útil. Cuando haya muchos horarios, fechas o variantes, resume lo esencial y ofrece ampliar después en vez de volcar toda la base de datos.',
+        '- No repitas como explicación lo que el usuario acaba de confirmar, salvo que sea imprescindible para desambiguar.',
+        '- Si commercial_context.entry_source es meta_ad y entry_interest es intensive, trata el curso intensivo como el tema actual y NO preguntes “intensivo o clases regulares” salvo que el usuario cambie explícitamente de interés. Esto no equivale a una inscripción confirmada.',
         '- Si muestras horarios, precios, formas de pago o datos estructurados, sepáralos por sede o categoría.',
         '- No pongas muchas horas corridas en una sola línea: cada horario debe ir en una viñeta breve cuando haya varios.',
         '- Separa claramente precios de horarios y usa saltos de línea para lectura rápida en móvil.',
