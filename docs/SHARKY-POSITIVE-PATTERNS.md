@@ -46,6 +46,8 @@ Un prospecto entra desde un anuncio de Meta relacionado con aprender a nadar. Sh
 
 - Brain puede comprender, recomendar y mantener el hilo conversacional.
 - La recomendación de intensivo se basa en el **nivel real**: quien empieza desde cero o nunca ha tomado clases formales recibe el intensivo como recomendación primaria.
+- Cuando el intensivo ya es el programa activo, referencias genéricas como “las clases”, “precio”, “horarios”, “ubicación”, “cuándo empieza” o “el curso” siguen refiriéndose al intensivo; no pueden saltar a regulares por una palabra ambigua.
+- Una consulta lateral sobre regulares puede responderse sin cambiar el programa activo. El cambio a regulares requiere una preferencia explícita del prospecto.
 - La preferencia posterior del cliente se respeta; recomendar no significa imponer.
 - La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo.
 - Horario y fecha se eligen usando disponibilidad real del backend.
@@ -69,6 +71,7 @@ Considerar GP-001 roto si una adecuación provoca cualquiera de estos comportami
 
 - volver a preguntar nivel, sede, horario o fecha ya confirmados;
 - perder el hilo después de una pausa normal;
+- cambiar de intensivo a regulares porque el usuario dijo de forma genérica “clases”, “precio” u otra referencia ambigua;
 - ofrecer horarios o fechas no disponibles;
 - convertir una respuesta conversacional de Brain en una operación sensible directa;
 - reiniciar el onboarding al entrar al flow de inscripción;

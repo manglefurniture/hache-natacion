@@ -145,11 +145,42 @@ human_edge_ok(
     'A true beginner must retain the existing controlled intensive recommendation in structured state.'
 );
 
+$genericProgramQuestions=[
+    'Precio de las clases?',
+    '¿Cuánto cuesta?',
+    '¿Qué horarios tienen?',
+    'Ubicación por favor',
+    '¿Cuándo empieza?',
+];
+foreach($genericProgramQuestions as $text){
+    $after=hache_sharky_orchestrator_capture_commercial_context($prospect,$text);
+    human_edge_ok(
+        ($after['commercial_context']['program']??null)==='intensive',
+        'Generic follow-up must not switch an active intensive program: '.$text
+    );
+}
+human_edge_ok(
+    hache_sharky_orchestrator_program_choice('Precio de las clases?')===null,
+    'The word “clases” alone must not be parsed as regular classes.'
+);
+human_edge_ok(
+    hache_sharky_orchestrator_program_choice('Prefiero clases regulares')==='regular',
+    'An explicit regular preference must remain able to change program.'
+);
+$intensiveInstruction=hache_sharky_whatsapp_style_instruction(['kind'=>'conversation'],$prospect);
+human_edge_ok(
+    str_contains(hache_sharky_orchestrator_normalize($intensiveInstruction),'programa: curso intensivo'),
+    'A confirmed intensive program must be visible to the model instruction as durable context.'
+);
+
 $policy=hache_sharky_post72_whatsapp_style_policy();
 foreach([
     'prioriza conocer el nivel antes de pedir que elija programa',
     'curso intensivo es la recomendación primaria de Hache Natación',
     'respeta su decisión y continúa con regulares sin insistir',
+    'ese es el programa activo de la conversación hasta que el usuario lo cambie explícitamente',
+    'La palabra “clases” por sí sola NO significa clases regulares',
+    'Una consulta lateral sobre regulares no cambia por sí sola el programa activo',
     'no asumas que esa es su elección final',
     'Una negación se aplica a su objeto inmediato',
     'domina la corrección final',
