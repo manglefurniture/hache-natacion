@@ -10,6 +10,8 @@ No convertir cada frase rara en una regex. Separar tres capas:
 2. **Contextual**: depende del último turno, la última pregunta o la información que Sharky acaba de mostrar.
 3. **Semántico**: dejar que Brain interprete lenguaje libre, pero sin ejecutar operaciones protegidas.
 
+La fuente de entrada (por ejemplo, un anuncio de curso intensivo) es **contexto**, no una decisión irrevocable del usuario. La recomendación comercial debe apoyarse en el nivel y la experiencia declarados por la persona. Para Hache Natación, alguien que no sabe nadar o nunca ha tomado clases debe recibir el curso intensivo como recomendación primaria, aunque inicialmente pregunte por clases regulares; la persona conserva la decisión final.
+
 ## H0 — Una sola autoridad para pausa, cierre y opt-out
 
 El sistema ya tiene detectores maduros en `sharky-followup.php`, especialmente `hache_sharky_followup_user_deferred()` y `hache_sharky_followup_user_opted_out()`. También existen detectores similares en el adaptador y en Brain.
@@ -120,6 +122,32 @@ El sistema de follow-up **ya distingue** buena parte de este lenguaje: `no me es
 
 Regla candidata para la próxima intervención: no crear otro detector; hacer que Brain respete la autoridad existente **antes de generar una respuesta comercial**. Un opt-out fuerte bloquea seguimientos automáticos hasta una nueva iniciativa explícita del usuario.
 
+### H16 — Recomendación comercial por nivel, no solo por lo que pidió primero
+
+Caso observado: una persona puede entrar por un anuncio de intensivo y pedir clases regulares, o pedir regulares sin saber nadar ni haber tomado clases.
+
+Regla candidata:
+- el anuncio o la primera elección son **señales de interés**, no una prescripción;
+- si la persona declara que no sabe nadar o nunca ha tomado clases, Hache recomienda primero el curso intensivo como vía de inicio;
+- explicar brevemente el motivo de la recomendación, sin invalidar la preferencia del usuario;
+- si la persona insiste en regulares, continuar con regulares y no discutir con ella.
+
+Objetivo: Sharky no es solo un menú; también representa el criterio comercial/pedagógico de Hache.
+
+### H17 — No pedir datos de baja utilidad; cerrar con el próximo paso útil
+
+Caso observado: después de entregar las ubicaciones de ambas sedes, Sharky preguntó `¿Desde qué zona te queda más cerca?`.
+
+Regla candidata: **no recolectar ubicación del hogar/trabajo ni zona de procedencia si ese dato no es necesario para responder o ejecutar una operación**. Si ya se resolvió la pregunta concreta del usuario, cerrar dejando el siguiente paso en sus manos.
+
+Patrón recomendado de cierre:
+
+`Listo, ahí tienes las dos ubicaciones. Cuando quieras seguimos con horarios o precios de la sede que te convenga más.`
+
+Puede adaptarse al contexto (`horarios`, `precios`, `fechas`, `inscripción`) pero no debe añadir una pregunta solo para mantener viva la conversación.
+
+Excepción: si la persona **pide ayuda explícita para elegir por distancia**, entonces sí puede pedirse una zona aproximada o trabajar con la información que ella decida compartir.
+
 ## Regresiones que sí conviene mantener desde ahora
 
 - Pausas inequívocas siguen siendo pausa.
@@ -129,12 +157,16 @@ Regla candidata para la próxima intervención: no crear otro detector; hacer qu
 - El filtro de muletillas iniciales no debe borrar una frase significativa que empiece por `Perfecto, ...`.
 - Flujos protegidos y `action_result` nunca son reescritos por Brain.
 - Detectores existentes de follow-up/opt-out no deben divergir de la semántica usada por Brain.
+- El origen de campaña no debe bloquear una elección explícita del usuario.
+- La recomendación de intensivo debe poder activarse después por nivel/experiencia declarados.
+- Resolver una consulta concreta no obliga a terminar con otra pregunta.
+- No pedir zona/ubicación personal salvo que aporte a una necesidad explícita del usuario.
 
 ## Orden sugerido para la próxima intervención
 
-**P1:** H0, H1, H2, H5, H6 y H15. Primero unificar autoridad y evitar empuje comercial incorrecto.
+**P1:** H0, H1, H2, H5, H6, H15 y H17. Primero unificar autoridad y evitar empuje o recolección de datos innecesarios.
 
-**P2:** H3, H4, H8 y H9. Mejoran memoria y reducen preguntas tontas/repetidas.
+**P2:** H3, H4, H8, H9 y H16. Mejoran memoria, recomendación y reducen preguntas tontas/repetidas.
 
 **P3:** H7, H10, H12, H13 y H14. Pulido conversacional y continuidad.
 
