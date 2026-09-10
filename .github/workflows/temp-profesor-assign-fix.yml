@@ -1,0 +1,99 @@
+name: Temp professor assign fix
+
+on:
+  push:
+    branches: [fix/profesores-assign-ui-p2-20260909]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/profesores-assign-ui-p2-20260909
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Apply professor assignment and co-teaching review fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'missing target: {label}')
+              return text.replace(old, new, 1)
+
+          p=Path('config/sharky-member-ops.php')
+          text=p.read_text()
+          needle="""function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
+{
+    if(!hache_sharky_member_schema_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
+"""
+          replacement="""function hache_sharky_member_coteaching_ready(PDO $pdo): bool
+{
+    try{
+        $st=$pdo->prepare(\"SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') columns_in_order,MIN(non_unique) non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_profesor_sesion' GROUP BY index_name\");
+        $st->execute();$row=$st->fetch(PDO::FETCH_ASSOC);
+        return is_array($row)&&(string)($row['columns_in_order']??'')==='profesor_id,sesion_id'&&(int)($row['non_unique']??1)===0;
+    }catch(Throwable $e){return false;}
+}
+
+function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
+{
+    if(!hache_sharky_member_schema_ready($pdo)||!hache_sharky_member_coteaching_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
+"""
+          text=once(text,needle,replacement,'co-teaching readiness helper')
+          needle2="""function hache_sharky_member_cancel_teacher_session(PDO $pdo,string $teacherId,string $sessionId,string $reason,string $actionKey): array
+{
+    $reason=preg_replace('/\\s+/u',' ',trim($reason))??'';if($reason===''||mb_strlen($reason)>500)throw new HacheSharkyBusinessException('El motivo es obligatorio y no puede exceder 500 caracteres.','INVALID_REASON',422);
+"""
+          replacement2="""function hache_sharky_member_cancel_teacher_session(PDO $pdo,string $teacherId,string $sessionId,string $reason,string $actionKey): array
+{
+    if(!hache_sharky_member_coteaching_ready($pdo))throw new HacheSharkyBusinessException('La operación de profesores todavía no está lista.','TEACHER_COTEACHING_SCHEMA_UNAVAILABLE',503);
+    $reason=preg_replace('/\\s+/u',' ',trim($reason))??'';if($reason===''||mb_strlen($reason)>500)throw new HacheSharkyBusinessException('El motivo es obligatorio y no puede exceder 500 caracteres.','INVALID_REASON',422);
+"""
+          text=once(text,needle2,replacement2,'cancel route readiness gate')
+          old_status="$status=!empty($s['teacher_cancel_id'])?'NO ASISTIRÁS':((string)$s['estado']==='CANCELADA'?'CANCELADA':((int)($s['cerrada']??0)===1?'cerrada':'programada'));"
+          new_status="$status=(string)$s['estado']==='CANCELADA'?'CANCELADA':(!empty($s['teacher_cancel_id'])?'NO ASISTIRÁS':((int)($s['cerrada']??0)===1?'cerrada':'programada'));"
+          text=once(text,old_status,new_status,'cancelled status precedence')
+          p.write_text(text)
+
+          p=Path('public/profesores.php')
+          text=p.read_text()
+          old="""list.querySelectorAll('[data-on]').forEach(b=>b.onclick=async()=>{const s=list.querySelector('[data-sel=\"'+b.dataset.on+'\"]');if(!s.value)return;try{await post({accion:'ASSIGN',profesor_id:b.dataset.on,horario_id:s.value,activo:true});note('Horario asignado.');await load()}catch(e){note(e.message)}});"""
+          new="""list.querySelectorAll('[data-on]').forEach(b=>b.onclick=async()=>{const box=b.closest('.assign'),s=box?box.querySelector('[data-sel]'):null;if(!s){note('No pude localizar el selector de horario. Recarga la página e inténtalo de nuevo.');return}const schedule=String(s.value||'').trim();if(schedule===''){note('Selecciona primero una clase u horario.');s.focus();return}const original=b.textContent;b.disabled=true;b.textContent='Asignando…';note('Asignando horario…');try{await post({accion:'ASSIGN',profesor_id:b.dataset.on,horario_id:schedule,activo:true});note('Horario asignado correctamente.');await load()}catch(e){note(e.message||'No se pudo asignar el horario.')}finally{if(document.body.contains(b)){b.disabled=false;b.textContent=original}}});"""
+          text=once(text,old,new,'assign button handler')
+          text=text.replace("<option value=\"\">Asignar horario…</option>","<option value=\"\">Selecciona una clase/horario…</option>",1)
+          p.write_text(text)
+
+          p=Path('tests/sharky-member-ops-regression.php')
+          text=p.read_text()
+          anchor="member_ok(str_contains($memberOps,\"'code'=>'SESSION_CANCELLED'\"),'The class must cancel only when teacher coverage reaches zero.');\n"
+          extra="""member_ok(str_contains($memberOps,'function hache_sharky_member_coteaching_ready'),'Teacher routing must have an explicit co-teaching readiness gate.');
+member_ok(str_contains($memberOps,'uq_profesor_cancelacion_profesor_sesion')&&str_contains($memberOps,"profesor_id,sesion_id"),'Teacher routing must verify the composite professor/session index before accepting co-teaching operations.');
+member_ok(str_contains($memberOps,"$status=(string)$s['estado']==='CANCELADA'?'CANCELADA':(!empty($s['teacher_cancel_id'])"),'Cancelled class status must take precedence over teacher-specific unavailability.');
+"""
+          text=once(text,anchor,anchor+extra,'member P2 regression assertions')
+          anchor2="member_ok(str_contains($professorPage,'varios horarios')&&str_contains($professorPage,'varios profes'),'Professor UI must explain many-to-many schedule assignment.');\n"
+          extra2="""member_ok(str_contains($professorPage,"b.closest('.assign')"),'Professor assignment button must resolve its own adjacent schedule selector.');
+member_ok(str_contains($professorPage,'Selecciona primero una clase u horario.'),'Professor assignment must never fail silently when no schedule is selected.');
+member_ok(str_contains($professorPage,"b.textContent='Asignando…'"),'Professor assignment must expose an in-progress state and prevent duplicate taps.');
+"""
+          text=once(text,anchor2,anchor2+extra2,'professor assignment UI regression assertions')
+          p.write_text(text)
+          PY
+          php -l config/sharky-member-ops.php
+          php -l public/profesores.php
+          php tests/sharky-member-ops-regression.php
+          rm -f .github/workflows/temp-profesor-assign-fix.yml
+          git config user.name "Hache Interactive"
+          git config user.email "manglefurniture@gmail.com"
+          git add -A
+          git commit -m "fix: reparar asignación de horarios a profesores"
+          git push origin HEAD:fix/profesores-assign-ui-p2-20260909
