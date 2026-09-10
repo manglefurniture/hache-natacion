@@ -61,7 +61,7 @@ function historias_enviar_confirmacion_comentario(PDO $pdo,string $comentarioId,
     }catch(Throwable $e){
         if($pdo->inTransaction())$pdo->rollBack();
         try{$pdo->prepare("UPDATE historia_comentario_suscripciones SET confirmacion_estado='FALLO',updated_at=NOW() WHERE comentario_id=:id AND confirmacion_estado='ENVIANDO'")->execute([':id'=>$comentarioId]);}catch(Throwable $markError){error_log('[historias-notificaciones] No se pudo liberar el claim de confirmación: '.$markError->getMessage());}
-        error_log('[historias-notificaciones] Falló la coordinación del correo de confirmación: '.$e->getMessage());return false;
+        error_log('[historias-notificaciones] Falló la coordinación del aviso de confirmación: '.$e->getMessage());return false;
     }
 }
 
