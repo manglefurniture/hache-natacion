@@ -28,8 +28,8 @@ declare(strict_types=1);
 
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="preload" as="image" href="/assets/file_00000000ddc881fba7297eac7c62765c.png" fetchpriority="high">
-  <link rel="stylesheet" href="/assets/historia-maria-del-carmen.css?v=20260828-2">
-  <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260902-1">
+  <link rel="stylesheet" href="/assets/historia-maria-del-carmen.css?v=20260910-logo2026">
+  <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260910-logo2026">
 
   <script type="application/ld+json">
   {
