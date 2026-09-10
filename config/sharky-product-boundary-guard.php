@@ -37,6 +37,12 @@ function hache_sharky_product_boundary_weekly_frequency(string $text): ?int
     return $value>=1&&$value<=7?$value:null;
 }
 
+function hache_sharky_product_boundary_ambiguous_plural(string $text): bool
+{
+    $t=trim(hache_sharky_product_boundary_normalize($text));
+    return preg_match('/^(?:de\s+)?(?:ambos|ambas|los\s+dos|las\s+dos|de\s+los\s+dos|de\s+las\s+dos)[.! ]*$/u',$t)===1;
+}
+
 function hache_sharky_product_boundary_intensive_context(array $state): bool
 {
     $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
@@ -48,14 +54,18 @@ function hache_sharky_product_boundary_intensive_context(array $state): bool
 }
 
 /**
- * Prevents a weekly-frequency constraint from silently turning the intensive
- * course into a regular plan. It explains the product boundary first and lets
- * the prospect explicitly decide whether to switch products.
+ * Prevents a weekly-frequency constraint or a bare plural reference from
+ * silently turning the intensive course into regular classes.
  */
 function hache_sharky_product_boundary_reply(string $text,array $state): ?string
 {
     if(!hache_sharky_product_boundary_intensive_context($state))return null;
     if(hache_sharky_product_boundary_explicit_regular_choice($text))return null;
+
+    if(hache_sharky_product_boundary_ambiguous_plural($text)){
+        return 'Entiendo. “Las dos” por sí solo no cambia el tipo de servicio. Mantengo el curso intensivo como la opción que veníamos trabajando. Si te refieres a las dos sedes u otras dos opciones, seguimos con esas; si quieres cambiar a clases regulares, dímelo explícitamente.';
+    }
+
     $frequency=hache_sharky_product_boundary_weekly_frequency($text);
     if($frequency===null)return null;
 
