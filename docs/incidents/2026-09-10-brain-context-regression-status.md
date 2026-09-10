@@ -1,0 +1,1 @@
+Estado: Brain conversacional debe permanecer OFF hasta completar corrección y regresiones.
