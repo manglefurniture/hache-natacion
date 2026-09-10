@@ -30,7 +30,7 @@ foreach($templates as $template){
 expect_template(substr_count($helper,"_mx';")===2,'Solo inscripción confirmada e inscripciones abiertas deben usar el sufijo _mx');
 expect_template(str_contains($helper,"HACHE_SHARKY_TEMPLATE_LANGUAGE_MX = 'es_MX'"),'Las plantillas deben enviarse como Spanish (MEX)');
 expect_template(str_contains($helper,"'type'=>'template'"),'El payload debe usar el tipo template de WhatsApp');
-expect_template(str_contains($helper,"'components'=>[['type'=>'body','parameters'=>\$parameters]]"),'Las variables deben viajar como parámetros del cuerpo');
+expect_template(str_contains($helper,"\$template['components']=[['type'=>'body','parameters'=>\$parameters]]"),'Las variables deben viajar como parámetros del cuerpo');
 expect_template(str_contains($helper,'hache_sharky_outbox_enqueue_raw'),'Las plantillas deben pasar por el outbox cifrado/idempotente');
 expect_template(str_contains($helper,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'"),'El envío debe respetar el kill switch de Sharky');
 expect_template(str_contains($helper,"'payment-confirmed|folio:'.\$folio"),'La confirmación de pago debe deduplicarse por folio');
