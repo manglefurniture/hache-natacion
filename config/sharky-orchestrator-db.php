@@ -9,6 +9,8 @@ require_once __DIR__.'/sharky-action-recovery.php';
 require_once __DIR__.'/sharky-start-authority.php';
 require_once __DIR__.'/sharky-registration-recovery.php';
 
+const HACHE_SHARKY_STATE_MAX_TTL = 345600;
+
 function hache_sharky_db_state_key(): string
 {
     $secret=hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY');
@@ -120,7 +122,7 @@ function hache_sharky_db_state_defer_cancel(): void
 
 function hache_sharky_db_state_save_now(PDO $pdo,string $contact,array $state,int $ttl=86400): bool
 {
-    $ttl=max(HACHE_SHARKY_FLOW_TTL,min(172800,$ttl));
+    $ttl=max(HACHE_SHARKY_FLOW_TTL,min(HACHE_SHARKY_STATE_MAX_TTL,$ttl));
     if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
     $hash=hache_sharky_orchestrator_contact_hash($contact);$sealed=hache_sharky_db_state_encrypt($state);
     $expires=(new DateTimeImmutable())->modify('+'.$ttl.' seconds')->format('Y-m-d H:i:s');
