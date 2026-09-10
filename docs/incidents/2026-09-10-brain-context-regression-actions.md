@@ -1,0 +1,1 @@
+Acción inmediata: deshabilitar Brain conversacional experimental mediante kill switch persistido. Mantener fallback estable. No reactivar sin regresiones de contexto y prueba controlada.

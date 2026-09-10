@@ -1,0 +1,1 @@
+Owner: Hache Interactive. Reactivación solo con aprobación explícita tras pruebas controladas.

@@ -1,0 +1,1 @@
+Casos mínimos: contexto de ubicación domina números ambiguos; edad solo con semántica explícita; intersecciones con “y”; multi-intención ubicación+costo; no re-preguntar programa desde anuncio intensivo; resolver “qué diferencia” contra el objeto inmediato.
