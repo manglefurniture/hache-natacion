@@ -12,12 +12,31 @@ function hache_sharky_commercial_snapshot(array $state): array
     return array_intersect_key(is_array($state['commercial_context']??null)?$state['commercial_context']:[],array_flip($keys));
 }
 
+function hache_sharky_commercial_regular_restricted(array $state): bool
+{
+    $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    return ($c['swim_level']??null)==='beginner'
+        || in_array(($c['background']??null),['self_taught','no_formal'],true);
+}
+
+function hache_sharky_commercial_force_intensive_eligibility(array $state): array
+{
+    if(!hache_sharky_commercial_regular_restricted($state))return $state;
+    $c=&$state['commercial_context'];
+    $c['recommended_program']='intensive';
+    $c['program']='intensive';
+    foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($c[$key]);
+    return $state;
+}
+
 function hache_sharky_commercial_invalidate(array $state,array $before): array
 {
     $c=&$state['commercial_context'];
     if(($before['swim_level']??null)!==($c['swim_level']??null)){
         unset($c['background'],$c['recommended_program']);
     }
+    $state=hache_sharky_commercial_force_intensive_eligibility($state);
+    $c=&$state['commercial_context'];
     if(($before['program']??null)!==($c['program']??null)||($before['sede_clave']??null)!==($c['sede_clave']??null)){
         foreach(['plan_id','plan_name','sessions_per_week','plan_price','schedule_id','schedule_label','course_id','fecha_inicio','course_price','date_preference'] as $key)unset($c[$key]);
     }
@@ -53,6 +72,10 @@ function hache_sharky_commercial_background_choice(string $text): ?string
     if(preg_match('/^(?:si|si\s+he\s+tomado\s+clases|he\s+tomado\s+clases|ya\s+tome\s+clases|con\s+profesor|con\s+entrenador|formal(?:mente)?)[.! ]*$/u',$t)===1)return 'formal';
     if(preg_match('/^(?:por\s+mi\s+cuenta|aprendi\s+solo|aprendi\s+sola|autodidacta)[.! ]*$/u',$t)===1)return 'self_taught';
     if(preg_match('/^(?:no(?:\s+nunca)?|nunca|no\s+he\s+tomado\s+clases|nunca\s+he\s+tomado\s+clases|jamas\s+he\s+tomado\s+clases)[.! ]*$/u',$t)===1)return 'no_formal';
+    if(preg_match('/\b(?:nunca|jamas)\b.{0,42}\b(?:he\s+)?(?:tomado|recibido|tenido)\b.{0,24}\bclases?\b/u',$t)===1)return 'no_formal';
+    if(preg_match('/\bno\s+(?:he\s+)?(?:tomado|recibido|tenido)\b.{0,24}\bclases?\b/u',$t)===1)return 'no_formal';
+    if(preg_match('/\b(?:sin|ninguna?)\s+clases?\s+(?:formales?\s+)?(?:de\s+)?natacion\b/u',$t)===1)return 'no_formal';
+    if(preg_match('/\b(?:aprendi|nado|he\s+nadado)\b.{0,30}\b(?:solo|sola|por\s+mi\s+cuenta|autodidacta)\b/u',$t)===1)return 'self_taught';
     return null;
 }
 
@@ -80,19 +103,34 @@ function hache_sharky_commercial_reconcile_guidance(array $state,string $text): 
         $background=hache_sharky_commercial_background_choice($text);
         if($background!==null){
             $c['background']=$background;
-            if(in_array($background,['self_taught','no_formal'],true))$c['recommended_program']='intensive';
-            elseif($background==='formal'&&in_array(($c['entry_interest']??null),['intensive','regular'],true))$c['recommended_program']=$c['entry_interest'];
-            if(empty($c['program'])){
-                $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',[
-                    'recommended_program'=>$c['recommended_program']??null,
-                    'background'=>$background,
-                    'preferred_program'=>$c['entry_interest']??null,
-                ],(int)($state['updated_at']??time()));
-                $flow=$state['flow'];$flowName='qualify_prospect';$flowStep='program';
+            if(in_array($background,['self_taught','no_formal'],true)){
+                $c['recommended_program']='intensive';
+                $c['program']='intensive';
+                foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($c[$key]);
+                if(in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
+                    $state=hache_sharky_orchestrator_clear_flow($state);
+                }else{
+                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',['recommended_program'=>'intensive','background'=>$background],(int)($state['updated_at']??time()));
+                }
+                $c=&$state['commercial_context'];
+                $flow=$state['flow']??null;$flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
+            }else{
+                if($background==='formal'&&in_array(($c['entry_interest']??null),['intensive','regular'],true))$c['recommended_program']=$c['entry_interest'];
+                if(empty($c['program'])){
+                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',[
+                        'recommended_program'=>$c['recommended_program']??null,
+                        'background'=>$background,
+                        'preferred_program'=>$c['entry_interest']??null,
+                    ],(int)($state['updated_at']??time()));
+                    $c=&$state['commercial_context'];
+                    $flow=$state['flow'];$flowName='qualify_prospect';$flowStep='program';
+                }
             }
         }
     }
 
+    $state=hache_sharky_commercial_force_intensive_eligibility($state);
+    $c=&$state['commercial_context'];
     $recommended=(string)($c['recommended_program']??'');
     if(empty($c['program'])&&in_array($recommended,['intensive','regular'],true)){
         if(!is_array($state['flow']??null)){
@@ -111,7 +149,7 @@ function hache_sharky_commercial_reconcile_guidance(array $state,string $text): 
             }
         }
     }
-    return $state;
+    return hache_sharky_commercial_force_intensive_eligibility($state);
 }
 
 function hache_sharky_commercial_relative_date_question(string $text): bool
@@ -151,6 +189,7 @@ function hache_sharky_commercial_short_date(string $iso): string
 
 function hache_sharky_commercial_visible_plans(array $state,array $catalog): array
 {
+    if(hache_sharky_commercial_regular_restricted($state))return [];
     $sessions=$state['commercial_context']['sessions_per_week']??null;
     return array_values(array_filter($catalog['plans']??[],static fn(array $p):bool=>$sessions===null||(int)($p['sesiones_semana']??0)===(int)$sessions));
 }
@@ -204,6 +243,9 @@ function hache_sharky_commercial_control_ui(array $state,array $catalog,array $n
     $slot=(string)($next['slot']??'');$c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
     if($slot==='program'){
         $recommended=(string)($c['recommended_program']??'');
+        if(hache_sharky_commercial_regular_restricted($state))return ['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button('qualify:intensive','Seguir intensivo'),
+        ]];
         if($recommended==='intensive')return ['type'=>'buttons','buttons'=>[
             hache_sharky_orchestrator_button('qualify:intensive','Seguir intensivo'),hache_sharky_orchestrator_button('qualify:regular','Ver regulares'),
         ]];
@@ -259,6 +301,7 @@ function hache_sharky_commercial_interactive_input(PDO $pdo,array $state,array $
         return [$state,hache_sharky_orchestrator_decision('prospect_age_rejected','Hache Natación atiende a partir de '.$minAge.' años; no puedo continuar con esta orientación para una persona de '.$age.' años.')];
     }
 
+    $state=hache_sharky_commercial_force_intensive_eligibility($state);
     $catalog=hache_sharky_commercial_catalog($pdo,$state,$context);
     $next=hache_sharky_commercial_next($state);$slot=(string)($next['slot']??'');
     $requestedSlot=(string)($state['commercial_context']['_requested_slot']??'');
@@ -313,6 +356,7 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
     $entryBootstrap=is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&($flow['step']??'')==='swim'&&($flow['data']['entry_bootstrap']??false)===true;
     if($entryBootstrap&&in_array(($state['commercial_context']['program']??null),['intensive','regular'],true))$state['commercial_context']['program']=null;
     $state=hache_sharky_commercial_reconcile_guidance($state,$text);
+    $state=hache_sharky_commercial_force_intensive_eligibility($state);
     $c=&$state['commercial_context'];
     unset($c['_requested_slot']);
     if(($c['program']??'')==='intensive'&&in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)&&hache_sharky_commercial_course_options_question($text))$c['_requested_slot']='course';
@@ -320,7 +364,7 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
         $t=hache_sharky_orchestrator_normalize($line);
         if(str_contains($line,'?')||str_contains($line,'¿'))continue;
         if(preg_match('/\b(?:ya\s+)?tengo\s+(?:mi\s+)?gorro\s+y\s+goggles\b/u',$t))$c['kit']=['gorro'=>true,'goggles'=>true];
-        if(($c['program']??'')==='regular'){
+        if(($c['program']??'')==='regular'&&!hache_sharky_commercial_regular_restricted($state)){
             $sessions=null;
             if(preg_match('/^(?:(?:quiero|prefiero|mejor|cambio\s+a)\s+)?(\d{1,2})\s*(?:clases|sesiones|dias)(?:\s+(?:por|a\s+la)\s+semana)?[.! ]*$/u',$t,$m))$sessions=(int)$m[1];
             $matches=[];
@@ -384,7 +428,7 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
             $c['date_preference']['year']=(int)$flat;
         }
     }
-    return $state;
+    return hache_sharky_commercial_force_intensive_eligibility($state);
 }
 
 function hache_sharky_commercial_next(array $state): array
@@ -405,6 +449,7 @@ function hache_sharky_commercial_next(array $state): array
 /** One commercial continuation, never a business mutation or implicit consent. */
 function hache_sharky_commercial_reply(array $state,string $answer,array $catalog=[]): array
 {
+    $state=hache_sharky_commercial_force_intensive_eligibility($state);
     $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
     $requestedCourse=($c['_requested_slot']??null)==='course'&&($c['program']??null)==='intensive'&&in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true);
     $next=$requestedCourse?['slot'=>'course','prompt'=>'Elige uno de los inicios disponibles.']:hache_sharky_commercial_next($state);
