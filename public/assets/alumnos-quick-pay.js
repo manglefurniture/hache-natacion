@@ -187,6 +187,18 @@
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || 'No se pudo registrar el pago');
+      if (data.pago?.folio) {
+        try {
+          const notifyResponse = await fetch('/api/pago-notificacion.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folio: data.pago.folio })
+          });
+          if (!notifyResponse.ok) console.warn('Pago registrado, pero no se pudo preparar la confirmación por WhatsApp.');
+        } catch (notifyError) {
+          console.warn('Pago registrado, pero no se pudo preparar la confirmación por WhatsApp.', notifyError);
+        }
+      }
       if (current !== target) return;
 
       close();
