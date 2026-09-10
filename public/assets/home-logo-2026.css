@@ -15,6 +15,20 @@
   top: 102px;
 }
 
+/* Mantiene la ubicación del footer y sustituye solo el lockup antiguo. */
+.site-footer .footer-brand .brand-mark,
+.site-footer .footer-brand strong {
+  display: none;
+}
+.site-footer .footer-brand::before {
+  content: '';
+  display: block;
+  flex: 0 0 95px;
+  width: 95px;
+  height: 65px;
+  background: url('/assets/brand/hache-logo-2026.webp') left center / contain no-repeat;
+}
+
 @media (min-width: 760px) {
   .topbar .brand-logo {
     height: 68px;
