@@ -194,7 +194,11 @@ function hache_sharky_brain_conversational_apply(
         return $result;
     }
 
-    $message=trim((string)($event['text']??''));
+    // The adapter may have processed a synthetic debounce event containing the
+    // complete customer burst. Prefer its durable last_user_text over the worker's
+    // original fragment so Brain answers the same coalesced turn as deterministic Sharky.
+    $message=trim((string)($state['last_user_text']??''));
+    if($message==='')$message=trim((string)($event['text']??''));
     if($message===''||!function_exists('hache_sharky_lab_answer')){
         hache_sharky_brain_2ba_metric('brain_conversational_fallback');
         return $result;
@@ -218,9 +222,13 @@ function hache_sharky_brain_conversational_apply(
     ];
 
     try{
-        $answer=trim((string)hache_sharky_lab_answer($message,$instruction,$openState,$context));
+        $answer=hache_sharky_whatsapp_clean_answer((string)hache_sharky_lab_answer($message,$instruction,$openState,$context));
+        $answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$openState);
+        $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$openState,$message);
+        if(hache_sharky_whatsapp_answer_looks_incomplete($answer))$answer=hache_sharky_whatsapp_incomplete_recovery($openState);
+        $answer=trim($answer);
     }catch(Throwable $e){
-        error_log('[sharky-brain-conversational] model call failed; deterministic fallback used');
+        error_log('[sharky-brain-conversational] model/guard pipeline failed; deterministic fallback used');
         $answer='';
     }
     if($answer===''){

@@ -14,7 +14,8 @@ function hache_sharky_lab_answer(string $text,string $instruction,array $state,a
 {
     $GLOBALS['brain_conversational_model_calls']=(int)($GLOBALS['brain_conversational_model_calls']??0)+1;
     $GLOBALS['brain_conversational_instruction']=$instruction;
-    return 'Claro. Dime qué quieres resolver y te oriento.';
+    $GLOBALS['brain_conversational_model_text']=$text;
+    return (string)($GLOBALS['brain_conversational_model_answer']??'Claro. Dime qué quieres resolver y te oriento.');
 }
 
 function brain_conversational_state(?array $flow=null): array
@@ -63,15 +64,18 @@ $guidedState=brain_conversational_state([
     'step'=>'swim',
     'data'=>[],
 ]);
+$coalescedText="Hola, quiero información\nTambién quiero saber precios y horarios";
+$guidedState['last_user_text']=$coalescedText;
 $guidedRaw=[
     'state'=>$guidedState,
     'decision'=>hache_sharky_orchestrator_decision('qualification_swim','Elige una opción.'),
     'payload'=>hache_sharky_whatsapp_text_payload($contact,'Elige una opción.'),
     'action_result'=>null,
 ];
-$event=['id'=>'brain:open','from'=>$contact,'type'=>'text','text'=>'Hola, quiero información'];
+$event=['id'=>'brain:open','from'=>$contact,'type'=>'text','text'=>'También quiero saber precios y horarios'];
 
 $GLOBALS['brain_conversational_model_calls']=0;
+unset($GLOBALS['brain_conversational_model_answer']);
 $open=hache_sharky_brain_2ba_apply($before,$guidedRaw,$event,$config,$contact,true,1788886801);
 brain_conversational_ok(
     !is_array($open['state']['flow']??null),
@@ -95,8 +99,49 @@ brain_conversational_ok(
     'Opening a guided qualification must call the conversational model exactly once.'
 );
 brain_conversational_ok(
+    ($GLOBALS['brain_conversational_model_text']??'')===$coalescedText,
+    'Brain must answer the coalesced debounce text retained in state, not the worker original fragment.'
+);
+brain_conversational_ok(
     str_contains((string)($GLOBALS['brain_conversational_instruction']??''),'operación sensible'),
     'Brain prompt must explicitly deny authority over sensitive operations.'
+);
+
+$guardRaw=$guidedRaw;
+$guardRaw['state']['assistant_presentation_queued']=true;
+$GLOBALS['brain_conversational_model_answer']="Hola\nHola\n\nTe ayudo con eso.";
+$guarded=hache_sharky_brain_2ba_apply($before,$guardRaw,$event,$config,$contact,true,1788886802);
+$guardBody=(string)($guarded['payload']['text']['body']??'');
+brain_conversational_ok(
+    substr_count($guardBody,'Hola')===1,
+    'Experimental model output must pass through the normal WhatsApp cleanup pipeline.'
+);
+unset($GLOBALS['brain_conversational_model_answer']);
+
+$routerSource=(string)file_get_contents(__DIR__.'/../config/sharky-brain-live-router.php');
+foreach([
+    'hache_sharky_whatsapp_clean_answer',
+    'hache_sharky_whatsapp_enforce_confirmed_context',
+    'hache_sharky_whatsapp_enforce_no_reintroduction',
+    'hache_sharky_whatsapp_answer_looks_incomplete',
+    'hache_sharky_whatsapp_incomplete_recovery',
+] as $guardFunction){
+    brain_conversational_ok(
+        str_contains($routerSource,$guardFunction),
+        'Conversational Brain must reuse guard '.$guardFunction.'.'
+    );
+}
+brain_conversational_ok(
+    str_contains($routerSource,'$state[\'last_user_text\']'),
+    'Router source must prefer durable coalesced last_user_text for the opening turn.'
+);
+
+$adminSource=(string)file_get_contents(__DIR__.'/../public/sharky-admin.php');
+brain_conversational_ok(
+    str_contains($adminSource,'open_conversation_live')
+    &&str_contains($adminSource,'routing_mode')
+    &&str_contains($adminSource,'Brain conversacional · 100% prospectos'),
+    'Production admin must render the conversational live mode instead of mislabeling it as 2B-A.'
 );
 
 $protectedState=brain_conversational_state([
@@ -111,7 +156,7 @@ $protectedRaw=[
     'action_result'=>null,
 ];
 $GLOBALS['brain_conversational_model_calls']=0;
-$protected=hache_sharky_brain_2ba_apply($before,$protectedRaw,['text'=>'Ariel'],$config,$contact,true,1788886802);
+$protected=hache_sharky_brain_2ba_apply($before,$protectedRaw,['text'=>'Ariel'],$config,$contact,true,1788886803);
 brain_conversational_ok(
     ($protected['state']['flow']['name']??'')==='register_intensive'
     &&($GLOBALS['brain_conversational_model_calls']??0)===0,
@@ -121,7 +166,7 @@ brain_conversational_ok(
 $actionRaw=$guidedRaw;
 $actionRaw['action_result']=['ok'=>true,'code'=>'PAYMENT_RECORDED'];
 $GLOBALS['brain_conversational_model_calls']=0;
-$actionProtected=hache_sharky_brain_2ba_apply($before,$actionRaw,$event,$config,$contact,true,1788886803);
+$actionProtected=hache_sharky_brain_2ba_apply($before,$actionRaw,$event,$config,$contact,true,1788886804);
 brain_conversational_ok(
     ($actionProtected['action_result']['code']??'')==='PAYMENT_RECORDED'
     &&($GLOBALS['brain_conversational_model_calls']??0)===0,
@@ -129,7 +174,7 @@ brain_conversational_ok(
 );
 
 $GLOBALS['brain_conversational_model_calls']=0;
-$group=hache_sharky_brain_2ba_apply($before,$guidedRaw,$event,$config,$contact,false,1788886804);
+$group=hache_sharky_brain_2ba_apply($before,$guidedRaw,$event,$config,$contact,false,1788886805);
 brain_conversational_ok(
     ($group['state']['flow']['name']??'')==='qualify_prospect'
     &&($GLOBALS['brain_conversational_model_calls']??0)===0,
@@ -143,7 +188,7 @@ $off=[
 ];
 $openRaw=$open;
 unset($openRaw['_brain_2ba'],$openRaw['_brain_conversational']);
-$restored=hache_sharky_brain_2ba_apply($open['state'],$openRaw,['text'=>'Quiero seguir'],$off,$contact,true,1788886805);
+$restored=hache_sharky_brain_2ba_apply($open['state'],$openRaw,['text'=>'Quiero seguir'],$off,$contact,true,1788886806);
 brain_conversational_ok(
     ($restored['state']['flow']['name']??'')==='qualify_prospect',
     'Switching Brain OFF must restore the deterministic qualification flow on the next safe turn.'
