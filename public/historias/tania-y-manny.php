@@ -103,7 +103,6 @@ declare(strict_types=1);
 
       <section class="chapter chapter-split">
         <div class="chapter-copy">
-          <span class="chapter-number">01</span>
           <h2>Aprender juntos.</h2>
           <p>Los primeros días quedaron asociados a la convivencia, la disciplina y al proceso de descubrir que el agua podía sentirse diferente. Con el tiempo, Tania perdió el miedo y Manny fue afinando su técnica.</p>
           <p>Los dos siguieron avanzando hasta aprender los distintos estilos. No fue solamente dominar movimientos: fue ganar seguridad, constancia y una actividad que podían compartir.</p>
@@ -122,14 +121,12 @@ declare(strict_types=1);
 
       <section class="chapter chapter-split">
         <div class="chapter-copy">
-          <span class="chapter-number">02</span>
           <h2>La competencia que nadie olvidó.</h2>
           <p>En una pequeña competencia durante aquellos primeros tiempos, Manny miraba desde fuera mientras Tania nadaba. Cuando vio que ella estaba cerca de ganar, la emoción le ganó a cualquier intento de discreción.</p>
           <blockquote>“¡Esa es mi mujer! ¡Esa es mi mujer!”</blockquote>
           <p>Desde entonces la frase se convirtió en una broma recurrente entre quienes compartieron aquel momento. Pero detrás de la risa había algo más: Tania había pasado de tener miedo al agua a estar ahí, compitiendo, mientras Manny la celebraba desde fuera.</p>
         </div>
         <div class="chapter-copy">
-          <span class="chapter-number">03</span>
           <h2>Ir, venir y volver.</h2>
           <p>En estos años han pasado por distintas etapas de Hache. Cuando el proyecto cambió de sede, ellos también continuaron su historia en Palapas. Después llegaron pausas, casi siempre por la misma razón: trabajo, horarios y una vida adulta que no siempre deja espacio para todo.</p>
           <p>Pero la natación seguía ahí. Y cada vez que podían hacerle espacio de nuevo, regresaban. Hoy están otra vez entrenando en Monteverde.</p>
@@ -139,13 +136,11 @@ declare(strict_types=1);
 
       <section class="chapter chapter-split final-chapter">
         <div class="chapter-copy">
-          <span class="chapter-number">04</span>
           <h2>Lo que permanece.</h2>
           <p>Cuando se les pide que se describan como alumnos, eligen tres palabras: disciplinados, motivados y perseverantes. Tal vez la última sea la que mejor cuenta estos años.</p>
           <p>Porque perseverar no siempre significa no detenerse. A veces significa volver.</p>
         </div>
         <div class="chapter-copy">
-          <span class="chapter-number">05</span>
           <h2>Una historia que sigue.</h2>
           <p>Tania y Manny no han nadado cada semana desde 2022. Han hecho algo quizá más real: han encontrado una actividad importante para su vida y, aun cuando las obligaciones los alejan por un tiempo, saben que quieren regresar.</p>
           <blockquote>“Ahora es un estilo de vida la natación para nosotros.”</blockquote>
