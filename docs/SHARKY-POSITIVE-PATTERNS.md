@@ -46,11 +46,15 @@ Un prospecto entra desde un anuncio de Meta relacionado con aprender a nadar. Sh
 
 - Brain puede comprender, recomendar y mantener el hilo conversacional.
 - La recomendación de intensivo se basa en el **nivel real**: quien empieza desde cero o nunca ha tomado clases formales recibe el intensivo como recomendación primaria.
+- **Curso intensivo y clases regulares son productos distintos.** El intensivo dura 3 semanas y se toma de lunes a viernes; los planes semanales/mensuales pertenecen a clases regulares.
 - Cuando el intensivo ya es el programa activo, referencias genéricas como “las clases”, “precio”, “horarios”, “ubicación”, “cuándo empieza” o “el curso” siguen refiriéndose al intensivo; no pueden saltar a regulares por una palabra ambigua.
+- Una preferencia de frecuencia como “2 veces por semana” no puede convertir silenciosamente el intensivo en un plan regular. Sharky debe explicar la diferencia de productos y pedir confirmación explícita antes de cambiar.
+- “Ambas”, “las dos”, “los dos” o “de las dos” no son por sí solos una selección de producto; deben resolverse contra el contexto inmediato y nunca cambiar de intensivo a regulares sin mención explícita.
 - Una consulta lateral sobre regulares puede responderse sin cambiar el programa activo. El cambio a regulares requiere una preferencia explícita del prospecto.
 - La preferencia posterior del cliente se respeta; recomendar no significa imponer.
 - La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo.
-- Horario y fecha se eligen usando disponibilidad real del backend.
+- Horario y fecha se eligen usando disponibilidad real del backend y siempre dentro del programa activo.
+- El modelo no puede ampliar, mezclar ni inventar horarios fuera del catálogo verificado del backend; si la disponibilidad no puede verificarse, se falla cerrado.
 - Una vez que empieza un flow protegido de inscripción o pago, Brain no reescribe ni suplanta ese flow.
 - Debe existir confirmación explícita antes de ejecutar el alta.
 - Tras una inscripción correcta, el recorrido puede continuar hacia la forma de pago sin reiniciar la conversación.
@@ -72,7 +76,9 @@ Considerar GP-001 roto si una adecuación provoca cualquiera de estos comportami
 - volver a preguntar nivel, sede, horario o fecha ya confirmados;
 - perder el hilo después de una pausa normal;
 - cambiar de intensivo a regulares porque el usuario dijo de forma genérica “clases”, “precio” u otra referencia ambigua;
-- ofrecer horarios o fechas no disponibles;
+- presentar 3/5 clases por semana como si fueran modalidades del curso intensivo;
+- interpretar “de las dos” como una orden para cambiar de producto;
+- ofrecer horarios del otro producto, horarios inventados o horarios no verificables;
 - convertir una respuesta conversacional de Brain en una operación sensible directa;
 - reiniciar el onboarding al entrar al flow de inscripción;
 - terminar una inscripción y no poder continuar al pago;
@@ -81,7 +87,7 @@ Considerar GP-001 roto si una adecuación provoca cualquiera de estos comportami
 
 ### Cobertura automática relacionada
 
-La protección técnica de este recorrido se reparte actualmente entre las regresiones de Brain conversacional, WhatsApp adapter, commerce flows, enrollment-after-reserve, follow-up y pagos. Las futuras adecuaciones deben conservar esas pruebas verdes y añadir cobertura específica cuando aparezca un nuevo borde real.
+La protección técnica de este recorrido se reparte actualmente entre las regresiones de Brain conversacional, frontera de producto, alcance de horarios, WhatsApp adapter, commerce flows, enrollment-after-reserve, follow-up y pagos. Las futuras adecuaciones deben conservar esas pruebas verdes y añadir cobertura específica cuando aparezca un nuevo borde real.
 
 ---
 
