@@ -38,7 +38,9 @@ expect_template(str_contains($helper,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'"),
 
 expect_template(str_contains($helper,'function hache_sharky_notify_enrollment_confirmed'),'Debe existir el disparador de inscripción confirmada');
 expect_template(str_contains($helper,'HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED'),'La inscripción debe usar la plantilla canónica con sufijo _mx');
-expect_template(str_contains($helper,"'enrollment-confirmed|student:'.\$studentId"),'La inscripción confirmada debe deduplicarse por alumno');
+expect_template(str_contains($helper,"\$explicit=hache_sharky_template_text((string)(\$detail['horario']??''),80)"),'El horario explícito del evento debe tener prioridad sobre el horario regular del alumno');
+expect_template(str_contains($helper,"\$courseStart=trim((string)(\$detail['curso_inicio']??''))"),'La inscripción intensiva debe usar la fecha del curso seleccionado');
+expect_template(str_contains($helper,"'enrollment-confirmed|student:'.\$studentId.'|event:'.hash('sha256',\$eventScope)"),'La deduplicación debe distinguir cada evento de inscripción');
 expect_template(str_contains($helper,"==='BAJA'"),'Una alta histórica/inactiva no debe recibir confirmación de inscripción');
 expect_template(str_contains($helper,'curso_intensivo_alumnos'),'La inscripción intensiva debe poder resolver el horario desde su relación de curso');
 expect_template(str_contains($helper,'hache_sharky_enrollment_date_text'),'La fecha de inicio debe convertirse a texto apto para la plantilla');

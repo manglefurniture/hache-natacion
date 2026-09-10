@@ -109,6 +109,9 @@ function hache_sharky_enrollment_time_text(string $time): string
 
 function hache_sharky_enrollment_schedule(PDO $pdo,array $row,array $detail=[]): string
 {
+    $explicit=hache_sharky_template_text((string)($detail['horario']??''),80);
+    if($explicit!=='')return $explicit;
+
     $scheduleId=trim((string)($row['horario_preferido_id']??''));
     if($scheduleId===''){
         $st=$pdo->prepare("SELECT cia.horario_id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a ORDER BY ci.fecha_inicio DESC LIMIT 1");
@@ -121,7 +124,7 @@ function hache_sharky_enrollment_schedule(PDO $pdo,array $row,array $detail=[]):
         $start=trim((string)($st->fetchColumn()?:''));
         if($start!=='')return hache_sharky_enrollment_time_text($start);
     }
-    return hache_sharky_template_text((string)($detail['horario']??''),80);
+    return '';
 }
 
 /** @return array{ok:bool,reason:string,queued:bool} */
@@ -148,16 +151,19 @@ function hache_sharky_notify_enrollment_confirmed(PDO $pdo,array $student,array 
         $phone=trim((string)$row['whatsapp']);
         $schedule=hache_sharky_enrollment_schedule($pdo,$row,$detail);
         $site=hache_sharky_template_text((string)$row['sede_nombre'],120);
-        $startDate=hache_sharky_enrollment_date_text((string)$row['fecha_inicio']);
+        $courseStart=trim((string)($detail['curso_inicio']??''));
+        $startRaw=$courseStart!==''?$courseStart:(string)$row['fecha_inicio'];
+        $startDate=hache_sharky_enrollment_date_text($startRaw);
         if($studentId===''||$name===''||$phone===''||$schedule===''||$site===''||$startDate===''){
             return ['ok'=>false,'reason'=>'ENROLLMENT_CONTEXT_INCOMPLETE','queued'=>false];
         }
+        $eventScope=($courseStart!==''?'intensive':'base').'|'.$startRaw.'|'.$schedule;
         return hache_sharky_template_enqueue(
             $pdo,
             $phone,
             HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED,
             [$name,$schedule,$site,$startDate],
-            'enrollment-confirmed|student:'.$studentId
+            'enrollment-confirmed|student:'.$studentId.'|event:'.hash('sha256',$eventScope)
         );
     }catch(Throwable $e){
         error_log('[sharky-template] enrollment confirmation enqueue failed');
