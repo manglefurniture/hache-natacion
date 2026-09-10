@@ -42,7 +42,7 @@ assert.match(repliesMigration,/notificacion_estado ENUM\('NO_APLICA','PENDIENTE'
 assert.match(repliesMigration,/confirmacion_estado ENUM\('PENDIENTE','ENVIANDO','ENVIADA','FALLO'\)/,'El double opt-in también debe reclamarse idempotentemente');
 assert.match(migrator,/20260902_historias_respuestas_notificaciones\.sql/,'El migrador de Historias debe aplicar la extensión nueva');
 
-assert.match(publicApi,/const HISTORIAS_PUBLICAS=\['maria-del-carmen'\]/);
+assert.match(publicApi,/const HISTORIAS_PUBLICAS=\['maria-del-carmen','tania-y-manny'\]/);
 assert.match(publicApi,/hash_hmac\('sha256'/,'Origen y visitante deben anonimizarse con HMAC');
 assert.match(publicApi,/HACHE_PUBLIC_INTERACTION_SALT/);
 assert.match(publicApi,/mismo_origen\(\)/,'Las mutaciones públicas deben validar origen');
