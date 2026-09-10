@@ -135,6 +135,13 @@ run_current_implementation() {
   bash "$implementation" "$@"
 }
 
+disable_brain_conversational() {
+  local script="$REPO/bin/emergency-disable-brain-conversational.php"
+  [[ -f "$script" && ! -L "$script" ]] || fail "script de kill switch de Brain ausente."
+  require_command php
+  php "$script"
+}
+
 main() {
   require_root
   [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -142,6 +149,10 @@ main() {
   case "$1" in
     backup|restore-drill)
       run_current_implementation "$@"
+      ;;
+    brain-off)
+      [[ "$#" -eq 1 ]] || fail "brain-off no acepta argumentos adicionales."
+      disable_brain_conversational
       ;;
     *)
       [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."
