@@ -29,31 +29,57 @@ function hache_sharky_schedule_guard_venue_selection(string $text): ?string
     return null;
 }
 
+/**
+ * Resolve only explicit product nouns. Bare pronouns such as "ambas" or
+ * "de las dos" never mean "both programs" by themselves.
+ *
+ * @return list<string>
+ */
+function hache_sharky_schedule_guard_requested_programs(string $text,string $activeProgram): array
+{
+    if(!in_array($activeProgram,['intensive','regular'],true))return [];
+    $t=hache_sharky_schedule_guard_normalize($text);
+    $mentionsIntensive=preg_match('/\b(?:curso\s+)?intensiv[oa]s?\b/u',$t)===1;
+    $mentionsRegular=preg_match('/\b(?:clases?\s+)?regulares?\b|\bmensualidad(?:es)?\b/u',$t)===1;
+    if($mentionsIntensive&&$mentionsRegular)return ['intensive','regular'];
+    if($mentionsRegular)return ['regular'];
+    if($mentionsIntensive)return ['intensive'];
+    return [$activeProgram];
+}
+
 function hache_sharky_schedule_guard_cross_program_request(string $text,string $activeProgram): bool
 {
-    $t=hache_sharky_schedule_guard_normalize($text);
-    if(preg_match('/\b(?:ambos|ambas|los\s+dos|las\s+dos)\b/u',$t)===1)return true;
-    if($activeProgram==='intensive'){
-        return preg_match('/\b(?:regular|regulares|mensualidad|mensualidades)\b/u',$t)===1;
-    }
-    if($activeProgram==='regular'){
-        return preg_match('/\b(?:curso\s+)?intensiv[oa]s?\b/u',$t)===1;
-    }
-    return false;
+    $programs=hache_sharky_schedule_guard_requested_programs($text,$activeProgram);
+    return $programs!==[]&&($programs!==[$activeProgram]);
 }
 
 /** @return list<string> */
 function hache_sharky_schedule_guard_answer_ranges(string $answer): array
 {
     $out=[];
-    if(preg_match_all('/(?<!\d)(\d{1,2}):([0-5]\d)\s*[–-]\s*(\d{1,2}):([0-5]\d)(?!\d)/u',$answer,$matches,PREG_SET_ORDER)!==false){
+    $t=hache_sharky_schedule_guard_normalize($answer);
+    $hasScheduleWord=preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
+    $pattern='/(?<!\d)(?:de\s+|desde\s+)?(\d{1,2})(?::([0-5]\d))?\s*(?:a|–|-)\s*(\d{1,2})(?::([0-5]\d))?(?!\d)/ui';
+    if(preg_match_all($pattern,$answer,$matches,PREG_SET_ORDER)!==false){
         foreach($matches as $m){
             $h1=(int)$m[1];$h2=(int)$m[3];
-            if($h1>23||$h2>23)continue;
-            $out[]=sprintf('%02d:%02d–%02d:%02d',$h1,(int)$m[2],$h2,(int)$m[4]);
+            $m1=(isset($m[2])&&$m[2]!=='')?(int)$m[2]:0;
+            $m2=(isset($m[4])&&$m[4]!=='')?(int)$m[4]:0;
+            if($h1>23||$h2>23||$m1>59||$m2>59)continue;
+            $hasMinutes=(isset($m[2])&&$m[2]!=='')||(isset($m[4])&&$m[4]!=='');
+            // Avoid reading prose such as "3 a 5 clases por semana" as clock time.
+            if(!$hasMinutes&&!$hasScheduleWord)continue;
+            $out[]=sprintf('%02d:%02d–%02d:%02d',$h1,$m1,$h2,$m2);
         }
     }
     return array_values(array_unique($out));
+}
+
+function hache_sharky_schedule_guard_answer_is_schedule_like(string $answer): bool
+{
+    $t=hache_sharky_schedule_guard_normalize($answer);
+    return hache_sharky_schedule_guard_answer_ranges($answer)!==[]
+        || preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
 }
 
 function hache_sharky_schedule_guard_scope_violation_from_hours(string $answer,string $activeProgram,array $allowedHours): bool
@@ -72,6 +98,25 @@ function hache_sharky_schedule_guard_scope_violation_from_hours(string $answer,s
     return false;
 }
 
+function hache_sharky_schedule_guard_program_label(string $program): string
+{
+    return $program==='regular'?'clases regulares':'curso intensivo';
+}
+
+function hache_sharky_schedule_guard_message_from_hours(string $program,string $sede,array $hours): string
+{
+    $label=hache_sharky_deterministic_sede_label($sede);
+    $programLabel=hache_sharky_schedule_guard_program_label($program);
+    if(!$hours)return 'Ahora mismo no encuentro horarios activos de '.$programLabel.' en '.$label.'. Prefiero no inventarte uno; puedo dejarte con el equipo para revisarlo.';
+    return '🕐 Horarios vigentes de '.$programLabel.' en '.$label.':'."\n\n"
+        .implode("\n",array_map(static fn(string $h):string=>'• '.$h,$hours));
+}
+
+function hache_sharky_schedule_guard_unavailable_message(): string
+{
+    return 'Ahora mismo no pude verificar los horarios vigentes en el backend. Prefiero no darte un horario sin confirmar; intenta de nuevo en unos minutos.';
+}
+
 function hache_sharky_schedule_guard_invalid_selection_from_hours(string $text,array $state,array $allowedHours): ?string
 {
     $range=hache_sharky_deterministic_time_range($text);if($range===null)return null;
@@ -80,7 +125,7 @@ function hache_sharky_schedule_guard_invalid_selection_from_hours(string $text,a
     if(in_array($needle,$allowedHours,true))return null;
 
     $label=hache_sharky_deterministic_sede_label($commercial['sede']);
-    $programLabel=$commercial['program']==='regular'?'clases regulares':'curso intensivo';
+    $programLabel=hache_sharky_schedule_guard_program_label($commercial['program']);
     if(!$allowedHours)return 'Ahora mismo no encuentro horarios activos de '.$programLabel.' en '.$label.'. Prefiero no inventarte uno; puedo dejarte con el equipo para revisarlo.';
     return 'Ese horario no está activo para '.$programLabel.' en '.$label.'. Los horarios vigentes son:'."\n\n"
         .implode("\n",array_map(static fn(string $h):string=>'• '.$h,$allowedHours))
@@ -98,22 +143,52 @@ function hache_sharky_schedule_guard_reply(string $text,array $state): ?string
 
     if(hache_sharky_deterministic_time_range($text)===null)return null;
     $pdo=hache_sharky_pdo();
-    if(!$pdo instanceof PDO)return 'No pude verificar ese horario contra la disponibilidad actual. Prefiero no inventarte una opción; intenta de nuevo en unos minutos.';
+    if(!$pdo instanceof PDO)return hache_sharky_schedule_guard_unavailable_message();
     try{$hours=hache_sharky_deterministic_active_schedules($pdo,$commercial['program'],$commercial['sede']);}
-    catch(Throwable $e){return 'No pude verificar ese horario contra la disponibilidad actual. Prefiero no inventarte una opción; intenta de nuevo en unos minutos.';}
+    catch(Throwable $e){return hache_sharky_schedule_guard_unavailable_message();}
     return hache_sharky_schedule_guard_invalid_selection_from_hours($text,$state,$hours);
 }
 
-function hache_sharky_schedule_guard_model_answer(string $answer,array $state,string $userText=''): string
+/**
+ * Final firewall for model-authored schedule output. A lateral question may use
+ * the other product, but its hours are still rendered from backend authority.
+ *
+ * @param null|callable(string,string):array $scheduleLoader Test seam; production uses PDO.
+ */
+function hache_sharky_schedule_guard_model_answer(string $answer,array $state,string $userText='',?callable $scheduleLoader=null): string
 {
     $commercial=hache_sharky_deterministic_commercial($state);if($commercial===null)return $answer;
-    if(hache_sharky_schedule_guard_cross_program_request($userText,$commercial['program']))return $answer;
+    $scheduleLike=hache_sharky_schedule_guard_answer_is_schedule_like($answer)
+        || hache_sharky_deterministic_schedule_request($userText)
+        || hache_sharky_deterministic_time_range($userText)!==null;
+    if(!$scheduleLike)return $answer;
 
-    $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)return $answer;
-    try{$hours=hache_sharky_deterministic_active_schedules($pdo,$commercial['program'],$commercial['sede']);}
-    catch(Throwable $e){return $answer;}
+    $loader=$scheduleLoader;
+    if($loader===null){
+        $pdo=hache_sharky_pdo();
+        if(!$pdo instanceof PDO)return hache_sharky_schedule_guard_unavailable_message();
+        $loader=static fn(string $program,string $sede):array=>hache_sharky_deterministic_active_schedules($pdo,$program,$sede);
+    }
+
+    $requested=hache_sharky_schedule_guard_requested_programs($userText,$commercial['program']);
+    if($requested===[])$requested=[$commercial['program']];
+
+    $verified=[];
+    try{
+        foreach($requested as $program)$verified[$program]=$loader($program,$commercial['sede']);
+    }catch(Throwable $e){
+        return hache_sharky_schedule_guard_unavailable_message();
+    }
+
+    // Explicitly asking about the other product (or both products) is a lateral
+    // consultation, not authority for the model to invent or mix schedules.
+    if($requested!==[$commercial['program']]){
+        $parts=[];
+        foreach($requested as $program)$parts[]=hache_sharky_schedule_guard_message_from_hours($program,$commercial['sede'],$verified[$program]??[]);
+        return implode("\n\n",$parts);
+    }
+
+    $hours=$verified[$commercial['program']]??[];
     if(!hache_sharky_schedule_guard_scope_violation_from_hours($answer,$commercial['program'],$hours))return $answer;
-
-    $replacement=hache_sharky_deterministic_schedule_message($state);
-    return is_string($replacement)&&trim($replacement)!==''?$replacement:$answer;
+    return hache_sharky_schedule_guard_message_from_hours($commercial['program'],$commercial['sede'],$hours);
 }
