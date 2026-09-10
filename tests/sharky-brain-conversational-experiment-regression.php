@@ -132,7 +132,7 @@ foreach([
     );
 }
 brain_conversational_ok(
-    str_contains($routerSource,"$state['last_user_text']")||str_contains($routerSource,"\$state['last_user_text']"),
+    str_contains($routerSource,'$state[\'last_user_text\']'),
     'Router source must prefer durable coalesced last_user_text for the opening turn.'
 );
 
