@@ -145,6 +145,57 @@ function hache_sharky_brain_2ba_result_protected(array $result): bool
     ],true);
 }
 
+function hache_sharky_brain_conversational_explicit_pause(string $text): bool
+{
+    if(str_contains($text,'?')||str_contains($text,'¿'))return false;
+    $t=hache_sharky_orchestrator_normalize($text);
+    $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
+    if($t==='')return false;
+    if(preg_match('/\b(?:dejame|deje|permiteme)\s+(?:analizar|pensar|revisar|checar|ver)\b/u',$t)===1)return true;
+    if(preg_match('/\b(?:lo|esto|eso|me\s+lo)\s+voy\s+a\s+(?:analizar|pensar|revisar|checar)\b/u',$t)===1)return true;
+    return preg_match('/^(?:voy\s+a\s+pensarlo|lo\s+pienso\s+y\s+te\s+(?:digo|aviso|confirmo)|dejame\s+pensarlo)(?:\s+por\s+favor)?[.! ]*$/u',$t)===1;
+}
+
+function hache_sharky_brain_conversational_strip_opening_filler(string $answer): string
+{
+    $answer=trim($answer);if($answer==='')return '';
+    $lines=preg_split('/\R/u',$answer)?:[];
+    $removed=0;
+    while($lines&&$removed<3){
+        $line=trim((string)$lines[0]);
+        if($line===''){array_shift($lines);continue;}
+        $plain=preg_replace('/[^\p{L}\p{N}\s]/u',' ',$line)??$line;
+        $plain=hache_sharky_orchestrator_normalize($plain);
+        $plain=preg_replace('/\s+/u',' ',trim($plain))??trim($plain);
+        if(!in_array($plain,['hola','claro','con gusto','por supuesto','perfecto','genial'],true))break;
+        array_shift($lines);$removed++;
+    }
+    $clean=trim(implode("\n",$lines));
+    return $clean!==''?$clean:$answer;
+}
+
+function hache_sharky_brain_conversational_pause_result(array $state,array $result,string $contact,?int $now=null): array
+{
+    $now??=time();
+    if(function_exists('hache_sharky_whatsapp_mark_followup_paused')){
+        $state=hache_sharky_whatsapp_mark_followup_paused($state,$now,'brain_explicit_pause');
+    }else{
+        if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+        $state['commercial_context']['_idle_followup']=['status'=>'completed_optout','user_turn_at'=>$now,'completed_at'=>$now,'pause_reason'=>'brain_explicit_pause'];
+    }
+    $state['brain_conversational_experiment']=true;
+    $state['updated_at']=$now;
+    $decision=hache_sharky_orchestrator_decision('flow_paused','Claro 😊 Tómate tu tiempo. Cuando quieras retomar, seguimos desde aquí.');
+    $result['state']=$state;
+    $result['decision']=$decision;
+    $result['payload']=hache_sharky_whatsapp_render($contact,$decision);
+    $result['action_result']=null;
+    $result['_brain_2ba']=['applied'=>true,'action'=>'brain_conversational_pause'];
+    $result['_brain_conversational']=['applied'=>true,'mode'=>'paused'];
+    hache_sharky_brain_2ba_metric('brain_conversational_pause');
+    return $result;
+}
+
 /**
  * Conversational experiment: remove only the guided qualification rail.
  *
@@ -180,9 +231,14 @@ function hache_sharky_brain_conversational_apply(
     $softKinds=['conversation','conversation_identity_prompt','side_question','commercial_progress'];
 
     // Once the guided rail has been removed, keep the existing natural response
-    // path. Tagging the state makes OFF able to return this conversation to the
-    // exact deterministic qualification flow on the next safe turn.
+    // path. An explicit “déjame pensarlo/analizarlo” is the one deterministic
+    // conversational intervention: stop the sales push and wait for the person.
     if(!$qualificationFlow){
+        $message=trim((string)($state['last_user_text']??''));
+        if($message==='')$message=trim((string)($event['text']??''));
+        if(hache_sharky_brain_conversational_explicit_pause($message)){
+            return hache_sharky_brain_conversational_pause_result($state,$result,$contact,$now);
+        }
         if(!in_array($kind,$softKinds,true))return $result;
         $now??=time();
         $state['brain_conversational_experiment']=true;
@@ -213,7 +269,7 @@ function hache_sharky_brain_conversational_apply(
 
     $seed=hache_sharky_orchestrator_decision('conversation','');
     $instruction=hache_sharky_whatsapp_style_instruction($seed,$openState);
-    $instruction.="\n\nMODO BRAIN CONVERSACIONAL EXPERIMENTAL: responde primero a lo que realmente preguntó la persona y conduce la conversación con naturalidad. Haz como máximo una pregunta útil por turno cuando haga falta avanzar. Puedes explicar, comparar y cambiar de tema usando únicamente datos confirmados por el contexto de Hache Natación. No inventes precios, horarios, cupos, políticas ni datos del alumno. No afirmes haber ejecutado pagos, inscripciones, cancelaciones, reposiciones, cambios de datos ni ninguna operación sensible: esas acciones pertenecen exclusivamente a los flujos y ejecutores determinísticos del backend. Si una operación requiere un flujo protegido, deja que el backend tome el control.";
+    $instruction.="\n\nMODO BRAIN CONVERSACIONAL EXPERIMENTAL: responde primero a lo que realmente preguntó la persona y conduce la conversación con naturalidad. Haz como máximo una pregunta útil por turno cuando haga falta avanzar. En el primer turno no saludes ni añadas muletillas como ‘¡Claro!’ o ‘¡Con gusto!’: la presentación de Sharky se agrega de forma determinística aparte. Si commercial_context.entry_source es meta_ad y entry_interest es intensive, considera el curso intensivo como el tema actual y no preguntes intensivo vs. clases regulares salvo que la persona cambie explícitamente de interés. Mantén la respuesta breve y móvil: no vuelques todos los horarios, fechas o variantes cuando basta un resumen. Puedes explicar, comparar y cambiar de tema usando únicamente datos confirmados por el contexto de Hache Natación. No inventes precios, horarios, cupos, políticas ni datos del alumno. No afirmes haber ejecutado pagos, inscripciones, cancelaciones, reposiciones, cambios de datos ni ninguna operación sensible: esas acciones pertenecen exclusivamente a los flujos y ejecutores determinísticos del backend. Si una operación requiere un flujo protegido, deja que el backend tome el control.";
 
     $context=[
         'today'=>function_exists('hache_sharky_lab_today')?hache_sharky_lab_today():date('Y-m-d'),
@@ -226,6 +282,7 @@ function hache_sharky_brain_conversational_apply(
         $answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$openState);
         $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$openState,$message);
         if(hache_sharky_whatsapp_answer_looks_incomplete($answer))$answer=hache_sharky_whatsapp_incomplete_recovery($openState);
+        $answer=hache_sharky_brain_conversational_strip_opening_filler($answer);
         $answer=trim($answer);
     }catch(Throwable $e){
         error_log('[sharky-brain-conversational] model/guard pipeline failed; deterministic fallback used');
