@@ -14,7 +14,7 @@ $pdo=new PDO(
     [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
 );
 
-const HISTORIAS_PUBLICAS=['maria-del-carmen'];
+const HISTORIAS_PUBLICAS=['maria-del-carmen','tania-y-manny'];
 const REACCIONES_PUBLICAS=['CORAZON','APLAUSOS','INSPIRA','FUERZA','SONRISA'];
 
 function salida(array $data,int $status=200): never{http_response_code($status);echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
