@@ -83,6 +83,7 @@ if(!is_array($data)||!hache_sharky_dispatcher_is_loopback_whatsapp($data)){
 
 $state=hache_sharky_dispatcher_state_from_history($data);
 $message=trim((string)($data['message']??''));
+$state=hache_sharky_product_boundary_sanitize_state($state,$message);
 $deterministicInput=hache_sharky_schedule_guard_canonicalize_venue_spacing($message);
 $deterministic=$message!==''?hache_sharky_product_boundary_reply($deterministicInput,$state):null;
 $deterministicSource=$deterministic!==null?'deterministic_product_boundary':'deterministic';
@@ -113,6 +114,12 @@ ob_start(static function(string $buffer) use ($underway,$state,$message): string
         $answer=$scoped;
         $body['source']='deterministic_schedule_guard';
         hache_sharky_metric_increment('guarded_schedule_scope');
+    }
+    $productSafe=hache_sharky_product_boundary_model_answer($answer,$state,$message);
+    if($productSafe!==$answer){
+        $answer=$productSafe;
+        $body['source']='deterministic_product_boundary_guard';
+        hache_sharky_metric_increment('guarded_product_boundary');
     }
     $responseIncomplete=(string)($body['response_status']??'completed')==='incomplete';
     if($responseIncomplete||hache_sharky_reply_looks_incomplete($answer)){
