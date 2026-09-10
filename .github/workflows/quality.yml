@@ -22,6 +22,8 @@ jobs:
         run: npm test
       - name: Sharky conversational Brain experiment regression
         run: php tests/sharky-brain-conversational-experiment-regression.php
+      - name: Sharky Brain human edge regression
+        run: php tests/sharky-brain-human-edges-regression.php
       - name: Sharky contact book regression
         run: php tests/sharky-contact-book-regression.php
       - name: Sharky member routing and midnight takeover regression
