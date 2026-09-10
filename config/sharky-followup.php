@@ -337,8 +337,8 @@ function hache_sharky_followup_after_sent(PDO $pdo,string $contact,array $meta,?
             return;
         }
         if($stage===2){
-            $due=hache_sharky_followup_next_allowed_at($userTurnAt+HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_DELAY_SECONDS);
-            if($due<=$now)$due=hache_sharky_followup_next_allowed_at($now+60);
+            $due=$userTurnAt+HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_DELAY_SECONDS;
+            if($due<=$now)$due=$now+60;
             $followup['status']='second_sent';$followup['sent_count']=2;$followup['next_stage']=3;$followup['third_due_at']=$due;
             $state=hache_sharky_followup_set_state($state,$followup);hache_sharky_db_state_save_now($pdo,$contact,$state,172800);
             $payload=hache_sharky_followup_payload($contact,$state,3,$token,$userTurnAt);
