@@ -65,4 +65,4 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "sudo php /var/www/hache-natacion/bin/emergency-disable-brain-conversational.php"
+            "sudo /usr/local/sbin/deploy-hache-natacion brain-off"
