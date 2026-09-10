@@ -35,6 +35,7 @@ Hache Natación ofrece clases presenciales de natación para adultos y adolescen
 ## Historias de Hache
 
 - [Historias Hache](https://hnatacion.com/historias/): historias reales de alumnos y sus procesos dentro del agua.
+- [Tania y Manny: siempre vuelven al agua](https://hnatacion.com/historias/tania-y-manny.php): una historia de pareja sobre aprender, perder el miedo, mejorar la técnica, hacer pausas y volver a nadar.
 - [María del Carmen: del miedo al agua a un logro de vida](https://hnatacion.com/historias/maria-del-carmen.php): una historia real sobre miedo al agua, constancia, confianza y aprendizaje.
 
 ## Audiencia

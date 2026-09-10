@@ -17,11 +17,11 @@ declare(strict_types=1);
   <meta property="og:title" content="Historias Hache | Personas reales. Procesos reales.">
   <meta property="og:description" content="Conoce historias reales de personas que decidieron entrar al agua y avanzar a su ritmo.">
   <meta property="og:url" content="https://hnatacion.com/historias/">
-  <meta property="og:image" content="https://hnatacion.com/assets/file_00000000ddc881fba7297eac7c62765c.png">
+  <meta property="og:image" content="https://hnatacion.com/assets/IMG_20260909_195609.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Historias Hache | Hache Natación">
   <meta name="twitter:description" content="Personas reales, procesos reales y la confianza que se construye dentro del agua.">
-  <meta name="twitter:image" content="https://hnatacion.com/assets/file_00000000ddc881fba7297eac7c62765c.png">
+  <meta name="twitter:image" content="https://hnatacion.com/assets/IMG_20260909_195609.jpg">
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260828-1">
   <script type="application/ld+json">
@@ -40,11 +40,17 @@ declare(strict_types=1);
       {
         "@type":"ItemList",
         "name":"Historias Hache",
-        "numberOfItems":1,
+        "numberOfItems":2,
         "itemListElement":[
           {
             "@type":"ListItem",
             "position":1,
+            "url":"https://hnatacion.com/historias/tania-y-manny.php",
+            "name":"Tania y Manny: siempre vuelven al agua"
+          },
+          {
+            "@type":"ListItem",
+            "position":2,
             "url":"https://hnatacion.com/historias/maria-del-carmen.php",
             "name":"María del Carmen: del miedo al agua a un logro de vida"
           }
@@ -75,15 +81,26 @@ declare(strict_types=1);
   </header>
   <main class="hub-content">
     <h2 class="hub-section-title">Historias para entrar al agua con otra mirada.</h2>
-    <a class="hub-story-card" href="/historias/maria-del-carmen.php" aria-label="Leer la historia de María del Carmen">
-      <div class="hub-story-media" role="img" aria-label="María del Carmen sonríe frente a la alberca"></div>
-      <div class="hub-story-copy">
-        <small>HISTORIA 01 · MARÍA DEL CARMEN</small>
-        <h2>Del miedo al agua a un logro de vida.</h2>
-        <p>Durante años, el agua significó miedo. Con constancia, confianza y un proceso paso a paso, María del Carmen descubrió que sí podía aprender a nadar.</p>
-        <strong>Leer la historia →</strong>
-      </div>
-    </a>
+    <div style="display:grid;gap:24px">
+      <a class="hub-story-card" href="/historias/tania-y-manny.php" aria-label="Leer la historia de Tania y Manny">
+        <div class="hub-story-media" style="background-image:url('/assets/IMG_20260909_195609.jpg');background-position:center 45%" role="img" aria-label="Tania y Manny juntos dentro de la alberca"></div>
+        <div class="hub-story-copy">
+          <small>HISTORIA 02 · TANIA Y MANNY</small>
+          <h2>Siempre vuelven al agua.</h2>
+          <p>Empezaron juntos, aprendieron, hicieron pausas por trabajo y volvieron. Con los años, la natación terminó convirtiéndose en parte de su vida.</p>
+          <strong>Leer la historia →</strong>
+        </div>
+      </a>
+      <a class="hub-story-card" href="/historias/maria-del-carmen.php" aria-label="Leer la historia de María del Carmen">
+        <div class="hub-story-media" role="img" aria-label="María del Carmen sonríe frente a la alberca"></div>
+        <div class="hub-story-copy">
+          <small>HISTORIA 01 · MARÍA DEL CARMEN</small>
+          <h2>Del miedo al agua a un logro de vida.</h2>
+          <p>Durante años, el agua significó miedo. Con constancia, confianza y un proceso paso a paso, María del Carmen descubrió que sí podía aprender a nadar.</p>
+          <strong>Leer la historia →</strong>
+        </div>
+      </a>
+    </div>
     <p class="hub-note">Esta sección seguirá creciendo con nuevas historias de alumnos de Hache Natación. Cada historia se publica con autorización de sus protagonistas.</p>
   </main>
   <footer class="hub-footer"><span>Hache Natación · Cancún, Quintana Roo</span><a href="/privacidad/">Política de privacidad</a></footer>

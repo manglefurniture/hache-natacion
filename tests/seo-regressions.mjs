@@ -15,6 +15,7 @@ const palapas = read('public/palapas-protudec.php');
 const metodologia = read('public/metodologia.php');
 const historias = read('public/historias/index.php');
 const mariaStory = read('public/historias/maria-del-carmen.php');
+const taniaMannyStory = read('public/historias/tania-y-manny.php');
 const robots = read('public/robots.txt');
 const sitemap = read('public/sitemap.xml');
 const llms = read('public/llms.txt');
@@ -44,6 +45,7 @@ const guideUrls = [
 
 const storyUrls = [
   'https://hnatacion.com/historias/',
+  'https://hnatacion.com/historias/tania-y-manny.php',
   'https://hnatacion.com/historias/maria-del-carmen.php',
 ];
 
@@ -113,12 +115,19 @@ assert.match(metodologia, /href="\/palapas-protudec\.php"/);
 assert.match(historias, /<title>Historias Hache \| Personas reales que aprendieron a nadar<\/title>/);
 assert.match(historias, /<meta name="robots" content="index,follow[^\"]*">/);
 assert.match(historias, /<link rel="canonical" href="https:\/\/hnatacion\.com\/historias\/">/);
+assert.match(historias, /href="\/historias\/tania-y-manny\.php"/);
 assert.match(historias, /href="\/historias\/maria-del-carmen\.php"/);
 assert.match(historias, /"@type":"CollectionPage"/);
 assert.match(mariaStory, /<meta name="robots" content="index,follow[^\"]*">/);
 assert.match(mariaStory, /<link rel="canonical" href="https:\/\/hnatacion\.com\/historias\/maria-del-carmen\.php">/);
 assert.match(mariaStory, /data-story-community data-story="maria-del-carmen"/);
 assert.match(mariaStory, /\/assets\/historias-interacciones\.js/);
+assert.match(taniaMannyStory, /<meta name="robots" content="index,follow[^\"]*">/);
+assert.match(taniaMannyStory, /<link rel="canonical" href="https:\/\/hnatacion\.com\/historias\/tania-y-manny\.php">/);
+assert.match(taniaMannyStory, /data-story-community data-story="tania-y-manny"/);
+assert.match(taniaMannyStory, /\/assets\/IMG_20260909_195609\.jpg/);
+assert.match(taniaMannyStory, /\/assets\/IMG_20260909_204205\.jpg/);
+assert.match(taniaMannyStory, /\/assets\/historias-interacciones\.js/);
 
 assert.match(bootstrap, /X-Robots-Tag: noindex, nofollow, noarchive/);
 for (const route of ['/monteverde.php', '/palapas-protudec.php', '/metodologia.php']) {
@@ -175,7 +184,7 @@ const historiasSitemapBlock = sitemapUrlBlocks.find((block) => block.includes('<
 assert.ok(historiasSitemapBlock, 'El sitemap debe contener el bloque del hub de Historias');
 assert.match(
   historiasSitemapBlock,
-  /<image:loc>https:\/\/hnatacion\.com\/assets\/file_00000000ddc881fba7297eac7c62765c\.png<\/image:loc>/,
+  /<image:loc>https:\/\/hnatacion\.com\/assets\/IMG_20260909_195609\.jpg<\/image:loc>/,
   'El hub de Historias debe declarar su imagen principal en su propio bloque <url>'
 );
 
@@ -193,6 +202,7 @@ assert.match(llms, /\[Palapas Protudec\]\(https:\/\/hnatacion\.com\/palapas-prot
 assert.match(llms, /\[Metodología de Hache Natación\]\(https:\/\/hnatacion\.com\/metodologia\.php\)/);
 assert.match(llms, /\[Guías de Hache Natación\]\(https:\/\/hnatacion\.com\/guias\/\)/);
 assert.match(llms, /\[Historias Hache\]\(https:\/\/hnatacion\.com\/historias\/\)/);
+assert.match(llms, /\[Tania y Manny: siempre vuelven al agua\]\(https:\/\/hnatacion\.com\/historias\/tania-y-manny\.php\)/);
 assert.match(llms, /\[María del Carmen: del miedo al agua a un logro de vida\]\(https:\/\/hnatacion\.com\/historias\/maria-del-carmen\.php\)/);
 
 console.log('✓ regresiones SEO verificadas');
