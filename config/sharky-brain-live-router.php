@@ -6,21 +6,25 @@ require_once __DIR__.'/sharky-brain-shadow-runtime.php';
 
 const HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY = 'sharky_brain_2ba_habilitado';
 const HACHE_SHARKY_BRAIN_2BA_CANARY_KEY = 'sharky_brain_2ba_canary_pct';
+const HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY = 'sharky_brain_conversacional_habilitado';
 
 /** @return array<string,string> */
 function hache_sharky_brain_2ba_config_defaults(): array
 {
-    // The candidate gate has already been satisfied; start with a deliberately
-    // small cohort. Both values remain kill-switchable from Sharky admin.
+    // 2B-A remains the proven fallback. The conversational experiment is a
+    // separate kill-switchable layer and may be disabled without a rollback.
     return [
         HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'1',
         HACHE_SHARKY_BRAIN_2BA_CANARY_KEY=>'10',
+        HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY=>'1',
     ];
 }
 
 function hache_sharky_brain_2ba_config_value_valid(string $key,string $value): bool
 {
-    if($key===HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY)return in_array($value,['0','1'],true);
+    if(in_array($key,[HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY],true)){
+        return in_array($value,['0','1'],true);
+    }
     if($key===HACHE_SHARKY_BRAIN_2BA_CANARY_KEY)return ctype_digit($value)&&(int)$value>=0&&(int)$value<=100;
     return false;
 }
@@ -29,6 +33,13 @@ function hache_sharky_brain_2ba_config_value_valid(string $key,string $value): b
 function hache_sharky_brain_2ba_config_rows(array $values): array
 {
     return [
+        [
+            'clave'=>HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY,
+            'valor'=>(string)($values[HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY]??'0'),
+            'descripcion'=>'ON: abre la conversación para el 100 % de prospectos nuevos. Brain puede conversar libremente, pero registro, pagos, cancelaciones, cambios de datos y demás operaciones sensibles siguen bajo ejecutores determinísticos. OFF: vuelve al comportamiento actual de Sharky/2B-A sin rollback.',
+            'tipo'=>'checkbox',
+            'etiqueta'=>'Brain conversacional experimental — 100 % prospectos nuevos',
+        ],
         [
             'clave'=>HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,
             'valor'=>(string)($values[HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY]??'0'),
@@ -39,7 +50,7 @@ function hache_sharky_brain_2ba_config_rows(array $values): array
         [
             'clave'=>HACHE_SHARKY_BRAIN_2BA_CANARY_KEY,
             'valor'=>(string)($values[HACHE_SHARKY_BRAIN_2BA_CANARY_KEY]??'0'),
-            'descripcion'=>'Porcentaje determinista de prospectos nuevos elegibles para Fase 2B-A (0–100).',
+            'descripcion'=>'Porcentaje determinista de prospectos nuevos elegibles para Fase 2B-A (0–100). Solo se usa cuando el Brain conversacional experimental está apagado.',
             'tipo'=>'text',
             'etiqueta'=>'Brain Fase 2B-A — porcentaje canary',
         ],
@@ -51,32 +62,45 @@ function hache_sharky_brain_2ba_config(PDO $pdo): array
 {
     $values=hache_sharky_brain_2ba_config_defaults();
     try{
-        $st=$pdo->prepare('SELECT clave,valor FROM configuracion WHERE clave IN (?,?)');
-        $st->execute([HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,HACHE_SHARKY_BRAIN_2BA_CANARY_KEY]);
+        $st=$pdo->prepare('SELECT clave,valor FROM configuracion WHERE clave IN (?,?,?)');
+        $st->execute([
+            HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,
+            HACHE_SHARKY_BRAIN_2BA_CANARY_KEY,
+            HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY,
+        ]);
         foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
             $key=(string)($row['clave']??'');$value=trim((string)($row['valor']??''));
             if(isset($values[$key])&&hache_sharky_brain_2ba_config_value_valid($key,$value))$values[$key]=$value;
         }
         return $values;
     }catch(Throwable $e){
-        // Fase live is optional. If its config authority is unavailable, the only
-        // safe behavior is shadow-only, never "default enabled" through an error.
-        error_log('[sharky-brain-2ba] configuration unavailable; live routing disabled');
-        return [HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'0',HACHE_SHARKY_BRAIN_2BA_CANARY_KEY=>'0'];
+        // Live Brain is optional. If its config authority is unavailable, fail
+        // closed to deterministic/shadow behavior, never to open conversation.
+        error_log('[sharky-brain] configuration unavailable; live routing disabled');
+        return [
+            HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'0',
+            HACHE_SHARKY_BRAIN_2BA_CANARY_KEY=>'0',
+            HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY=>'0',
+        ];
     }
 }
 
 /** @return list<string> */
 function hache_sharky_brain_2ba_live_actions(): array
 {
-    // Phase 2B-A may only push a prospect toward existing deterministic UI.
-    // Open conversation/discovery deliberately remain shadow-only.
+    // Phase 2B-A remains unchanged. The conversational experiment is deliberately
+    // implemented as a separate layer so OFF restores this exact behavior.
     return ['start_guided_qualification','show_commercial_menu'];
 }
 
 function hache_sharky_brain_2ba_enabled(array $business): bool
 {
     return trim((string)($business[HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY]??'0'))==='1';
+}
+
+function hache_sharky_brain_conversational_enabled(array $business): bool
+{
+    return trim((string)($business[HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY]??'0'))==='1';
 }
 
 function hache_sharky_brain_2ba_canary_percent(array $business): int
@@ -119,6 +143,138 @@ function hache_sharky_brain_2ba_result_protected(array $result): bool
         'conversation','conversation_identity_prompt','side_question',
         'commercial_progress','commercial_next_action',
     ],true);
+}
+
+/**
+ * Conversational experiment: remove only the guided qualification rail.
+ *
+ * Protected flows remain untouched. If the model is unavailable or returns an
+ * empty answer, the original deterministic result is returned as an automatic
+ * fallback for the same turn.
+ */
+function hache_sharky_brain_conversational_apply(
+    array $beforeState,
+    array $result,
+    array $event,
+    array $business,
+    string $contact,
+    bool $directChat=true,
+    ?int $now=null
+): array {
+    if(!hache_sharky_brain_conversational_enabled($business))return $result;
+    if(!$directChat)return $result;
+
+    $state=is_array($result['state']??null)?$result['state']:[];
+    if(!hache_sharky_brain_2ba_unmatched_prospect($state))return $result;
+    if(is_array($result['action_result']??null))return $result;
+
+    $decision=is_array($result['decision']??null)?$result['decision']:[];
+    $action=is_array($decision['action']??null)?$decision['action']:[];
+    if(($action['type']??'')==='human_takeover')return $result;
+
+    $flow=is_array($state['flow']??null)?$state['flow']:null;
+    $qualificationFlow=is_array($flow)&&($flow['name']??'')==='qualify_prospect';
+    if(is_array($flow)&&!$qualificationFlow)return $result;
+
+    $kind=(string)($decision['kind']??'');
+    $softKinds=['conversation','conversation_identity_prompt','side_question','commercial_progress'];
+
+    // Once the guided rail has been removed, keep the existing natural response
+    // path. Tagging the state makes OFF able to return this conversation to the
+    // exact deterministic qualification flow on the next safe turn.
+    if(!$qualificationFlow){
+        if(!in_array($kind,$softKinds,true))return $result;
+        $now??=time();
+        $state['brain_conversational_experiment']=true;
+        $state['updated_at']=$now;
+        $result['state']=$state;
+        $result['_brain_2ba']=['applied'=>true,'action'=>'brain_conversational_passthrough'];
+        $result['_brain_conversational']=['applied'=>true,'mode'=>'passthrough'];
+        hache_sharky_brain_2ba_metric('brain_conversational_passthrough');
+        return $result;
+    }
+
+    $message=trim((string)($event['text']??''));
+    if($message===''||!function_exists('hache_sharky_lab_answer')){
+        hache_sharky_brain_2ba_metric('brain_conversational_fallback');
+        return $result;
+    }
+
+    $openState=function_exists('hache_sharky_orchestrator_clear_flow')
+        ?hache_sharky_orchestrator_clear_flow($state)
+        :array_replace($state,['flow'=>null]);
+    $now??=time();
+    $openState['brain_conversational_experiment']=true;
+    $openState['updated_at']=$now;
+
+    $seed=hache_sharky_orchestrator_decision('conversation','');
+    $instruction=hache_sharky_whatsapp_style_instruction($seed,$openState);
+    $instruction.="\n\nMODO BRAIN CONVERSACIONAL EXPERIMENTAL: responde primero a lo que realmente preguntó la persona y conduce la conversación con naturalidad. Haz como máximo una pregunta útil por turno cuando haga falta avanzar. Puedes explicar, comparar y cambiar de tema usando únicamente datos confirmados por el contexto de Hache Natación. No inventes precios, horarios, cupos, políticas ni datos del alumno. No afirmes haber ejecutado pagos, inscripciones, cancelaciones, reposiciones, cambios de datos ni ninguna operación sensible: esas acciones pertenecen exclusivamente a los flujos y ejecutores determinísticos del backend. Si una operación requiere un flujo protegido, deja que el backend tome el control.";
+
+    $context=[
+        'today'=>function_exists('hache_sharky_lab_today')?hache_sharky_lab_today():date('Y-m-d'),
+        'contact'=>$contact,
+        'previous_user_text'=>(string)($beforeState['last_user_text']??''),
+    ];
+
+    try{
+        $answer=trim((string)hache_sharky_lab_answer($message,$instruction,$openState,$context));
+    }catch(Throwable $e){
+        error_log('[sharky-brain-conversational] model call failed; deterministic fallback used');
+        $answer='';
+    }
+    if($answer===''){
+        hache_sharky_brain_2ba_metric('brain_conversational_fallback');
+        return $result;
+    }
+
+    $decision=hache_sharky_orchestrator_decision('conversation',$answer);
+    $result['state']=$openState;
+    $result['decision']=$decision;
+    $result['payload']=hache_sharky_whatsapp_render($contact,$decision,$answer);
+    $result['action_result']=null;
+    $result['_brain_2ba']=['applied'=>true,'action'=>'brain_conversational_open'];
+    $result['_brain_conversational']=['applied'=>true,'mode'=>'open'];
+    hache_sharky_brain_2ba_metric('brain_conversational_open');
+    return $result;
+}
+
+/**
+ * If the experiment is switched OFF while a prospect is already in open mode,
+ * restore the deterministic qualification flow on the next safe conversational
+ * turn. Protected operations are never interrupted.
+ */
+function hache_sharky_brain_conversational_restore(
+    array $result,
+    string $contact,
+    bool $directChat=true,
+    ?int $now=null
+): array {
+    if(!$directChat)return $result;
+    $state=is_array($result['state']??null)?$result['state']:[];
+    if(($state['brain_conversational_experiment']??false)!==true)return $result;
+    if(!hache_sharky_brain_2ba_unmatched_prospect($state))return $result;
+    if(is_array($state['flow']??null)||is_array($result['action_result']??null))return $result;
+
+    $decision=is_array($result['decision']??null)?$result['decision']:[];
+    $action=is_array($decision['action']??null)?$decision['action']:[];
+    if(($action['type']??'')==='human_takeover')return $result;
+    if(!in_array((string)($decision['kind']??''),[
+        'conversation','conversation_identity_prompt','side_question','commercial_progress',
+    ],true))return $result;
+
+    $now??=time();
+    unset($state['brain_conversational_experiment']);
+    [$state,$decision]=hache_sharky_whatsapp_qualification_start($state,$now);
+    $state['updated_at']=$now;
+    $result['state']=$state;
+    $result['decision']=$decision;
+    $result['payload']=hache_sharky_whatsapp_render($contact,$decision);
+    $result['action_result']=null;
+    $result['_brain_2ba']=['applied'=>true,'action'=>'brain_conversational_restore'];
+    $result['_brain_conversational']=['applied'=>false,'fallback'=>'deterministic'];
+    hache_sharky_brain_2ba_metric('brain_conversational_restored');
+    return $result;
 }
 
 /**
@@ -187,8 +343,8 @@ function hache_sharky_brain_2ba_metric(string $key): void
 }
 
 /**
- * Apply only a pre-approved deterministic executor. The model never authors a
- * message here; existing WhatsApp decisions/buttons remain the presentation layer.
+ * Apply the conversational experiment first. When OFF, restore any previously
+ * open prospect and then execute the original Phase 2B-A router unchanged.
  */
 function hache_sharky_brain_2ba_apply(
     array $beforeState,
@@ -199,6 +355,15 @@ function hache_sharky_brain_2ba_apply(
     bool $directChat=true,
     ?int $now=null
 ): array {
+    if(hache_sharky_brain_conversational_enabled($business)){
+        return hache_sharky_brain_conversational_apply(
+            $beforeState,$result,$event,$business,$contact,$directChat,$now
+        );
+    }
+
+    $restored=hache_sharky_brain_conversational_restore($result,$contact,$directChat,$now);
+    if(($restored['_brain_conversational']['fallback']??'')==='deterministic')return $restored;
+
     $plan=hache_sharky_brain_2ba_plan($beforeState,$result,$event,$business,$contact,$directChat);
     $status=(string)($plan['status']??'blocked_action');
 
