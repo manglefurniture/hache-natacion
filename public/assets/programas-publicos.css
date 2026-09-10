@@ -377,3 +377,44 @@ a {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* Identidad Hache 2026 — navegación y pie compartidos. */
+.top .brand {
+  position: relative;
+  flex: 0 0 auto;
+  width: 95px;
+  height: 65px;
+  gap: 0;
+  background: url('/assets/brand/hache-logo-2026.webp') left center / contain no-repeat;
+}
+.top .brand .mark {
+  display: none;
+}
+.top .brand > span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.footer > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.footer > div:first-child::before {
+  content: '';
+  display: block;
+  flex: 0 0 88px;
+  width: 88px;
+  height: 60px;
+  background: url('/assets/brand/hache-logo-2026.webp') left center / contain no-repeat;
+}
+.footer > div:first-child strong,
+.footer > div:first-child br {
+  display: none;
+}
