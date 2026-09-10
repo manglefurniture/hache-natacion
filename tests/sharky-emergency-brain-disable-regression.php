@@ -14,9 +14,8 @@ function emergency_brain_ok(bool $ok,string $message): void
 emergency_brain_ok(str_contains($script,"sharky_brain_conversacional_habilitado"),'Emergency script must target only the conversational Brain switch.');
 emergency_brain_ok(str_contains($script,"':valor'=>'0'"),'Emergency script must force the conversational Brain switch OFF.');
 emergency_brain_ok(str_contains($script,'updated_by=NULL'),'Emergency operational change must not impersonate an admin user.');
-emergency_brain_ok(str_contains($deploy,'Emergency disable conversational Brain'),'Deploy must execute the emergency kill switch after the approved SHA is deployed.');
-emergency_brain_ok(str_contains($deploy,'sudo /usr/local/sbin/deploy-hache-natacion brain-off'),'Deploy must use the already-authorized protected helper for the kill switch.');
-emergency_brain_ok(str_contains($wrapper,'brain-off)')&&str_contains($wrapper,'disable_brain_conversational'),'Protected helper must expose only the explicit brain-off operation.');
+emergency_brain_ok(str_contains($wrapper,'brain-off)')&&str_contains($wrapper,'disable_brain_conversational'),'Protected helper must preserve the explicit manual brain-off operation.');
 emergency_brain_ok(str_contains($wrapper,'bin/emergency-disable-brain-conversational.php'),'Protected helper must execute the tracked kill-switch script from the deployed repository.');
+emergency_brain_ok(!str_contains($deploy,'deploy-hache-natacion brain-off'),'Normal deploys must not automatically disable conversational Brain.');
 
 fwrite(STDOUT,"SHARKY_EMERGENCY_BRAIN_DISABLE_OK\n");

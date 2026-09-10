@@ -142,6 +142,13 @@ disable_brain_conversational() {
   php "$script"
 }
 
+reactivate_brain_conversational_once() {
+  local script="$REPO/bin/reactivate-brain-conversational-once.php"
+  [[ -f "$script" && ! -L "$script" ]] || fail "script one-shot de reactivación de Brain ausente."
+  require_command php
+  php "$script"
+}
+
 main() {
   require_root
   [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -153,6 +160,10 @@ main() {
     brain-off)
       [[ "$#" -eq 1 ]] || fail "brain-off no acepta argumentos adicionales."
       disable_brain_conversational
+      ;;
+    brain-reactivate-once)
+      [[ "$#" -eq 1 ]] || fail "brain-reactivate-once no acepta argumentos adicionales."
+      reactivate_brain_conversational_once
       ;;
     *)
       [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."

@@ -51,7 +51,7 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "sudo /usr/local/sbin/deploy-hache-natacion '$APPROVED_SHA'"
 
-      - name: Emergency disable conversational Brain
+      - name: Reactivate conversational Brain once
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -65,4 +65,4 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "sudo /usr/local/sbin/deploy-hache-natacion brain-off"
+            "sudo /usr/local/sbin/deploy-hache-natacion brain-reactivate-once"
