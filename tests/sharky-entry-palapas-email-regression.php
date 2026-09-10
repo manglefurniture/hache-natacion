@@ -47,11 +47,12 @@ $teacherOwnerStart=strpos($routing,'function hache_sharky_member_teacher_owned_e
 $teacherOwnerEnd=strpos($routing,'function hache_sharky_member_palapas_restricted_route',$teacherOwnerStart?:0);
 sharky_entry_expect($teacherOwnerStart!==false&&$teacherOwnerEnd!==false,'Teacher ownership helper must exist before the Palapas route.');
 $teacherOwner=substr($routing,$teacherOwnerStart,$teacherOwnerEnd-$teacherOwnerStart);
+sharky_entry_expect(!str_contains($teacherOwner,'hache_sharky_member_coteaching_ready'),'Teacher event ownership must remain independent from co-teaching readiness.');
 sharky_entry_expect(str_contains($teacherOwner,"(\$flow['name']??'')!=='teacher_cancel'"),'Free text bypass must be limited to teacher_cancel.');
 sharky_entry_expect(str_contains($teacherOwner,"(\$flow['step']??'')!=='reason'"),'Only the cancellation reason step may own free text.');
 sharky_entry_expect(str_contains($teacherOwner,"trim((string)(\$event['interactive_id']??''))!==''"),'Interactive member buttons must never inherit teacher-flow ownership.');
 sharky_entry_expect(str_contains($teacherOwner,"return \$intent!=='payments';"),'Payment-like text must remain behind the Palapas red-light gate.');
-sharky_entry_expect(str_contains($palapasBlock,'hache_sharky_member_teacher_owned_event($pdo,$teacher,$routingFlow,$event,$intent)'),'Palapas gate must use the narrow teacher ownership helper with co-teaching readiness context.');
+sharky_entry_expect(str_contains($palapasBlock,'hache_sharky_member_teacher_owned_event($pdo,$teacher,$routingFlow,$event,$intent)'),'Palapas gate must bypass on teacher ownership before any student restriction is allowed to claim the event.');
 
 // Codex P1: an explicit human request containing a payment word must escape
 // member-ops before its payment parser can expose a balance.
@@ -61,6 +62,17 @@ $routeBlock=substr($routing,$routeStart);
 $routeHandoff=strpos($routeBlock,'hache_sharky_member_routing_handoff_requested((string)($event[\'text\']??\'\'))');
 $routePayment=strpos($routeBlock,'hache_sharky_member_payment_process_event($pdo,$event,$business)');
 sharky_entry_expect($routeHandoff!==false&&$routePayment!==false&&$routeHandoff<$routePayment,'Palapas human handoff must escape before payment processing.');
+
+// Codex P1 follow-up: teacher ownership and readiness are separate concerns.
+// If a teacher-owned event arrives while co-teaching is unavailable, the member
+// router must leave it dormant before either pending- or active-student fallback.
+$teacherOwnedGuard=strpos($routeBlock,'$teacherOwned=hache_sharky_member_teacher_owned_event($pdo,$teacher,$activeFlow,$event,$intent);');
+$teacherDormantGuard=strpos($routeBlock,'if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return null;');
+$pendingStudentFallback=strpos($routeBlock,'$student=hache_sharky_member_student_context($pdo,$contact);',$teacherDormantGuard?:0);
+$activeStudentFallback=strrpos($routeBlock,'hache_sharky_member_student_fallback($pdo,$event);');
+sharky_entry_expect($teacherOwnedGuard!==false&&$teacherDormantGuard!==false&&$teacherOwnedGuard<$teacherDormantGuard,'Shared router must detect teacher ownership before applying the co-teaching readiness gate.');
+sharky_entry_expect($pendingStudentFallback!==false&&$teacherDormantGuard<$pendingStudentFallback,'Unready teacher events must return before pending-student fallback.');
+sharky_entry_expect($activeStudentFallback!==false&&$teacherDormantGuard<$activeStudentFallback,'Unready teacher events must return before active-student fallback.');
 
 // Codex P2: a merely PENDIENTE record is identifiable but must never receive a
 // positive class-today answer as though its enrollment were active.

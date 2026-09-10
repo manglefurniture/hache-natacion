@@ -75,7 +75,7 @@ function hache_sharky_member_pending_payment_payload(string $contact,array $stud
 
 function hache_sharky_member_teacher_owned_event(PDO $pdo,array $teacher,?array $flow,array $event,?string $intent=null): bool
 {
-    if(($teacher['found']??false)!==true||!hache_sharky_member_coteaching_ready($pdo))return false;
+    if(($teacher['found']??false)!==true)return false;
     $intent=$intent??hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
     if(in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
 
@@ -342,8 +342,9 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     // active-student class/absence/reposition controls meanwhile.
     $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
     $activeFlow=hache_sharky_member_flow($state);
-    $teacherFlow=is_array($activeFlow)&&str_starts_with((string)($activeFlow['name']??''),'teacher_');
-    $teacherIntent=($teacher['found']??false)===true&&hache_sharky_member_coteaching_ready($pdo)&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true));
+    $teacherOwned=hache_sharky_member_teacher_owned_event($pdo,$teacher,$activeFlow,$event,$intent);
+    if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return null;
+    $teacherIntent=($teacher['found']??false)===true&&hache_sharky_member_coteaching_ready($pdo)&&$teacherOwned;
     if(!$teacherIntent){
         $student=hache_sharky_member_student_context($pdo,$contact);
         if(($student['found']??false)===true&&hache_sharky_member_pending_registration($student)&&$intent!=='payments'){
