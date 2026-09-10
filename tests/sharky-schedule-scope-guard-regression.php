@@ -18,6 +18,11 @@ $state=[
     ],
 ];
 $intensiveHours=['08:00–09:00','19:00–20:00','20:00–21:00'];
+$regularHours=['06:00–07:00','07:00–08:00','08:00–09:00','18:00–19:00','19:00–20:00','20:00–21:00'];
+$loader=static function(string $program,string $sede) use($intensiveHours,$regularHours): array {
+    schedule_scope_ok($sede==='MONTEVERDE','Test loader must preserve the selected venue.');
+    return $program==='regular'?$regularHours:$intensiveHours;
+};
 
 schedule_scope_ok(
     hache_sharky_schedule_guard_venue_selection('Colegio monte verde')==='MONTEVERDE',
@@ -59,6 +64,19 @@ schedule_scope_ok(
     'A valid intensive time must pass through without a false rejection.'
 );
 
+schedule_scope_ok(
+    hache_sharky_schedule_guard_answer_ranges('El horario es de 6 a 7.')===['06:00–07:00'],
+    'Natural model wording “de 6 a 7” must be parsed as a schedule range.'
+);
+schedule_scope_ok(
+    hache_sharky_schedule_guard_answer_ranges('Puedes venir de 6:00 a 7:00.')===['06:00–07:00'],
+    'Colon-formatted ranges joined by “a” must be parsed.'
+);
+schedule_scope_ok(
+    hache_sharky_schedule_guard_answer_ranges('Tenemos planes de 3 a 5 clases por semana.')===[],
+    'Weekly-plan prose must not be misread as clock time.'
+);
+
 $mixedAnswer="¡Perfecto! Para Colegio Monteverde, los horarios de clases que tenemos activos son:\n\n"
     ."• 06:00–07:00 (regular)\n"
     ."• 07:00–08:00 (regular)\n"
@@ -76,6 +94,10 @@ schedule_scope_ok(
     hache_sharky_schedule_guard_scope_violation_from_hours($invented,'intensive',$intensiveHours),
     'A model answer containing a regular-only time must be blocked even if it labels it intensive.'
 );
+schedule_scope_ok(
+    hache_sharky_schedule_guard_scope_violation_from_hours('El horario es de 6 a 7.','intensive',$intensiveHours),
+    'A natural regular-only range must not escape the final firewall.'
+);
 
 $allowed="Horarios del curso intensivo:\n• 08:00–09:00\n• 19:00–20:00\n• 20:00–21:00";
 schedule_scope_ok(
@@ -89,12 +111,49 @@ schedule_scope_ok(
     'A non-schedule explanation may mention regular classes without triggering the schedule firewall.'
 );
 schedule_scope_ok(
+    hache_sharky_schedule_guard_requested_programs('¿Qué horarios tienen las regulares?','intensive')===['regular'],
+    'An explicit lateral regular-schedule question must resolve to the regular product.'
+);
+schedule_scope_ok(
     hache_sharky_schedule_guard_cross_program_request('¿Qué horarios tienen las regulares?','intensive'),
     'An explicit lateral question about regular schedules must remain answerable without changing the active program.'
 );
 schedule_scope_ok(
     !hache_sharky_schedule_guard_cross_program_request('¿Qué horarios tienen?','intensive'),
     'A generic schedule question must stay scoped to the active intensive program.'
+);
+schedule_scope_ok(
+    hache_sharky_schedule_guard_requested_programs('de las dos','intensive')===['intensive'],
+    'Bare “de las dos” must not be reinterpreted as a request for both products.'
+);
+
+$naturalBlocked=hache_sharky_schedule_guard_model_answer('El horario es de 6 a 7.',$state,'¿Qué horario hay?',$loader);
+schedule_scope_ok(
+    str_contains($naturalBlocked,'08:00–09:00')&&!str_contains($naturalBlocked,'06:00–07:00'),
+    'The final firewall must replace a natural invalid time with verified intensive hours.'
+);
+
+$lateral=hache_sharky_schedule_guard_model_answer('Las regulares son a las 10:00–11:00.',$state,'¿Qué horarios tienen las regulares?',$loader);
+schedule_scope_ok(
+    str_contains($lateral,'06:00–07:00')&&str_contains($lateral,'07:00–08:00')&&!str_contains($lateral,'10:00–11:00'),
+    'Lateral regular schedules must be rendered from backend authority instead of trusting the model.'
+);
+
+$both=hache_sharky_schedule_guard_model_answer('Hay varios horarios.',$state,'¿Qué horarios tienen el intensivo y las regulares?',$loader);
+schedule_scope_ok(
+    str_contains($both,'curso intensivo')&&str_contains($both,'clases regulares')&&str_contains($both,'08:00–09:00')&&str_contains($both,'06:00–07:00'),
+    'An explicit both-products schedule comparison must validate and render both catalogs.'
+);
+
+$failed=hache_sharky_schedule_guard_model_answer(
+    'El horario es de 6 a 7.',
+    $state,
+    '¿Qué horario hay?',
+    static function(string $program,string $sede): array {throw new RuntimeException('db down');}
+);
+schedule_scope_ok(
+    str_contains(hache_sharky_schedule_guard_normalize($failed),'no pude verificar los horarios'),
+    'Schedule-like output must fail closed when backend availability cannot be loaded.'
 );
 
 $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
