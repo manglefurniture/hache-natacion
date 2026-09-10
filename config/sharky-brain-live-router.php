@@ -151,7 +151,9 @@ function hache_sharky_brain_conversational_explicit_pause(string $text): bool
     $t=hache_sharky_orchestrator_normalize($text);
     $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
     if($t==='')return false;
-    if(preg_match('/\b(?:dejame|deje|permiteme)\s+(?:analizar|pensar|revisar|checar|ver)\b/u',$t)===1)return true;
+    // "Déjame ver los horarios/opciones" is a request for information, not a pause.
+    // Reserve the broad detector for verbs that unambiguously mean deliberation.
+    if(preg_match('/\b(?:dejame|deje|permiteme)\s+(?:analizar|pensar|revisar|checar)\b/u',$t)===1)return true;
     if(preg_match('/\b(?:lo|esto|eso|me\s+lo)\s+voy\s+a\s+(?:analizar|pensar|revisar|checar)\b/u',$t)===1)return true;
     return preg_match('/^(?:voy\s+a\s+pensarlo|lo\s+pienso\s+y\s+te\s+(?:digo|aviso|confirmo)|dejame\s+pensarlo)(?:\s+por\s+favor)?[.! ]*$/u',$t)===1;
 }
