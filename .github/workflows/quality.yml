@@ -32,6 +32,8 @@ jobs:
         run: php tests/sharky-brain-numeric-context-regression.php
       - name: Sharky contact book regression
         run: php tests/sharky-contact-book-regression.php
+      - name: Sharky WhatsApp template notifications regression
+        run: php tests/sharky-template-notifications-regression.php
       - name: Sharky member routing and midnight takeover regression
         run: php tests/sharky-member-routing-midnight-regression.php
       - name: Sharky entry, Palapas red light and registration email regression

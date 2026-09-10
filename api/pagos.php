@@ -3,6 +3,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
+require_once __DIR__.'/../config/sharky-template-notifications.php';
 $config=require __DIR__.'/../config/database.php';
 try{
     $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
@@ -61,7 +62,11 @@ try{
             }
         }
         $json=json_decode((string)$salida,true);
-        if(is_array($json) && $resultado!==null){$json['acceso_regular']=$resultado;echo json_encode($json,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);}else{echo $salida;}
+        if(is_array($json)&&($json['ok']??false)===true&&!empty($json['pago']['folio'])){
+            $notification=hache_sharky_notify_payment_confirmed($pdo,(int)$json['pago']['folio']);
+            $json['notificacion_pago']=['queued'=>(bool)($notification['queued']??false)];
+        }
+        if(is_array($json) && $resultado!==null){$json['acceso_regular']=$resultado;echo json_encode($json,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);}elseif(is_array($json)){echo json_encode($json,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);}else{echo $salida;}
         exit;
     }
     http_response_code(405);echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);
