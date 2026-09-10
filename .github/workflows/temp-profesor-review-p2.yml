@@ -21,7 +21,140 @@ jobs:
           php-version: '8.2'
       - name: Apply review fixes
         run: |
-          printf '%s' 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKZGVmIG9uY2UodGV4dCwgb2xkLCBuZXcsIGxhYmVsKToKICAgIGlmIG9sZCBub3QgaW4gdGV4dDoKICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KGYibWlzc2luZyB0YXJnZXQ6IHtsYWJlbH0iKQogICAgcmV0dXJuIHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKCiMgMSkgTWVtYmVyIG9wczogcmVhZGluZXNzIGNoZWNrcyBsZWdhY3kgaW5kZXggYWJzZW5jZTsgSWRlbnRpdHkgaW5kZXBlbmRlbnQgZnJvbSByZWFkaW5lc3M7CiMgdGVhY2hlci1vd25lZCBvcHMgYmFpbCBvdXQgYmVmb3JlIGV2ZW50IGNsYWltIHdoZW4gbWlncmF0aW9uIGlzIGluY29tcGxldGUuCnA9UGF0aCgiY29uZmlnL3NoYXJreS1tZW1iZXItb3BzLnBocCIpCnRleHQ9cC5yZWFkX3RleHQoKQoKb2xkX2hlbHBlcj0iIiJmdW5jdGlvbiBoYWNoZV9zaGFya3lfbWVtYmVyX2NvdGVhY2hpbmdfcmVhZHkoUERPICRwZG8pOiBib29sCnsKICAgIHRyeXsKICAgICAgICAkc3Q9JHBkby0+cHJlcGFyZSgiU0VMRUNUIEdST1VQX0NPTkNBVChjb2x1bW5fbmFtZSBPUkRFUiBCWSBzZXFfaW5faW5kZXggU0VQQVJBVE9SICcsJykgY29sdW1uc19pbl9vcmRlcixNSU4obm9uX3VuaXF1ZSkgbm9uX3VuaXF1ZSBGUk9NIGluZm9ybWF0aW9uX3NjaGVtYS5zdGF0aXN0aWNzIFdIRVJFIHRhYmxlX3NjaGVtYT1EQVRBQkFTRSgpIEFORCB0YWJsZV9uYW1lPSdwcm9mZXNvcl9jYW5jZWxhY2lvbmVzJyBBTkQgaW5kZXhfbmFtZT0ndXFfcHJvZmVzb3JfY2FuY2VsYWNpb25fcHJvZmVzb3Jfc2VzaW9uJyBHUk9VUCBCWSBpbmRleF9uYW1lIik7CiAgICAgICAgJHN0LT5leGVjdXRlKCk7JHJvdz0kc3QtPmZldGNoKFBETzo6RkVUQ0hfQVNTT0MpOwogICAgICAgIHJldHVybiBpc19hcnJheSgkcm93KSYmKHN0cmluZykoJHJvd1snY29sdW1uc19pbl9vcmRlciddPz8nJyk9PT0ncHJvZmVzb3JfaWQsc2VzaW9uX2lkJyYmKGludCkoJHJvd1snbm9uX3VuaXF1ZSddPz8xKT09PTA7CiAgICB9Y2F0Y2goVGhyb3dhYmxlICRlKXtyZXR1cm4gZmFsc2U7fQp9CiIiIgpuZXdfaGVscGVyPSIiImZ1bmN0aW9uIGhhY2hlX3NoYXJreV9tZW1iZXJfY290ZWFjaGluZ19yZWFkeShQRE8gJHBkbyk6IGJvb2wKewogICAgdHJ5ewogICAgICAgICRzdD0kcGRvLT5wcmVwYXJlKCJTRUxFQ1QgR1JPVVBfQ09OQ0FUKGNvbHVtbl9uYW1lIE9SREVSIEJZIHNlcV9pbl9pbmRleCBTRVBBUkFUT1IgJywnKSBjb2x1bW5zX2luX29yZGVyLE1JTihub25fdW5pcXVlKSBub25fdW5pcXVlIEZST00gaW5mb3JtYXRpb25fc2NoZW1hLnN0YXRpc3RpY3MgV0hFUkUgdGFibGVfc2NoZW1hPURBVEFCQVNFKCkgQU5EIHRhYmxlX25hbWU9J3Byb2Zlc29yX2NhbmNlbGFjaW9uZXMnIEFORCBpbmRleF9uYW1lPSd1cV9wcm9mZXNvcl9jYW5jZWxhY2lvbl9wcm9mZXNvcl9zZXNpb24nIEdST1VQIEJZIGluZGV4X25hbWUiKTsKICAgICAgICAkc3QtPmV4ZWN1dGUoKTskcm93PSRzdC0+ZmV0Y2goUERPOjpGRVRDSF9BU1NPQyk7CiAgICAgICAgaWYoIWlzX2FycmF5KCRyb3cpfHwoc3RyaW5nKSgkcm93Wydjb2x1bW5zX2luX29yZGVyJ10/PycnKSE9PSdwcm9mZXNvcl9pZCxzZXNpb25faWQnfHwoaW50KSgkcm93WyDub25fdW5pcXVlJ10/PzEpIT09MClSZXR1cm4gZmFsc2U7CiAgICAgICAgJGxlZ2FjeT0kcGRvLT5wcmVwYXJlKCJTRUxFQ1QgQ09VTlQoKikgRlJPTSBpbmZvcm1hdGlvbl9zY2hlbWEuc3RhdGlzdGljcyBXSEVSRSB0YWJsZV9zY2hlbWE9REFUQUJBU0UoKSBBTkQgdGFibGVfbmFtZT0ncHJvZmVzb3JfY2FuY2VsYWNpb25lcycgQU5EIGluZGV4X25hbWU9J3VxX3Byb2Zlc29yX2NhbmNlbGFjaW9uX3Nlc2lvbiciKTsKICAgICAgICAkbGVnYWN5LT5leGVjdXRlKCk7CiAgICAgICAgcmV0dXJuIChpbnQpJGxlZ2FjeS0+ZmV0Y2hDb2x1bW4oKT09PTA7CiAgICB9Y2F0Y2goVGhyb3dhYmxlICRlKXtyZXR1cm4gZmFsc2U7fQp9CiIiIgp0ZXh0PW9uY2UodGV4dCxvbGRfaGVscGVyLG5ld19oZWxwZXIsImNvdGVhY2hpbmcgaGVscGVyIGxlZ2FjeSBnYXRlIikKCm9sZF9pZGVudGl0eT0iIiJmdW5jdGlvbiBoYWNoZV9zaGFya3lfbWVtYmVyX3RlYWNoZXJfYnlfd2hhdHNhcHAoUERPICRwZG8sc3RyaW5nICRjb250YWN0KTogYXJyYXkKewogICAgaWYoIWhhY2hlX3NoYXJreV9tZW1iZXJfc2NoZW1hX3JlYWR5KCRwZG8pfHwhaGFjaGVfc2hhcmt5X21lbWJlcl9jb3RlYWNoaW5nX3JlYWR5KCRwZG8pKXJldHVybiBbJ2ZvdW5kJz0+ZmFsc2UsJ3JlYXNvbic9PidzY2hlbWFfdW5hdmFpbGUnXTsKIiIiCm5ld19pZGVudGl0eT0iIiJmdW5jdGlvbiBoYWNoZV9zaGFya3lfbWVtYmVyX3RlYWNoZXJfYnlfd2hhdHNhcHAoUERPICRwZG8sc3RyaW5nICRjb250YWN0KTogYXJyYXkKewogICAgaWYoIWhhY2hlX3NoYXJreV9tZW1iZXJfc2NoZW1hX3JlYWR5KCRwZG8pKXJldHVybiBbJ2ZvdW5kJz0+ZmFsc2UsJ3JlYXNvbic9PidzY2hlbWFfdW5hdmFpbGUnXTsKIiIiCnRleHQ9b25jZSh0ZXh0LG9sZF9pZGVudGl0eSxuZXdfaWRlbnRpdHksInRlYWNoZXIgaWRlbnRpdHkgaW5kZXBlbmRlbnQgcmVhZGluZXNzIikKCm9sZF9nYXRlPSIiIiAgICAkaXNFdmlkZW5jZT0oc3RyaW5nKSgkZXZlbnRbJ2tpbmQnXT8/JycpPT09SEFDSEVfU0hBUktZX01FTUJFUl9FVklERU5DRV9LSU5EOwogICAgJHRlYWNoZXJGbG93PWlzX2FycmF5KCRmbG93KSYmc3RyX3N0YXJ0c193aXRoKChzdHJpbmcpKCRmbG93WyduYW1lJ10/PycnKSwndGVhY2hlcl8nKTskc3R1ZGVudEZsb3c9aXNfYXJyYXkoJGZsb3cpJiYoJGZsb3dbJ25hbWUnXT8/Jyk9PT0nYWJzZW5jZSc7CiAgICBpZigoJHRlYWNoZXJbJ2ZvdW5kJ10/P2ZhbHNlKSE9PXRydWUmJigkc3R1ZGVudFsnZm91bmQnXT8/ZmFsc2UpIT09dHJ1ZSYmISR0ZWFjaGVyRmxvdyYmISRzdHVkZW50RmxvdylyZXR1cm4gbnVsbDsKCiAgICAkZGVsaXZlcnlMb2NrPWhhY2hlX3NoYXJreV9vcmNoZXN0cmF0b3JfZGVsaXZlcnlfbG9jaygkY29udGFjdCk7aWYoIWlzX3Jlc291cmNlKCRkZWxpdmVyeUxvY2spKXJldHVybiBmYWxzZTsKIiIiCm5ld19nYXRlPSIiIiAgICAkaXNFdmlkZW5jZT0oc3RyaW5nKSgkZXZlbnRbJ2tpbmQnXT8/JycpPT09SEFDSEVfU0hBUktZX01FTUJFUl9FVklERU5DRV9LSU5EOwogICAgJHRlYWNoZXJGbG93PWlzX2FycmF5KCRmbG93KSYmc3RyX3N0YXJ0c193aXRoKChzdHJpbmcpKCRmbG93WyduYW1lJ10/PycnKSwndGVhY2hlcl8nKTskc3R1ZGVudEZsb3c9aXNfYXJyYXkoJGZsb3cpJiYoJGZsb3dbJ25hbWUnXT8/Jyk9PT0nYWJzZW5jZSc7CiAgICBpZigoJHRlYWNoZXJbJ2ZvdW5kJ10/P2ZhbHNlKSE9PXRydWUmJigkc3R1ZGVudFsnZm91bmQnXT8/ZmFsc2UpIT09dHJ1ZSYmISR0ZWFjaGVyRmxvdyYmISRzdHVkZW50RmxvdylyZXR1cm4gbnVsbDsKICAgICR0ZWFjaGVyT3duZWQ9KCR0ZWFjaGVyWydmb3VuZCddPz9mYWxzZSk9PT10cnVlJiYoJHRlYWNoZXJGbG93fHxpbl9hcnJheSgkaW50ZW50LFsndGVhY2hlcl9hZ2VuZGEnLCd0ZWFjaGVyX2NhbmNlbCcsJ3RlYWNoZXJfY2FuY2VsX3NlbGVjdCcsJ2dyZWV0aW5nJywnbWVtYmVyOnRjX2NvbmZpcm0nLCdtZW1iZXI6dGNfYWJvcnQnXSx0cnVlKSk7CiAgICBpZigkdGVhY2hlck93bmVkJiYhaGFjaGVfc2hhcmt5X21lbWJlcl9jb3RlYWNoaW5nX3JlYWR5KCRwZG8pKXJldHVybiBudWxsOwoKICAgICRkZWxpdmVyeUxvY2s9aGFjaGVfc2hhcmt5X29yY2hlc3RyYXRvcl9kZWxpdmVyeV9sb2NrKCRjb250YWN0KTtpZighaXNfcmVzb3VyY2UoJGRlbGl2ZXJ5TG9jaykpcmV0dXJuIGZhbHNlOwoiIiIKdGV4dD1vbmNlKHRleHQsb2xkX2dhdGUsbmV3X2dhdGUsInRlYWNoZXIgcHJvY2VzcyBwcmVjbGFpbSByZWFkaW5lc3MiKQpwLndyaXRlX3RleHQodGV4dCkKCiMgMikgUm91dGVyOiBpZGVudGl0eSBzdGF5cyBrbm93biwgdGVhY2hlci1vd25lZCByb3V0aW5nIGRlcGVuZHMgb24gcmVhZGluZXNzLgpwPVBhdGgoImNvbmZpZy9zaGFya3ktbWVtYmVyLXJvdXRpbmcucGhwIikKdGV4dD1wLnJlYWRfdGV4dCgpCgpvbGRfb3duZWQ9IiIiZnVuY3Rpb24gaGFjaGVfc2hhcmt5X21lbWJlcl90ZWFjaGVyX293bmVkX2V2ZW50KGFycmF5ICR0ZWFjaGVyLD9hcnJheSAkZmxvdyxhcnJheSAkZXZlbnQsP3N0cmluZyAkaW50ZW50PW51bGwpOiBib29sCnsKICAgIGlmKCgkdGVhY2hlclsnZm91bmQnXT8/ZmFsc2UpIT09dHJ1ZSlyZXR1cm4gZmFsc2U7CiIiIgpuZXdfb3duZWQ9IiIiZnVuY3Rpb24gaGFjaGVfc2hhcmt5X21lbWJlcl90ZWFjaGVyX293bmVkX2V2ZW50KFBETyAkcGRvLGFycmF5ICR0ZWFjaGVyLD9hcnJheSAkZmxvdyxhcnJheSAkZXZlbnQsP3N0cmluZyAkaW50ZW50PW51bGwpOiBib29sCnsKICAgIGlmKCgkdGVhY2hlclsnZm91bmQnXT8/ZmFsc2UpIT09dHJ1ZXx8IWhhY2hlX3NoYXJreV9tZW1iZXJfY290ZWFjaGluZ19yZWFkeSgkcGRvKSlyZXR1cm4gZmFsc2U7CiIiIgp0ZXh0PW9uY2UodGV4dCxvbGRfb3duZWQsbmV3X293bmVkLCJ0ZWFjaGVyIG93bmVkIGhlbHBlciBzaWduYXR1cmUvcmVhZGluZXNzIikKdGV4dD1vbmNlKHRleHQsImlmKGhhY2hlX3NoYXJreV9tZW1iZXJfdGVhY2hlcl9vd25lZF9ldmVudCgkdGVhY2hlciwkcm91dGluZ0Zsb3csJGV2ZW50LCRpbnRlbnQpKXJldHVybiBudWxsOyIsImlmKGhhY2hlX3NoYXJreV9tZW1iZXJfdGVhY2hlcl9vd25lZF9ldmVudCgkcGRvLCR0ZWFjaGVyLCRyb3V0aW5nRmxvdywkZXZlbnQsJGludGVudCkpcmV0dXJuIG51bGw7IiwidGVhY2hlciBvd25lZCBoZWxwZXIgY2FsbCIpCgpvbGRfZGV0PSIiIiAgICAkZmxvdz1oYWNoZV9zaGFya3lfbWVtYmVyX2Zsb3coJHN0YXRlKTskZmxvd05hbWU9KHN0cmluZykoJGZsb3dbJ25hbWUnXT8/JycpOwogICAgaWYoaW5fYXJyYXkoJGZsb3dOYW1lLFsnYWJzZW5jZScsJ3RlYWNoZXJfY2FuY2VsJ10sdHJ1ZSkpcmV0dXJuIHRydWU7CgogICAgJGludGVudD1oYWNoZV9zaGFya3lfbWVtYmVyX2ludGVudCgoc3RyaW5nKSgkZXZlbnRbJ3RleHQnXT8/JycpLChzdHJpbmcpKCRldmVudFsnaW50ZXJhY3RpdmVfaWQnXT8/JykpOwogICAgJHRlYWNoZXI9aGFjaGVfc2hhcmt5X21lbWJlcl90ZWFjaGVyX2J5X3doYXRzYXBwKCRwZG8sKHN0cmluZykoJGV2ZW50Wydmcm9tJ10/PycnKSk7CiAgICBpZigoJHRlYWNoZXJbJ2ZvdW5kJ10/P2ZhbHNlKT09PXRydWUmJmluX2FycmF5KCRpbnRlbnQsWydncmVldGluZycsJ3RlYWNoZXJfYWdlbmRhJywndGVhY2hlcl9jYW5jZWwnLCd0ZWFjaGVyX2NhbmNlbF9zZWxlY3QnLCdtZW1iZXI6dGNfY29uZmlybScsJ21lbWJlcjp0Y19hYm9ydCddLHRydWUpKXJldHVybiB0cnVlOwoiIiIKbmV3X2RldD0iIiIgICAgJGZsb3c9aGFjaGVfc2hhcmt5X21lbWJlcl9mbG93KCRzdGF0ZSk7JGZsb3dOYW1lPShzdHJpbmcpKCRmbG93WyduYW1lJ10/PycnKTsKICAgIGlmKCRmbG93TmFtZT09PSdhYnNlbmNlJylyZXR1cm4gdHJ1ZTsKICAgIGlmKCRmbG93TmFtZT09PSd0ZWFjaGVyX2NhbmNlbCcpcmV0dXJuIGhhY2hlX3NoYXJreV9tZW1iZXJfY290ZWFjaGluZ19yZWFkeSgkcGRvKTsKCiAgICAkaW50ZW50PWhhY2hlX3NoYXJreV9tZW1iZXJfaW50ZW50KChzdHJpbmcpKCRldmVudFsndGV4dCddPz8nJyksKHN0cmluZykoJGV2ZW50WydpbnRlcmFjdGl2ZV9pZCddPz8nJykpOwogICAgJHRlYWNoZXI9aGFjaGVfc2hhcmt5X21lbWJlcl90ZWFjaGVyX2J5X3doYXRzYXBwKCRwZG8sKHN0cmluZykoJGV2ZW50Wydmcm9tJ10/PycnKSk7CiAgICBpZigoJHRlYWNoZXJbJ2ZvdW5kJ10/P2ZhbHNlKT09PXRydWUmaGFjaGVfc2hhcmt5X21lbWJlcl9jb3RlYWNoaW5nX3JlYWR5KCRwZG8pJiZpbl9hcnJheSgkaW50ZW50LFsnZ3JlZXRpbmcnLCd0ZWFjaGVyX2FnZW5kYScsJ3RlYWNoZXJfY2FuY2VsJywndGVhY2hlcl9jYW5jZWxfc2VsZWN0JywnbWVtYmVyOnRjX2NvbmZpcm0nLCdtZW1iZXI6dGNfYWJvcnQnXSx0cnVlKSlyZXR1cm4gdHJ1ZTsKIiIiCnRleHQ9b25jZSh0ZXh0LG9sZF9kZXQsbmV3X2RldCwiZGV0ZXJtaW5pc3RpYyB0ZWFjaGVyIHJlYWRpbmVzcyIpCgpvbGRfaW50ZW50PSIiIiAgICAkdGVhY2hlckZsb3c9aXNfYXJyYXkoJGFjdGl2ZUZsb3cpJiZzdHJfc3RhcnRzX3dpdGgoKHN0cmluZykoJGFjdGl2ZUZsb3dbJ25hbWUnXT8/JycpLCd0ZWFjaGVyXycpOwogICAgJHRlYWNoZXJJbnRlbnQ9KCR0ZWFjaGVyWydmb3VuZCddPz9mYWxzZSk9PT10cnVlJiYoJHRlYWNoZXJGbG93fHxpbl9hcnJheSgkaW50ZW50LFsnZ3JlZXRpbmcnLCd0ZWFjaGVyX2FnZW5kYScsJ3RlYWNoZXJfY2FuY2VsJywndGVhY2hlcl9jYW5jZWxfc2VsZWN0JywnbWVtYmVyOnRjX2NvbmZpcm0nLCdtZW1iZXI6dGNfYWJvcnQnXSx0cnVlKSk7CiIiIgpuZXdfaW50ZW50PSIiIiAgICAkdGVhY2hlckZsb3c9aXNfYXJyYXkoJGFjdGl2ZUZsb3cpJiZzdHJfc3RhcnRzX3dpdGgoKHN0cmluZykoJGFjdGl2ZUZsb3dbJ25hbWUnXT8/JycpLCd0ZWFjaGVyXycpOwogICAgJHRlYWNoZXJJbnRlbnQ9KCR0ZWFjaGVyWydmb3VuZCddPz9mYWxzZSk9PT10cnVlJiZoYWNoZV9zaGFya3lfbWVtYmVyX2NvdGVhY2hpbmdfcmVhZHkoJHBkbykmJigkdGVhY2hlckZsb3d8fGluX2FycmF5KCRpbnRlbnQsWydncmVldGluZycsJ3RlYWNoZXJfYWdlbmRhJywndGVhY2hlcl9jYW5jZWwnLCd0ZWFjaGVyX2NhbmNlbF9zZWxlY3QnLCdtZW1iZXI6dGNfY29uZmlybScsJ21lbWJlcjp0Y19hYm9ydCddLHRydWUpKTsKIiIiCnRleHQ9b25jZSh0ZXh0LG9sZF9pbnRlbnQsbmV3X2ludGVudCwicm91dGUgdGVhY2hlciByZWFkaW5lc3MiKQpwLndyaXRlX3RleHQodGV4dCkKCiMgMykgU3RhdGljIHJlZ3Jlc3Npb246IHF1b3RlIGxpdGVyYWxzIHNhZmVseSBzbyBQSFAgbmV2ZXIgaW50ZXJwb2xhdGVzICQgdmFyaWFibGVzLgpwPVBhdGgoInRlc3RzL3NoYXJreS1tZW1iZXItb3BzLXJlZ3Jlc3Npb24ucGhwIikKdGV4dD1wLnJlYWRfdGV4dCgpCmFuY2hvcj0iIiJtZW1iZXJfb2soc3RyX2NvbnRhaW5zKCRtZW1iZXJPcHMsJ2Z1bmN0aW9uIGhhY2hlX3NoYXJreV9tZW1iZXJfY290ZWFjaGluZ19yZWFkeScpLCdUZWFjaGVyIHJvdXRpbmcgbXVzdCBoYXZlIGFuIGV4cGxpY2l0IGNvLXRlYWNoaW5nIHJlYWRpbmVzcyBnYXRlLicpOwptZW1iZXJfb2soc3RyX2NvbnRhaW5zKCRtZW1iZXJPcHMsJ3VxX3Byb2Zlc29yX2NhbmNlbGFjaW9uX3Byb2Zlc29yX3Nlc2lvbicpJiZzdHJfY29udGFpbnMoJG1lbWJlck9wcywicHJvZmVzb3JfaWQsc2VzaW9uX2lkIiksJ1RlYWNoZXIgcm91dGluZyBtdXN0IHZlcmlmeSB0aGUgY29tcG9zaXRlIHByb2Zlc3Nvci9zZXNzaW9uIGluZGV4IGJlZm9yZSBhY2NlcHRpbmcgY28tdGVhY2hpbmcgb3BlcmF0aW9ucy4nKTsKIiIiCmV4dHJhPSIiIm1lbWJlcl9vayhzdHJfY29udGFpbnMoJG1lbWJlck9wcywiaW5kZXhfbmFtZT0ndXFfcHJvZmVzb3JfY2FuY2VsYWNpb25fc2VzaW9uJyIpLCdDby10ZWFjaGluZyByZWFkaW5lc3MgbXVzdCByZWplY3QgYSBzY2hlbWEgdGhhdCBzdGlsbCByZXRhaW5zIHRoZSBsZWdhY3kgc2Vzc2lvbi1vbmx5IHVuaXF1ZSBpbmRleC4nKTsKJHRlYWNoZXJJZGVudGl0eVN0YXJ0PXN0cnBvcygkbWVtYmVyT3BzLCdmdW5jdGlvbiBoYWNoZV9zaGFya3lfbWVtYmVyX3RlYWNoZXJfYnlfd2hhdHNhcHAnKTsKJHRlYWNoZXJJZGVudGl0eUVuZD0kdGVhY2hlcklkZW50aXR5U3RhcnQ9PT1mYWxzZT9mYWxzZTpzdHJwb3MoJG1lbWJlck9wcywnZnVuY3Rpb24gaGFjaGVfc2hhcmt5X21lbWJlcl9mbG93JywkdGVhY2hlcklkZW50aXR5U3RhcnQpOwokdGVhY2hlcklkZW50aXR5PSgkdGVhY2hlcklkZW50aXR5U3RhcnQhPT1mYWxzZSYmJHRlYWNoZXJJZGVudGl0eUVuZCE9PWZhbHNlKT9zdWJzdHIoJG1lbWJlck9wcywkdGVhY2hlcklkZW50aXR5U3RhcnQsJHRlYWNoZXJJZGVudGl0eUVuZC0kdGVhY2hlcklkZW50aXR5U3RhcnQpOicnOwptZW1iZXJfb2soJHRlYWNoZXJJZGVudGl0eSE9PScnJiYhc3RyX2NvbnRhaW5zKCR0ZWFjaGVySWRlbnRpdHksJ2hhY2hlX3NoYXJreV9tZW1iZXJfY290ZWFjaGluZ19yZWFkeScpLCdUZWFjaGVyIGlkZW50aXR5IHJlY29nbml0aW9uIG11c3QgcmVtYWluIGluZGVwZW5kZW50IGZyb20gY28tdGVhY2hpbmcgbWlncmF0aW9uIHJlYWRpbmVzcy4nKTsKbWVtYmVyX29rKHN0cl9jb250YWlucygkbWVtYmVyT3BzLCdpZigkdGVhY2hlck93bmVkJiYhaGFjaGVfc2hhcmt5X21lbWJlcl9jb3RlYWNoaW5nX3JlYWR5KCRwZG8pKXJldHVybiBudWxsOycpLCdUZWFjaGVyIG9wZXJhdGlvbnMgbXVzdCBzdG9wIGJlZm9yZSBjbGFpbWluZyBhbiBldmVudCB3aGVuIGNvLXRlYWNoaW5nIHNjaGVtYSBpcyBpbmNvbXBsZXRlLicpOwoiIiIKdGV4dD1vbmNlKHRleHQsYW5jaG9yLGFuY2hvcitleHRyYSwibWVtYmVyIHN0YXRpYyBQMiBhc3NlcnRpb25zIikKCmFuY2hvcjI9IiIiJG1lbWJlclJvdXRlcj0oc3RyaW5nKWZpbGVfZ2V0X2NvbnRlbnRzKCRyb290LicvY29uZmlnL3NoYXJreS1tZW1iZXItcm91dGluZy5waHAnKTsKIiIiCmV4dHJhMl9zYWZlPSIiIm1lbWJlcl9vayhzdHJfY29udGFpbnMoJG1lbWJlclJvdXRlciwnaGFjaGVfc2hhcmt5X21lbWJlcl90ZWFjaGVyX293bmVkX2V2ZW50KFBETyAkcGRvJyksJ1RlYWNoZXIgZXZlbnQgb3duZXJzaGlwIG11c3QgcmVjZWl2ZSBEQiByZWFkaW5lc3MgY29udGV4dC4nKTsKbWVtYmVyX29rKHN0cl9jb250YWlucygkbWVtYmVyUm91dGVyLCJmbG93TmFtZT09PSd0ZWFjaGVyX2NhbmNlbCciKSYmc3RyX2NvbnRhaW5zKCRtZW1iZXJSb3V0ZXIsJ3JldHVybiBoYWNoZV9zaGFya3lfbWVtYmVyX2NvdGVhY2hpbmdfcmVhZHkoJHBkbyk7JyksJ1RlYWNoZXIgY2FuY2VsbGF0aW9uIGZsb3dzIG11c3QgcmVtYWluIGRvcm1hbnQgdW50aWwgY28tdGVhY2hpbmcgc2NoZW1hIGlzIHJlYWR5LicpOwptZW1iZXJfb2soc3RyX2NvbnRhaW5zKCRtZW1iZXJSb3V0ZXIsJyR0ZWFjaGVySW50ZW50PScpJiZzdHJfY29udGFpbnMoJG1lbWJlclJvdXRlciwnJiZoYWNoZV9zaGFya3lfbWVtYmVyX2NvdGVhY2hpbmdfcmVhZHkoJHBkbykmJicpLCdUZWFjaGVyIHJvdXRlIHNlbGVjdGlvbiBtdXN0IGJlIGdhdGVkIG9uIGNvLXRlYWNoaW5nIHJlYWRpbmVzcyB3aXRob3V0IGhpZGluZyB0ZWFjaGVyIGlkZW50aXR5LicpOwoiIiIKdGV4dD1vbmNlKHRleHQsYW5jaG9yMixhbmNob3IyK2V4dHJhMl9zYWZlLCJyb3V0ZXIgUDIgYXNzZXJ0aW9ucyIpCnAud3JpdGVfdGV4dCh0ZXh0KQoKIyA0KSBNYXJpYURCIHJlYWRpbmVzcyByZWdyZXNzaW9uOiBib3RoIGNvbXBvc2l0ZSBpbmRleCBhbmQgbGVnYWN5LWluZGV4IGFic2VuY2UgbWF0dGVyLgpwPVBhdGgoInRlc3RzL3NoYXJreS1wcm9mZXNzb3ItY290ZWFjaGluZy1tYXJpYWRiLnBocCIpCnRleHQ9cC5yZWFkX3RleHQoKQphbmNob3IzPSIiInJlcXVpcmVfb25jZSBfX0RJUl9fLicvLi4vY29uZmlnL3NoYXJreS1tZW1iZXItb3BzLnBocCc7CiIiIgpleHRyYTM9IiIiY290ZWFjaF9leHBlY3QoaGFjaGVfc2hhcmt5X21lbWJlcl9jb3RlYWNoaW5nX3JlYWR5KCRwZG8pLCdDb21wb3NpdGUgY28tdGVhY2hpbmcgaW5kZXggc2hvdWxkIGJlIHJlYWR5IGJ5IGl0c2VsZi4nKTsKJHBkby0+ZXhlYygiQ1JFQVRFIFVOSVFVRSBJTkRFWCB1cV9wcm9mZXNvcl9jYW5jZWxhY2lvbl9zZXNpb24gT04gcHJvZmVzb3JfY2FuY2VsYWNpb25lcyhzZXNpb25faWQpIik7CmNvdGVhY2hfZXhwZWN0KCFoYWNoZV9zaGFya3lfbWVtYmVyX2NvdGVhY2hpbmdfcmVhZHkoJHBkbyksJ0xlZ2FjeSBzZXNzaW9uLW9ubHkgdW5pcXVlbmVzcyBtdXN0IG1ha2UgY28tdGVhY2hpbmcgcmVhZGluZXNzIGZhaWwgY2xvc2VkLicpOwokcGRvLT5leGVjKCJEUk9QIElOREVYIHVxX3Byb2Zlc29yX2NhbmNlbGFjaW9uX3Nlc2lvbiBPTiBwcm9mZXNvcl9jYW5jZWxhY2lvbmVzIik7CmNvdGVhY2hfZXhwZWN0KGhhY2hlX3NoYXJreV9tZW1iZXJfY290ZWFjaGluZ19yZWFkeSgkcGRvKSwnRHJvcHBpbmcgdGhlIGxlZ2FjeSBzZXNzaW9uLW9ubHkgaW5kZXggbXVzdCByZXN0b3JlIGNvLXRlYWNoaW5nIHJlYWRpbmVzcy4nKTsKIiIiCnRleHQ9b25jZSh0ZXh0LGFuY2hvcjMsYW5jaG9yMytleHRyYTMsIk1hcmlhREIgcmVhZGluZXNzIGFzc2VydGlvbnMiKQpwLndyaXRlX3RleHQodGV4dCkK' | base64 -d > /tmp/professor_p2.py
+          cat > /tmp/professor_p2.py <<'PY'
+          from pathlib import Path
+
+          def once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"missing target: {label}")
+              return text.replace(old, new, 1)
+
+          p=Path("config/sharky-member-ops.php")
+          text=p.read_text()
+          old_helper="""function hache_sharky_member_coteaching_ready(PDO $pdo): bool
+          {
+              try{
+                  $st=$pdo->prepare("SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') columns_in_order,MIN(non_unique) non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_profesor_sesion' GROUP BY index_name");
+                  $st->execute();$row=$st->fetch(PDO::FETCH_ASSOC);
+                  return is_array($row)&&(string)($row['columns_in_order']??'')==='profesor_id,sesion_id'&&(int)($row['non_unique']??1)===0;
+              }catch(Throwable $e){return false;}
+          }
+          """
+          new_helper="""function hache_sharky_member_coteaching_ready(PDO $pdo): bool
+          {
+              try{
+                  $st=$pdo->prepare("SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') columns_in_order,MIN(non_unique) non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_profesor_sesion' GROUP BY index_name");
+                  $st->execute();$row=$st->fetch(PDO::FETCH_ASSOC);
+                  if(!is_array($row)||(string)($row['columns_in_order']??'')!=='profesor_id,sesion_id'||(int)($row['non_unique']??1)!==0)return false;
+                  $legacy=$pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_sesion'");
+                  $legacy->execute();
+                  return (int)$legacy->fetchColumn()===0;
+              }catch(Throwable $e){return false;}
+          }
+          """
+          text=once(text,old_helper,new_helper,"coteaching helper legacy gate")
+
+          old_identity="""function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
+          {
+              if(!hache_sharky_member_schema_ready($pdo)||!hache_sharky_member_coteaching_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
+          """
+          new_identity="""function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
+          {
+              if(!hache_sharky_member_schema_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
+          """
+          text=once(text,old_identity,new_identity,"teacher identity independent readiness")
+
+          old_gate="""    $isEvidence=(string)($event['kind']??'')===HACHE_SHARKY_MEMBER_EVIDENCE_KIND;
+              $teacherFlow=is_array($flow)&&str_starts_with((string)($flow['name']??''),'teacher_');$studentFlow=is_array($flow)&&($flow['name']??'')==='absence';
+              if(($teacher['found']??false)!==true&&($student['found']??false)!==true&&!$teacherFlow&&!$studentFlow)return null;
+          
+              $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
+          """
+          new_gate="""    $isEvidence=(string)($event['kind']??'')===HACHE_SHARKY_MEMBER_EVIDENCE_KIND;
+              $teacherFlow=is_array($flow)&&str_starts_with((string)($flow['name']??''),'teacher_');$studentFlow=is_array($flow)&&($flow['name']??'')==='absence';
+              if(($teacher['found']??false)!==true&&($student['found']??false)!==true&&!$teacherFlow&&!$studentFlow)return null;
+              $teacherOwned=($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['teacher_agenda','teacher_cancel','teacher_cancel_select','greeting','member:tc_confirm','member:tc_abort'],true));
+              if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return null;
+          
+              $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
+          """
+          text=once(text,old_gate,new_gate,"teacher process preclaim readiness")
+          p.write_text(text)
+
+          p=Path("config/sharky-member-routing.php")
+          text=p.read_text()
+          old_owned="""function hache_sharky_member_teacher_owned_event(array $teacher,?array $flow,array $event,?string $intent=null): bool
+          {
+              if(($teacher['found']??false)!==true)return false;
+          """
+          new_owned="""function hache_sharky_member_teacher_owned_event(PDO $pdo,array $teacher,?array $flow,array $event,?string $intent=null): bool
+          {
+              if(($teacher['found']??false)!==true||!hache_sharky_member_coteaching_ready($pdo))return false;
+          """
+          text=once(text,old_owned,new_owned,"teacher owned helper signature/readiness")
+          text=once(text,"if(hache_sharky_member_teacher_owned_event($teacher,$routingFlow,$event,$intent))return null;","if(hache_sharky_member_teacher_owned_event($pdo,$teacher,$routingFlow,$event,$intent))return null;","teacher owned helper call")
+
+          old_det="""    $flow=hache_sharky_member_flow($state);$flowName=(string)($flow['name']??'');
+              if(in_array($flowName,['absence','teacher_cancel'],true))return true;
+          
+              $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
+              $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,(string)($event['from']??''));
+              if(($teacher['found']??false)===true&&in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
+          """
+          new_det="""    $flow=hache_sharky_member_flow($state);$flowName=(string)($flow['name']??'');
+              if($flowName==='absence')return true;
+              if($flowName==='teacher_cancel')return hache_sharky_member_coteaching_ready($pdo);
+          
+              $intent=hache_sharky_member_intent((string)($event['text']??''),(string)($event['interactive_id']??''));
+              $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,(string)($event['from']??''));
+              if(($teacher['found']??false)===true&&hache_sharky_member_coteaching_ready($pdo)&&in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true))return true;
+          """
+          text=once(text,old_det,new_det,"deterministic teacher readiness")
+
+          old_intent="""    $teacherFlow=is_array($activeFlow)&&str_starts_with((string)($activeFlow['name']??''),'teacher_');
+              $teacherIntent=($teacher['found']??false)===true&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true));
+          """
+          new_intent="""    $teacherFlow=is_array($activeFlow)&&str_starts_with((string)($activeFlow['name']??''),'teacher_');
+              $teacherIntent=($teacher['found']??false)===true&&hache_sharky_member_coteaching_ready($pdo)&&($teacherFlow||in_array($intent,['greeting','teacher_agenda','teacher_cancel','teacher_cancel_select','member:tc_confirm','member:tc_abort'],true));
+          """
+          text=once(text,old_intent,new_intent,"route teacher readiness")
+          p.write_text(text)
+
+          p=Path("tests/sharky-member-ops-regression.php")
+          text=p.read_text()
+          anchor="""member_ok(str_contains($memberOps,'function hache_sharky_member_coteaching_ready'),'Teacher routing must have an explicit co-teaching readiness gate.');
+          member_ok(str_contains($memberOps,'uq_profesor_cancelacion_profesor_sesion')&&str_contains($memberOps,"profesor_id,sesion_id"),'Teacher routing must verify the composite professor/session index before accepting co-teaching operations.');
+          """
+          extra="""member_ok(str_contains($memberOps,"index_name='uq_profesor_cancelacion_sesion'"),'Co-teaching readiness must reject a schema that still retains the legacy session-only unique index.');
+          $teacherIdentityStart=strpos($memberOps,'function hache_sharky_member_teacher_by_whatsapp');
+          $teacherIdentityEnd=$teacherIdentityStart===false?false:strpos($memberOps,'function hache_sharky_member_flow',$teacherIdentityStart);
+          $teacherIdentity=($teacherIdentityStart!==false&&$teacherIdentityEnd!==false)?substr($memberOps,$teacherIdentityStart,$teacherIdentityEnd-$teacherIdentityStart):'';
+          member_ok($teacherIdentity!==''&&!str_contains($teacherIdentity,'hache_sharky_member_coteaching_ready'),'Teacher identity recognition must remain independent from co-teaching migration readiness.');
+          member_ok(str_contains($memberOps,'if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return null;'),'Teacher operations must stop before claiming an event when co-teaching schema is incomplete.');
+          """
+          text=once(text,anchor,anchor+extra,"member static P2 assertions")
+          anchor2="""$memberRouter=(string)file_get_contents($root.'/config/sharky-member-routing.php');
+          """
+          extra2="""member_ok(str_contains($memberRouter,'hache_sharky_member_teacher_owned_event(PDO $pdo'),'Teacher event ownership must receive DB readiness context.');
+          member_ok(str_contains($memberRouter,"flowName==='teacher_cancel'")&&str_contains($memberRouter,'return hache_sharky_member_coteaching_ready($pdo);'),'Teacher cancellation flows must remain dormant until co-teaching schema is ready.');
+          member_ok(str_contains($memberRouter,'$teacherIntent=')&&str_contains($memberRouter,'&&hache_sharky_member_coteaching_ready($pdo)&&'),'Teacher route selection must be gated on co-teaching readiness without hiding teacher identity.');
+          """
+          text=once(text,anchor2,anchor2+extra2,"router P2 assertions")
+          p.write_text(text)
+
+          p=Path("tests/sharky-professor-coteaching-mariadb.php")
+          text=p.read_text()
+          anchor3="""require_once __DIR__.'/../config/sharky-member-ops.php';
+          """
+          extra3="""coteach_expect(hache_sharky_member_coteaching_ready($pdo),'Composite co-teaching index should be ready by itself.');
+          $pdo->exec("CREATE UNIQUE INDEX uq_profesor_cancelacion_sesion ON profesor_cancelaciones(sesion_id)");
+          coteach_expect(!hache_sharky_member_coteaching_ready($pdo),'Legacy session-only uniqueness must make co-teaching readiness fail closed.');
+          $pdo->exec("DROP INDEX uq_profesor_cancelacion_sesion ON profesor_cancelaciones");
+          coteach_expect(hache_sharky_member_coteaching_ready($pdo),'Dropping the legacy session-only index must restore co-teaching readiness.');
+          """
+          text=once(text,anchor3,anchor3+extra3,"MariaDB readiness assertions")
+          p.write_text(text)
+          PY
           python3 /tmp/professor_p2.py
           php -l config/sharky-member-ops.php
           php -l config/sharky-member-routing.php
