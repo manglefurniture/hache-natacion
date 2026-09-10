@@ -54,11 +54,14 @@ if ($method === 'GET') {
         }
     }
     $brainShadow=hache_sharky_brain_diag_report($metrics);
+    $brainConversationLive=hache_sharky_brain_conversational_enabled($brain2ba);
     $brainShadow['routing_live']=hache_sharky_brain_2ba_enabled($brain2ba);
-    $brainShadow['routing_mode']=$brainShadow['routing_live']?'phase_2b_a':'shadow';
+    $brainShadow['routing_mode']=$brainConversationLive
+        ?'conversational_experiment'
+        :($brainShadow['routing_live']?'phase_2b_a':'shadow');
     $brainShadow['canary_pct']=hache_sharky_brain_2ba_canary_percent($brain2ba);
     $brainShadow['live_actions']=hache_sharky_brain_2ba_live_actions();
-    $brainShadow['open_conversation_live']=false;
+    $brainShadow['open_conversation_live']=$brainConversationLive;
     sharky_admin_out([
         'ok'=>true,
         'admin'=>true,
@@ -90,7 +93,11 @@ if ($action === 'CONFIG') {
     if ($key === HACHE_SHARKY_GROUPS_KEY) {
         if (!hache_sharky_groups_config_valid($value)) sharky_admin_out(['ok'=>false, 'error'=>'Valor de configuración inválido'], 422);
         $description=(string)hache_sharky_groups_config_row()['descripcion'];
-    } elseif(in_array($key,[HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,HACHE_SHARKY_BRAIN_2BA_CANARY_KEY],true)) {
+    } elseif(in_array($key,[
+        HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY,
+        HACHE_SHARKY_BRAIN_2BA_CANARY_KEY,
+        HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY,
+    ],true)) {
         if(!hache_sharky_brain_2ba_config_value_valid($key,$value))sharky_admin_out(['ok'=>false,'error'=>'Valor de configuración inválido'],422);
         foreach(hache_sharky_brain_2ba_config_rows([$key=>$value]) as $row){
             if(($row['clave']??'')===$key){$description=(string)$row['descripcion'];break;}
