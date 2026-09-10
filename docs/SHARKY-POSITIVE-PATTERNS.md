@@ -30,7 +30,7 @@ Un prospecto entra desde un anuncio de Meta relacionado con aprender a nadar. Sh
 
 1. Sharky usa el anuncio como contexto, sin asumir que ya conoce todas las necesidades del prospecto.
 2. Pregunta por el nivel real de natación.
-3. Al confirmar que empieza desde cero, recomienda el curso intensivo como opción primaria de Hache Natación y explica brevemente el motivo.
+3. Al confirmar que empieza desde cero, lleva el prospecto al curso intensivo como producto automático elegible de Hache Natación y explica brevemente el motivo.
 4. El prospecto elige sede.
 5. Sharky ofrece horarios disponibles mediante opciones controladas.
 6. El prospecto elige horario.
@@ -45,13 +45,14 @@ Un prospecto entra desde un anuncio de Meta relacionado con aprender a nadar. Sh
 ### Invariantes — NO ROMPER
 
 - Brain puede comprender, recomendar y mantener el hilo conversacional.
-- La recomendación de intensivo se basa en el **nivel real**: quien empieza desde cero o nunca ha tomado clases formales recibe el intensivo como recomendación primaria.
+- **Elegibilidad dura:** quien empieza desde cero, no sabe nadar, aprendió por su cuenta o nunca ha tomado clases formales de natación no es elegible para venta automática de clases regulares. Para Sharky, el único producto automático en ese perfil es el curso intensivo. Una excepción a regulares solo puede autorizarla una persona del equipo.
+- Si alguien dice “sé nadar un poco” o equivalente pero todavía no sabemos si ha tomado clases formales, Sharky debe confirmar ese antecedente antes de ofrecer o comparar clases regulares. Nadar un poco no equivale a formación formal.
 - **Curso intensivo y clases regulares son productos distintos.** El intensivo dura 3 semanas y se toma de lunes a viernes; los planes semanales/mensuales pertenecen a clases regulares.
 - Cuando el intensivo ya es el programa activo, referencias genéricas como “las clases”, “precio”, “horarios”, “ubicación”, “cuándo empieza” o “el curso” siguen refiriéndose al intensivo; no pueden saltar a regulares por una palabra ambigua.
-- Una preferencia de frecuencia como “2 veces por semana” no puede convertir silenciosamente el intensivo en un plan regular. Sharky debe explicar la diferencia de productos y pedir confirmación explícita antes de cambiar.
-- “Ambas”, “las dos”, “los dos” o “de las dos” no son por sí solos una selección de producto; deben resolverse contra el contexto inmediato y nunca cambiar de intensivo a regulares sin mención explícita.
-- Una consulta lateral sobre regulares puede responderse sin cambiar el programa activo. El cambio a regulares requiere una preferencia explícita del prospecto.
-- La preferencia posterior del cliente se respeta; recomendar no significa imponer.
+- Una preferencia de frecuencia como “2 veces por semana”, “3 veces por semana” o “5 veces por semana” no puede convertir silenciosamente el intensivo en un plan regular. Para un perfil sin formación formal, esa frecuencia no habilita regulares: se mantiene intensivo y cualquier excepción requiere evaluación humana.
+- “Ambas”, “las dos”, “los dos” o “de las dos” no son por sí solos una selección de producto; deben resolverse contra el contexto inmediato y nunca cambiar de intensivo a regulares sin una intención inequívoca y elegible.
+- Solo un prospecto con formación formal confirmada puede cambiar automáticamente a clases regulares mediante una preferencia explícita. Si no es elegible, Sharky no muestra planes, precios ni horarios regulares y deriva la excepción a una persona.
+- La preferencia posterior del cliente se respeta dentro de las reglas de elegibilidad; una preferencia no autoriza a Sharky a saltarse una valoración humana requerida.
 - La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo.
 - Horario y fecha se eligen usando disponibilidad real del backend y siempre dentro del programa activo.
 - El modelo no puede ampliar, mezclar ni inventar horarios fuera del catálogo verificado del backend; si la disponibilidad no puede verificarse, se falla cerrado.
@@ -75,19 +76,21 @@ Considerar GP-001 roto si una adecuación provoca cualquiera de estos comportami
 
 - volver a preguntar nivel, sede, horario o fecha ya confirmados;
 - perder el hilo después de una pausa normal;
+- ofrecer clases regulares automáticamente a alguien que empieza desde cero o nunca ha tomado clases formales;
+- interpretar “nado un poco” como permiso suficiente para vender regulares sin confirmar formación formal;
 - cambiar de intensivo a regulares porque el usuario dijo de forma genérica “clases”, “precio” u otra referencia ambigua;
-- presentar 3/5 clases por semana como si fueran modalidades del curso intensivo;
+- presentar 2/3/5 clases por semana como si fueran modalidades del curso intensivo;
 - interpretar “de las dos” como una orden para cambiar de producto;
 - ofrecer horarios del otro producto, horarios inventados o horarios no verificables;
 - convertir una respuesta conversacional de Brain en una operación sensible directa;
 - reiniciar el onboarding al entrar al flow de inscripción;
 - terminar una inscripción y no poder continuar al pago;
 - obligar a usar botones cuando el texto libre ya expresa claramente la selección;
-- impedir que el usuario cambie de decisión antes de la operación final.
+- impedir una derivación humana cuando el prospecto solicita una excepción a las reglas de elegibilidad.
 
 ### Cobertura automática relacionada
 
-La protección técnica de este recorrido se reparte actualmente entre las regresiones de Brain conversacional, frontera de producto, alcance de horarios, WhatsApp adapter, commerce flows, enrollment-after-reserve, follow-up y pagos. Las futuras adecuaciones deben conservar esas pruebas verdes y añadir cobertura específica cuando aparezca un nuevo borde real.
+La protección técnica de este recorrido se reparte actualmente entre las regresiones de Brain conversacional, frontera y elegibilidad de producto, alcance de horarios, WhatsApp adapter, commerce flows, enrollment-after-reserve, follow-up y pagos. Las futuras adecuaciones deben conservar esas pruebas verdes y añadir cobertura específica cuando aparezca un nuevo borde real.
 
 ---
 
