@@ -7,6 +7,7 @@ const HACHE_SHARKY_FOLLOWUP_SECOND_DELAY_SECONDS = 5400;
 const HACHE_SHARKY_FOLLOWUP_SESSION_SECONDS = 86400;
 const HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_DELAY_SECONDS = 172800;
 const HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_GRACE_SECONDS = 86400;
+const HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_RETENTION_SECONDS = 345600;
 const HACHE_SHARKY_FOLLOWUP_RESUME_TEMPLATE = 'hache_retomar_inscripcion';
 const HACHE_SHARKY_FOLLOWUP_TIMEZONE = 'America/Cancun';
 const HACHE_SHARKY_FOLLOWUP_START_HOUR = 8;
@@ -295,7 +296,7 @@ function hache_sharky_followup_validate_before_send(PDO $pdo,string $contact,arr
     if(!hache_sharky_followup_commercial_ready($state))return ['ok'=>false,'reason'=>'CONTEXT_NOT_ELIGIBLE'];
     if(!hache_sharky_followup_context_matches($state,$meta))return ['ok'=>false,'reason'=>'CONTEXT_CHANGED'];
     if(!hache_sharky_followup_send_allowed_now($now)){
-        if($stage===3)hache_sharky_db_state_save_now($pdo,$contact,$state,172800);
+        if($stage===3)hache_sharky_db_state_save_now($pdo,$contact,$state,HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_RETENTION_SECONDS);
         return ['ok'=>false,'reason'=>'QUIET_HOURS','reschedule_at'=>hache_sharky_followup_next_allowed_at($now)];
     }
     return ['ok'=>true,'state'=>$state];
@@ -340,7 +341,7 @@ function hache_sharky_followup_after_sent(PDO $pdo,string $contact,array $meta,?
             $due=$userTurnAt+HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_DELAY_SECONDS;
             if($due<=$now)$due=$now+60;
             $followup['status']='second_sent';$followup['sent_count']=2;$followup['next_stage']=3;$followup['third_due_at']=$due;
-            $state=hache_sharky_followup_set_state($state,$followup);hache_sharky_db_state_save_now($pdo,$contact,$state,172800);
+            $state=hache_sharky_followup_set_state($state,$followup);hache_sharky_db_state_save_now($pdo,$contact,$state,HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_RETENTION_SECONDS);
             $payload=hache_sharky_followup_payload($contact,$state,3,$token,$userTurnAt);
             if(!hache_sharky_outbox_enqueue_raw($pdo,$contact,$payload,'idle-followup|'.$token.'|3',$due)){
                 $followup['status']='completed_reengagement_schedule_failed';$followup['next_stage']=null;$followup['token']=null;$followup['completed_at']=$now;
