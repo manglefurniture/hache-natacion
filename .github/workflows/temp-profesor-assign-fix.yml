@@ -19,75 +19,10 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-      - name: Apply professor assignment and co-teaching review fixes
+      - name: Apply fixes
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def once(text, old, new, label):
-              if old not in text:
-                  raise SystemExit(f'missing target: {label}')
-              return text.replace(old, new, 1)
-
-          p=Path('config/sharky-member-ops.php')
-          text=p.read_text()
-          needle="""function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
-{
-    if(!hache_sharky_member_schema_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
-"""
-          replacement="""function hache_sharky_member_coteaching_ready(PDO $pdo): bool
-{
-    try{
-        $st=$pdo->prepare(\"SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') columns_in_order,MIN(non_unique) non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_profesor_sesion' GROUP BY index_name\");
-        $st->execute();$row=$st->fetch(PDO::FETCH_ASSOC);
-        return is_array($row)&&(string)($row['columns_in_order']??'')==='profesor_id,sesion_id'&&(int)($row['non_unique']??1)===0;
-    }catch(Throwable $e){return false;}
-}
-
-function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
-{
-    if(!hache_sharky_member_schema_ready($pdo)||!hache_sharky_member_coteaching_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
-"""
-          text=once(text,needle,replacement,'co-teaching readiness helper')
-          needle2="""function hache_sharky_member_cancel_teacher_session(PDO $pdo,string $teacherId,string $sessionId,string $reason,string $actionKey): array
-{
-    $reason=preg_replace('/\\s+/u',' ',trim($reason))??'';if($reason===''||mb_strlen($reason)>500)throw new HacheSharkyBusinessException('El motivo es obligatorio y no puede exceder 500 caracteres.','INVALID_REASON',422);
-"""
-          replacement2="""function hache_sharky_member_cancel_teacher_session(PDO $pdo,string $teacherId,string $sessionId,string $reason,string $actionKey): array
-{
-    if(!hache_sharky_member_coteaching_ready($pdo))throw new HacheSharkyBusinessException('La operación de profesores todavía no está lista.','TEACHER_COTEACHING_SCHEMA_UNAVAILABLE',503);
-    $reason=preg_replace('/\\s+/u',' ',trim($reason))??'';if($reason===''||mb_strlen($reason)>500)throw new HacheSharkyBusinessException('El motivo es obligatorio y no puede exceder 500 caracteres.','INVALID_REASON',422);
-"""
-          text=once(text,needle2,replacement2,'cancel route readiness gate')
-          old_status="$status=!empty($s['teacher_cancel_id'])?'NO ASISTIRÁS':((string)$s['estado']==='CANCELADA'?'CANCELADA':((int)($s['cerrada']??0)===1?'cerrada':'programada'));"
-          new_status="$status=(string)$s['estado']==='CANCELADA'?'CANCELADA':(!empty($s['teacher_cancel_id'])?'NO ASISTIRÁS':((int)($s['cerrada']??0)===1?'cerrada':'programada'));"
-          text=once(text,old_status,new_status,'cancelled status precedence')
-          p.write_text(text)
-
-          p=Path('public/profesores.php')
-          text=p.read_text()
-          old="""list.querySelectorAll('[data-on]').forEach(b=>b.onclick=async()=>{const s=list.querySelector('[data-sel=\"'+b.dataset.on+'\"]');if(!s.value)return;try{await post({accion:'ASSIGN',profesor_id:b.dataset.on,horario_id:s.value,activo:true});note('Horario asignado.');await load()}catch(e){note(e.message)}});"""
-          new="""list.querySelectorAll('[data-on]').forEach(b=>b.onclick=async()=>{const box=b.closest('.assign'),s=box?box.querySelector('[data-sel]'):null;if(!s){note('No pude localizar el selector de horario. Recarga la página e inténtalo de nuevo.');return}const schedule=String(s.value||'').trim();if(schedule===''){note('Selecciona primero una clase u horario.');s.focus();return}const original=b.textContent;b.disabled=true;b.textContent='Asignando…';note('Asignando horario…');try{await post({accion:'ASSIGN',profesor_id:b.dataset.on,horario_id:schedule,activo:true});note('Horario asignado correctamente.');await load()}catch(e){note(e.message||'No se pudo asignar el horario.')}finally{if(document.body.contains(b)){b.disabled=false;b.textContent=original}}});"""
-          text=once(text,old,new,'assign button handler')
-          text=text.replace("<option value=\"\">Asignar horario…</option>","<option value=\"\">Selecciona una clase/horario…</option>",1)
-          p.write_text(text)
-
-          p=Path('tests/sharky-member-ops-regression.php')
-          text=p.read_text()
-          anchor="member_ok(str_contains($memberOps,\"'code'=>'SESSION_CANCELLED'\"),'The class must cancel only when teacher coverage reaches zero.');\n"
-          extra="""member_ok(str_contains($memberOps,'function hache_sharky_member_coteaching_ready'),'Teacher routing must have an explicit co-teaching readiness gate.');
-member_ok(str_contains($memberOps,'uq_profesor_cancelacion_profesor_sesion')&&str_contains($memberOps,"profesor_id,sesion_id"),'Teacher routing must verify the composite professor/session index before accepting co-teaching operations.');
-member_ok(str_contains($memberOps,"$status=(string)$s['estado']==='CANCELADA'?'CANCELADA':(!empty($s['teacher_cancel_id'])"),'Cancelled class status must take precedence over teacher-specific unavailability.');
-"""
-          text=once(text,anchor,anchor+extra,'member P2 regression assertions')
-          anchor2="member_ok(str_contains($professorPage,'varios horarios')&&str_contains($professorPage,'varios profes'),'Professor UI must explain many-to-many schedule assignment.');\n"
-          extra2="""member_ok(str_contains($professorPage,"b.closest('.assign')"),'Professor assignment button must resolve its own adjacent schedule selector.');
-member_ok(str_contains($professorPage,'Selecciona primero una clase u horario.'),'Professor assignment must never fail silently when no schedule is selected.');
-member_ok(str_contains($professorPage,"b.textContent='Asignando…'"),'Professor assignment must expose an in-progress state and prevent duplicate taps.');
-"""
-          text=once(text,anchor2,anchor2+extra2,'professor assignment UI regression assertions')
-          p.write_text(text)
-          PY
+          printf '%s' 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKZGVmIG9uY2UodGV4dCwgb2xkLCBuZXcsIGxhYmVsKToKICAgIGlmIG9sZCBub3QgaW4gdGV4dDoKICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KGYnbWlzc2luZyB0YXJnZXQ6IHtsYWJlbH0nKQogICAgcmV0dXJuIHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKCnA9UGF0aCgnY29uZmlnL3NoYXJreS1tZW1iZXItb3BzLnBocCcpCnRleHQ9cC5yZWFkX3RleHQoKQpuZWVkbGU9IiIiZnVuY3Rpb24gaGFjaGVfc2hhcmt5X21lbWJlcl90ZWFjaGVyX2J5X3doYXRzYXBwKFBETyAkcGRvLHN0cmluZyAkY29udGFjdCk6IGFycmF5CnsKICAgIGlmKCFoYWNoZV9zaGFya3lfbWVtYmVyX3NjaGVtYV9yZWFkeSgkcGRvKSlyZXR1cm4gWydmb3VuZCc9PmZhbHNlLCdyZWFzb24nPT4nc2NoZW1hX3VuYXZhaWxhYmxlJ107CiIiIgpyZXBsYWNlbWVudD0iIiJmdW5jdGlvbiBoYWNoZV9zaGFya3lfbWVtYmVyX2NvdGVhY2hpbmdfcmVhZHkoUERPICRwZG8pOiBib29sCnsKICAgIHRyeXsKICAgICAgICAkc3Q9JHBkby0+cHJlcGFyZSgiU0VMRUNUIEdST1VQX0NPTkNBVChjb2x1bW5fbmFtZSBPUkRFUiBCWSBzZXFfaW5faW5kZXggU0VQQVJBVE9SICcsJykgY29sdW1uc19pbl9vcmRlcixNSU4obm9uX3VuaXF1ZSkgbm9uX3VuaXF1ZSBGUk9NIGluZm9ybWF0aW9uX3NjaGVtYS5zdGF0aXN0aWNzIFdIRVJFIHRhYmxlX3NjaGVtYT1EQVRBQkFTRSgpIEFORCB0YWJsZV9uYW1lPSdwcm9mZXNvcl9jYW5jZWxhY2lvbmVzJyBBTkQgaW5kZXhfbmFtZT0ndXFfcHJvZmVzb3JfY2FuY2VsYWNpb25fcHJvZmVzb3Jfc2VzaW9uJyBHUk9VUCBCWSBpbmRleF9uYW1lIik7CiAgICAgICAgJHN0LT5leGVjdXRlKCk7JHJvdz0kc3QtPmZldGNoKFBETzo6RkVUQ0hfQVNTT0MpOwogICAgICAgIHJldHVybiBpc19hcnJheSgkcm93KSYmKHN0cmluZykoJHJvd1snY29sdW1uc19pbl9vcmRlciddPz8nJyk9PT0ncHJvZmVzb3JfaWQsc2VzaW9uX2lkJyYmKGludCkoJHJvd1snbm9uX3VuaXF1ZSddPz8xKT09PTA7CiAgICB9Y2F0Y2goVGhyb3dhYmxlICRlKXtyZXR1cm4gZmFsc2U7fQp9CgpmdW5jdGlvbiBoYWNoZV9zaGFya3lfbWVtYmVyX3RlYWNoZXJfYnlfd2hhdHNhcHAoUERPICRwZG8sc3RyaW5nICRjb250YWN0KTogYXJyYXkKewogICAgaWYoIWhhY2hlX3NoYXJreV9tZW1iZXJfc2NoZW1hX3JlYWR5KCRwZG8pfHwhaGFjaGVfc2hhcmt5X21lbWJlcl9jb3RlYWNoaW5nX3JlYWR5KCRwZG8pKXJldHVybiBbJ2ZvdW5kJz0+ZmFsc2UsJ3JlYXNvbic9PidzY2hlbWFfdW5hdmFpbGUnXTsKIiIiCnRleHQ9b25jZSh0ZXh0LG5lZWRsZSxyZXBsYWNlbWVudCwnY28tdGVhY2hpbmcgcmVhZGluZXNzIGhlbHBlcicpCm5lZWRsZTI9IiIiZnVuY3Rpb24gaGFjaGVfc2hhcmt5X21lbWJlcl9jYW5jZWxfdGVhY2hlcl9zZXNzaW9uKFBETyAkcGRvLHN0cmluZyAkdGVhY2hlcklkLHN0cmluZyAkc2Vzc2lvbklkLHN0cmluZyAkcmVhc29uLHN0cmluZyAkYWN0aW9uS2V5KTogYXJyYXkKewogICAgJHJlYXNvbj1wcmVnX3JlcGxhY2UoJy9cXHMrL3UnLCcgJyx0cmltKCRyZWFzb24pKT8/Jyc7aWYoJHJlYXNvbj09PScnfHxtYl9zdHJsZW4oJHJlYXNvbik+NTAwKXRocm93IG5ldyBIYWNoZVNoYXJreUJ1c2luZXNzRXhjZXB0aW9uKCdFbCBtb3Rpdm8gZXMgb2JsaWdhdG9yaW8geSBubyBwdWVkZSBleGNlZGVyIDUwMCBjYXJhY3RlcmVzLicsJ0lOVkFMSURfUkVBU09OJyw0MjIpOwoiIiIKcmVwbGFjZW1lbnQyPSIiImZ1bmN0aW9uIGhhY2hlX3NoYXJreV9tZW1iZXJfY2FuY2VsX3RlYWNoZXJfc2Vzc2lvbihQRE8gJHBkbyxzdHJpbmcgJHRlYWNoZXJJZCxzdHJpbmcgJHNlc3Npb25JZCxzdHJpbmcgJHJlYXNvbixzdHJpbmcgJGFjdGlvbktleSk6IGFycmF5CnsKICAgIGlmKCFoYWNoZV9zaGFya3lfbWVtYmVyX2NvdGVhY2hpbmdfcmVhZHkoJHBkbykpdGhyb3cgbmV3IEhhY2hlU2hhcmt5QnVzaW5lc3NFeGNlcHRpb24oJ0xhIG9wZXJhY2nDs24gZGUgcHJvZmVzb3JlcyB0b2RhdsOtYSBubyBlc3TDoSBsaXN0YS4nLCdURUFDSEVSX0NPVEVBQ0hJTkdfU0NIRU1BX1VOQVZBSUxBQkxFJyw1MDMpOwogICAgJHJlYXNvbj1wcmVnX3JlcGxhY2UoJy9cXHMrL3UnLCcgJyx0cmltKCRyZWFzb24pKT8/Jyc7aWYoJHJlYXNvbj09PScnfHxtYl9zdHJsZW4oJHJlYXNvbik+NTAwKXRocm93IG5ldyBIYWNoZVNoYXJreUJ1c2luZXNzRXhjZXB0aW9uKCdFbCBtb3Rpdm8gZXMgb2JsaWdhdG9yaW8geSBubyBwdWVkZSBleGNlZGVyIDUwMCBjYXJhY3RlcmVzLicsJ0lOVkFMSURfUkVBU09OJyw0MjIpOwoiIiIKdGV4dD1vbmNlKHRleHQsbmVlZGxlMixyZXBsYWNlbWVudDIsJ2NhbmNlbCByb3V0ZSByZWFkaW5lc3MgZ2F0ZScpCm9sZF9zdGF0dXM9IiRzdGF0dXM9IWVtcHR5KCRzWyd0ZWFjaGVyX2NhbmNlbF9pZCddKT8nTk8gQVNJU1RJUsOBUyc6KChzdHJpbmcpJHNbJ2VzdGFkbyddPT09J0NBTkNFTEFEQSc/J0NBTkNFTEFEQSc6KChpbnQpKCRzWydjZXJyYWRhJ10/PzApPT09MT8nY2VycmFkYSc6J3Byb2dyYW1hZGEnKSk7IgpuZXdfc3RhdHVzPSIkc3RhdHVzPShzdHJpbmcpJHNbJ2VzdGFkbyddPT09J0NBTkNFTEFEQSc/J0NBTkNFTEFEQSc6KCFlbXB0eSgkc1sndGVhY2hlcl9jYW5jZWxfaWQnXSk/J05PIEFTSVNUSVLDgVMnOigoaW50KSgkc1snY2VycmFkYSddPz8wKT09PTE/J2NlcnJhZGEnOidwcm9ncmFtYWRhJykpOyIKdGV4dD1vbmNlKHRleHQsb2xkX3N0YXR1cyxuZXdfc3RhdHVzLCdjYW5jZWxsZWQgc3RhdHVzIHByZWNlZGVuY2UnKQpwLndyaXRlX3RleHQodGV4dCkKCnA9UGF0aCgncHVibGljL3Byb2Zlc29yZXMucGhwJykKdGV4dD1wLnJlYWRfdGV4dCgpCm9sZD0iIiJsaXN0LnF1ZXJ5U2VsZWN0b3JBbGwoJ1tkYXRhLW9uXScpLmZvckVhY2goYj0+Yi5vbmNsaWNrPWFzeW5jKCk9Pntjb25zdCBzPWxpc3QucXVlcnlTZWxlY3RvcignW2RhdGEtc2VsPSInK2IuZGF0YXNldC5vbisnIl0nKTtpZighcy52YWx1ZSlyZXR1cm47dHJ5e2F3YWl0IHBvc3Qoe2FjY2lvbjonQVNTSUdOJyxwcm9mZXNvcl9pZDpiLmRhdGFzZXQub24saG9yYXJpb19pZDpzLnZhbHVlLGFjdGl2bzp0cnVlfSk7bm90ZSgnSG9yYXJpbyBhc2lnbmFkby4nKTthd2FpdCBsb2FkKCl9Y2F0Y2goZSl7bm90ZShlLm1lc3NhZ2UpfX0pOyIiIgpuZXc9IiIibGlzdC5xdWVyeVNlbGVjdG9yQWxsKCdbZGF0YS1vbl0nKS5mb3JFYWNoKGI9PmIub25jbGljaz1hc3luYygpPT57Y29uc3QgYm94PWIuY2xvc2VzdCgnLmFzc2lnbicpLHM9Ym94P2JveC5xdWVyeVNlbGVjdG9yKCdbZGF0YS1zZWxdJyk6bnVsbDtpZighcyl7bm90ZSgnTm8gcHVkZSBsb2NhbGl6YXIgZWwgc2VsZWN0b3IgZGUgaG9yYXJpby4gUmVjYXJnYSBsYSBww6FnaW5hIGUgaW50w6ludGFsbyBkZSBudWV2by4nKTtyZXR1cm59Y29uc3Qgc2NoZWR1bGU9U3RyaW5nKHMudmFsdWV8fCcnKS50cmltKCk7aWYoc2NoZWR1bGU9PT0nJyl7bm90ZSgnU2VsZWNjaW9uYSBwcmltZXJvIHVuYSBjbGFzZSB1IGhvcmFyaW8uJyk7cy5mb2N1cygpO3JldHVybn1jb25zdCBvcmlnaW5hbD1iLnRleHRDb250ZW50O2IuZGlzYWJsZWQ9dHJ1ZTtiLnRleHRDb250ZW50PSdBc2lnbmFuZG/igKYnO25vdGUoJ0FzaWduYW5kbyBob3Jhcmlv4oCmJyk7dHJ5e2F3YWl0IHBvc3Qoe2FjY2lvbjonQVNTSUdOJyxwcm9mZXNvcl9pZDpiLmRhdGFzZXQub24saG9yYXJpb19pZDpzY2hlZHVsZSxhY3Rpdm86dHJ1ZX0pO25vdGUoJ0hvcmFyaW8gYXNpZ25hZG8gY29ycmVjdGFtZW50ZS4nKTthd2FpdCBsb2FkKCl9Y2F0Y2goZSl7bm90ZShlLm1lc3NhZ2V8fCdObyBzZSBwdWRvIGFzaWduYXIgZWwgaG9yYXJpby4nKX1maW5hbGx5e2lmKGRvY3VtZW50LmJvZHkuY29udGFpbnMoYikpe2IuZGlzYWJsZWQ9ZmFsc2U7Yi50ZXh0Q29udGVudD1vcmlnaW5hbH19fSk7IiIiCnRleHQ9b25jZSh0ZXh0LG9sZCxuZXcsJ2Fzc2lnbiBidXR0b24gaGFuZGxlcicpCnRleHQ9dGV4dC5yZXBsYWNlKCc8b3B0aW9uIHZhbHVlPSIiPkFzaWduYXIgaG9yYXJpb+KApjwvb3B0aW9uPicsJzxvcHRpb24gdmFsdWU9IiI+U2VsZWNjaW9uYSB1bmEgY2xhc2UvaG9yYXJpb+KApjwvb3B0aW9uPicsMSkKcC53cml0ZV90ZXh0KHRleHQpCgpwPVBhdGgoJ3Rlc3RzL3NoYXJreS1tZW1iZXItb3BzLXJlZ3Jlc3Npb24ucGhwJykKdGV4dD1wLnJlYWRfdGV4dCgpCmFuY2hvcj0ibWVtYmVyX29rKHN0cl9jb250YWlucygkbWVtYmVyT3BzLFwiJ2NvZGUnPT4nU0VTU0lPTl9DQU5DRUxMRUQnXCIpLCdUaGUgY2xhc3MgbXVzdCBjYW5jZWwgb25seSB3aGVuIHRlYWNoZXIgY292ZXJhZ2UgcmVhY2hlcyB6ZXJvLicpO1xuIgpleHRyYT0iIiJtZW1iZXJfb2soc3RyX2NvbnRhaW5zKCRtZW1iZXJPcHMsJ2Z1bmN0aW9uIGhhY2hlX3NoYXJreV9tZW1iZXJfY290ZWFjaGluZ19yZWFkeScpLCdUZWFjaGVyIHJvdXRpbmcgbXVzdCBoYXZlIGFuIGV4cGxpY2l0IGNvLXRlYWNoaW5nIHJlYWRpbmVzcyBnYXRlLicpOwptZW1iZXJfb2soc3RyX2NvbnRhaW5zKCRtZW1iZXJPcHMsJ3VxX3Byb2Zlc29yX2NhbmNlbGFjaW9uX3Byb2Zlc29yX3Nlc2lvbicpJiZzdHJfY29udGFpbnMoJG1lbWJlck9wcywicHJvZmVzb3JfaWQsc2VzaW9uX2lkIiksJ1RlYWNoZXIgcm91dGluZyBtdXN0IHZlcmlmeSB0aGUgY29tcG9zaXRlIHByb2Zlc3Nvci9zZXNzaW9uIGluZGV4IGJlZm9yZSBhY2NlcHRpbmcgY28tdGVhY2hpbmcgb3BlcmF0aW9ucy4nKTsKbWVtYmVyX29rKHN0cl9jb250YWlucygkbWVtYmVyT3BzLCIkc3RhdHVzPShzdHJpbmcpJHNbJ2VzdGFkbyddPT09J0NBTkNFTEFEQSc/J0NBTkNFTEFEQSc6KCFlbXB0eSgkc1sndGVhY2hlcl9jYW5jZWxfaWQnXSkiKSwnQ2FuY2VsbGVkIGNsYXNzIHN0YXR1cyBtdXN0IHRha2UgcHJlY2VkZW5jZSBvdmVyIHRlYWNoZXItc3BlY2lmaWMgdW5hdmFpbGFiaWxpdHkuJyk7CiIiIgp0ZXh0PW9uY2UodGV4dCxhbmNob3IsYW5jaG9yK2V4dHJhLCdtZW1iZXIgUDIgcmVncmVzc2lvbiBhc3NlcnRpb25zJykKYW5jaG9yMj0ibWVtYmVyX29rKHN0cl9jb250YWlucygkcHJvZmVzc29yUGFnZSwndmFyaW9zIGhvcmFyaW9zJykmJnN0cl9jb250YWlucygkcHJvZmVzc29yUGFnZSwndmFyaW9zIHByb2ZlcycpLCdQcm9mZXNzb3IgVUkgbXVzdCBleHBsYWluIG1hbnktdG8tbWFueSBzY2hlZHVsZSBhc3NpZ25tZW50LicpO1xuIgpleHRyYTI9IiIibWVtYmVyX29rKHN0cl9jb250YWlucygkcHJvZmVzc29yUGFnZSwiYi5jbG9zZXN0KCcuYXNzaWduJykiKSwnUHJvZmVzc29yIGFzc2lnbm1lbnQgYnV0dG9uIG11c3QgcmVzb2x2ZSBpdHMgb3duIGFkamFjZW50IHNjaGVkdWxlIHNlbGVjdG9yLicpOwptZW1iZXJfb2soc3RyX2NvbnRhaW5zKCRwcm9mZXNzb3JQYWdlLCdTZWxlY2Npb25hIHByaW1lcm8gdW5hIGNsYXNlIHUgaG9yYXJpby4nKSwnUHJvZmVzc29yIGFzc2lnbm1lbnQgbXVzdCBuZXZlciBmYWlsIHNpbGVudGx5IHdoZW4gbm8gc2NoZWR1bGUgaXMgc2VsZWN0ZWQuJyk7Cm1lbWJlcl9vayhzdHJfY29udGFpbnMoJHByb2Zlc3NvclBhZ2UsImIudGV4dENvbnRlbnQ9J0FzaWduYW5kb+KApiciKSwnUHJvZmVzc29yIGFzc2lnbm1lbnQgbXVzdCBleHBvc2UgYW4gaW4tcHJvZ3Jlc3Mgc3RhdGUgYW5kIHByZXZlbnQgZHVwbGljYXRlIHRhcHMuJyk7CiIiIgp0ZXh0PW9uY2UodGV4dCxhbmNob3IyLGFuY2hvcjIrZXh0cmEyLCdwcm9mZXNzb3IgYXNzaWdubWVudCBVSSByZWdyZXNzaW9uIGFzc2VydGlvbnMnKQpwLndyaXRlX3RleHQodGV4dCkK' | base64 -d > /tmp/profesor_fix.py
+          python3 /tmp/profesor_fix.py
           php -l config/sharky-member-ops.php
           php -l public/profesores.php
           php tests/sharky-member-ops-regression.php
