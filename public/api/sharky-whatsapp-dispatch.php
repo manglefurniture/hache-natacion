@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../../config/rate-limit.php';
 require_once __DIR__.'/../../config/sharky-runtime.php';
 require_once __DIR__.'/../../config/sharky-deterministic-replies.php';
+require_once __DIR__.'/../../config/sharky-schedule-scope-guard.php';
 
 function hache_sharky_dispatcher_is_loopback_whatsapp(array $data): bool
 {
@@ -81,7 +82,9 @@ if(!is_array($data)||!hache_sharky_dispatcher_is_loopback_whatsapp($data)){
 
 $state=hache_sharky_dispatcher_state_from_history($data);
 $message=trim((string)($data['message']??''));
-$deterministic=$message!==''?hache_sharky_deterministic_reply($message,$state):null;
+$deterministicInput=hache_sharky_schedule_guard_canonicalize_venue_spacing($message);
+$deterministic=$message!==''?hache_sharky_deterministic_reply($deterministicInput,$state):null;
+if($deterministic===null&&$message!=='')$deterministic=hache_sharky_schedule_guard_reply($deterministicInput,$state);
 if(is_string($deterministic)&&trim($deterministic)!==''){
     $rate=security_rate_limit_record('sharky-internal-whatsapp','loopback',300,300);
     if(!$rate['allowed']){
@@ -94,10 +97,16 @@ if(is_string($deterministic)&&trim($deterministic)!==''){
 }
 
 $underway=hache_sharky_dispatcher_conversation_underway($state);
-ob_start(static function(string $buffer) use ($underway): string {
+ob_start(static function(string $buffer) use ($underway,$state,$message): string {
     $body=json_decode($buffer,true);
     if(!is_array($body)||($body['ok']??false)!==true||!isset($body['answer']))return $buffer;
     $answer=hache_sharky_dispatcher_clean_model_answer((string)$body['answer'],$underway);
+    $scoped=hache_sharky_schedule_guard_model_answer($answer,$state,$message);
+    if($scoped!==$answer){
+        $answer=$scoped;
+        $body['source']='deterministic_schedule_guard';
+        hache_sharky_metric_increment('guarded_schedule_scope');
+    }
     $responseIncomplete=(string)($body['response_status']??'completed')==='incomplete';
     if($responseIncomplete||hache_sharky_reply_looks_incomplete($answer)){
         $answer='No quiero dejarte una respuesta a medias. Dime de nuevo qué dato necesitas y te respondo completo.';
