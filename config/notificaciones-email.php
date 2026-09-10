@@ -77,8 +77,37 @@ function hache_construir_alerta_nueva_inscripcion(array $alumno,string $tipoIngr
     return ['subject'=>$subject,'body'=>$body];
 }
 
+function hache_notificar_nueva_inscripcion_whatsapp(array $alumno,array $detalle=[]): bool
+{
+    try{
+        require_once __DIR__.'/sharky-template-notifications.php';
+        $cfg=require __DIR__.'/database.php';
+        $pdo=new PDO(
+            "mysql:host={$cfg['host']};dbname={$cfg['dbname']};charset={$cfg['charset']}",
+            $cfg['user'],
+            $cfg['password'],
+            [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
+        );
+        $result=hache_sharky_notify_enrollment_confirmed($pdo,$alumno,$detalle);
+        if(($result['queued']??false)===true)return true;
+        $reason=(string)($result['reason']??'UNKNOWN');
+        if(!in_array($reason,['SHARKY_DISABLED','OUTBOX_UNAVAILABLE'],true)){
+            error_log('[notificaciones-inscripcion] WhatsApp de inscripción omitido: '.$reason);
+        }
+        return false;
+    }catch(Throwable $e){
+        error_log('[notificaciones-inscripcion] No se pudo preparar WhatsApp de inscripción: '.$e->getMessage());
+        return false;
+    }
+}
+
 function hache_notificar_nueva_inscripcion(array $alumno,string $tipoIngreso,array $detalle=[]): bool
 {
+    // La confirmación por WhatsApp es independiente de la alerta interna por correo.
+    // Se ejecuta aquí porque este notificador canónico ya se dispara después del
+    // commit tanto en el registro web como en las demás rutas de alta.
+    hache_notificar_nueva_inscripcion_whatsapp($alumno,$detalle);
+
     $to=trim((string)(getenv('HACHE_ALERT_EMAIL_TO')?:''));
     if($to===''){
         error_log('[notificaciones-email] HACHE_ALERT_EMAIL_TO no está configurado; alerta omitida.');
