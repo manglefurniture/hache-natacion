@@ -115,11 +115,13 @@ batch_context_ok(is_array($sameVenue)&&($sameVenue[1]['kind']??'')==='commercial
 
 $regularState=$venueState;
 $regularState['commercial_context']['program']='regular';
+$regularState['commercial_context']['swim_level']='swims';
+$regularState['commercial_context']['background']='formal';
 $regularState['commercial_context']['sede_clave']='PALAPAS';
 $regularChange=hache_sharky_whatsapp_historical_venue_reselection($regularState,[
     'interactive_id'=>'sede:monteverde','text'=>'Colegio Monteverde',
 ]);
-batch_context_ok(is_array($regularChange)&&($regularChange[0]['commercial_context']['program']??'')==='regular','Regular-program venue correction must preserve the regular program.');
+batch_context_ok(is_array($regularChange)&&($regularChange[0]['commercial_context']['program']??'')==='regular','Regular-program venue correction must preserve the regular program for a formally trained swimmer.');
 $regularButtons=array_map(static fn(array $button):string=>(string)($button['id']??''),(array)($regularChange[1]['ui']['buttons']??[]));
 batch_context_ok(in_array('action:commercial_schedules',$regularButtons,true)&&in_array('action:commercial_price',$regularButtons,true)&&!in_array('action:register_intensive',$regularButtons,true),'Regular venue correction must offer schedule and price without an intensive-registration action.');
 
@@ -150,10 +152,10 @@ batch_context_ok(!str_contains($source,'hache_sharky_whatsapp_batch_answer_after
 batch_context_ok(str_contains($source,"if(\$groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock"),'Group messages must remain outside direct-chat batching.');
 batch_context_ok(str_contains($source,'hache_sharky_whatsapp_guarded_historical_venue_reselection($deferredState,$event')&&str_contains($source,'hache_sharky_whatsapp_underage_gate($state,$event,$minAge)'),'Historical venue correction must pass through the minimum-age guard before stale-button handling.');
 
-$pendingReadPos=strpos($dbSource,"\$pending=\$GLOBALS['hache_sharky_db_state_pending']??null");
+$pendingReadPos=strpos($dbSource,"$pending=$GLOBALS['hache_sharky_db_state_pending']??null");
 $readyCheckPos=strpos($dbSource,'if(!hache_sharky_db_state_ready($pdo))');
 batch_context_ok($pendingReadPos!==false&&$readyCheckPos!==false&&$pendingReadPos<$readyCheckPos,'Deferred state load must read its own pending write before durable DB reload.');
-batch_context_ok(str_contains($dbSource,"(string)(\$pending['contact']??'')===\$contact")&&str_contains($dbSource,"is_array(\$pending['state']??null)"),'Deferred read-your-writes must be scoped to the same contact and a valid state array.');
+batch_context_ok(str_contains($dbSource,"(string)($pending['contact']??'')===$contact")&&str_contains($dbSource,"is_array($pending['state']??null)"),'Deferred read-your-writes must be scoped to the same contact and a valid state array.');
 
 // Manual takeover and resume are a control-plane pause, not a memory reset.
 $resumeStart=strpos($runtimeSource,'function hache_sharky_takeover_resume_hash');
@@ -161,8 +163,8 @@ $resumeEnd=$resumeStart===false?false:strpos($runtimeSource,"\nfunction ",$resum
 $resumeBody=$resumeStart===false?'':substr($runtimeSource,$resumeStart,$resumeEnd===false?null:$resumeEnd-$resumeStart);
 batch_context_ok($resumeStart!==false&&str_contains($resumeBody,'@unlink($path)'),'Resume must only remove the takeover marker.');
 batch_context_ok(!str_contains($resumeBody,'sharky_conversation_state')&&!str_contains($resumeBody,'hache_sharky_db_state_'),'Resume must never delete or rewrite Sharky conversation memory.');
-$echoStart=strpos($labSource,"if(\$kind==='echo'){");
-$echoEnd=$echoStart===false?false:strpos($labSource,"\n\n    \$contact=preg_replace",$echoStart);
+$echoStart=strpos($labSource,"if($kind==='echo'){");
+$echoEnd=$echoStart===false?false:strpos($labSource,"\n\n    $contact=preg_replace",$echoStart);
 $echoBody=$echoStart===false?'':substr($labSource,$echoStart,$echoEnd===false?null:$echoEnd-$echoStart);
 batch_context_ok($echoStart!==false&&str_contains($echoBody,'hache_sharky_takeover_mark($contact'),'A manual WhatsApp echo must activate takeover.');
 batch_context_ok(!str_contains($echoBody,'hache_sharky_db_state_save')&&!str_contains($echoBody,'hache_sharky_orchestrator_clear_flow'),'A manual human message must not clear or overwrite the saved conversational state that Sharky will resume later.');
