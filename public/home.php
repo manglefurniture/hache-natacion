@@ -32,6 +32,7 @@ declare(strict_types=1);
   <link rel="icon" href="/assets/icons/hache-icon.svg" type="image/svg+xml">
   <link rel="preload" as="image" href="/assets/seo/clases-natacion-adultos-cancun.webp" type="image/webp" fetchpriority="high">
   <link rel="stylesheet" href="/assets/home-v1.css?v=20260822-seo1">
+  <link rel="stylesheet" href="/assets/home-logo-2026.css?v=20260910-1">
   <link rel="stylesheet" href="/assets/historias-publicas.css?v=20260828-1">
   <link rel="stylesheet" href="/assets/hachi.css?v=20260818-wa2">
 
@@ -187,8 +188,7 @@ declare(strict_types=1);
   </picture>
   <nav class="topbar" aria-label="Navegación principal">
     <a class="brand" href="#inicio" aria-label="Hache Natación, inicio">
-      <span class="brand-mark">H</span>
-      <span class="brand-name">H NATACIÓN</span>
+      <img class="brand-logo" src="/assets/brand/hache-logo-2026.webp" alt="" width="200" height="136" decoding="async">
     </a>
     <div class="desktop-nav">
       <a href="#programas">Programas</a>

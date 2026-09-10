@@ -1,0 +1,22 @@
+/* Hache Natación 2026 — logo de marca en la navegación de la portada. */
+.topbar .brand {
+  flex: 0 0 auto;
+  gap: 0;
+}
+
+.topbar .brand-logo {
+  display: block;
+  width: auto;
+  height: 64px;
+}
+
+/* La marca nueva es más alta que el lockup tipográfico anterior. */
+.mobile-menu {
+  top: 102px;
+}
+
+@media (min-width: 760px) {
+  .topbar .brand-logo {
+    height: 68px;
+  }
+}
