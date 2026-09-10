@@ -28,9 +28,18 @@ function hache_sharky_member_schema_ready(PDO $pdo): bool
     }catch(Throwable $e){return false;}
 }
 
+function hache_sharky_member_coteaching_ready(PDO $pdo): bool
+{
+    try{
+        $st=$pdo->prepare("SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') columns_in_order,MIN(non_unique) non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='profesor_cancelaciones' AND index_name='uq_profesor_cancelacion_profesor_sesion' GROUP BY index_name");
+        $st->execute();$row=$st->fetch(PDO::FETCH_ASSOC);
+        return is_array($row)&&(string)($row['columns_in_order']??'')==='profesor_id,sesion_id'&&(int)($row['non_unique']??1)===0;
+    }catch(Throwable $e){return false;}
+}
+
 function hache_sharky_member_teacher_by_whatsapp(PDO $pdo,string $contact): array
 {
-    if(!hache_sharky_member_schema_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
+    if(!hache_sharky_member_schema_ready($pdo)||!hache_sharky_member_coteaching_ready($pdo))return ['found'=>false,'reason'=>'schema_unavailable'];
     $phone=hache_sharky_member_phone($contact);if($phone===null)return ['found'=>false,'reason'=>'invalid_phone'];
     $st=$pdo->prepare("SELECT id,nombre,whatsapp,correo,activo FROM profesores WHERE whatsapp=:w LIMIT 2");
     $st->execute([':w'=>$phone]);$rows=$st->fetchAll(PDO::FETCH_ASSOC);
@@ -204,6 +213,7 @@ function hache_sharky_member_teacher_sessions(PDO $pdo,string $teacherId,string 
 
 function hache_sharky_member_cancel_teacher_session(PDO $pdo,string $teacherId,string $sessionId,string $reason,string $actionKey): array
 {
+    if(!hache_sharky_member_coteaching_ready($pdo))throw new HacheSharkyBusinessException('La operación de profesores todavía no está lista.','TEACHER_COTEACHING_SCHEMA_UNAVAILABLE',503);
     $reason=preg_replace('/\s+/u',' ',trim($reason))??'';if($reason===''||mb_strlen($reason)>500)throw new HacheSharkyBusinessException('El motivo es obligatorio y no puede exceder 500 caracteres.','INVALID_REASON',422);
     $actor=hache_sharky_business_actor_id($pdo);
     $pdo->beginTransaction();
@@ -324,7 +334,7 @@ function hache_sharky_member_process_event(PDO $pdo,array $event,array $business
             if(str_starts_with($id,'member:tc:')){$sessionId=substr($id,10);$sessions=hache_sharky_member_teacher_sessions($pdo,$teacherId,$today,(new DateTimeImmutable($today))->modify('+7 days')->format('Y-m-d'));$match=null;foreach($sessions as $s)if((string)$s['session_id']===$sessionId&&(int)($s['cerrada']??0)===0&&empty($s['teacher_cancel_id'])){$match=$s;break;}if(!$match){$payload=hache_sharky_whatsapp_text_payload($contact,'Esa clase ya no está disponible entre tus turnos activos.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-scope-miss');}$state=hache_sharky_member_set_flow($state,['name'=>'teacher_cancel','step'=>'reason','teacher_id'=>$teacherId,'session_id'=>$sessionId],$now);$payload=hache_sharky_whatsapp_text_payload($contact,'Cuéntame brevemente por qué no podrás asistir.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-reason');}
             $to=(new DateTimeImmutable($today))->modify('+7 days')->format('Y-m-d');$sessions=hache_sharky_member_teacher_sessions($pdo,$teacherId,$today,$to);
             if($intent==='teacher_cancel'){$rows=[];foreach($sessions as $s){if((string)$s['estado']==='CANCELADA'||(int)($s['cerrada']??0)===1||!empty($s['teacher_cancel_id']))continue;$rows[]=['id'=>'member:tc:'.(string)$s['session_id'],'title'=>date('d/m',strtotime((string)$s['fecha'])).' '.substr((string)$s['hora_inicio'],0,5),'description'=>(string)$s['sede_nombre'].' · '.substr((string)$s['hora_inicio'],0,5).'–'.substr((string)$s['hora_fin'],0,5)];}$payload=$rows?hache_sharky_member_list($contact,'¿A cuál clase no podrás asistir? Solo te muestro tus turnos asignados.','Elegir clase',$rows):hache_sharky_whatsapp_text_payload($contact,'No encuentro clases pendientes de confirmar contigo en los próximos 7 días.');return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-cancel-list');}
-            $todayRows=array_values(array_filter($sessions,static fn(array $s):bool=>(string)$s['fecha']===$today));$lines=[];foreach($todayRows as $s){$status=!empty($s['teacher_cancel_id'])?'NO ASISTIRÁS':((string)$s['estado']==='CANCELADA'?'CANCELADA':((int)($s['cerrada']??0)===1?'cerrada':'programada'));$lines[]=substr((string)$s['hora_inicio'],0,5).' · '.(string)$s['sede_nombre'].' · '.$status;}$body='¡Hola, '.(preg_split('/\s+/u',$name)[0]??$name).'! 👋'.($lines?"\n\nHoy tienes:\n• ".implode("\n• ",$lines):' Hoy no encuentro sesiones asignadas a ti.');$payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:teacher_agenda','title'=>'Mi agenda'],['id'=>'member:teacher_cancel','title'=>'No podré asistir']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-home');
+            $todayRows=array_values(array_filter($sessions,static fn(array $s):bool=>(string)$s['fecha']===$today));$lines=[];foreach($todayRows as $s){$status=(string)$s['estado']==='CANCELADA'?'CANCELADA':(!empty($s['teacher_cancel_id'])?'NO ASISTIRÁS':((int)($s['cerrada']??0)===1?'cerrada':'programada'));$lines[]=substr((string)$s['hora_inicio'],0,5).' · '.(string)$s['sede_nombre'].' · '.$status;}$body='¡Hola, '.(preg_split('/\s+/u',$name)[0]??$name).'! 👋'.($lines?"\n\nHoy tienes:\n• ".implode("\n• ",$lines):' Hoy no encuentro sesiones asignadas a ti.');$payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:teacher_agenda','title'=>'Mi agenda'],['id'=>'member:teacher_cancel','title'=>'No podré asistir']]);return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'teacher-home');
         }
 
         if(($student['found']??false)===true){$studentId=(string)$student['identity']['student_id'];
