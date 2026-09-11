@@ -42,7 +42,11 @@ jobs:
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
           set -Eeuo pipefail
-          ssh \
+          token="$(openssl rand -hex 32)"
+          test "${#token}" = "64"
+          token_path="/tmp/hache-sharky-backfill-token-${GITHUB_RUN_ID}"
+
+          printf '%s' "$token" | ssh \
             -p "$DEPLOY_PORT" \
             -i "$HOME/.ssh/id_ed25519" \
             -o IdentitiesOnly=yes \
@@ -50,4 +54,39 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd /var/www/hache-natacion && php bin/sharky-reengagement-backfill-dry-run.php --dry-run"
+            "umask 022; cat > '$token_path'; chmod 644 '$token_path'"
+
+          cleanup_token() {
+            ssh \
+              -p "$DEPLOY_PORT" \
+              -i "$HOME/.ssh/id_ed25519" \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "rm -f '$token_path'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_token EXIT
+
+          result="$(ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Backfill-Run-Id: $GITHUB_RUN_ID' --header 'X-Hache-Backfill-Token: $token' https://hnatacion.com/api/sharky-reengagement-backfill-dry-run.php")"
+
+          cleanup_token
+          trap - EXIT
+          unset token
+
+          RESULT="$result" php -r '
+            $p=json_decode((string)getenv("RESULT"),true,512,JSON_THROW_ON_ERROR);
+            if(($p["ok"]??false)!==true||($p["mode"]??"")!=="dry-run"||($p["privacy"]??"")!=="aggregate_counts_only"){
+              fwrite(STDERR,"invalid dry-run response\n"); exit(1);
+            }
+            echo json_encode($p,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR),"\n";
+          '
