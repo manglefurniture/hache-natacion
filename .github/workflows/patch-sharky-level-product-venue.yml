@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: '22'
       - name: Apply narrow Sharky patch
-        run: python .github/scripts/patch_sharky_priority.py
+        run: |
+          python .github/scripts/patch_sharky_priority.py
+          python .github/scripts/patch_sharky_priority_tests.py
       - name: Syntax adapter
         run: php -l config/sharky-whatsapp-adapter.php
       - name: Syntax commercial memory
@@ -50,7 +52,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add config/sharky-whatsapp-adapter.php config/sharky-commercial-memory.php config/sharky-product-boundary-guard.php config/sharky-post-pr72.php docs/SHARKY-POSITIVE-PATTERNS.md tests/sharky-pr162-review-regression.php tests/sharky-product-boundary-regression.php package.json
+          git add config/sharky-whatsapp-adapter.php config/sharky-commercial-memory.php config/sharky-product-boundary-guard.php config/sharky-post-pr72.php docs/SHARKY-POSITIVE-PATTERNS.md tests/sharky-pr162-review-regression.php tests/sharky-product-boundary-regression.php tests/sharky-guided-onboarding-regression.php package.json
           git diff --cached --check
           git commit -m "Enforce Sharky level product and venue priorities"
           git push origin HEAD:fix/sharky-level-product-venue-priority
