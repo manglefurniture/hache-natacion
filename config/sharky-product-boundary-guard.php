@@ -138,6 +138,8 @@ function hache_sharky_product_boundary_sanitize_state(array $state,string $userT
 {
     if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
     $c=&$state['commercial_context'];
+    $currentNoFormal=$userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText);
+    if($currentNoFormal)$c['background']='no_formal';
     if(($c['swim_level']??null)==='swims'&&($c['background']??null)==='formal'){
         $c['recommended_program']='regular';
         $c['program']='regular';
@@ -145,7 +147,6 @@ function hache_sharky_product_boundary_sanitize_state(array $state,string $userT
         return $state;
     }
     if(!hache_sharky_product_boundary_regular_restricted($state,$userText))return $state;
-    if($userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText))$c['background']='no_formal';
     $c['recommended_program']='intensive';
     $c['program']='intensive';
     foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($c[$key]);

@@ -58,6 +58,23 @@ priority_ok(($beginner['flow']['data']['venue_proposal']??null)==='MONTEVERDE','
 priority_ok(str_contains((string)($beginnerDecision['message']??''),'Te propongo primero Colegio Monteverde'),'Venue copy must explicitly propose Monteverde first.');
 priority_ok(array_column($beginnerDecision['ui']['buttons']??[],'id')===['sede:monteverde','sede:palapas'],'Venue proposal must keep Palapas as the immediate alternative.');
 
+$staleRegular=$fresh;
+$staleRegular['commercial_context']=array_replace($staleRegular['commercial_context'],[
+    'program'=>'regular','recommended_program'=>'regular','background'=>'formal','plan_id'=>'r3','plan_name'=>'Regular 3','sessions_per_week'=>3,'plan_price'=>1000,
+]);
+$staleRegular=hache_sharky_orchestrator_flow($staleRegular,'qualify_prospect','swim',[],$now+5);
+[$staleBeginner,$staleBeginnerDecision]=hache_sharky_whatsapp_qualification_input($pdo,$staleRegular,[
+    'text'=>'Desde cero','interactive_id'=>'qualify:beginner',
+],$now+6,12);
+priority_ok(($staleBeginner['commercial_context']['swim_level']??null)==='beginner','A new beginner selection must become authoritative even over stale pre-qualification context.');
+priority_ok(($staleBeginner['commercial_context']['program']??null)==='intensive','A beginner selection must overwrite a stale regular program before advancing.');
+priority_ok(($staleBeginner['commercial_context']['recommended_program']??null)==='intensive','A beginner selection must overwrite a stale regular recommendation.');
+priority_ok(!isset($staleBeginner['commercial_context']['background']),'A beginner selection must invalidate stale formal-history context.');
+priority_ok(!isset($staleBeginner['commercial_context']['plan_id']),'A beginner selection must discard stale regular-plan state.');
+priority_ok(($staleBeginner['flow']['step']??null)==='sede','Repaired beginner state must continue only to venue selection.');
+priority_ok(($staleBeginner['flow']['data']['venue_proposal']??null)==='MONTEVERDE','Repaired beginner state must retain the Monteverde-first venue rule.');
+priority_ok(array_column($staleBeginnerDecision['ui']['buttons']??[],'id')===['sede:monteverde','sede:palapas'],'Repaired beginner state must expose only venue controls, never regular-product continuation.');
+
 [$palapas,$palapasDecision]=hache_sharky_whatsapp_qualification_input($pdo,$beginner,[
     'text'=>'No','interactive_id'=>'',
 ],$now+6,12);

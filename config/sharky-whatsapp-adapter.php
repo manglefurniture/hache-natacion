@@ -195,7 +195,12 @@ function hache_sharky_whatsapp_apply_swim_level_choice(array $state,string $leve
 {
     if(!in_array($level,['beginner','swims'],true))return $state;
     $state['commercial_context']['swim_level']=$level;
-    if($level==='beginner'&&($state['commercial_context']['program']??null)===null)$state['commercial_context']['program']='intensive';
+    if($level==='beginner'){
+        $state['commercial_context']['program']='intensive';
+        $state['commercial_context']['recommended_program']='intensive';
+        unset($state['commercial_context']['background']);
+        foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($state['commercial_context'][$key]);
+    }
     return $state;
 }
 

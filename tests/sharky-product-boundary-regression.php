@@ -79,6 +79,18 @@ $formalClean=hache_sharky_product_boundary_sanitize_state($formal);
 product_boundary_ok(($formalClean['commercial_context']['program']??null)==='regular','Formal swimmer state must canonicalize to regular classes automatically.');
 product_boundary_ok(($formalClean['commercial_context']['recommended_program']??null)==='regular','Formal swimmer recommendation must canonicalize to regular classes.');
 
+$staleFormal=$formal;
+$staleFormal['commercial_context']=array_replace($staleFormal['commercial_context'],[
+    'program'=>'regular','recommended_program'=>'regular','plan_id'=>'r3','plan_name'=>'Regular 3','sessions_per_week'=>3,'plan_price'=>1000,
+]);
+$staleFormal=hache_sharky_product_boundary_sanitize_state($staleFormal,'Nado un poco pero nunca he tomado clases');
+product_boundary_ok(($staleFormal['commercial_context']['background']??null)==='no_formal','Current no-formal evidence must overwrite stale formal history in durable state.');
+product_boundary_ok(($staleFormal['commercial_context']['program']??null)==='intensive','Current no-formal evidence must persist the intensive restriction instead of returning early as regular.');
+product_boundary_ok(($staleFormal['commercial_context']['recommended_program']??null)==='intensive','Current no-formal evidence must persist the intensive recommendation.');
+product_boundary_ok(!isset($staleFormal['commercial_context']['plan_id']),'Current no-formal evidence must discard stale regular-plan state.');
+$staleFormalFollowup=hache_sharky_product_boundary_sanitize_state($staleFormal,'¿Qué planes hay?');
+product_boundary_ok(($staleFormalFollowup['commercial_context']['program']??null)==='intensive','A later turn without repeated contradiction must remain intensive after current no-formal evidence was persisted.');
+
 $dirty=$beginner;
 $dirty['commercial_context']=array_replace($dirty['commercial_context'],[
     'program'=>'regular','plan_id'=>'r3','plan_name'=>'Regular 3','sessions_per_week'=>3,'plan_price'=>1000,
