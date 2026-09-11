@@ -48,14 +48,9 @@ function hache_sharky_product_boundary_no_formal_signal(string $text): bool
     $t=hache_sharky_product_boundary_normalize($text);
     if($t==='')return false;
 
-    // Explicitly names swimming/formal instruction anywhere in the sentence.
     if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?\s+de\s+natacion\b/u',$t)===1)return true;
     if(preg_match('/\b(?:sin|ninguna?)\s+clases?(?:\s+formales?)?\s+(?:de\s+)?natacion\b/u',$t)===1)return true;
 
-    // A bare "nunca/no he tomado clases" is accepted when it closes the
-    // utterance, explicitly says "antes/formales", or is paired with a clear
-    // swimming-context statement in the same message. Local attendance/schedule
-    // qualifiers still win and prevent it from becoming lifetime history.
     $bareNoClasses=preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?\b/u',$t)===1;
     if($bareNoClasses){
         $localQualifier=preg_match('/\bclases?\s+(?:esta\s+semana|este\s+(?:mes|ano)|hoy|ayer|ultimamente|en\s+la\s+(?:manana|tarde|noche)|por\s+la\s+(?:manana|tarde|noche))\b/u',$t)===1;
@@ -77,12 +72,6 @@ function hache_sharky_product_boundary_regular_restricted(array $state,string $u
     return $userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText);
 }
 
-/**
- * Regular classes require affirmative evidence of formal prior instruction.
- * Missing qualification is therefore pending, including a brand-new prospect
- * with an empty commercial context. Restricted states are handled by the harder
- * gate before this one; this function covers the not-yet-proven case.
- */
 function hache_sharky_product_boundary_regular_pending_background(array $state): bool
 {
     $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
@@ -102,6 +91,12 @@ function hache_sharky_product_boundary_intensive_context(array $state): bool
     return (string)($c['entry_interest']??'')==='intensive';
 }
 
+function hache_sharky_product_boundary_user_requests_regular(string $text): bool
+{
+    return hache_sharky_product_boundary_explicit_regular_choice($text)
+        || hache_sharky_product_boundary_weekly_frequency($text)!==null;
+}
+
 function hache_sharky_product_boundary_human_exception_message(): string
 {
     return 'Por lo que me dices, las clases regulares no son una opción que yo pueda autorizar automáticamente. Si estás empezando desde cero o no has tomado clases formales de natación, en Hache te orientamos primero al curso intensivo de 3 semanas, lunes a viernes. Si quieres valorar una excepción para clases regulares, esa decisión debe revisarla una persona del equipo.';
@@ -110,6 +105,24 @@ function hache_sharky_product_boundary_human_exception_message(): string
 function hache_sharky_product_boundary_background_question(): string
 {
     return 'Antes de ofrecerte clases regulares necesito confirmar algo: ¿has tomado clases formales de natación con un profesor o entrenador? Si no has tomado clases formales, el camino automático es el curso intensivo.';
+}
+
+function hache_sharky_product_boundary_intensive_leak_recovery(array $state): string
+{
+    $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $level=(string)($c['swim_level']??'');
+    $background=(string)($c['background']??'');
+
+    if($level===''){
+        return 'Veo que llegaste por el curso intensivo. Para orientarte bien: ¿ya sabes nadar o estás empezando desde cero?';
+    }
+    if($level==='swims'&&$background===''){
+        return 'Para orientarte bien sin mezclar productos: ¿has tomado clases formales de natación con un profesor o entrenador, o aprendiste por tu cuenta?';
+    }
+    if($level==='beginner'||in_array($background,['self_taught','no_formal'],true)){
+        return 'Por lo que ya me contaste, seguimos con el curso intensivo. No voy a cambiarte a clases regulares por una referencia ambigua.';
+    }
+    return 'Seguimos con el curso intensivo como producto activo. Si quieres cambiar a clases regulares, dímelo de forma explícita y reviso si aplica.';
 }
 
 function hache_sharky_product_boundary_regular_offer(string $answer): bool
@@ -157,7 +170,21 @@ function hache_sharky_product_boundary_reply(string $text,array $state): ?string
 function hache_sharky_product_boundary_model_answer(string $answer,array $state,string $userText=''): string
 {
     if(!hache_sharky_product_boundary_regular_offer($answer))return $answer;
-    if(hache_sharky_product_boundary_regular_restricted($state,$userText))return hache_sharky_product_boundary_human_exception_message();
-    if(hache_sharky_product_boundary_regular_pending_background($state))return hache_sharky_product_boundary_background_question();
+
+    $userRequestsRegular=hache_sharky_product_boundary_user_requests_regular($userText);
+    $restricted=hache_sharky_product_boundary_regular_restricted($state,$userText);
+    $pending=hache_sharky_product_boundary_regular_pending_background($state);
+
+    // A model-written regular mention must never manufacture a product switch.
+    // Human exception is only for a real user request for regular classes.
+    if(hache_sharky_product_boundary_intensive_context($state)&&!$userRequestsRegular){
+        return hache_sharky_product_boundary_intensive_leak_recovery($state);
+    }
+    if($restricted){
+        return $userRequestsRegular
+            ?hache_sharky_product_boundary_human_exception_message()
+            :hache_sharky_product_boundary_intensive_leak_recovery($state);
+    }
+    if($pending)return hache_sharky_product_boundary_background_question();
     return $answer;
 }
