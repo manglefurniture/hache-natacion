@@ -47,7 +47,9 @@ foreach([
     'Nunca he tomado clases en la mañana',
 ] as $text){
     product_boundary_ok(!hache_sharky_product_boundary_no_formal_signal($text),'Local schedule/attendance wording must not overwrite formal training history: '.$text);
+    product_boundary_ok(hache_sharky_commercial_background_choice($text)===null,'Commercial memory must also ignore local schedule/attendance wording: '.$text);
 }
+product_boundary_ok(hache_sharky_commercial_background_choice('He nadado un poco pero nunca he tomado clases')==='no_formal','Commercial memory must capture a genuine no-formal training statement.');
 
 product_boundary_ok(hache_sharky_product_boundary_regular_restricted($beginner),'A beginner is never auto-eligible for regular classes.');
 product_boundary_ok(hache_sharky_product_boundary_regular_restricted($noFormal),'A swimmer without formal lessons is never auto-eligible for regular classes.');
@@ -82,6 +84,10 @@ $clean=hache_sharky_product_boundary_sanitize_state($dirty);
 product_boundary_ok(($clean['commercial_context']['program']??null)==='intensive','A contaminated beginner state must be forced back to intensive.');
 product_boundary_ok(($clean['commercial_context']['recommended_program']??null)==='intensive','The intensive recommendation must remain canonical for beginners.');
 foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)product_boundary_ok(!array_key_exists($key,$clean['commercial_context']),'Regular-only state must be removed from a restricted prospect: '.$key);
+
+$cleanIntensive=$beginner;unset($cleanIntensive['commercial_context']['recommended_program']);
+$cleanIntensiveAfter=hache_sharky_commercial_force_intensive_eligibility($cleanIntensive);
+product_boundary_ok(!isset($cleanIntensiveAfter['commercial_context']['recommended_program']),'A harmless turn must not add recommendation memory to an already-confirmed intensive state.');
 
 $modelRegular="Clases regulares:\n• 3 clases por semana: $1000 MXN\n• 5 clases por semana: $1200 MXN";
 $guarded=hache_sharky_product_boundary_model_answer($modelRegular,$beginner,'Precio de las clases')??'';
