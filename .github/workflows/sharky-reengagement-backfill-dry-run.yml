@@ -50,4 +50,4 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "sudo -u www-data php /var/www/hache-natacion/bin/sharky-reengagement-backfill-dry-run.php --dry-run"
+            "cd /var/www/hache-natacion && php bin/sharky-reengagement-backfill-dry-run.php --dry-run"
