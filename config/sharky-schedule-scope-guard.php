@@ -208,12 +208,12 @@ function hache_sharky_schedule_guard_render_verified(array $programs,array $venu
 function hache_sharky_schedule_guard_scoped_reply(string $text,array $state,?callable $scheduleLoader=null): ?string
 {
     $commercial=hache_sharky_deterministic_commercial($state);if($commercial===null)return null;
-    if(!hache_sharky_deterministic_schedule_request($text))return null;
+    $daypart=hache_sharky_schedule_guard_daypart($text);
+    if(!hache_sharky_deterministic_schedule_request($text)&&$daypart===null)return null;
     $venues=hache_sharky_schedule_guard_requested_venues($text,$state);
     if($venues===[])$venues=[$commercial['sede']];
     $programs=hache_sharky_schedule_guard_requested_programs($text,$commercial['program']);
     if($programs===[])$programs=[$commercial['program']];
-    $daypart=hache_sharky_schedule_guard_daypart($text);
 
     // Plain "horarios" for the active product/sede is already handled by the
     // generic deterministic reply. This guard owns only a narrower scope:
@@ -257,9 +257,11 @@ function hache_sharky_schedule_guard_reply(string $text,array $state): ?string
 function hache_sharky_schedule_guard_model_answer(string $answer,array $state,string $userText='',?callable $scheduleLoader=null): string
 {
     $commercial=hache_sharky_deterministic_commercial($state);if($commercial===null)return $answer;
+    $daypart=hache_sharky_schedule_guard_daypart($userText);
     $scheduleLike=hache_sharky_schedule_guard_answer_is_schedule_like($answer)
         || hache_sharky_deterministic_schedule_request($userText)
-        || hache_sharky_deterministic_time_range($userText)!==null;
+        || hache_sharky_deterministic_time_range($userText)!==null
+        || $daypart!==null;
     if(!$scheduleLike)return $answer;
 
     $loader=$scheduleLoader;
@@ -273,7 +275,6 @@ function hache_sharky_schedule_guard_model_answer(string $answer,array $state,st
     if($programs===[])$programs=[$commercial['program']];
     $venues=hache_sharky_schedule_guard_requested_venues($userText,$state);
     if($venues===[])$venues=[$commercial['sede']];
-    $daypart=hache_sharky_schedule_guard_daypart($userText);
 
     $verified=[];
     try{
