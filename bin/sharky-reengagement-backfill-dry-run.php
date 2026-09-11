@@ -8,42 +8,39 @@ require_once __DIR__.'/../config/sharky-inbox.php';
 require_once __DIR__.'/../config/sharky-contact-book.php';
 require_once __DIR__.'/../config/sharky-followup.php';
 
-if (PHP_SAPI !== 'cli') {
-    fwrite(STDERR, "CLI only\n");
-    exit(2);
-}
+/**
+ * Read-only retrospective scan for prospects that missed the 48h re-engagement
+ * because their original conversation predated the feature cutover.
+ *
+ * @return array<string,mixed>
+ */
+function hache_sharky_reengagement_backfill_dry_run(?PDO $pdo=null, ?int $now=null): array
+{
+    $now ??= time();
+    $minAge = 48 * 3600;
+    $maxAge = 72 * 3600;
+    $cutover = (new DateTimeImmutable('2026-09-10 13:52:26', new DateTimeZone('America/Cancun')))->getTimestamp();
 
-if (!in_array('--dry-run', $argv, true)) {
-    fwrite(STDERR, "This command is read-only and requires --dry-run\n");
-    exit(2);
-}
+    $stats = [
+        'mode' => 'dry-run',
+        'window_hours' => ['min' => 48, 'max' => 72],
+        'feature_cutover_local' => '2026-09-10 13:52:26 America/Cancun',
+        'stage2_sent_contacts' => 0,
+        'eligible' => 0,
+        'excluded' => [
+            'decrypt_failed' => 0,
+            'invalid_contact' => 0,
+            'outside_window' => 0,
+            'covered_by_current_rule' => 0,
+            'not_current_prospect' => 0,
+            'registered' => 0,
+            'inbound_history_unavailable' => 0,
+            'replied_after_original_turn' => 0,
+        ],
+        'privacy' => 'aggregate_counts_only',
+        'generated_at_utc' => gmdate('c', $now),
+    ];
 
-$now = time();
-$minAge = 48 * 3600;
-$maxAge = 72 * 3600;
-$cutover = (new DateTimeImmutable('2026-09-10 13:52:26', new DateTimeZone('America/Cancun')))->getTimestamp();
-
-$stats = [
-    'mode' => 'dry-run',
-    'window_hours' => ['min' => 48, 'max' => 72],
-    'feature_cutover_local' => '2026-09-10 13:52:26 America/Cancun',
-    'stage2_sent_contacts' => 0,
-    'eligible' => 0,
-    'excluded' => [
-        'decrypt_failed' => 0,
-        'invalid_contact' => 0,
-        'outside_window' => 0,
-        'covered_by_current_rule' => 0,
-        'not_current_prospect' => 0,
-        'registered' => 0,
-        'inbound_history_unavailable' => 0,
-        'replied_after_original_turn' => 0,
-    ],
-    'privacy' => 'aggregate_counts_only',
-    'generated_at_utc' => gmdate('c', $now),
-];
-
-try {
     if (hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED') !== '1') {
         throw new RuntimeException('Sharky orchestrator is not enabled');
     }
@@ -51,7 +48,7 @@ try {
         throw new RuntimeException('SHARKY_CONTACT_HASH_KEY missing');
     }
 
-    $pdo = hache_sharky_pdo();
+    $pdo ??= hache_sharky_pdo();
     if (!$pdo instanceof PDO) throw new RuntimeException('Database unavailable');
     if (!hache_sharky_orchestrator_store_ready($pdo)) throw new RuntimeException('Sharky store unavailable');
 
@@ -156,9 +153,21 @@ try {
         $stats['eligible']++;
     }
 
-    fwrite(STDOUT, json_encode($stats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR).PHP_EOL);
-    exit(0);
-} catch (Throwable $e) {
-    fwrite(STDERR, 'Sharky retroactive re-engagement dry-run: '.$e->getMessage().PHP_EOL);
-    exit(1);
+    return $stats;
+}
+
+// Direct CLI invocation remains read-only and explicitly gated by --dry-run.
+if (PHP_SAPI === 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    if (!in_array('--dry-run', $argv, true)) {
+        fwrite(STDERR, "This command is read-only and requires --dry-run\n");
+        exit(2);
+    }
+    try {
+        $stats = hache_sharky_reengagement_backfill_dry_run();
+        fwrite(STDOUT, json_encode($stats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR).PHP_EOL);
+        exit(0);
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'Sharky retroactive re-engagement dry-run: '.$e->getMessage().PHP_EOL);
+        exit(1);
+    }
 }
