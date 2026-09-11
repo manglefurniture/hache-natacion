@@ -529,14 +529,16 @@ function hache_sharky_orchestrator_registration_schedule_side_query(array $state
 
     $regularSchedule=preg_match('/\b(?:horario|horarios|hora|horas)\b.{0,55}\b(?:clases?\s+regulares|curso\s+regular|regulares)\b/u',$t)===1
         || preg_match('/\b(?:clases?\s+regulares|curso\s+regular|regulares)\b.{0,55}\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
-    if($regularSchedule&&hache_sharky_orchestrator_program_rejection($text)!=='regular'){
+    $regularRejected=hache_sharky_orchestrator_program_rejection($text)==='regular'
+        || preg_match('/\b(?:no|nunca|tampoco)\s+de\s+(?:(?:las?|unas?)\s+)?(?:clases?\s+regulares|curso\s+regular|regulares)\b/u',$t)===1;
+    if($regularSchedule&&!$regularRejected){
         $state['commercial_context']['sede_clave']=$current;
         foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key){
             if(array_key_exists($key,$flowData))$state['commercial_context'][$key]=$flowData[$key];
         }
         if(is_array($state['flow']??null))$state['flow']['updated_at']=$now;
         $label=$current==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec';
-        $message='Tu pregunta es por horarios de clases regulares, que son un producto distinto al curso intensivo. Para no mezclar catálogos, no voy a mostrarte horarios del intensivo como si fueran regulares. Tu inscripción actual al intensivo sigue intacta en '.$label.'. Si quieres cambiar de producto, dímelo de forma explícita y revisamos si aplica.';
+        $message='Tu mensaje incluye una consulta de horarios de clases regulares, que son un producto distinto al curso intensivo. Para no mezclar catálogos, no voy a mostrarte horarios del intensivo como si fueran regulares. Tu inscripción actual al intensivo sigue intacta en '.$label.'. Si quieres cambiar de producto, dímelo de forma explícita y revisamos si aplica.';
         return [$state,hache_sharky_orchestrator_decision('side_question',$message)];
     }
 
