@@ -83,6 +83,16 @@ function hache_sharky_schedule_guard_requested_venues(string $text,array $state)
 function hache_sharky_schedule_guard_daypart(string $text): ?string
 {
     $t=hache_sharky_schedule_guard_normalize($text);
+    if($t==='')return null;
+    $hasScheduleWord=preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
+    if(!$hasScheduleWord){
+        // A bare daypart is a schedule selection only when the whole message is
+        // the choice itself. This avoids treating “Buenas noches” or “mañana te
+        // confirmo” as schedule requests.
+        if(preg_match('/^(?:(?:en|por)\s+la\s+)?(?:manana|matutino|matutina)[.! ]*$/u',$t)===1)return 'morning';
+        if(preg_match('/^(?:(?:en|por)\s+la\s+)?(?:tarde|noche|vespertino|vespertina|nocturno|nocturna)[.! ]*$/u',$t)===1)return 'evening';
+        return null;
+    }
     if(preg_match('/\b(?:manana|matutino|matutina)\b/u',$t)===1)return 'morning';
     if(preg_match('/\b(?:tarde|noche|vespertino|vespertina|nocturno|nocturna)\b/u',$t)===1)return 'evening';
     return null;
