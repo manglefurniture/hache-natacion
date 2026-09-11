@@ -1,0 +1,567 @@
+name: Patch Sharky level product venue rules
+
+on:
+  push:
+    branches:
+      - fix/sharky-level-product-venue-priority
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply narrow Sharky patch
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path)
+              text=p.read_text()
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one exact match, found {count}')
+              p.write_text(text.replace(old,new,1))
+
+          adapter='config/sharky-whatsapp-adapter.php'
+
+          old="""function hache_sharky_whatsapp_apply_natural_swim_level(array $state,string $text): array
+          {
+              if(($state['identity']['kind']??'unknown')!=='prospect')return $state;
+              $level=null;
+              foreach(hache_sharky_orchestrator_text_segments($text) as $line){
+                  $choice=hache_sharky_whatsapp_detect_swim_level($line);if($choice!==null)$level=$choice;
+              }
+              if($level===null)return $state;
+              return hache_sharky_whatsapp_apply_swim_level_choice($state,$level);
+          }
+          """
+          new=old+"""
+          function hache_sharky_whatsapp_swim_level_conflict(array $state,array $event,int $now): ?array
+          {
+              if(($state['identity']['kind']??'unknown')!=='prospect')return null;
+              if(trim((string)($event['interactive_id']??''))!=='')return null;
+              $current=(string)($state['commercial_context']['swim_level']??'');
+              if(!in_array($current,['beginner','swims'],true))return null;
+              $incoming=hache_sharky_whatsapp_detect_swim_level((string)($event['text']??''));
+              if(!in_array($incoming,['beginner','swims'],true)||$incoming===$current)return null;
+              $flow=is_array($state['flow']??null)?$state['flow']:null;
+              $flowName=(string)($flow['name']??'');
+              if($flowName!==''&&!in_array($flowName,['qualify_prospect','register_intensive'],true))return null;
+
+              if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+              $c=&$state['commercial_context'];
+              unset($c['swim_level'],$c['program'],$c['recommended_program'],$c['background']);
+              foreach(['plan_id','plan_name','sessions_per_week','plan_price','schedule_id','schedule_label','course_id','fecha_inicio','course_price','date_preference','payment_choice_pct','kit','_requested_slot'] as $key)unset($c[$key]);
+              $data=['previous_level'=>$current,'conflicting_level'=>$incoming];
+              if(in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))$data['sede_clave']=$c['sede_clave'];
+              $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','swim_conflict',$data,$now);
+              $decision=hache_sharky_orchestrator_decision(
+                  'prospect_swim_conflict',
+                  'Antes me indicaste un nivel diferente. Para no orientarte al producto equivocado necesito aclarar una sola cosa: ¿estás empezando desde cero o ya sabes nadar?',
+                  ['type'=>'buttons','buttons'=>[
+                      hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),
+                      hache_sharky_orchestrator_button('qualify:beginner','Desde cero'),
+                  ]]
+              );
+              return [$state,$decision];
+          }
+
+          function hache_sharky_whatsapp_monteverde_rejection(string $text): bool
+          {
+              if(str_contains($text,'?')||str_contains($text,'¿'))return false;
+              $t=hache_sharky_orchestrator_normalize($text);
+              if(preg_match('/^(?:no|no\\s+me\\s+(?:sirve|funciona|conviene)|prefiero\\s+(?:la\\s+)?otra(?:\\s+sede)?|mejor\\s+(?:la\\s+)?otra(?:\\s+sede)?|la\\s+otra|otra\\s+sede)[.! ]*$/u',$t)===1)return true;
+              return preg_match('/\\b(?:monteverde)\\b.{0,28}\\b(?:no\\s+me\\s+(?:sirve|funciona|conviene|queda)|no\\s+quiero)\\b|\\b(?:no\\s+quiero|no\\s+me\\s+(?:sirve|funciona|conviene|queda))\\b.{0,28}\\bmonteverde\\b/u',$t)===1;
+          }
+          """
+          replace_once(adapter,old,new)
+
+          old="""    $sede=hache_sharky_whatsapp_detect_venue_preference($text);
+              if($sede===null)$sede=hache_sharky_whatsapp_detect_relative_venue_preference($state,$text);
+          """
+          new="""    if(is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&($flow['step']??'')==='sede'&&($flow['data']['venue_proposal']??null)==='MONTEVERDE'&&hache_sharky_whatsapp_monteverde_rejection($text))return $state;
+              $sede=hache_sharky_whatsapp_detect_venue_preference($text);
+              if($sede===null)$sede=hache_sharky_whatsapp_detect_relative_venue_preference($state,$text);
+          """
+          replace_once(adapter,old,new)
+
+          old="""function hache_sharky_whatsapp_qualification_start(array $state,int $now): array
+          {
+              $data=[];
+              if(in_array(($state['commercial_context']['swim_level']??null),['beginner','swims'],true)){
+                  return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Continuamos con tu elección.');
+              }
+              $preferred=(string)($state['commercial_context']['program']??'');
+              if(in_array($preferred,['intensive','regular'],true))$data['preferred_program']=$preferred;
+              $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','swim',$data,$now);
+              $decision=hache_sharky_orchestrator_decision('prospect_swim_prompt','Para orientarte por lo que necesitas: ¿ya sabes nadar o estás empezando desde cero?',['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),
+                  hache_sharky_orchestrator_button('qualify:beginner','Desde cero'),
+              ]]);
+              return [$state,$decision];
+          }
+          """
+          new="""function hache_sharky_whatsapp_qualification_start(array $state,int $now): array
+          {
+              $data=[];
+              $level=(string)($state['commercial_context']['swim_level']??'');
+              $background=(string)($state['commercial_context']['background']??'');
+              if($level==='beginner'){
+                  $state['commercial_context']['program']='intensive';
+                  $state['commercial_context']['recommended_program']='intensive';
+                  return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Si estás empezando desde cero, seguimos con el curso intensivo básico.');
+              }
+              if($level==='swims'){
+                  if(in_array($background,['self_taught','no_formal'],true)){
+                      $state['commercial_context']['program']='intensive';
+                      $state['commercial_context']['recommended_program']='intensive';
+                      return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Como aprendiste sin clases formales, seguimos con el curso intensivo básico.');
+                  }
+                  if($background==='formal'){
+                      $state['commercial_context']['program']='regular';
+                      $state['commercial_context']['recommended_program']='regular';
+                      return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Como ya sabes nadar y has tomado clases, seguimos con clases regulares.');
+                  }
+                  $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','background',$data,$now);
+                  return [$state,hache_sharky_orchestrator_decision('prospect_background_prompt','Perfecto. ¿Has tomado clases de natación antes o aprendiste por tu cuenta?',['type'=>'buttons','buttons'=>[
+                      hache_sharky_orchestrator_button('qualify:formal','He tomado clases'),hache_sharky_orchestrator_button('qualify:self','Por mi cuenta')]])];
+              }
+              $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','swim',$data,$now);
+              $decision=hache_sharky_orchestrator_decision('prospect_swim_prompt','Para orientarte por lo que necesitas: ¿ya sabes nadar o estás empezando desde cero?',['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),
+                  hache_sharky_orchestrator_button('qualify:beginner','Desde cero'),
+              ]]);
+              return [$state,$decision];
+          }
+          """
+          replace_once(adapter,old,new)
+
+          old="""function hache_sharky_whatsapp_qualification_sede_step(array $state,array $data,int $now,string $message): array
+          {
+              $known=(string)($state['commercial_context']['sede_clave']??'');
+              if(in_array($known,['MONTEVERDE','PALAPAS'],true)){
+                  $label=hache_sharky_whatsapp_venue_label($known);
+                  $state=hache_sharky_orchestrator_clear_flow($state);
+                  return [$state,hache_sharky_whatsapp_commercial_next_action($state,$message.' Ya tengo tu sede: '.$label.'.')];
+              }
+              $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',$data,$now);
+              $prompt=$message.' Tenemos dos sedes en Cancún: Colegio Monteverde y Palapas Protudec. ¿Cuál de las dos te queda mejor?';
+              return [$state,hache_sharky_orchestrator_decision('prospect_program_recommendation',$prompt,['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('sede:monteverde','Colegio Monteverde'),
+                  hache_sharky_orchestrator_button('sede:palapas','Palapas Protudec'),
+              ]])];
+          }
+          """
+          new="""function hache_sharky_whatsapp_qualification_sede_step(array $state,array $data,int $now,string $message): array
+          {
+              $known=(string)($state['commercial_context']['sede_clave']??'');
+              if(in_array($known,['MONTEVERDE','PALAPAS'],true)){
+                  $label=hache_sharky_whatsapp_venue_label($known);
+                  $state=hache_sharky_orchestrator_clear_flow($state);
+                  return [$state,hache_sharky_whatsapp_commercial_next_action($state,$message.' Ya tengo tu sede: '.$label.'.')];
+              }
+              $data['venue_proposal']='MONTEVERDE';
+              $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',$data,$now);
+              $prompt=$message.' Te propongo primero Colegio Monteverde. ¿Te funciona esta sede?';
+              return [$state,hache_sharky_orchestrator_decision('prospect_program_recommendation',$prompt,['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('sede:monteverde','Sí, Monteverde'),
+                  hache_sharky_orchestrator_button('sede:palapas','Prefiero Palapas'),
+              ]])];
+          }
+          """
+          replace_once(adapter,old,new)
+
+          replace_once(adapter,"""    if($step==='swim'){
+                  $level=hache_sharky_whatsapp_swim_level_from_input($text,$id);
+                  if($level===null)return [$state,hache_sharky_orchestrator_decision('prospect_swim_prompt','¿Ya sabes nadar o estás empezando desde cero?',['type'=>'buttons','buttons'=>[
+                      hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),hache_sharky_orchestrator_button('qualify:beginner','Desde cero')]])];
+          ""","""    if(in_array($step,['swim','swim_conflict'],true)){
+                  $level=hache_sharky_whatsapp_swim_level_from_input($text,$id);
+                  if($level===null){
+                      $prompt=$step==='swim_conflict'
+                          ?'Necesito aclarar tu nivel antes de continuar: ¿estás empezando desde cero o ya sabes nadar?'
+                          :'¿Ya sabes nadar o estás empezando desde cero?';
+                      return [$state,hache_sharky_orchestrator_decision('prospect_swim_prompt',$prompt,['type'=>'buttons','buttons'=>[
+                          hache_sharky_orchestrator_button('qualify:swims','Ya sé nadar'),hache_sharky_orchestrator_button('qualify:beginner','Desde cero')]])];
+                  }
+          """)
+
+          old="""    if($step==='background'){
+              $formal=$id==='qualify:formal'||preg_match('/^(?:si|he\\s+tomado\\s+clases|ya\\s+tome\\s+clases|con\\s+profesor|con\\s+entrenador|formal(?:mente)?)[.! ]*$/u',$t)===1;
+              $self=$id==='qualify:self'||preg_match('/^(?:no|por\\s+mi\\s+cuenta|aprendi\\s+solo|aprendi\\s+sola|nunca\\s+he\\s+tomado\\s+clases|autodidacta)[.! ]*$/u',$t)===1;
+              if(!$formal&&!$self)return [$state,hache_sharky_orchestrator_decision('prospect_background_prompt','¿Has tomado clases antes o aprendiste por tu cuenta?',['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('qualify:formal','He tomado clases'),hache_sharky_orchestrator_button('qualify:self','Por mi cuenta')]])];
+              if($self){
+                  $state['commercial_context']['program']='intensive';
+                  return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Aunque ya nades, si aprendiste por tu cuenta te recomendamos comenzar por el intensivo para ordenar fundamentos y técnica.');
+              }
+              $preferred=(string)($data['preferred_program']??'');
+              if(in_array($preferred,['intensive','regular'],true)){
+                  $state['commercial_context']['program']=$preferred;
+                  $why=$preferred==='intensive'?'Como ya tomaste clases, también puedes elegir el intensivo si buscas un bloque temporal o trabajar técnica.':'Como ya has tomado clases, las clases regulares son una buena opción para seguir técnica, resistencia y estilos.';
+                  return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,$why);
+              }
+              $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',$data,$now);
+              return [$state,hache_sharky_orchestrator_decision('prospect_program_prompt','Como ya sabes nadar y has tomado clases, ¿qué buscas ahora: un curso intensivo temporal o clases regulares mensuales?',['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),
+                  hache_sharky_orchestrator_button('qualify:regular','Regulares'),
+              ]])];
+          }
+          """
+          new="""    if($step==='background'){
+              $formal=$id==='qualify:formal'||preg_match('/^(?:si|he\\s+tomado\\s+clases|ya\\s+tome\\s+clases|con\\s+profesor|con\\s+entrenador|formal(?:mente)?)[.! ]*$/u',$t)===1;
+              $self=$id==='qualify:self'||preg_match('/^(?:no|por\\s+mi\\s+cuenta|aprendi\\s+solo|aprendi\\s+sola|nunca\\s+he\\s+tomado\\s+clases|autodidacta)[.! ]*$/u',$t)===1;
+              if(!$formal&&!$self)return [$state,hache_sharky_orchestrator_decision('prospect_background_prompt','¿Has tomado clases antes o aprendiste por tu cuenta?',['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('qualify:formal','He tomado clases'),hache_sharky_orchestrator_button('qualify:self','Por mi cuenta')]])];
+              if($self){
+                  $state['commercial_context']['background']='self_taught';
+                  $state['commercial_context']['recommended_program']='intensive';
+                  $state['commercial_context']['program']='intensive';
+                  return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Aunque ya nades, si aprendiste por tu cuenta seguimos con el curso intensivo básico para ordenar fundamentos y técnica.');
+              }
+              $state['commercial_context']['background']='formal';
+              $state['commercial_context']['recommended_program']='regular';
+              $state['commercial_context']['program']='regular';
+              return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,'Como ya sabes nadar y has tomado clases, seguimos con clases regulares.');
+          }
+          """
+          replace_once(adapter,old,new)
+
+          old="""    if($step==='program'){
+              $program='';
+              if($id==='qualify:intensive')$program='intensive';
+              elseif($id==='qualify:regular')$program='regular';
+              else $program=(string)(hache_sharky_orchestrator_program_choice($text)??'');
+              if(!in_array($program,['intensive','regular'],true))return [$state,hache_sharky_orchestrator_decision('prospect_program_prompt','¿Prefieres un curso intensivo temporal o clases regulares mensuales?',['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),hache_sharky_orchestrator_button('qualify:regular','Regulares')]])];
+              $state['commercial_context']['program']=$program;
+              $why=$program==='intensive'?'Perfecto, podemos orientarte por el intensivo.':'Perfecto, seguimos por clases regulares.';
+              return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,$why);
+          }
+          """
+          new="""    if($step==='program'){
+              $level=(string)($state['commercial_context']['swim_level']??'');
+              $background=(string)($state['commercial_context']['background']??($data['background']??''));
+              $program='';
+              if($level==='beginner'||in_array($background,['self_taught','no_formal'],true))$program='intensive';
+              elseif($level==='swims'&&$background==='formal')$program='regular';
+              elseif($id==='qualify:intensive')$program='intensive';
+              elseif($id==='qualify:regular')$program='regular';
+              else $program=(string)(hache_sharky_orchestrator_program_choice($text)??'');
+              if(!in_array($program,['intensive','regular'],true))return [$state,hache_sharky_orchestrator_decision('prospect_program_prompt','¿Prefieres un curso intensivo temporal o clases regulares mensuales?',['type'=>'buttons','buttons'=>[
+                  hache_sharky_orchestrator_button('qualify:intensive','Intensivo'),hache_sharky_orchestrator_button('qualify:regular','Regulares')]])];
+              $state['commercial_context']['program']=$program;
+              $state['commercial_context']['recommended_program']=$program;
+              $why=$program==='intensive'?'Perfecto, seguimos por el intensivo.':'Perfecto, seguimos por clases regulares.';
+              return hache_sharky_whatsapp_qualification_sede_step($state,$data,$now,$why);
+          }
+          """
+          replace_once(adapter,old,new)
+
+          old="""    if($step==='sede'){
+              $sede=hache_sharky_whatsapp_detect_venue_preference($text,$id);
+              if($sede===null){
+                  $prompt=hache_sharky_whatsapp_venue_help_request($text)
+                      ?hache_sharky_whatsapp_venue_help_message($pdo)
+                      :'Tenemos dos sedes en Cancún: Colegio Monteverde y Palapas Protudec. ¿Cuál de las dos te queda mejor?';
+                  return [$state,hache_sharky_orchestrator_decision('prospect_sede_prompt',$prompt,['type'=>'buttons','buttons'=>[
+                      hache_sharky_orchestrator_button('sede:monteverde','Colegio Monteverde'),hache_sharky_orchestrator_button('sede:palapas','Palapas Protudec')]])];
+              }
+              $state['commercial_context']['sede_clave']=$sede;
+              $state=hache_sharky_orchestrator_clear_flow($state);
+              return [$state,hache_sharky_whatsapp_commercial_next_action($state)];
+          }
+          """
+          new="""    if($step==='sede'){
+              $help=hache_sharky_whatsapp_venue_help_request($text);
+              $sede=null;
+              if(!$help&&($data['venue_proposal']??null)==='MONTEVERDE'&&hache_sharky_whatsapp_monteverde_rejection($text))$sede='PALAPAS';
+              if($sede===null)$sede=hache_sharky_whatsapp_detect_venue_preference($text,$id);
+              if($sede===null){
+                  $prompt=$help
+                      ?hache_sharky_whatsapp_venue_help_message($pdo)
+                      :'Te propongo primero Colegio Monteverde. ¿Te funciona esta sede?';
+                  return [$state,hache_sharky_orchestrator_decision('prospect_sede_prompt',$prompt,['type'=>'buttons','buttons'=>[
+                      hache_sharky_orchestrator_button('sede:monteverde','Sí, Monteverde'),hache_sharky_orchestrator_button('sede:palapas','Prefiero Palapas')]])];
+              }
+              $state['commercial_context']['sede_clave']=$sede;
+              $state=hache_sharky_orchestrator_clear_flow($state);
+              return [$state,hache_sharky_whatsapp_commercial_next_action($state)];
+          }
+          """
+          replace_once(adapter,old,new)
+
+          replace_once(adapter,"""        if($step==='swim')return in_array($id,['qualify:swims','qualify:beginner'],true);
+          ""","""        if(in_array($step,['swim','swim_conflict'],true))return in_array($id,['qualify:swims','qualify:beginner'],true);
+          """)
+          replace_once(adapter,"""        if(!in_array($step,['swim','background','program','sede','daypart'],true))return false;
+          ""","""        if(!in_array($step,['swim','swim_conflict','background','program','sede','daypart'],true))return false;
+          """)
+
+          replace_once(adapter,"""        $commercialBefore=$state['commercial_context']??[];
+          ""","""        $levelConflict=hache_sharky_whatsapp_swim_level_conflict($state,$event,$now);
+              if(is_array($levelConflict)){
+                  [$state,$decision]=$levelConflict;
+                  hache_sharky_db_state_save($pdo,$contact,$state);hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                  return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+              }
+
+              $commercialBefore=$state['commercial_context']??[];
+          """)
+
+          memory='config/sharky-commercial-memory.php'
+          replace_once(memory,"""                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',['recommended_program'=>'intensive','background'=>$background],(int)($state['updated_at']??time()));
+          ""","""                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',['recommended_program'=>'intensive','background'=>$background,'venue_proposal'=>'MONTEVERDE'],(int)($state['updated_at']??time()));
+          """)
+          replace_once(memory,"""            }else{
+                      if($background==='formal'&&in_array(($c['entry_interest']??null),['intensive','regular'],true))$c['recommended_program']=$c['entry_interest'];
+                      if(empty($c['program'])){
+                          $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',[
+                              'recommended_program'=>$c['recommended_program']??null,
+                              'background'=>$background,
+                              'preferred_program'=>$c['entry_interest']??null,
+                          ],(int)($state['updated_at']??time()));
+                          $c=&$state['commercial_context'];
+                          $flow=$state['flow'];$flowName='qualify_prospect';$flowStep='program';
+                      }
+                  }
+          ""","""            }else{
+                      $c['recommended_program']='regular';
+                      $c['program']='regular';
+                      foreach(['course_id','fecha_inicio','course_price','date_preference'] as $key)unset($c[$key]);
+                      if(in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
+                          $state=hache_sharky_orchestrator_clear_flow($state);
+                      }else{
+                          $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',[
+                              'recommended_program'=>'regular','background'=>'formal','venue_proposal'=>'MONTEVERDE',
+                          ],(int)($state['updated_at']??time()));
+                      }
+                      $c=&$state['commercial_context'];
+                      $flow=$state['flow']??null;$flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
+                  }
+          """)
+
+          boundary='config/sharky-product-boundary-guard.php'
+          replace_once(boundary,"""function hache_sharky_product_boundary_sanitize_state(array $state,string $userText=''): array
+          {
+              if(!hache_sharky_product_boundary_regular_restricted($state,$userText))return $state;
+              if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+              $c=&$state['commercial_context'];
+              if($userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText))$c['background']='no_formal';
+              $c['recommended_program']='intensive';
+              $c['program']='intensive';
+              foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($c[$key]);
+              return $state;
+          }
+          ""","""function hache_sharky_product_boundary_sanitize_state(array $state,string $userText=''): array
+          {
+              if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+              $c=&$state['commercial_context'];
+              if(($c['swim_level']??null)==='swims'&&($c['background']??null)==='formal'){
+                  $c['recommended_program']='regular';
+                  $c['program']='regular';
+                  foreach(['course_id','fecha_inicio','course_price','date_preference'] as $key)unset($c[$key]);
+                  return $state;
+              }
+              if(!hache_sharky_product_boundary_regular_restricted($state,$userText))return $state;
+              if($userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText))$c['background']='no_formal';
+              $c['recommended_program']='intensive';
+              $c['program']='intensive';
+              foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($c[$key]);
+              return $state;
+          }
+          """)
+
+          policy='config/sharky-post-pr72.php'
+          replace_once(policy,"""        '- Solo cuando background sea formal puede Sharky ofrecer o vender automáticamente clases regulares. Aun así, intensivo y regulares siguen siendo productos distintos y una frecuencia semanal no cambia el producto por sí sola.',
+          ""","""        '- REGLA DE PRODUCTO: cuando commercial_context.swim_level sea swims y background sea formal, el producto automático es clases regulares. No ofrezcas una elección entre intensivo y regulares en ese perfil. Intensivo y regulares siguen siendo productos distintos y una frecuencia semanal no cambia el producto por sí sola.',
+                  '- Si un swim_level ya confirmado entra en contradicción con una declaración posterior, no lo sobrescribas silenciosamente ni avances la venta: detén el flujo y pide una aclaración explícita del nivel antes de volver a determinar producto.',
+                  '- Una vez determinado el producto y si todavía no hay sede confirmada, propone primero Colegio Monteverde. Si la persona rechaza Monteverde o pide Palapas Protudec, acepta Palapas y continúa sin volver a insistir con Monteverde.',
+          """)
+          replace_once(policy,"""        '- Una consulta lateral sobre regulares no cambia por sí sola el programa activo. Si el perfil no es elegible para regulares, explica que requiere valoración humana; si tiene formación formal, puede responderse la consulta sin cambiar automáticamente el producto.',
+          ""","""        '- Una consulta lateral sobre regulares no cambia por sí sola el programa activo. Si el perfil no es elegible para regulares, explica que requiere valoración humana; si swim_level es swims y la formación formal ya está confirmada, las clases regulares son el producto automático.',
+          """)
+
+          docs='docs/SHARKY-POSITIVE-PATTERNS.md'
+          replace_once(docs,"""- Solo un prospecto con formación formal confirmada puede cambiar automáticamente a clases regulares mediante una preferencia explícita. Si no es elegible, Sharky no muestra planes, precios ni horarios regulares y deriva la excepción a una persona.
+          - La preferencia posterior del cliente se respeta dentro de las reglas de elegibilidad; una preferencia no autoriza a Sharky a saltarse una valoración humana requerida.
+          - La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo.
+          ""","""- Si el prospecto ya sabe nadar y confirma que ha tomado clases formales, el producto automático es clases regulares; Sharky no abre una elección entre intensivo y regulares. Si aprendió por su cuenta o no ha tomado clases formales, el producto automático sigue siendo el curso intensivo.
+          - Si una declaración nueva contradice el swim_level ya confirmado, Sharky no reemplaza silenciosamente ese dato: congela el avance comercial y pide una aclaración explícita antes de volver a determinar producto.
+          - La preferencia posterior del cliente se respeta dentro de las reglas de elegibilidad; una preferencia no autoriza a Sharky a saltarse una valoración humana requerida.
+          - La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo. Si aún no hay sede, Sharky propone primero Colegio Monteverde; si el prospecto la rechaza o pide Palapas Protudec, acepta Palapas y continúa sin insistir de nuevo con Monteverde.
+          """)
+
+          pr162='tests/sharky-pr162-review-regression.php'
+          replace_once(pr162,"""// Regression: arriving from the intensive ad is not the same as choosing intensive.
+          // A swimmer who has taken classes must still choose between intensive and regular.
+          ""","""// Regression: arriving from the intensive ad is not the same as choosing intensive.
+          // A swimmer with formal lessons is routed to regular classes by the current product rule.
+          """)
+          replace_once(pr162,"""pr162_review_ok(empty($metaFormal['commercial_context']['program']),'Formal experience must not auto-confirm the intensive ad program.');
+          pr162_review_ok(($metaFormal['flow']['step']??null)==='program','A formal swimmer must explicitly choose intensive or regular before venue selection.');
+          pr162_review_ok(array_column($metaFormalDecision['ui']['buttons']??[],'id')===['qualify:intensive','qualify:regular'],'Formal swimmer must receive Intensivo and Regulares buttons, not venue buttons.');
+          ""","""pr162_review_ok(($metaFormal['commercial_context']['program']??null)==='regular','Formal experience must route to regular classes, never inherit the intensive ad program.');
+          pr162_review_ok(($metaFormal['commercial_context']['background']??null)==='formal','Formal training history must persist as durable commercial context.');
+          pr162_review_ok(($metaFormal['flow']['step']??null)==='sede','A formal swimmer must go directly to venue selection after product resolution.');
+          pr162_review_ok(array_column($metaFormalDecision['ui']['buttons']??[],'id')===['sede:monteverde','sede:palapas'],'Formal swimmer must receive venue buttons, not a product-choice screen.');
+          """)
+
+          product_test='tests/sharky-product-boundary-regression.php'
+          replace_once(product_test,"""product_boundary_ok(hache_sharky_product_boundary_reply('Prefiero clases regulares',$formal)===null,'Only a prospect with formal training may explicitly switch to regular classes automatically.');
+          ""","""product_boundary_ok(hache_sharky_product_boundary_reply('Prefiero clases regulares',$formal)===null,'A prospect with formal training may continue with regular classes without a human exception.');
+          $formalClean=hache_sharky_product_boundary_sanitize_state($formal);
+          product_boundary_ok(($formalClean['commercial_context']['program']??null)==='regular','Formal swimmer state must canonicalize to regular classes automatically.');
+          product_boundary_ok(($formalClean['commercial_context']['recommended_program']??null)==='regular','Formal swimmer recommendation must canonicalize to regular classes.');
+          """)
+
+          new_test=Path('tests/sharky-qualification-priority-regression.php')
+          new_test.write_text(r'''<?php
+
+declare(strict_types=1);
+
+require_once __DIR__.'/../config/sharky-whatsapp-adapter.php';
+require_once __DIR__.'/../config/sharky-product-boundary-guard.php';
+require_once __DIR__.'/../config/sharky-post-pr72.php';
+
+function priority_ok(bool $condition,string $message): void
+{
+    if(!$condition){fwrite(STDERR,"SHARKY QUALIFICATION PRIORITY FAIL: $message\n");exit(1);}
+}
+
+$now=1789136400;
+$pdo=new PDO('sqlite::memory:');
+
+$base=hache_sharky_orchestrator_state(null,$now);
+$base['identity']=array_replace($base['identity'],['kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched']);
+$base['commercial_context']['swim_level']='beginner';
+$base['commercial_context']['program']='intensive';
+$base['commercial_context']['recommended_program']='intensive';
+$base['commercial_context']['sede_clave']='PALAPAS';
+
+$conflict=hache_sharky_whatsapp_swim_level_conflict($base,['text'=>'Ya sé nadar','interactive_id'=>''],$now+1);
+priority_ok(is_array($conflict),'A contradictory free-text swim claim must be intercepted deterministically.');
+[$conflictState,$conflictDecision]=$conflict;
+priority_ok(($conflictDecision['kind']??null)==='prospect_swim_conflict','Contradictory swim claims must use the explicit conflict decision.');
+priority_ok(($conflictState['flow']['step']??null)==='swim_conflict','Contradiction must freeze qualification on a dedicated clarification cursor.');
+priority_ok(!isset($conflictState['commercial_context']['swim_level']),'Neither contradictory swim claim may silently win before clarification.');
+priority_ok(!isset($conflictState['commercial_context']['program']),'Contradiction must invalidate the active product intention.');
+priority_ok(($conflictState['commercial_context']['sede_clave']??null)==='PALAPAS','A previously explicit venue preference must survive a level contradiction.');
+priority_ok(array_column($conflictDecision['ui']['buttons']??[],'id')===['qualify:swims','qualify:beginner'],'Clarification must offer only the two level answers.');
+
+[$clarified,$backgroundDecision]=hache_sharky_whatsapp_qualification_input($pdo,$conflictState,[
+    'text'=>'Ya sé nadar','interactive_id'=>'qualify:swims',
+],$now+2,12);
+priority_ok(($clarified['commercial_context']['swim_level']??null)==='swims','Explicit clarification must establish the selected swim level.');
+priority_ok(($clarified['flow']['step']??null)==='background','A swimmer still needs training-history qualification before product resolution.');
+priority_ok(array_column($backgroundDecision['ui']['buttons']??[],'id')===['qualify:formal','qualify:self'],'Swimmer clarification must continue to formal-vs-self-taught history.');
+
+[$formal,$formalDecision]=hache_sharky_whatsapp_qualification_input($pdo,$clarified,[
+    'text'=>'He tomado clases','interactive_id'=>'qualify:formal',
+],$now+3,12);
+priority_ok(($formal['commercial_context']['background']??null)==='formal','Formal history must persist.');
+priority_ok(($formal['commercial_context']['program']??null)==='regular','Swimmer with formal lessons must map only to regular classes.');
+priority_ok(($formal['flow']??null)===null,'A previously confirmed Palapas venue must not be asked again after formal qualification.');
+priority_ok(($formalDecision['kind']??null)==='commercial_next_action','Known venue plus canonical regular product must continue commercially.');
+
+$fresh=$base;
+$fresh['commercial_context']=[];
+$fresh=hache_sharky_orchestrator_flow($fresh,'qualify_prospect','swim',[],$now+4);
+[$beginner,$beginnerDecision]=hache_sharky_whatsapp_qualification_input($pdo,$fresh,[
+    'text'=>'Desde cero','interactive_id'=>'qualify:beginner',
+],$now+5,12);
+priority_ok(($beginner['commercial_context']['program']??null)==='intensive','Beginner must map only to intensive.');
+priority_ok(($beginner['flow']['step']??null)==='sede','Beginner with no venue must proceed to venue proposal.');
+priority_ok(($beginner['flow']['data']['venue_proposal']??null)==='MONTEVERDE','The first venue proposal must be Monteverde.');
+priority_ok(str_contains((string)($beginnerDecision['message']??''),'Te propongo primero Colegio Monteverde'),'Venue copy must explicitly propose Monteverde first.');
+priority_ok(array_column($beginnerDecision['ui']['buttons']??[],'id')===['sede:monteverde','sede:palapas'],'Venue proposal must keep Palapas as the immediate alternative.');
+
+[$palapas,$palapasDecision]=hache_sharky_whatsapp_qualification_input($pdo,$beginner,[
+    'text'=>'No','interactive_id'=>'',
+],$now+6,12);
+priority_ok(($palapas['commercial_context']['sede_clave']??null)==='PALAPAS','Rejecting the explicit Monteverde proposal must select Palapas.');
+priority_ok(($palapas['flow']??null)===null,'Palapas rejection path must continue instead of asking Monteverde again.');
+priority_ok(($palapasDecision['kind']??null)==='commercial_next_action','Palapas fallback must reach the normal commercial continuation.');
+
+$selfState=$fresh;
+$selfState['commercial_context']['swim_level']='swims';
+$selfState=hache_sharky_orchestrator_flow($selfState,'qualify_prospect','background',[],$now+7);
+[$self,$selfDecision]=hache_sharky_whatsapp_qualification_input($pdo,$selfState,[
+    'text'=>'Por mi cuenta','interactive_id'=>'qualify:self',
+],$now+8,12);
+priority_ok(($self['commercial_context']['background']??null)==='self_taught','Self-taught background must persist.');
+priority_ok(($self['commercial_context']['program']??null)==='intensive','Self-taught swimmer must remain intensive-only.');
+priority_ok(($self['flow']['data']['venue_proposal']??null)==='MONTEVERDE','Self-taught intensive path must use the same Monteverde-first venue rule.');
+
+$legacy=$fresh;
+$legacy['commercial_context']['swim_level']='swims';
+$legacy['commercial_context']['background']='formal';
+$legacy=hache_sharky_orchestrator_flow($legacy,'qualify_prospect','program',['background'=>'formal'],$now+9);
+[$legacyAfter,$legacyDecision]=hache_sharky_whatsapp_qualification_input($pdo,$legacy,[
+    'text'=>'Intensivo','interactive_id'=>'qualify:intensive',
+],$now+10,12);
+priority_ok(($legacyAfter['commercial_context']['program']??null)==='regular','A stale legacy product cursor must not bypass formal-swimmer regular eligibility.');
+priority_ok(($legacyAfter['flow']['step']??null)==='sede','Legacy product cursor must converge on venue selection after canonicalizing regular.');
+priority_ok(array_column($legacyDecision['ui']['buttons']??[],'id')===['sede:monteverde','sede:palapas'],'Legacy cursor must converge on the venue UI, not reopen product choice.');
+
+$reverse=$base;
+$reverse['commercial_context']['swim_level']='swims';
+$reverse['commercial_context']['background']='formal';
+$reverse['commercial_context']['program']='regular';
+$reverseConflict=hache_sharky_whatsapp_swim_level_conflict($reverse,['text'=>'No sé nadar, empiezo desde cero','interactive_id'=>''],$now+11);
+priority_ok(is_array($reverseConflict),'Reverse swim-level contradiction must also freeze instead of silently switching products.');
+
+$sanitized=hache_sharky_product_boundary_sanitize_state([
+    'identity'=>['kind'=>'prospect'],
+    'commercial_context'=>['swim_level'=>'swims','background'=>'formal','program'=>'intensive','course_id'=>'old-course'],
+]);
+priority_ok(($sanitized['commercial_context']['program']??null)==='regular','Final product boundary must repair stale formal+intensive state to regular.');
+priority_ok(!isset($sanitized['commercial_context']['course_id']),'Formal-to-regular repair must discard intensive-only course selection.');
+
+$policy=hache_sharky_post72_whatsapp_style_policy();
+priority_ok(str_contains($policy,'el producto automático es clases regulares'),'Brain policy must mirror formal-swimmer regular eligibility.');
+priority_ok(str_contains($policy,'no lo sobrescribas silenciosamente'),'Brain policy must mirror swim-level contradiction handling.');
+priority_ok(str_contains($policy,'propone primero Colegio Monteverde'),'Brain policy must mirror venue priority without inventing capacity logic.');
+
+fwrite(STDOUT,"SHARKY_QUALIFICATION_PRIORITY_OK\n");
+''')
+
+          package='package.json'
+          replace_once(package,"""php tests/sharky-guided-onboarding-regression.php && php tests/sharky-guided-first-prospect-regression.php""","""php tests/sharky-guided-onboarding-regression.php && php tests/sharky-qualification-priority-regression.php && php tests/sharky-guided-first-prospect-regression.php""")
+          PY
+      - name: Syntax and focused regressions
+        run: |
+          php -l config/sharky-whatsapp-adapter.php
+          php -l config/sharky-commercial-memory.php
+          php -l config/sharky-product-boundary-guard.php
+          php -l config/sharky-post-pr72.php
+          php -l tests/sharky-qualification-priority-regression.php
+          php tests/sharky-qualification-priority-regression.php
+          php tests/sharky-pr162-review-regression.php
+          php tests/sharky-product-boundary-regression.php
+          php tests/sharky-guided-onboarding-regression.php
+          php tests/sharky-commercial-memory-regression.php
+      - name: Full regression suite
+        run: npm test
+      - name: Commit verified patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/sharky-whatsapp-adapter.php config/sharky-commercial-memory.php config/sharky-product-boundary-guard.php config/sharky-post-pr72.php docs/SHARKY-POSITIVE-PATTERNS.md tests/sharky-pr162-review-regression.php tests/sharky-product-boundary-regression.php tests/sharky-qualification-priority-regression.php package.json
+          git diff --cached --check
+          git commit -m "Enforce Sharky level product and venue priorities"
+          git push origin HEAD:fix/sharky-level-product-venue-priority
