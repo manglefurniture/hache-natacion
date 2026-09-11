@@ -88,7 +88,7 @@ $deterministicInput=hache_sharky_schedule_guard_canonicalize_venue_spacing($mess
 $deterministic=$message!==''?hache_sharky_product_boundary_reply($deterministicInput,$state):null;
 $deterministicSource=$deterministic!==null?'deterministic_product_boundary':'deterministic';
 if($deterministic===null&&$message!==''){
-    $deterministic=hache_sharky_schedule_guard_multi_venue_reply($deterministicInput,$state);
+    $deterministic=hache_sharky_schedule_guard_scoped_reply($deterministicInput,$state);
     if($deterministic!==null)$deterministicSource='deterministic_schedule_guard';
 }
 if($deterministic===null&&$message!=='')$deterministic=hache_sharky_deterministic_reply($deterministicInput,$state);
