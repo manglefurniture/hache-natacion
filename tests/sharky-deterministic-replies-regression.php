@@ -71,7 +71,7 @@ deterministic_ok(str_contains($pdo->lastQuery,'h.intensivo=1'),'Intensive reques
 $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
 $wrapper=file_get_contents(__DIR__.'/../api/sharky.php')?:'';
 deterministic_ok(str_contains($wrapper,'sharky-whatsapp-dispatch.php'),'Public Sharky wrapper must route through the WhatsApp dispatcher.');
-deterministic_ok(str_contains($dispatcher,"$deterministicSource")&&str_contains($dispatcher,"'source'=>$deterministicSource"),'Dispatcher must expose deterministic/guarded deterministic responses without calling the LLM.');
+deterministic_ok(str_contains($dispatcher,'$deterministicSource')&&str_contains($dispatcher,"'source'=>\$deterministicSource"),'Dispatcher must expose deterministic/guarded deterministic responses without calling the LLM.');
 deterministic_ok(str_contains($dispatcher,"sede: colegio monteverde"),'Dispatcher must recover Colegio Monteverde from the system context before deterministic price/schedule handling.');
 deterministic_ok(str_contains($dispatcher,'hache_sharky_reply_looks_incomplete'),'Dispatcher must guard incomplete model answers.');
 deterministic_ok(str_contains($dispatcher,'hache_sharky_dispatcher_clean_model_answer'),'Dispatcher must clean repeated greetings and empty bullets.');
