@@ -52,10 +52,18 @@ function hache_sharky_product_boundary_no_formal_signal(string $text): bool
     if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?\s+de\s+natacion\b/u',$t)===1)return true;
     if(preg_match('/\b(?:sin|ninguna?)\s+clases?(?:\s+formales?)?\s+(?:de\s+)?natacion\b/u',$t)===1)return true;
 
-    // A bare "nunca/no he tomado clases" is accepted only when that training
-    // statement closes the utterance (or explicitly says "antes/formales").
-    // This avoids converting "esta semana" / "en la mañana" into a lifetime fact.
-    if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?(?:\s+antes)?[.!¡!\s]*$/u',$t)===1)return true;
+    // A bare "nunca/no he tomado clases" is accepted when it closes the
+    // utterance, explicitly says "antes/formales", or is paired with a clear
+    // swimming-context statement in the same message. Local attendance/schedule
+    // qualifiers still win and prevent it from becoming lifetime history.
+    $bareNoClasses=preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?\b/u',$t)===1;
+    if($bareNoClasses){
+        $localQualifier=preg_match('/\bclases?\s+(?:esta\s+semana|este\s+(?:mes|ano)|hoy|ayer|ultimamente|en\s+la\s+(?:manana|tarde|noche)|por\s+la\s+(?:manana|tarde|noche))\b/u',$t)===1;
+        if(!$localQualifier){
+            if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?(?:\s+antes)?[.!¡!\s]*$/u',$t)===1)return true;
+            if(preg_match('/\b(?:nado|nadar|nadado|natacion|floto|flotar|estilo|estilos)\b/u',$t)===1)return true;
+        }
+    }
 
     if(preg_match('/\b(?:aprendi|nado|he\s+nadado)\b.{0,30}\b(?:solo|sola|por\s+mi\s+cuenta|autodidacta)\b/u',$t)===1)return true;
     return false;
