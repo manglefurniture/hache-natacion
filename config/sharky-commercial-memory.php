@@ -25,8 +25,6 @@ function hache_sharky_commercial_force_intensive_eligibility(array $state): arra
     $c=&$state['commercial_context'];
     $program=(string)($c['program']??'');
     $recommended=(string)($c['recommended_program']??'');
-    // Repair an absent/stale product, but do not mutate an already-clean confirmed
-    // intensive state merely because a harmless side question arrived.
     if($program!=='intensive'||$recommended==='regular')$c['recommended_program']='intensive';
     $c['program']='intensive';
     foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($c[$key]);
@@ -50,7 +48,7 @@ function hache_sharky_commercial_invalidate(array $state,array $before): array
 function hache_sharky_commercial_catalog(PDO $pdo,array $state,array $context): array
 {
     $c=$state['commercial_context']??[];$sede=(string)($c['sede_clave']??'');$program=(string)($c['program']??'');
-    $out=['plans'=>[],'schedules'=>[],'courses'=>[]];
+    $out=['plans'=>[],'schedules'=>[],'courses'=>[],'_sede'=>$sede,'_program'=>$program];
     if(!in_array($sede,['MONTEVERDE','PALAPAS'],true))return $out;
     if($program==='intensive'){
         foreach($context['intensive_options']??[] as $course){
@@ -83,6 +81,21 @@ function hache_sharky_commercial_background_choice(string $text): ?string
     return null;
 }
 
+function hache_sharky_commercial_venue_browse_choice(string $text): ?string
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if($t==='')return null;
+    $pal='palapas(?:\s+protudec)?';$mv='(?:colegio\s+)?monteverde';
+    $hasPal=preg_match('/\b'.$pal.'\b/u',$t)===1;$hasMv=preg_match('/\b'.$mv.'\b/u',$t)===1;
+    if($hasPal===$hasMv)return null;
+    $name=$hasPal?$pal:$mv;$venue=$hasPal?'PALAPAS':'MONTEVERDE';
+    $simple=preg_match('/^(?:y\s+)?(?:en\s+)?'.$name.'[?!. ]*$/u',$t)===1;
+    $preference=preg_match('/\b'.$name.'\b.{0,28}\b(?:me\s+gusta|me\s+interesa|me\s+queda\s+mejor|me\s+conviene|me\s+queda\s+mas\s+cerca)\b/u',$t)===1
+        ||preg_match('/\b(?:me\s+gusta|me\s+interesa|me\s+queda\s+mejor|me\s+conviene|me\s+queda\s+mas\s+cerca)\b.{0,28}\b'.$name.'\b/u',$t)===1;
+    $browse=preg_match('/^(?:y\s+)?(?:quiero|quisiera|me\s+gustaria)?\s*(?:ver|conocer|revisar|mostrar|muestrame)?\s*(?:(?:los|las|opciones|horarios)\s+)?(?:de\s+|en\s+)?'.$name.'[?!. ]*$/u',$t)===1;
+    return ($simple||$preference||$browse)?$venue:null;
+}
+
 function hache_sharky_commercial_recommendation_affirmation(string $text): bool
 {
     if(str_contains($text,'?')||str_contains($text,'¿'))return false;
@@ -90,20 +103,12 @@ function hache_sharky_commercial_recommendation_affirmation(string $text): bool
     return preg_match('/^(?:si|si\s+quiero|claro|claro\s+que\s+si|ok|oki|okay|vale|va|dale|de\s+acuerdo|esta\s+bien|me\s+parece\s+bien)[!. ]*$/u',$t)===1;
 }
 
-/**
- * Keeps recommendation memory distinct from a confirmed program and makes sure
- * an unresolved recommendation always has a live guided step. This prevents a
- * model-written recommendation from becoming conversational memory only.
- */
 function hache_sharky_commercial_reconcile_guidance(array $state,string $text): array
 {
     $c=&$state['commercial_context'];
     $flow=is_array($state['flow']??null)?$state['flow']:null;
     $flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
     $backgroundEligible=$flowName==='qualify_prospect'&&$flowStep==='background';
-    // Brain may already know the active product while the swimmer's training
-    // history is still unresolved. Eligibility depends on background, not on
-    // whether a product recommendation happens to be present.
     if(!$backgroundEligible&&!is_array($flow)&&($c['swim_level']??null)==='swims'&&empty($c['background']))$backgroundEligible=true;
 
     if($backgroundEligible){
@@ -223,6 +228,33 @@ function hache_sharky_commercial_visible_courses(array $state,array $catalog): a
         foreach($course['schedules']??[] as $schedule)if((string)($schedule['id']??'')===$scheduleId)return true;
         return false;
     }));
+}
+
+function hache_sharky_commercial_schedule_daypart(string $text): ?string
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if(preg_match('/\b(?:manana|matutino|matutina)\b/u',$t)===1)return 'morning';
+    if(preg_match('/\b(?:tarde|noche|vespertino|vespertina|nocturno|nocturna)\b/u',$t)===1)return 'evening';
+    return null;
+}
+
+function hache_sharky_commercial_filter_catalog_daypart(array $catalog,?string $daypart): array
+{
+    if(!in_array($daypart,['morning','evening'],true))return $catalog;
+    $keep=static function(array $schedule) use($daypart): bool {
+        $label=(string)($schedule['label']??'');
+        if(preg_match('/^(\d{2}):/u',$label,$m)!==1)return false;
+        $hour=(int)$m[1];
+        return $daypart==='morning'?$hour<12:$hour>=12;
+    };
+    $catalog['schedules']=array_values(array_filter($catalog['schedules']??[],$keep));
+    if(is_array($catalog['courses']??null)){
+        foreach($catalog['courses'] as &$course){
+            if(is_array($course))$course['schedules']=array_values(array_filter($course['schedules']??[],$keep));
+        }
+        unset($course);
+    }
+    return $catalog;
 }
 
 /** Buttons when WhatsApp can show every choice safely; otherwise a native list. */
@@ -362,6 +394,13 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
     $flow=is_array($state['flow']??null)?$state['flow']:null;
     $entryBootstrap=is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&($flow['step']??'')==='swim'&&($flow['data']['entry_bootstrap']??false)===true;
     if($entryBootstrap&&in_array(($state['commercial_context']['program']??null),['intensive','regular'],true))$state['commercial_context']['program']=null;
+
+    $venueChoice=hache_sharky_commercial_venue_browse_choice($text);
+    if($venueChoice!==null&&($state['commercial_context']['sede_clave']??null)!==$venueChoice){
+        $state['commercial_context']['sede_clave']=$venueChoice;
+        foreach(['plan_id','plan_name','sessions_per_week','plan_price','schedule_id','schedule_label','course_id','fecha_inicio','course_price','date_preference'] as $key)unset($state['commercial_context'][$key]);
+    }
+
     $state=hache_sharky_commercial_reconcile_guidance($state,$text);
     $state=hache_sharky_commercial_force_intensive_eligibility($state);
     $c=&$state['commercial_context'];
@@ -400,7 +439,6 @@ function hache_sharky_commercial_capture(array $state,string $text,array $catalo
         }
     }
 
-    // Join a date split across messages without treating a month/year as a day.
     $declarations=array_filter(hache_sharky_orchestrator_text_segments($text),static fn(string $line):bool=>!str_contains($line,'?')&&!str_contains($line,'¿'));
     $flat=preg_replace('/\s+/u',' ',hache_sharky_orchestrator_normalize(implode(' ',$declarations)))??'';
     if(($c['program']??'')==='intensive'&&!str_contains($flat,'?')&&!str_contains($flat,'¿')&&!hache_sharky_commercial_relative_date_question($text)){
@@ -458,8 +496,30 @@ function hache_sharky_commercial_reply(array $state,string $answer,array $catalo
 {
     $state=hache_sharky_commercial_force_intensive_eligibility($state);
     $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+
+    if(($c['program']??null)==='regular'&&($c['swim_level']??null)!=='swims'){
+        return hache_sharky_orchestrator_decision('commercial_level_required','Antes de continuar con clases regulares necesito confirmar algo: ¿ya sabes nadar o estás empezando desde cero?');
+    }
+    if(($c['program']??null)==='regular'&&($c['background']??null)!=='formal'){
+        return hache_sharky_orchestrator_decision('commercial_background_required','Antes de ofrecerte clases regulares necesito confirmar algo: ¿has tomado clases formales de natación con un profesor o entrenador?');
+    }
+
+    $catalogSede=(string)($catalog['_sede']??'');$catalogProgram=(string)($catalog['_program']??'');
+    $catalogStale=($catalogSede!==''&&$catalogSede!==(string)($c['sede_clave']??''))
+        ||($catalogProgram!==''&&$catalogProgram!==(string)($c['program']??''));
+    if($catalogStale){
+        $safe=trim(preg_replace('/¿[^?]*\?/u','',$answer)??$answer);
+        if($safe===''){
+            $venue=($c['sede_clave']??'')==='PALAPAS'?'Palapas Protudec':'Colegio Monteverde';
+            $safe='Ya actualicé el contexto a '.$venue.'. Puedo mostrarte los horarios vigentes de esta sede.';
+        }
+        return hache_sharky_orchestrator_decision('commercial_scope_refreshed',$safe);
+    }
+
     $requestedCourse=($c['_requested_slot']??null)==='course'&&($c['program']??null)==='intensive'&&in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true);
     $next=$requestedCourse?['slot'=>'course','prompt'=>'Elige uno de los inicios disponibles.']:hache_sharky_commercial_next($state);
+    $daypart=hache_sharky_commercial_schedule_daypart($answer);
+    $uiCatalog=hache_sharky_commercial_filter_catalog_daypart($catalog,$daypart);
     $answer=preg_replace('/¿[^?]*\?/u','',$answer)??$answer;
     $message=$requestedCourse?'Estos son los inicios disponibles actualmente en '.(($c['sede_clave']??'')==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec').'.':trim($answer);
     $slot=(string)$next['slot'];
@@ -474,6 +534,6 @@ function hache_sharky_commercial_reply(array $state,string $answer,array $catalo
         $message.=($message!==''?"\n\n":'').$next['prompt'];
     }
 
-    $ui=hache_sharky_commercial_control_ui($state,$catalog,$next);
+    $ui=hache_sharky_commercial_control_ui($state,$uiCatalog,$next);
     return hache_sharky_orchestrator_decision('commercial_progress',$message,$ui);
 }
