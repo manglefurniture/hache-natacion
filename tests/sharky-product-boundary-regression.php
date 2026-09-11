@@ -91,7 +91,13 @@ product_boundary_ok(!isset($cleanIntensiveAfter['commercial_context']['recommend
 
 $modelRegular="Clases regulares:\n• 3 clases por semana: $1000 MXN\n• 5 clases por semana: $1200 MXN";
 $guarded=hache_sharky_product_boundary_model_answer($modelRegular,$beginner,'Precio de las clases')??'';
-product_boundary_ok(!str_contains(hache_sharky_product_boundary_normalize($guarded),'3 clases por semana')&&str_contains(hache_sharky_product_boundary_normalize($guarded),'persona del equipo'),'Model output cannot leak a regular plan to a beginner.');
+$guardedNorm=hache_sharky_product_boundary_normalize($guarded);
+product_boundary_ok(
+    !str_contains($guardedNorm,'3 clases por semana')
+    &&!str_contains($guardedNorm,'persona del equipo')
+    &&str_contains($guardedNorm,'seguimos con el curso intensivo'),
+    'Generic price/classes wording must keep the active intensive product while blocking a model-written regular leak.'
+);
 $guardedPending=hache_sharky_product_boundary_model_answer($modelRegular,$unknownBackground,'¿Qué planes hay?');
 product_boundary_ok(str_contains(hache_sharky_product_boundary_normalize($guardedPending),'has tomado clases formales'),'Model output cannot offer regular plans before formal-history qualification.');
 $guardedFresh=hache_sharky_product_boundary_model_answer($modelRegular,$fresh,'¿Qué opciones tienen?');

@@ -81,8 +81,9 @@ $GLOBALS['brain_conversational_model_calls']=0;
 $GLOBALS['brain_conversational_model_answer']="¡Hola!\n\n¡Claro!\n\n¿Ya sabes nadar o estás empezando desde cero?";
 $open=hache_sharky_brain_2ba_apply($before,$guidedRaw,$event,$config,$contact,true,1788886801);
 brain_conversational_ok(
-    !is_array($open['state']['flow']??null),
-    'Conversational mode must remove only the qualify_prospect rail before durable persistence.'
+    ($open['state']['flow']['name']??null)==='qualify_prospect'
+    &&($open['state']['flow']['step']??null)==='swim',
+    'Conversational mode must retain the qualification cursor so short next-turn replies keep their exact meaning.'
 );
 brain_conversational_ok(
     ($open['state']['brain_conversational_experiment']??false)===true,
@@ -119,6 +120,10 @@ brain_conversational_ok(
     str_contains((string)($GLOBALS['brain_conversational_instruction']??''),'no preguntes intensivo vs. clases regulares')
     &&str_contains((string)($GLOBALS['brain_conversational_instruction']??''),'no vuelques todos los horarios'),
     'Experimental prompt must respect ad intent and keep mobile replies concise.'
+);
+brain_conversational_ok(
+    str_contains((string)($GLOBALS['brain_conversational_instruction']??''),'Paso pendiente de calificación: NIVEL'),
+    'Brain must receive the exact pending qualification slot while keeping the visible reply conversational.'
 );
 unset($GLOBALS['brain_conversational_model_answer']);
 
@@ -245,8 +250,9 @@ $openRaw=$open;
 unset($openRaw['_brain_2ba'],$openRaw['_brain_conversational']);
 $restored=hache_sharky_brain_2ba_apply($open['state'],$openRaw,['text'=>'Quiero seguir'],$off,$contact,true,1788886807);
 brain_conversational_ok(
-    ($restored['state']['flow']['name']??'')==='qualify_prospect',
-    'Switching Brain OFF must restore the deterministic qualification flow on the next safe turn.'
+    ($restored['state']['flow']['name']??'')==='qualify_prospect'
+    &&($restored['state']['flow']['step']??'')==='swim',
+    'Switching Brain OFF must preserve the existing deterministic qualification cursor.'
 );
 brain_conversational_ok(
     !array_key_exists('brain_conversational_experiment',$restored['state']),

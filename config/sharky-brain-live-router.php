@@ -74,8 +74,6 @@ function hache_sharky_brain_2ba_config(PDO $pdo): array
         }
         return $values;
     }catch(Throwable $e){
-        // Live Brain is optional. If its config authority is unavailable, fail
-        // closed to deterministic/shadow behavior, never to open conversation.
         error_log('[sharky-brain] configuration unavailable; live routing disabled');
         return [
             HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'0',
@@ -88,8 +86,6 @@ function hache_sharky_brain_2ba_config(PDO $pdo): array
 /** @return list<string> */
 function hache_sharky_brain_2ba_live_actions(): array
 {
-    // Phase 2B-A remains unchanged. The conversational experiment is deliberately
-    // implemented as a separate layer so OFF restores this exact behavior.
     return ['start_guided_qualification','show_commercial_menu'];
 }
 
@@ -137,8 +133,6 @@ function hache_sharky_brain_2ba_result_protected(array $result): bool
     $action=is_array($decision['action']??null)?$decision['action']:[];
     if(($action['type']??'')==='human_takeover')return true;
 
-    // Only generic prospect presentation decisions are eligible for a low-risk
-    // Brain correction. Everything concrete stays owned by the current backend.
     return !in_array((string)($decision['kind']??''),[
         'conversation','conversation_identity_prompt','side_question',
         'commercial_progress','commercial_next_action',
@@ -151,8 +145,6 @@ function hache_sharky_brain_conversational_explicit_pause(string $text): bool
     $t=hache_sharky_orchestrator_normalize($text);
     $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
     if($t==='')return false;
-    // "Déjame ver los horarios/opciones" is a request for information, not a pause.
-    // Reserve the broad detector for verbs that unambiguously mean deliberation.
     if(preg_match('/\b(?:dejame|deje|permiteme)\s+(?:analizar|pensar|revisar|checar)\b/u',$t)===1)return true;
     if(preg_match('/\b(?:lo|esto|eso|me\s+lo)\s+voy\s+a\s+(?:analizar|pensar|revisar|checar)\b/u',$t)===1)return true;
     return preg_match('/^(?:voy\s+a\s+pensarlo|lo\s+pienso\s+y\s+te\s+(?:digo|aviso|confirmo)|dejame\s+pensarlo)(?:\s+por\s+favor)?[.! ]*$/u',$t)===1;
@@ -213,13 +205,6 @@ function hache_sharky_brain_conversational_pause_result(array $state,array $resu
     return $result;
 }
 
-/**
- * Conversational experiment: remove only the guided qualification rail.
- *
- * Protected flows remain untouched. If the model is unavailable or returns an
- * empty answer, the original deterministic result is returned as an automatic
- * fallback for the same turn.
- */
 function hache_sharky_brain_conversational_apply(
     array $beforeState,
     array $result,
@@ -235,9 +220,6 @@ function hache_sharky_brain_conversational_apply(
     $state=is_array($result['state']??null)?$result['state']:[];
     if(!hache_sharky_brain_2ba_unmatched_prospect($state))return $result;
 
-    // A bare number has no intrinsic semantic type in WhatsApp. If the generic
-    // age extractor just created an age from it, restore the pre-turn age and
-    // force Brain to resolve the number against the actual conversational context.
     $message=trim((string)($state['last_user_text']??''));
     if($message==='')$message=trim((string)($event['text']??''));
     $ambiguousAgeDrift=hache_sharky_brain_conversational_ambiguous_numeric_age_drift($beforeState,$state,$message);
@@ -261,18 +243,17 @@ function hache_sharky_brain_conversational_apply(
     $qualificationFlow=is_array($flow)&&($flow['name']??'')==='qualify_prospect';
     if(is_array($flow)&&!$qualificationFlow)return $result;
 
+    // A semantic qualification cursor is not a protected business operation.
+    // Explicit deliberation must still pause the sales push while preserving the
+    // cursor for a later resume.
+    if(hache_sharky_brain_conversational_explicit_pause($message)){
+        return hache_sharky_brain_conversational_pause_result($state,$result,$contact,$now);
+    }
+
     $kind=(string)($decision['kind']??'');
     $softKinds=['conversation','conversation_identity_prompt','side_question','commercial_progress'];
 
-    // Once the guided rail has been removed, keep the existing natural response
-    // path. An explicit “déjame pensarlo/analizarlo” is the one deterministic
-    // conversational intervention: stop the sales push and wait for the person.
-    // Ambiguous numeric age drift is the other exception: the contaminated reply
-    // must be regenerated once with the corrected state instead of passed through.
     if(!$qualificationFlow&&!$ambiguousAgeDrift){
-        if(hache_sharky_brain_conversational_explicit_pause($message)){
-            return hache_sharky_brain_conversational_pause_result($state,$result,$contact,$now);
-        }
         if(!in_array($kind,$softKinds,true))return $result;
         $now??=time();
         $state['brain_conversational_experiment']=true;
@@ -289,9 +270,8 @@ function hache_sharky_brain_conversational_apply(
         return $result;
     }
 
-    $openState=$qualificationFlow&&function_exists('hache_sharky_orchestrator_clear_flow')
-        ?hache_sharky_orchestrator_clear_flow($state)
-        :$state;
+    $openState=$state;
+    $qualificationStep=$qualificationFlow?(string)($flow['step']??''):'';
     $now??=time();
     $openState['brain_conversational_experiment']=true;
     $openState['updated_at']=$now;
@@ -299,6 +279,11 @@ function hache_sharky_brain_conversational_apply(
     $seed=hache_sharky_orchestrator_decision('conversation','');
     $instruction=hache_sharky_whatsapp_style_instruction($seed,$openState);
     $instruction.="\n\nMODO BRAIN CONVERSACIONAL EXPERIMENTAL: responde primero a lo que realmente preguntó la persona y conduce la conversación con naturalidad. Haz como máximo una pregunta útil por turno cuando haga falta avanzar. En el primer turno no saludes ni añadas muletillas como ‘¡Claro!’ o ‘¡Con gusto!’: la presentación de Sharky se agrega de forma determinística aparte. Si commercial_context.entry_source es meta_ad y entry_interest es intensive, considera el curso intensivo como el tema actual y no preguntes intensivo vs. clases regulares salvo que la persona cambie explícitamente de interés. Mantén la respuesta breve y móvil: no vuelques todos los horarios, fechas o variantes cuando basta un resumen. Un número aislado es ambiguo: no lo conviertas en edad por tu cuenta; resuélvelo con el contexto conversacional anterior y, si sigue siendo ambiguo, pregunta brevemente qué significa. Solo trata una edad como confirmada cuando la persona la expresa inequívocamente (por ejemplo, ‘tengo 62 años’). Puedes explicar, comparar y cambiar de tema usando únicamente datos confirmados por el contexto de Hache Natación. No inventes precios, horarios, cupos, políticas ni datos del alumno. No afirmes haber ejecutado pagos, inscripciones, cancelaciones, reposiciones, cambios de datos ni ninguna operación sensible: esas acciones pertenecen exclusivamente a los flujos y ejecutores determinísticos del backend. Si una operación requiere un flujo protegido, deja que el backend tome el control.";
+    if($qualificationStep==='swim')$instruction.="\nPaso pendiente de calificación: NIVEL. Si hace falta avanzar, pregunta únicamente si ya sabe nadar o empieza desde cero; no le pidas elegir producto todavía.";
+    elseif($qualificationStep==='background')$instruction.="\nPaso pendiente de calificación: FORMACIÓN PREVIA. Si hace falta avanzar, pregunta únicamente si ha tomado clases formales de natación o aprendió por su cuenta. No repitas esta pregunta si commercial_context.background ya está confirmado.";
+    elseif($qualificationStep==='program')$instruction.="\nPaso pendiente de calificación: PROGRAMA. Solo una persona con formación formal confirmada puede elegir regulares automáticamente.";
+    elseif($qualificationStep==='sede')$instruction.="\nPaso pendiente de calificación: SEDE. Conserva el programa ya confirmado y pregunta únicamente qué sede prefiere si todavía no la indicó.";
+    elseif($qualificationStep==='daypart')$instruction.="\nPaso pendiente de calificación: TURNO. Conserva programa y sede; pregunta únicamente matutino o vespertino si aún falta esa preferencia.";
 
     $context=[
         'today'=>function_exists('hache_sharky_lab_today')?hache_sharky_lab_today():date('Y-m-d'),
@@ -333,11 +318,6 @@ function hache_sharky_brain_conversational_apply(
     return $result;
 }
 
-/**
- * If the experiment is switched OFF while a prospect is already in open mode,
- * restore the deterministic qualification flow on the next safe conversational
- * turn. Protected operations are never interrupted.
- */
 function hache_sharky_brain_conversational_restore(
     array $result,
     string $contact,
@@ -348,17 +328,31 @@ function hache_sharky_brain_conversational_restore(
     $state=is_array($result['state']??null)?$result['state']:[];
     if(($state['brain_conversational_experiment']??false)!==true)return $result;
     if(!hache_sharky_brain_2ba_unmatched_prospect($state))return $result;
-    if(is_array($state['flow']??null)||is_array($result['action_result']??null))return $result;
+    if(is_array($result['action_result']??null))return $result;
+
+    $flow=is_array($state['flow']??null)?$state['flow']:null;
+    if(is_array($flow)&&($flow['name']??'')!=='qualify_prospect')return $result;
 
     $decision=is_array($result['decision']??null)?$result['decision']:[];
     $action=is_array($decision['action']??null)?$decision['action']:[];
     if(($action['type']??'')==='human_takeover')return $result;
+
+    $now??=time();
+    unset($state['brain_conversational_experiment']);
+
+    if(is_array($flow)&&($flow['name']??'')==='qualify_prospect'){
+        $state['updated_at']=$now;
+        $result['state']=$state;
+        $result['_brain_2ba']=['applied'=>true,'action'=>'brain_conversational_restore'];
+        $result['_brain_conversational']=['applied'=>false,'fallback'=>'deterministic'];
+        hache_sharky_brain_2ba_metric('brain_conversational_restored');
+        return $result;
+    }
+
     if(!in_array((string)($decision['kind']??''),[
         'conversation','conversation_identity_prompt','side_question','commercial_progress',
     ],true))return $result;
 
-    $now??=time();
-    unset($state['brain_conversational_experiment']);
     [$state,$decision]=hache_sharky_whatsapp_qualification_start($state,$now);
     $state['updated_at']=$now;
     $result['state']=$state;
@@ -371,11 +365,6 @@ function hache_sharky_brain_conversational_restore(
     return $result;
 }
 
-/**
- * Pure Phase 2B-A gate. It never sends, persists or mutates business state.
- *
- * @return array{status:string,action:?string,evaluation:?array}
- */
 function hache_sharky_brain_2ba_plan(
     array $beforeState,
     array $result,
@@ -393,20 +382,14 @@ function hache_sharky_brain_2ba_plan(
     $pct=hache_sharky_brain_2ba_canary_percent($business);
     if(!hache_sharky_brain_2ba_contact_in_canary($contact,$pct))return ['status'=>'outside_canary','action'=>null,'evaluation'=>null];
 
-    // Protected live results are an absolute barrier. They never enter the live
-    // Brain comparator, even when shadow already agrees with the current route.
     if(hache_sharky_brain_2ba_result_protected($result))return ['status'=>'blocked_protected','action'=>null,'evaluation'=>null];
 
     $evaluation=hache_sharky_brain_shadow_evaluate($beforeState,$state,$event,$result,true);
     $brain=is_array($evaluation['brain']??null)?$evaluation['brain']:[];
     $action=(string)($brain['action']??'');
 
-    // If current live already made the same eligible routing choice, leave its
-    // exact payload/state untouched instead of rewriting an aligned result.
     if(($evaluation['match']??false)===true)return ['status'=>'aligned','action'=>$action,'evaluation'=>$evaluation];
 
-    // These are intentionally explicit so a future Brain change cannot silently
-    // turn Phase 2B-A into an open conversational router.
     if(in_array($action,['answer_user','continue_discovery'],true)){
         return ['status'=>'blocked_open_conversation','action'=>$action,'evaluation'=>$evaluation];
     }
@@ -436,10 +419,6 @@ function hache_sharky_brain_2ba_metric(string $key): void
     if(function_exists('hache_sharky_metric_increment'))hache_sharky_metric_increment($key);
 }
 
-/**
- * Apply the conversational experiment first. When OFF, restore any previously
- * open prospect and then execute the original Phase 2B-A router unchanged.
- */
 function hache_sharky_brain_2ba_apply(
     array $beforeState,
     array $result,

@@ -47,6 +47,14 @@ schedule_scope_ok(hache_sharky_schedule_guard_answer_ranges('Horario de 6:00 p. 
 schedule_scope_ok(hache_sharky_schedule_guard_answer_ranges('Horario de 7 a 8 p.m.')===['19:00–20:00'],'Trailing meridiem must scope both ends.');
 schedule_scope_ok(hache_sharky_schedule_guard_answer_ranges('Tenemos planes de 3 a 5 clases por semana.')===[],'Weekly-plan prose must not be parsed as clock time.');
 
+// A bare turn preference is valid, but ordinary greetings/relative “mañana” are not.
+schedule_scope_ok(hache_sharky_schedule_guard_daypart('En la mañana')==='morning','Bare “En la mañana” must be recognized as the pending schedule choice.');
+schedule_scope_ok(hache_sharky_schedule_guard_daypart('Por la noche')==='evening','Bare “Por la noche” must be recognized as the pending schedule choice.');
+schedule_scope_ok(hache_sharky_schedule_guard_daypart('Buenas noches')===null,'A greeting must never be interpreted as an evening schedule choice.');
+schedule_scope_ok(hache_sharky_schedule_guard_daypart('Mañana te confirmo')===null,'Relative tomorrow language must never be interpreted as a morning schedule choice.');
+schedule_scope_ok(hache_sharky_schedule_guard_scoped_reply('Buenas noches',$state,$loader)===null,'A greeting must fall through to normal conversation rather than emit schedules.');
+schedule_scope_ok(hache_sharky_schedule_guard_scoped_reply('Mañana te confirmo',$state,$loader)===null,'A relative-date message must fall through rather than emit morning schedules.');
+
 // Patty 20:11: this answer was correct. “Ambos” followed Sharky's question
 // about morning/tarde; it must not be silently reinterpreted as both venues.
 $correctPattyFirst="¡Claro! Para curso intensivo (Colegio Monteverde) los horarios activos son:\n\n"
@@ -68,6 +76,10 @@ schedule_scope_ok(str_contains($morningReply,'08:00–09:00'),'Monteverde intens
 schedule_scope_ok(!str_contains($morningReply,'Palapas Protudec'),'Morning follow-up must not jump to Palapas.');
 schedule_scope_ok(!str_contains($morningReply,'06:00–07:00')&&!str_contains($morningReply,'07:00–08:00'),'Monteverde regular-only morning slots must never appear as intensive.');
 schedule_scope_ok(!str_contains($morningReply,'19:00–20:00')&&!str_contains($morningReply,'20:00–21:00'),'Morning-only reply must filter out evening intensive times.');
+
+$bareMorning=hache_sharky_schedule_guard_scoped_reply('En la mañana',$followupState,$loader)??'';
+schedule_scope_ok(str_contains($bareMorning,'08:00–09:00'),'Exact field wording “En la mañana” must resolve the verified Monteverde intensive morning slot.');
+schedule_scope_ok(!str_contains($bareMorning,'06:00–07:00')&&!str_contains($bareMorning,'07:00–08:00')&&!str_contains($bareMorning,'19:00–20:00'),'Bare morning selection must not leak regular or evening schedules.');
 
 $wrongPattyAnswer="Sí 😊 En la mañana, los horarios activos para intensivo son estos:\n\n"
     ."• Palapas Protudec: 07:00–08:00, 08:00–09:00 y 09:00–10:00\n"
