@@ -342,9 +342,10 @@ function hache_sharky_brain_conversational_apply(
 }
 
 /**
- * If the experiment is switched OFF while a prospect is already in open mode,
- * restore the deterministic qualification flow on the next safe conversational
- * turn. Protected operations are never interrupted.
+ * If the experiment is switched OFF while a prospect is already in conversational
+ * mode, remove the experiment marker on the next safe turn. When the semantic
+ * qualification cursor is still present, preserve it exactly instead of rebuilding
+ * the flow from incomplete commercial memory.
  */
 function hache_sharky_brain_conversational_restore(
     array $result,
@@ -356,17 +357,34 @@ function hache_sharky_brain_conversational_restore(
     $state=is_array($result['state']??null)?$result['state']:[];
     if(($state['brain_conversational_experiment']??false)!==true)return $result;
     if(!hache_sharky_brain_2ba_unmatched_prospect($state))return $result;
-    if(is_array($state['flow']??null)||is_array($result['action_result']??null))return $result;
+    if(is_array($result['action_result']??null))return $result;
+
+    $flow=is_array($state['flow']??null)?$state['flow']:null;
+    if(is_array($flow)&&($flow['name']??'')!=='qualify_prospect')return $result;
 
     $decision=is_array($result['decision']??null)?$result['decision']:[];
     $action=is_array($decision['action']??null)?$decision['action']:[];
     if(($action['type']??'')==='human_takeover')return $result;
+
+    $now??=time();
+    unset($state['brain_conversational_experiment']);
+
+    if(is_array($flow)&&($flow['name']??'')==='qualify_prospect'){
+        // The current base pipeline already advanced/validated this exact
+        // qualification step before the live Brain router runs. Keep that result
+        // and only remove the experimental marker.
+        $state['updated_at']=$now;
+        $result['state']=$state;
+        $result['_brain_2ba']=['applied'=>true,'action'=>'brain_conversational_restore'];
+        $result['_brain_conversational']=['applied'=>false,'fallback'=>'deterministic'];
+        hache_sharky_brain_2ba_metric('brain_conversational_restored');
+        return $result;
+    }
+
     if(!in_array((string)($decision['kind']??''),[
         'conversation','conversation_identity_prompt','side_question','commercial_progress',
     ],true))return $result;
 
-    $now??=time();
-    unset($state['brain_conversational_experiment']);
     [$state,$decision]=hache_sharky_whatsapp_qualification_start($state,$now);
     $state['updated_at']=$now;
     $result['state']=$state;
