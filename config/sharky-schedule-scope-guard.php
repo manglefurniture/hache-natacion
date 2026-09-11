@@ -29,12 +29,6 @@ function hache_sharky_schedule_guard_venue_selection(string $text): ?string
     return null;
 }
 
-/**
- * Resolve only explicit product nouns. Bare pronouns such as "ambas" or
- * "de las dos" never mean "both programs" by themselves.
- *
- * @return list<string>
- */
 function hache_sharky_schedule_guard_requested_programs(string $text,string $activeProgram): array
 {
     if(!in_array($activeProgram,['intensive','regular'],true))return [];
@@ -53,22 +47,37 @@ function hache_sharky_schedule_guard_cross_program_request(string $text,string $
     return $programs!==[]&&($programs!==[$activeProgram]);
 }
 
+function hache_sharky_schedule_guard_meridiem_hour(int $hour,string $meridiem): ?int
+{
+    $meridiem=strtolower(preg_replace('/[.\s]+/u','',$meridiem)??'');
+    if($meridiem==='')return ($hour>=0&&$hour<=23)?$hour:null;
+    if(!in_array($meridiem,['am','pm'],true)||$hour<1||$hour>12)return null;
+    if($meridiem==='am')return $hour===12?0:$hour;
+    return $hour===12?12:$hour+12;
+}
+
 /** @return list<string> */
 function hache_sharky_schedule_guard_answer_ranges(string $answer): array
 {
     $out=[];
     $t=hache_sharky_schedule_guard_normalize($answer);
     $hasScheduleWord=preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
-    $pattern='/(?<!\d)(?:de\s+|desde\s+)?(\d{1,2})(?::([0-5]\d))?\s*(?:a|–|-)\s*(\d{1,2})(?::([0-5]\d))?(?!\d)/ui';
+    $mer='(?:a\.?\s*m\.?|p\.?\s*m\.?)';
+    $pattern='/(?<!\d)(?:de\s+|desde\s+)?(\d{1,2})(?::([0-5]\d))?\s*('.$mer.')?\s*(?:a|–|-)\s*(\d{1,2})(?::([0-5]\d))?\s*('.$mer.')?(?!\d)/ui';
     if(preg_match_all($pattern,$answer,$matches,PREG_SET_ORDER)!==false){
         foreach($matches as $m){
-            $h1=(int)$m[1];$h2=(int)$m[3];
             $m1=(isset($m[2])&&$m[2]!=='')?(int)$m[2]:0;
-            $m2=(isset($m[4])&&$m[4]!=='')?(int)$m[4]:0;
-            if($h1>23||$h2>23||$m1>59||$m2>59)continue;
-            $hasMinutes=(isset($m[2])&&$m[2]!=='')||(isset($m[4])&&$m[4]!=='');
-            // Avoid reading prose such as "3 a 5 clases por semana" as clock time.
-            if(!$hasMinutes&&!$hasScheduleWord)continue;
+            $m2=(isset($m[5])&&$m[5]!=='')?(int)$m[5]:0;
+            $mer1=trim((string)($m[3]??''));$mer2=trim((string)($m[6]??''));
+            // "de 6 a 7 p. m." conventionally scopes the final meridiem to both ends.
+            if($mer1===''&&$mer2!=='')$mer1=$mer2;
+            elseif($mer2===''&&$mer1!=='')$mer2=$mer1;
+            $h1=hache_sharky_schedule_guard_meridiem_hour((int)$m[1],$mer1);
+            $h2=hache_sharky_schedule_guard_meridiem_hour((int)$m[4],$mer2);
+            if($h1===null||$h2===null||$m1>59||$m2>59)continue;
+            $hasMinutes=(isset($m[2])&&$m[2]!=='')||(isset($m[5])&&$m[5]!=='');
+            $hasMeridiem=$mer1!==''||$mer2!=='';
+            if(!$hasMinutes&&!$hasMeridiem&&!$hasScheduleWord)continue;
             $out[]=sprintf('%02d:%02d–%02d:%02d',$h1,$m1,$h2,$m2);
         }
     }
@@ -149,12 +158,6 @@ function hache_sharky_schedule_guard_reply(string $text,array $state): ?string
     return hache_sharky_schedule_guard_invalid_selection_from_hours($text,$state,$hours);
 }
 
-/**
- * Final firewall for model-authored schedule output. A lateral question may use
- * the other product, but its hours are still rendered from backend authority.
- *
- * @param null|callable(string,string):array $scheduleLoader Test seam; production uses PDO.
- */
 function hache_sharky_schedule_guard_model_answer(string $answer,array $state,string $userText='',?callable $scheduleLoader=null): string
 {
     $commercial=hache_sharky_deterministic_commercial($state);if($commercial===null)return $answer;
@@ -180,8 +183,6 @@ function hache_sharky_schedule_guard_model_answer(string $answer,array $state,st
         return hache_sharky_schedule_guard_unavailable_message();
     }
 
-    // Explicitly asking about the other product (or both products) is a lateral
-    // consultation, not authority for the model to invent or mix schedules.
     if($requested!==[$commercial['program']]){
         $parts=[];
         foreach($requested as $program)$parts[]=hache_sharky_schedule_guard_message_from_hours($program,$commercial['sede'],$verified[$program]??[]);
