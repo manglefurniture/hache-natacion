@@ -510,6 +510,67 @@ function hache_sharky_orchestrator_registration_course_step(array $state,array $
     ],array_slice($options,0,10))])];
 }
 
+/**
+ * Informational schedule lookups are allowed while the protected intensive
+ * enrollment is open. They must never mutate the enrollment scope or become a
+ * business action. The live intensive_options supplied by the backend remain the
+ * only authority for the hours shown here.
+ *
+ * @return array{0:array,1:array}|null
+ */
+function hache_sharky_orchestrator_registration_schedule_side_query(array $state,array $flow,array $context,string $text): ?array
+{
+    $t=hache_sharky_orchestrator_normalize($text);
+    if($t===''||preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)!==1)return null;
+
+    $flowData=is_array($flow['data']??null)?$flow['data']:[];
+    $current=strtoupper((string)($flowData['sede_clave']??($state['commercial_context']['sede_clave']??'')));
+    if(!in_array($current,['MONTEVERDE','PALAPAS'],true))return null;
+
+    $hasMv=preg_match('/\bmonteverde\b/u',$t)===1;
+    $hasPal=preg_match('/\bpalapas(?:\s+protudec)?\b/u',$t)===1;
+    $both=($hasMv&&$hasPal)||preg_match('/\b(?:ambas?\s+sedes?|las\s+dos\s+sedes)\b/u',$t)===1;
+    $other=preg_match('/\b(?:la\s+)?otra\s+(?:sede|ubicacion)|\b(?:el\s+)?otro\s+(?:plantel|lugar)\b/u',$t)===1;
+
+    if($both)$targets=['MONTEVERDE','PALAPAS'];
+    elseif($hasMv)$targets=['MONTEVERDE'];
+    elseif($hasPal)$targets=['PALAPAS'];
+    elseif($other)$targets=[$current==='MONTEVERDE'?'PALAPAS':'MONTEVERDE'];
+    else return null;
+
+    // commercial_capture may have interpreted an informational named-venue
+    // phrase as a browse selection before the protected flow gets this turn.
+    // Restore the exact enrollment scope from flow data before answering.
+    $state['commercial_context']['sede_clave']=$current;
+    foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key){
+        if(array_key_exists($key,$flowData))$state['commercial_context'][$key]=$flowData[$key];
+    }
+
+    $labels=['MONTEVERDE'=>'Colegio Monteverde','PALAPAS'=>'Palapas Protudec'];
+    $sections=[];
+    foreach($targets as $target){
+        $hours=[];
+        foreach($context['intensive_options']??[] as $course){
+            if(!is_array($course)||strtoupper((string)($course['sede_clave']??''))!==$target)continue;
+            foreach(is_array($course['schedules']??null)?$course['schedules']:[] as $schedule){
+                $label=trim((string)($schedule['label']??''));
+                if($label!=='')$hours[$label]=true;
+            }
+        }
+        $hours=array_keys($hours);sort($hours,SORT_STRING);
+        if($hours){
+            $sections[]='🕐 Horarios vigentes del curso intensivo en '.$labels[$target].':'."\n\n"
+                .implode("\n",array_map(static fn(string $hour):string=>'• '.$hour,$hours));
+        }else{
+            $sections[]='Ahora mismo no encuentro horarios activos del curso intensivo en '.$labels[$target].'. Prefiero no inventarte uno.';
+        }
+    }
+
+    $message=implode("\n\n",$sections)
+        ."\n\n".'Tu inscripción actual sigue en '.$labels[$current].'. No cambié la sede ni tu selección. Cuando quieras, continúa con el paso que tenías abierto.';
+    return [$state,hache_sharky_orchestrator_decision('side_question',$message)];
+}
+
 function hache_sharky_orchestrator_handle_flow(array $state, array $event, array $context, string $intent, int $now): array
 {
     $flow = $state['flow'];
@@ -569,7 +630,7 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
             return [$state, hache_sharky_orchestrator_yes_no('absence_confirm','Voy a registrar tu ausencia para '.$date.'. ¿Confirmas?','flow:confirm')];
         }
         if ($step === 'confirm') {
-            if ($intent !== 'yes') return [$state, hache_sharky_orchestrator_yes_no('absence_confirm','¿Confirmas registrar la ausencia para '.($data['date_from'] ?? '').'?','flow:confirm')];
+            if ($intent !== 'yes') return [$state,hache_sharky_orchestrator_yes_no('absence_confirm','¿Confirmas registrar la ausencia para '.($data['date_from'] ?? '').'?','flow:confirm')];
             $action = [
                 'type'=>'create_absence',
                 'student_id'=>$state['identity']['student_id'],
@@ -584,6 +645,10 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
     }
 
     if ($name === 'register_intensive') {
+        if($interactive===''){
+            $side=hache_sharky_orchestrator_registration_schedule_side_query($state,$flow,$context,$text);
+            if(is_array($side))return $side;
+        }
         if ($step === 'offer') {
             $currentProgram=(string)($state['commercial_context']['program']??'');
             if($currentProgram==='regular'){
@@ -618,10 +683,20 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
             return hache_sharky_orchestrator_registration_course_step($state,$data,$context,$now);
         }
         if ($step === 'course') {
+            // Plain text can be a lateral question or an accidental free-form
+            // reply. Never turn it into refresh_intensive_options, because that
+            // pseudo-action is not a sensitive business action and must not reach
+            // the generic revalidation executor.
+            if($interactive==='')return hache_sharky_orchestrator_registration_course_step($state,$data,$context,$now);
             $courseId = str_starts_with($interactive,'course:') ? substr($interactive,7) : '';
             $course = null;
             foreach ($context['intensive_options'] ?? [] as $option) if (is_array($option) && (string)($option['id']??'') === $courseId) $course=$option;
-            if (!$course || strtoupper((string)($course['sede_clave']??'')) !== ($data['sede_clave']??'')) return [$state, hache_sharky_orchestrator_decision('registration_course_invalid','Esa opción ya no está disponible. Actualizaré las fechas antes de continuar.', [], ['type'=>'refresh_intensive_options'])];
+            if (!$course || strtoupper((string)($course['sede_clave']??'')) !== ($data['sede_clave']??'')) {
+                foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key)unset($state['commercial_context'][$key],$data[$key]);
+                [$state,$decision]=hache_sharky_orchestrator_registration_course_step($state,$data,$context,$now);
+                $decision['message']='Esa opción ya no está disponible. '.trim((string)($decision['message']??''));
+                return [$state,$decision];
+            }
             $data['course_id']=$courseId;
             $data['fecha_inicio']=$course['fecha_inicio']??null;
             $data['course_price']=is_numeric($course['precio']??null)?(float)$course['precio']:null;
