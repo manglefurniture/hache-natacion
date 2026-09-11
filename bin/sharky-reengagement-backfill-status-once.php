@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../config/sharky-runtime.php';
 require_once __DIR__.'/../config/sharky-outbox.php';
 require_once __DIR__.'/../config/sharky-followup.php';
+require_once __DIR__.'/../config/sharky-delivery-status.php';
 
 const HACHE_SHARKY_BACKFILL_STATUS_APPROVAL_SNAPSHOT_UTC = '2026-09-11T17:35:33+00:00';
 const HACHE_SHARKY_BACKFILL_STATUS_CUTOVER_LOCAL = '2026-09-10 13:52:26';
@@ -28,6 +29,11 @@ function hache_sharky_reengagement_backfill_status_once(?PDO $pdo=null, ?int $no
     if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
     if(!hache_sharky_orchestrator_store_ready($pdo))throw new RuntimeException('Sharky store unavailable');
 
+    $deliveryReady=hache_sharky_delivery_schema_ready($pdo);
+    $deliveryLookup=$deliveryReady
+        ?$pdo->prepare('SELECT status,provider_event_at_utc FROM sharky_delivery_status WHERE provider_message_id=:id LIMIT 1')
+        :null;
+
     $stats=[
         'mode'=>'approved-backfill-status-once',
         'approval_snapshot_utc'=>HACHE_SHARKY_BACKFILL_STATUS_APPROVAL_SNAPSHOT_UTC,
@@ -38,6 +44,12 @@ function hache_sharky_reengagement_backfill_status_once(?PDO $pdo=null, ?int $no
             'attempts'=>['zero'=>0,'one'=>0,'multiple'=>0],
             'provider_message_id_present'=>0,
             'sent_at_present'=>0,
+        ],
+        'provider_delivery'=>[
+            'schema_ready'=>$deliveryReady,
+            'correlated'=>0,
+            'status'=>['SENT'=>0,'DELIVERED'=>0,'READ'=>0,'FAILED'=>0,'NO_RECEIPT'=>0,'OTHER'=>0],
+            'latest_provider_event_at_utc'=>null,
         ],
         'errors'=>[],
         'template'=>['hache_retomar_inscripcion'=>0,'other'=>0],
@@ -72,8 +84,28 @@ function hache_sharky_reengagement_backfill_status_once(?PDO $pdo=null, ?int $no
         elseif($attempts===1)$stats['cohort']['attempts']['one']++;
         else $stats['cohort']['attempts']['multiple']++;
 
-        if(trim((string)($row['provider_message_id']??''))!=='')$stats['cohort']['provider_message_id_present']++;
+        $providerId=trim((string)($row['provider_message_id']??''));
+        if($providerId!=='')$stats['cohort']['provider_message_id_present']++;
         if(trim((string)($row['sent_at']??''))!=='')$stats['cohort']['sent_at_present']++;
+
+        if($providerId!==''&&$deliveryLookup instanceof PDOStatement){
+            $deliveryLookup->execute([':id'=>$providerId]);
+            $delivery=$deliveryLookup->fetch(PDO::FETCH_ASSOC);
+            if(is_array($delivery)){
+                $stats['provider_delivery']['correlated']++;
+                $providerStatus=strtoupper(trim((string)($delivery['status']??'')));
+                if(array_key_exists($providerStatus,$stats['provider_delivery']['status']))$stats['provider_delivery']['status'][$providerStatus]++;
+                else $stats['provider_delivery']['status']['OTHER']++;
+                $eventAt=trim((string)($delivery['provider_event_at_utc']??''));
+                if($eventAt!==''&&($stats['provider_delivery']['latest_provider_event_at_utc']===null||strcmp($eventAt,(string)$stats['provider_delivery']['latest_provider_event_at_utc'])>0)){
+                    $stats['provider_delivery']['latest_provider_event_at_utc']=$eventAt;
+                }
+            }else{
+                $stats['provider_delivery']['status']['NO_RECEIPT']++;
+            }
+        }elseif($providerId!==''){
+            $stats['provider_delivery']['status']['NO_RECEIPT']++;
+        }
 
         $error=trim((string)($row['last_error']??''));
         $error=$error===''?'NONE':mb_substr($error,0,120);
