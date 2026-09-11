@@ -100,10 +100,24 @@ Sharky handoff intent regression: OK
 [sharky-runtime] database unavailable
 SHARKY_COMMERCIAL_MEMORY_OK
 SHARKY_GUIDED_REFERRAL_DATE_OK
-PHP Warning:  Undefined variable $now in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php on line 1106
-PHP Fatal error:  Uncaught TypeError: hache_sharky_whatsapp_swim_level_conflict(): Argument #3 ($now) must be of type int, null given, called in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php on line 1106 and defined in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php:213
-Stack trace:
-#0 /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php(1106): hache_sharky_whatsapp_swim_level_conflict()
-#1 /home/runner/work/hache-natacion/hache-natacion/tests/sharky-commercial-memory-adapter-regression.php(54): hache_sharky_whatsapp_process()
-#2 {main}
-  thrown in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php on line 213
+[sharky-orchestrator] db state save failed
+[sharky-orchestrator] db state save failed
+[sharky-lab] durable delivery boundary failed
+SHARKY_COMMERCIAL_MEMORY_ADAPTER_OK
+Sharky orchestrator regression: OK
+SHARKY_WHATSAPP_FLOW_BIRTHDATE_OK
+SHARKY_ENROLLMENT_AFTER_RESERVE_OK
+OK sharky commerce Flows regression
+OK sharky commerce hardening regression
+SHARKY_COMMERCE_FLOW_V2_PINNING_OK
+Sharky virtual intensive date regression: OK
+Sharky deferred close regression: OK
+SHARKY_PR89_REVIEW_OK
+SHARKY_GROUPS_REGRESSION_OK
+SHARKY_CONVERSATION_COHERENCE_OK
+Sharky orchestrator static checks: OK
+PHP Warning:  Undefined variable $responseStatus in /home/runner/work/hache-natacion/hache-natacion/tests/sharky-whatsapp-adapter-regression.php on line 215
+SHARKY_WHATSAPP_ADAPTER_REGRESSION_OK
+SHARKY_BATCH_CONTEXT_OK
+SHARKY_TAKEOVER_RESUME_COMMAND_OK
+SHARKY SIDE QUESTION FAIL: The response must immediately resume the pending venue question.
