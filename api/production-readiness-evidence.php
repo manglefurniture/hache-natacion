@@ -52,6 +52,23 @@ if (!is_string($deployedSha)) {
     pr_internal_out(500, ['ok' => false]);
 }
 
+$mode = trim((string) ($_SERVER['HTTP_X_HACHE_EVIDENCE_MODE'] ?? ''));
+if ($mode === 'sharky_reengagement_backfill_dry_run') {
+    try {
+        require_once $root . '/bin/sharky-reengagement-backfill-dry-run.php';
+        $payload = ['ok' => true] + hache_sharky_reengagement_backfill_dry_run();
+        $payload['deployed_sha'] = $deployedSha;
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), "\n";
+        exit;
+    } catch (Throwable $e) {
+        error_log('[sharky-backfill-dry-run] internal scan failed');
+        pr_internal_out(500, ['ok' => false, 'reason' => 'DRY_RUN_UNAVAILABLE']);
+    }
+}
+if ($mode !== '') {
+    pr_internal_out(404, ['ok' => false]);
+}
+
 ob_start();
 define('HACHE_PR_INTERNAL_HTTP', true);
 require $root . '/bin/production-readiness-evidence.php';
