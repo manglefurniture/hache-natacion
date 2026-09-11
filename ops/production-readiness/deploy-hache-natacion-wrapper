@@ -157,6 +157,14 @@ run_sharky_reengagement_backfill_dry_run() {
   php "$script" --dry-run
 }
 
+run_sharky_reengagement_backfill_send_once() {
+  local script="$REPO/bin/sharky-reengagement-backfill-send-once.php"
+  [[ -f "$script" && ! -L "$script" ]] || fail "script one-shot de reconquista ausente."
+  require_command php
+  cd "$REPO"
+  php "$script" --execute-approved-20260911
+}
+
 main() {
   require_root
   [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -176,6 +184,10 @@ main() {
     sharky-backfill-dry-run)
       [[ "$#" -eq 1 ]] || fail "sharky-backfill-dry-run no acepta argumentos adicionales."
       run_sharky_reengagement_backfill_dry_run
+      ;;
+    sharky-backfill-send-once)
+      [[ "$#" -eq 1 ]] || fail "sharky-backfill-send-once no acepta argumentos adicionales."
+      run_sharky_reengagement_backfill_send_once
       ;;
     *)
       [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."

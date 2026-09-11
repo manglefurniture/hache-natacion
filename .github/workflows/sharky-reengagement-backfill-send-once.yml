@@ -1,4 +1,4 @@
-name: Sharky Reengagement Backfill Dry Run Once
+name: Sharky Approved Reengagement Send Once
 
 on:
   workflow_run:
@@ -10,14 +10,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: sharky-reengagement-backfill-dry-run-once
+  group: sharky-approved-reengagement-send-20260911
   cancel-in-progress: false
 
 jobs:
-  dry-run:
+  send-approved-cohort:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main' &&
+      contains(github.event.workflow_run.head_commit.message, 'Ops: enviar reconquista retroactiva aprobada')
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -35,7 +36,7 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Run privacy-safe production dry-run
+      - name: Revalidate and schedule approved cohort
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -50,12 +51,12 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "sudo /usr/local/sbin/deploy-hache-natacion sharky-backfill-dry-run")"
+            "sudo /usr/local/sbin/deploy-hache-natacion sharky-backfill-send-once")"
 
           RESULT="$result" php -r '
             $p=json_decode((string)getenv("RESULT"),true,512,JSON_THROW_ON_ERROR);
-            if(($p["mode"]??"")!=="dry-run"||($p["privacy"]??"")!=="aggregate_counts_only"){
-              fwrite(STDERR,"invalid dry-run response\n"); exit(1);
+            if(($p["mode"]??"")!=="approved-send-once"||($p["privacy"]??"")!=="aggregate_counts_only"){
+              fwrite(STDERR,"invalid approved backfill response\n"); exit(1);
             }
             echo json_encode($p,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR),"\n";
           '
