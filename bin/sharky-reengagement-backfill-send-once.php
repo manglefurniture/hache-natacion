@@ -32,6 +32,20 @@ function hache_sharky_reengagement_backfill_send_once(?PDO $pdo=null, ?int $now=
         'window_hours' => ['min' => 48, 'max' => 72],
         'stage2_sent_contacts' => 0,
         'scheduled_for_delivery' => 0,
+        'diagnostic' => [
+            'state_checked' => 0,
+            'followup_idle' => 0,
+            'followup_completed' => 0,
+            'followup_active' => 0,
+            'followup_other' => 0,
+            'token_matches_stage2' => 0,
+            'state_updated_matches_turn' => 0,
+            'next_stage_none' => 0,
+            'next_stage_1' => 0,
+            'next_stage_2' => 0,
+            'next_stage_3' => 0,
+            'next_stage_other' => 0,
+        ],
         'excluded' => [
             'decrypt_failed' => 0,
             'invalid_stage2_meta' => 0,
@@ -45,7 +59,8 @@ function hache_sharky_reengagement_backfill_send_once(?PDO $pdo=null, ?int $now=
             'replied_after_original_turn' => 0,
             'pending_inbound' => 0,
             'state_unavailable' => 0,
-            'stale_state' => 0,
+            'state_token_mismatch' => 0,
+            'state_updated_mismatch' => 0,
             'context_not_eligible' => 0,
             'context_changed' => 0,
             'queue_failed' => 0,
@@ -191,10 +206,35 @@ function hache_sharky_reengagement_backfill_send_once(?PDO $pdo=null, ?int $now=
 
         $followup = hache_sharky_followup_state($state);
         $token = (string)($meta['token'] ?? '');
-        if ($token === '' || !hash_equals((string)($followup['token'] ?? ''), $token) || (int)($state['updated_at'] ?? 0) !== $userTurnAt) {
-            $stats['excluded']['stale_state']++;
+        $stats['diagnostic']['state_checked']++;
+
+        $followupStatus = (string)($followup['status'] ?? 'idle');
+        if ($followupStatus === 'idle') $stats['diagnostic']['followup_idle']++;
+        elseif (str_starts_with($followupStatus, 'completed')) $stats['diagnostic']['followup_completed']++;
+        elseif (in_array($followupStatus, ['pending_delivery','first_sent','second_sent'], true)) $stats['diagnostic']['followup_active']++;
+        else $stats['diagnostic']['followup_other']++;
+
+        $nextStage = (int)($followup['next_stage'] ?? 0);
+        if ($nextStage === 0) $stats['diagnostic']['next_stage_none']++;
+        elseif ($nextStage === 1) $stats['diagnostic']['next_stage_1']++;
+        elseif ($nextStage === 2) $stats['diagnostic']['next_stage_2']++;
+        elseif ($nextStage === 3) $stats['diagnostic']['next_stage_3']++;
+        else $stats['diagnostic']['next_stage_other']++;
+
+        if ($token !== '' && hash_equals((string)($followup['token'] ?? ''), $token)) {
+            $stats['diagnostic']['token_matches_stage2']++;
+        } else {
+            $stats['excluded']['state_token_mismatch']++;
             continue;
         }
+
+        if ((int)($state['updated_at'] ?? 0) === $userTurnAt) {
+            $stats['diagnostic']['state_updated_matches_turn']++;
+        } else {
+            $stats['excluded']['state_updated_mismatch']++;
+            continue;
+        }
+
         if (!hache_sharky_followup_commercial_ready($state)) {
             $stats['excluded']['context_not_eligible']++;
             continue;
