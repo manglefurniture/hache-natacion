@@ -1,0 +1,72 @@
+name: Sharky Reengagement Queue Diagnostic Once
+
+on:
+  workflow_run:
+    workflows: ["Deploy"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sharky-reengagement-queue-diagnostic-20260911
+  cancel-in-progress: false
+
+jobs:
+  diagnose-approved-cohort:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      contains(github.event.workflow_run.head_commit.message, 'Ops: diagnosticar reconquista retroactiva')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Inspect approved cohort queue and outbox timer
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -Eeuo pipefail
+          result="$(ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo /usr/local/sbin/deploy-hache-natacion sharky-backfill-status-once")"
+
+          RESULT="$result" php -r '
+            $p=json_decode((string)getenv("RESULT"),true,512,JSON_THROW_ON_ERROR);
+            if(($p["mode"]??"")!=="approved-backfill-status-once"||($p["privacy"]??"")!=="aggregate_counts_only"||($p["read_only"]??false)!==true){
+              fwrite(STDERR,"invalid read-only backfill diagnostic response\n"); exit(1);
+            }
+            echo json_encode($p,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR),"\n";
+          '
+
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "printf 'OUTBOX_TIMER_ACTIVE='; systemctl is-active hache-sharky-outbox.timer || true; printf 'OUTBOX_TIMER_ENABLED='; systemctl is-enabled hache-sharky-outbox.timer || true; printf 'OUTBOX_SERVICE_ACTIVE='; systemctl is-active hache-sharky-outbox.service || true; systemctl show hache-sharky-outbox.timer --property=LastTriggerUSec --property=NextElapseUSecRealtime --no-pager"
