@@ -56,7 +56,72 @@ lateral_ok(str_contains($message,'inscripción actual sigue en Colegio Monteverd
 lateral_ok(($result['state']['flow']['name']??'')==='register_intensive'&&($result['state']['flow']['step']??'')==='course','Protected enrollment must remain on the exact prior step.');
 lateral_ok(($result['state']['flow']['data']['sede_clave']??'')==='MONTEVERDE','Protected flow venue must remain Monteverde.');
 lateral_ok(($result['state']['commercial_context']['sede_clave']??'')==='MONTEVERDE','Commercial venue must remain synchronized with the protected flow.');
+lateral_ok(($result['state']['flow']['updated_at']??0)===$now,'A handled side query must refresh the protected-flow activity timestamp.');
 lateral_ok(!str_contains(hache_sharky_orchestrator_normalize($message),'revalidacion obligatoria'),'Internal revalidation errors must never surface for a lateral information request.');
+
+// Codex P1: an explicit regular-product schedule request during an intensive
+// enrollment must never be answered from intensive_options or silently switch
+// the protected enrollment to regular.
+$regular=hache_sharky_orchestrate($state,[
+    'id'=>'lateral-regular','from'=>'529900000106','type'=>'text','interactive_id'=>'',
+    'text'=>'Quiero ver horarios de clases regulares en Palapas.',
+],array_replace($context,['now'=>$now+1]));
+$regularMessage=(string)($regular['decision']['message']??'');
+lateral_ok(($regular['decision']['kind']??'')==='side_question','Explicit regular schedule lookup must be handled safely inside the protected enrollment.');
+lateral_ok(($regular['decision']['action']??null)===null,'Regular informational lookup must not emit a business action.');
+lateral_ok(str_contains(hache_sharky_orchestrator_normalize($regularMessage),'clases regulares'),'Regular lookup must be acknowledged as a different product.');
+lateral_ok(!str_contains($regularMessage,'07:00–08:00')&&!str_contains($regularMessage,'08:00–09:00')&&!str_contains($regularMessage,'09:00–10:00')&&!str_contains($regularMessage,'20:00–21:00'),'Regular request must not receive intensive Palapas availability.');
+lateral_ok(($regular['state']['commercial_context']['program']??'')==='intensive','Informational regular lookup must not switch the active product.');
+lateral_ok(($regular['state']['commercial_context']['sede_clave']??'')==='MONTEVERDE','Informational regular lookup must not switch the enrollment venue.');
+lateral_ok(($regular['state']['flow']['step']??'')==='course','Informational regular lookup must preserve the protected step.');
+lateral_ok(($regular['state']['flow']['updated_at']??0)===$now+1,'Regular-product side lookup must refresh the protected-flow timestamp too.');
+
+// Mentioning regular only to reject it must not block a legitimate intensive
+// side lookup in the same message.
+$notRegular=hache_sharky_orchestrate($state,[
+    'id'=>'lateral-not-regular','from'=>'529900000107','type'=>'text','interactive_id'=>'',
+    'text'=>'No quiero clases regulares; quiero los horarios de la otra sede.',
+],array_replace($context,['now'=>$now+2]));
+$notRegularMessage=(string)($notRegular['decision']['message']??'');
+lateral_ok(str_contains($notRegularMessage,'Palapas Protudec'),'Rejecting regular classes must still allow the requested intensive opposite-venue lookup.');
+lateral_ok(str_contains($notRegularMessage,'07:00–08:00'),'Negated regular mention must not create a false P1 block.');
+
+// Follow-up Codex edge: a natural explicit intensive qualifier plus "no de
+// clases regulares" must preserve the active intensive interpretation.
+$explicitIntensive=hache_sharky_orchestrate($state,[
+    'id'=>'lateral-explicit-intensive','from'=>'529900000109','type'=>'text','interactive_id'=>'',
+    'text'=>'Quiero los horarios del curso intensivo, no de clases regulares, en Palapas.',
+],array_replace($context,['now'=>$now+3]));
+$explicitIntensiveMessage=(string)($explicitIntensive['decision']['message']??'');
+lateral_ok(($explicitIntensive['decision']['kind']??'')==='side_question','Explicit intensive qualifier must remain an intensive side lookup.');
+lateral_ok(str_contains($explicitIntensiveMessage,'Palapas Protudec'),'Explicit intensive qualifier must answer the requested Palapas venue.');
+foreach(['07:00–08:00','08:00–09:00','09:00–10:00','20:00–21:00'] as $hour){
+    lateral_ok(str_contains($explicitIntensiveMessage,$hour),'Explicit intensive qualifier must retain verified Palapas intensive hour '.$hour.'.');
+}
+lateral_ok(!str_contains(hache_sharky_orchestrator_normalize($explicitIntensiveMessage),'producto distinto'),'Negated regular qualifier must not trigger the regular-product blocker.');
+lateral_ok(($explicitIntensive['state']['commercial_context']['program']??'')==='intensive','Explicit intensive qualifier must keep the active intensive product.');
+lateral_ok(($explicitIntensive['state']['commercial_context']['sede_clave']??'')==='MONTEVERDE','Informational Palapas lookup must not mutate the protected Monteverde enrollment.');
+
+// Codex P2: a successful side lookup close to the 30-minute TTL must renew the
+// protected flow. A continuation seconds later must therefore keep the enrollment.
+$nearExpiryNow=$now-HACHE_SHARKY_FLOW_TTL+2;
+$nearExpiry=hache_sharky_orchestrator_state(null,$nearExpiryNow);
+$nearExpiry['identity']=array_replace($nearExpiry['identity'],['kind'=>'prospect','source'=>'whatsapp_unmatched']);
+$nearExpiry['commercial_context']=array_replace($nearExpiry['commercial_context'],[
+    'program'=>'intensive','sede_clave'=>'MONTEVERDE','swim_level'=>'beginner',
+]);
+$nearExpiry=hache_sharky_orchestrator_flow($nearExpiry,'register_intensive','course',['sede_clave'=>'MONTEVERDE'],$nearExpiryNow);
+$renewed=hache_sharky_orchestrate($nearExpiry,[
+    'id'=>'lateral-renew','from'=>'529900000108','type'=>'text','interactive_id'=>'',
+    'text'=>'Quiero los horarios de la otra sede.',
+],$context);
+lateral_ok(($renewed['state']['flow']['updated_at']??0)===$now,'Side lookup near TTL must renew the protected-flow activity timestamp.');
+$continued=hache_sharky_orchestrate($renewed['state'],[
+    'id'=>'lateral-renew-next','from'=>'529900000108','type'=>'text','interactive_id'=>'',
+    'text'=>'No entendí',
+],array_replace($context,['now'=>$now+10]));
+lateral_ok(is_array($continued['state']['flow']??null),'Continuation after a renewed side lookup must not expire the enrollment.');
+lateral_ok(($continued['state']['flow']['name']??'')==='register_intensive','Renewed enrollment must still be the protected intensive flow.');
 
 // Simulate the adapter having briefly interpreted a named browse phrase as a
 // commercial venue browse before the controlled flow receives it. The flow is

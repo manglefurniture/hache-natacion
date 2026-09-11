@@ -518,7 +518,7 @@ function hache_sharky_orchestrator_registration_course_step(array $state,array $
  *
  * @return array{0:array,1:array}|null
  */
-function hache_sharky_orchestrator_registration_schedule_side_query(array $state,array $flow,array $context,string $text): ?array
+function hache_sharky_orchestrator_registration_schedule_side_query(array $state,array $flow,array $context,string $text,int $now): ?array
 {
     $t=hache_sharky_orchestrator_normalize($text);
     if($t===''||preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)!==1)return null;
@@ -526,6 +526,21 @@ function hache_sharky_orchestrator_registration_schedule_side_query(array $state
     $flowData=is_array($flow['data']??null)?$flow['data']:[];
     $current=strtoupper((string)($flowData['sede_clave']??($state['commercial_context']['sede_clave']??'')));
     if(!in_array($current,['MONTEVERDE','PALAPAS'],true))return null;
+
+    $regularSchedule=preg_match('/\b(?:horario|horarios|hora|horas)\b.{0,55}\b(?:clases?\s+regulares|curso\s+regular|regulares)\b/u',$t)===1
+        || preg_match('/\b(?:clases?\s+regulares|curso\s+regular|regulares)\b.{0,55}\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
+    $regularRejected=hache_sharky_orchestrator_program_rejection($text)==='regular'
+        || preg_match('/\b(?:no|nunca|tampoco)\s+de\s+(?:(?:las?|unas?)\s+)?(?:clases?\s+regulares|curso\s+regular|regulares)\b/u',$t)===1;
+    if($regularSchedule&&!$regularRejected){
+        $state['commercial_context']['sede_clave']=$current;
+        foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key){
+            if(array_key_exists($key,$flowData))$state['commercial_context'][$key]=$flowData[$key];
+        }
+        if(is_array($state['flow']??null))$state['flow']['updated_at']=$now;
+        $label=$current==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec';
+        $message='Tu mensaje incluye una consulta de horarios de clases regulares, que son un producto distinto al curso intensivo. Para no mezclar catálogos, no voy a mostrarte horarios del intensivo como si fueran regulares. Tu inscripción actual al intensivo sigue intacta en '.$label.'. Si quieres cambiar de producto, dímelo de forma explícita y revisamos si aplica.';
+        return [$state,hache_sharky_orchestrator_decision('side_question',$message)];
+    }
 
     $hasMv=preg_match('/\bmonteverde\b/u',$t)===1;
     $hasPal=preg_match('/\bpalapas(?:\s+protudec)?\b/u',$t)===1;
@@ -545,6 +560,7 @@ function hache_sharky_orchestrator_registration_schedule_side_query(array $state
     foreach(['course_id','fecha_inicio','course_price','schedule_id','schedule_label'] as $key){
         if(array_key_exists($key,$flowData))$state['commercial_context'][$key]=$flowData[$key];
     }
+    if(is_array($state['flow']??null))$state['flow']['updated_at']=$now;
 
     $labels=['MONTEVERDE'=>'Colegio Monteverde','PALAPAS'=>'Palapas Protudec'];
     $sections=[];
@@ -646,7 +662,7 @@ function hache_sharky_orchestrator_handle_flow(array $state, array $event, array
 
     if ($name === 'register_intensive') {
         if($interactive===''){
-            $side=hache_sharky_orchestrator_registration_schedule_side_query($state,$flow,$context,$text);
+            $side=hache_sharky_orchestrator_registration_schedule_side_query($state,$flow,$context,$text,$now);
             if(is_array($side))return $side;
         }
         if ($step === 'offer') {
