@@ -28,12 +28,21 @@ jobs:
           python .github/scripts/patch_sharky_priority_tests.py
           python - <<'PY'
           from pathlib import Path
+
           p=Path('config/sharky-whatsapp-adapter.php')
           text=p.read_text()
           old="hache_sharky_whatsapp_swim_level_conflict($state,$event,$now)"
           new="hache_sharky_whatsapp_swim_level_conflict($state,$event,(int)($context['now']??time()))"
           if text.count(old)!=1:
               raise SystemExit(f'adapter conflict call: expected one match, found {text.count(old)}')
+          p.write_text(text.replace(old,new,1))
+
+          p=Path('tests/sharky-flow-side-question-regression.php')
+          text=p.read_text()
+          old="sideq_ok(str_contains($message,'Tenemos dos sedes en Cancún'),'The response must immediately resume the pending venue question.');"
+          new="sideq_ok(str_contains($message,'Te propongo primero Colegio Monteverde'),'The response must immediately resume the pending Monteverde-first venue question.');"
+          if text.count(old)!=1:
+              raise SystemExit(f'side-question venue assertion: expected one match, found {text.count(old)}')
           p.write_text(text.replace(old,new,1))
           PY
       - name: Syntax adapter
@@ -80,7 +89,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add config/sharky-whatsapp-adapter.php config/sharky-commercial-memory.php config/sharky-product-boundary-guard.php config/sharky-post-pr72.php docs/SHARKY-POSITIVE-PATTERNS.md tests/sharky-pr162-review-regression.php tests/sharky-product-boundary-regression.php tests/sharky-guided-onboarding-regression.php tests/sharky-qualification-priority-regression.php package.json
+          git add config/sharky-whatsapp-adapter.php config/sharky-commercial-memory.php config/sharky-product-boundary-guard.php config/sharky-post-pr72.php docs/SHARKY-POSITIVE-PATTERNS.md tests/sharky-pr162-review-regression.php tests/sharky-product-boundary-regression.php tests/sharky-guided-onboarding-regression.php tests/sharky-flow-side-question-regression.php tests/sharky-qualification-priority-regression.php package.json
           git diff --cached --check
           git commit -m "Enforce Sharky level product and venue priorities"
           git push origin HEAD:fix/sharky-level-product-venue-priority
