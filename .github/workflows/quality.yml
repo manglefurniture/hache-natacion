@@ -30,6 +30,8 @@ jobs:
         run: php tests/sharky-product-boundary-regression.php
       - name: Sharky field context regression
         run: php tests/sharky-field-context-regression.php
+      - name: Sharky enrollment lateral schedule regression
+        run: php tests/sharky-enrollment-lateral-schedule-regression.php
       - name: Sharky emergency Brain disable regression
         run: php tests/sharky-emergency-brain-disable-regression.php
       - name: Sharky Brain reactivation regression
