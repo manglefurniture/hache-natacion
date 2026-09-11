@@ -50,7 +50,7 @@ function hache_sharky_schedule_guard_cross_program_request(string $text,string $
 function hache_sharky_schedule_guard_both_venues_reference(string $text): bool
 {
     $t=hache_sharky_schedule_guard_normalize($text);
-    return preg_match('/\b(?:ambos|ambas|los\s+dos|las\s+dos|de\s+ambos|de\s+ambas|de\s+los\s+dos|de\s+las\s+dos|ambas\s+sedes|las\s+dos\s+sedes)\b/u',$t)===1;
+    return preg_match('/\b(?:ambas?\s+sedes?|las\s+dos\s+sedes|los\s+dos\s+(?:lugares|centros|planteles)|ambos\s+(?:lugares|centros|planteles))\b/u',$t)===1;
 }
 
 /** @return list<string> */
@@ -63,22 +63,17 @@ function hache_sharky_schedule_guard_requested_venues(string $text,array $state)
     if($mv&&$pal)return ['MONTEVERDE','PALAPAS'];
     if($mv)return ['MONTEVERDE'];
     if($pal)return ['PALAPAS'];
+    if(hache_sharky_schedule_guard_both_venues_reference($text))return ['MONTEVERDE','PALAPAS'];
 
-    $scheduleLike=hache_sharky_deterministic_schedule_request($text)
-        || hache_sharky_schedule_guard_answer_is_schedule_like($text);
-    $programs=hache_sharky_schedule_guard_requested_programs($text,$commercial['program']);
-    if($scheduleLike&&$programs===[$commercial['program']]&&hache_sharky_schedule_guard_both_venues_reference($text)){
-        return ['MONTEVERDE','PALAPAS'];
-    }
-
-    // Follow-ups such as "¿Solo hay un horario por la mañana?" inherit an
-    // immediately preceding explicit "horarios de ambos" venue comparison.
+    // Preserve an explicit previous both-venue scope only when the user really
+    // named both venues/sedes. Bare words such as "ambos" are intentionally
+    // ambiguous: they may refer to morning/tarde, plans or other options.
     $previous=trim((string)($state['previous_user_text']??''));
-    if($scheduleLike&&$programs===[$commercial['program']]&&$previous!==''){
-        $previousPrograms=hache_sharky_schedule_guard_requested_programs($previous,$commercial['program']);
-        $previousScheduleLike=hache_sharky_deterministic_schedule_request($previous)
-            || hache_sharky_schedule_guard_answer_is_schedule_like($previous);
-        if($previousScheduleLike&&$previousPrograms===[$commercial['program']]&&hache_sharky_schedule_guard_both_venues_reference($previous)){
+    if($previous!==''){
+        $p=hache_sharky_schedule_guard_normalize($previous);
+        $previousMv=preg_match('/\bmonteverde\b/u',$p)===1;
+        $previousPal=preg_match('/\bpalapas(?:\s+protudec)?\b/u',$p)===1;
+        if(($previousMv&&$previousPal)||hache_sharky_schedule_guard_both_venues_reference($previous)){
             return ['MONTEVERDE','PALAPAS'];
         }
     }
@@ -210,14 +205,20 @@ function hache_sharky_schedule_guard_render_verified(array $programs,array $venu
     return implode("\n\n",$parts);
 }
 
-function hache_sharky_schedule_guard_multi_venue_reply(string $text,array $state,?callable $scheduleLoader=null): ?string
+function hache_sharky_schedule_guard_scoped_reply(string $text,array $state,?callable $scheduleLoader=null): ?string
 {
     $commercial=hache_sharky_deterministic_commercial($state);if($commercial===null)return null;
     if(!hache_sharky_deterministic_schedule_request($text))return null;
     $venues=hache_sharky_schedule_guard_requested_venues($text,$state);
-    if(count($venues)<2)return null;
+    if($venues===[])$venues=[$commercial['sede']];
     $programs=hache_sharky_schedule_guard_requested_programs($text,$commercial['program']);
     if($programs===[])$programs=[$commercial['program']];
+    $daypart=hache_sharky_schedule_guard_daypart($text);
+
+    // Plain "horarios" for the active product/sede is already handled by the
+    // generic deterministic reply. This guard owns only a narrower scope:
+    // daypart, explicit cross-program query, or explicit multi-sede query.
+    if($daypart===null&&$venues===[$commercial['sede']]&&$programs===[$commercial['program']])return null;
 
     $loader=$scheduleLoader;
     if($loader===null){
@@ -233,7 +234,7 @@ function hache_sharky_schedule_guard_multi_venue_reply(string $text,array $state
     }catch(Throwable $e){
         return hache_sharky_schedule_guard_unavailable_message();
     }
-    return hache_sharky_schedule_guard_render_verified($programs,$venues,$verified,hache_sharky_schedule_guard_daypart($text));
+    return hache_sharky_schedule_guard_render_verified($programs,$venues,$verified,$daypart);
 }
 
 function hache_sharky_schedule_guard_reply(string $text,array $state): ?string
