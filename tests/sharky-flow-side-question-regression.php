@@ -63,7 +63,7 @@ $buttonIds=array_column($decision['ui']['buttons']??[],'id');
 sideq_ok($buttonIds===['sede:monteverde','sede:palapas'],'The resumed venue step must expose the two current venue choices.');
 $message=(string)($decision['message']??'');
 sideq_ok(str_contains($message,'$1,200 MXN'),'The useful answer must stay before the resumed flow prompt.');
-sideq_ok(str_contains($message,'Tenemos dos sedes en Cancún'),'The response must immediately resume the pending venue question.');
+sideq_ok(str_contains($message,'Te propongo primero Colegio Monteverde'),'The response must immediately resume the pending Monteverde-first venue question.');
 sideq_ok(!str_contains($message,'Cuando quieras, seguimos donde lo dejamos.'),'The generic deferred-resume sentence must be removed when controls resume immediately.');
 sideq_ok(($resumed['state']['flow']['name']??'')==='qualify_prospect'&&($resumed['state']['flow']['step']??'')==='sede','A side question must not advance, reset or lose the controlled flow.');
 

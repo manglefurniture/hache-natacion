@@ -69,7 +69,7 @@ pr162_review_ok(empty($metaGuided['flow']['data']['preferred_program']),'Meta in
 pr162_review_ok(empty($metaGuided['commercial_context']['program']),'Referral interest must not become canonical program by itself.');
 
 // Regression: arriving from the intensive ad is not the same as choosing intensive.
-// A swimmer who has taken classes must still choose between intensive and regular.
+// A swimmer with formal lessons is routed to regular classes by the current product rule.
 [$metaSwims,$metaSwimsDecision]=hache_sharky_whatsapp_qualification_input($pdo,$metaGuided,[
     'text'=>'Ya sé nadar','interactive_id'=>'qualify:swims',
 ],$now+1,12);
@@ -78,9 +78,10 @@ pr162_review_ok(array_column($metaSwimsDecision['ui']['buttons']??[],'id')===['q
 [$metaFormal,$metaFormalDecision]=hache_sharky_whatsapp_qualification_input($pdo,$metaSwims,[
     'text'=>'He tomado clases','interactive_id'=>'qualify:formal',
 ],$now+2,12);
-pr162_review_ok(empty($metaFormal['commercial_context']['program']),'Formal experience must not auto-confirm the intensive ad program.');
-pr162_review_ok(($metaFormal['flow']['step']??null)==='program','A formal swimmer must explicitly choose intensive or regular before venue selection.');
-pr162_review_ok(array_column($metaFormalDecision['ui']['buttons']??[],'id')===['qualify:intensive','qualify:regular'],'Formal swimmer must receive Intensivo and Regulares buttons, not venue buttons.');
+pr162_review_ok(($metaFormal['commercial_context']['program']??null)==='regular','Formal experience must route to regular classes, never inherit the intensive ad program.');
+pr162_review_ok(($metaFormal['commercial_context']['background']??null)==='formal','Formal training history must persist as durable commercial context.');
+pr162_review_ok(($metaFormal['flow']['step']??null)==='sede','A formal swimmer must go directly to venue selection after product resolution.');
+pr162_review_ok(array_column($metaFormalDecision['ui']['buttons']??[],'id')===['sede:monteverde','sede:palapas'],'Formal swimmer must receive venue buttons, not a product-choice screen.');
 
 // P2: a course button that went stale must invalidate the old selected course and
 // refresh the course controls; it must never expose enrollment for the old date.

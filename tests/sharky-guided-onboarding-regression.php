@@ -19,8 +19,8 @@ guided_ok(
     'A natural affirmative venue preference must still persist Palapas.'
 );
 
-// If the prospect already chose a program before declaring they are new, qualification
-// may validate experience but must not silently overwrite that explicit choice.
+// A program value captured before level qualification is context, not product authority.
+// Level and training history must determine the canonical product before venue selection.
 $prospect=hache_sharky_orchestrator_state(null,1788383000);
 $prospect['identity']=array_replace($prospect['identity'],[
     'kind'=>'prospect','verified'=>true,'source'=>'self_declared',
@@ -28,8 +28,8 @@ $prospect['identity']=array_replace($prospect['identity'],[
 $prospect['commercial_context']['program']='intensive';
 [$preferredState,$preferredDecision]=hache_sharky_whatsapp_qualification_start($prospect,1788383000);
 guided_ok(
-    ($preferredState['flow']['data']['preferred_program']??null)==='intensive',
-    'Qualification must carry a previously confirmed intensive choice in flow data.'
+    !isset($preferredState['flow']['data']['preferred_program']),
+    'Qualification must not carry a pre-qualification program as authority before level is known.'
 );
 guided_ok(
     ($preferredState['flow']['step']??null)==='swim',
@@ -40,8 +40,8 @@ guided_ok(
     'The first guided question must be about swimming experience, not venue.'
 );
 
-// Formal swimmers with no prior program get a real client-goal choice instead of an
-// automatic regular assignment. The interactive state machine must recognize it.
+// Legacy program cursors remain syntactically recognized so stale buttons fail safely;
+// canonical product mapping is enforced when level and training history are known.
 $programState=hache_sharky_orchestrator_flow($prospect,'qualify_prospect','program',[],1788383010);
 guided_ok(
     hache_sharky_whatsapp_interactive_is_current($programState,['interactive_id'=>'qualify:intensive'])===true,
