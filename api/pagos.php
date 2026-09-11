@@ -64,7 +64,10 @@ try{
         $json=json_decode((string)$salida,true);
         if(is_array($json)&&($json['ok']??false)===true&&!empty($json['pago']['folio'])){
             $notification=hache_sharky_notify_payment_confirmed($pdo,(int)$json['pago']['folio']);
-            $json['notificacion_pago']=['queued'=>(bool)($notification['queued']??false)];
+            $json['notificacion_pago']=[
+                'queued'=>(bool)($notification['queued']??false),
+                'reason'=>(string)($notification['reason']??''),
+            ];
         }
         if(is_array($json) && $resultado!==null){$json['acceso_regular']=$resultado;echo json_encode($json,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);}elseif(is_array($json)){echo json_encode($json,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);}else{echo $salida;}
         exit;

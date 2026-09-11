@@ -20,7 +20,7 @@ body{margin:0;font-family:Arial,sans-serif;background:#f4f7f9;color:#222}
 .badge{display:inline-block;padding:5px 9px;border-radius:20px;font-size:12px;font-weight:bold}.badge-valid{background:#e5f6ec;color:#18733b}.badge-invalid{background:#ffe7e7;color:#a52222}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:20px;z-index:1000}.modal-box{width:100%;max-width:500px;background:#fff;border-radius:14px;padding:25px;max-height:90vh;overflow-y:auto}.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}.modal-header h3{margin:0;color:#123b5d}.close{border:none;background:transparent;font-size:25px;cursor:pointer;color:#777}
 .form-group{margin-bottom:16px}.form-group label{display:block;margin-bottom:7px;font-size:13px;font-weight:bold;color:#444}.form-group input,.form-group select,.form-group textarea{width:100%;padding:11px 12px;border:1px solid #d5dce1;border-radius:8px;font-size:15px;background:#fff}.form-group textarea{min-height:80px;resize:vertical}.help{font-size:12px;color:#667085;line-height:1.4;margin-top:6px}.history-help{padding:10px 12px;border-radius:8px;background:#fff8e8;border:1px solid #f1c45b;color:#72520d}.hidden{display:none!important}.form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
-.message{display:none;padding:11px;border-radius:8px;margin-bottom:15px;font-size:14px}.message.error{background:#ffe8e8;color:#a52222}.message.success{background:#e5f6ec;color:#18733b}
+.message{display:none;padding:11px;border-radius:8px;margin-bottom:15px;font-size:14px}.message.error{background:#ffe8e8;color:#a52222}.message.success{background:#e5f6ec;color:#18733b}.message.warning{background:#fff8e8;color:#72520d;border:1px solid #f1c45b}
 @media(max-width:650px){.header{padding:15px}.header h1{font-size:20px}.container{padding:18px 12px}.top-bar{align-items:stretch;flex-direction:column}.top-bar .btn{width:100%}th,td{padding:10px}.modal{padding:8px}.modal-box{padding:20px}}
 </style>
 </head>
@@ -76,6 +76,26 @@ function formatearMetodo(metodo){return ({EFECTIVO:'Efectivo',TRANSFERENCIA:'Tra
 function money(value){return Number(value||0).toLocaleString('es-MX',{style:'currency',currency:'MXN'});}
 function fechaCorta(value){if(!value)return '';const d=new Date(value+'T12:00:00');return Number.isNaN(d.getTime())?value:d.toLocaleDateString('es-MX');}
 function cursoSolicitado(){return query.get('curso_intensivo_id')||query.get('curso_id')||'';}
+function estadoNotificacionPago(data){
+    const notificacion=data?.notificacion_pago||null;
+    const reason=String(notificacion?.reason||'').toUpperCase();
+    if(data?.pago_intensivo_historico||reason==='HISTORICAL_PAYMENT')return {tipo:'success',texto:'Pago histórico registrado y auditado correctamente. No se envía confirmación de WhatsApp para pagos históricos.'};
+    if(notificacion?.queued===true)return {tipo:'success',texto:'Pago registrado correctamente. Confirmación de WhatsApp preparada para envío.'};
+    const detalles={
+        SHARKY_DISABLED:'Sharky/WhatsApp está deshabilitado.',
+        INVALID_PHONE:'el WhatsApp del alumno no tiene un formato válido.',
+        INVALID_TEMPLATE:'la plantilla de WhatsApp no es válida.',
+        OUTBOX_UNAVAILABLE:'la cola de salida no pudo aceptar el mensaje.',
+        PAYMENT_CONTACT_INCOMPLETE:'faltan datos de contacto válidos del alumno.',
+        PAYMENT_NOT_FOUND:'el pago no pudo recuperarse para preparar la notificación.',
+        PAYMENT_NOT_VALID:'el pago no está en estado válido para notificar.',
+        INVALID_FOLIO:'el folio del pago no es válido para notificar.',
+        INTERNAL_ERROR:'ocurrió un error interno al preparar la notificación.',
+    };
+    const detalle=detalles[reason]||'no se recibió confirmación de que el mensaje haya entrado a la cola de salida.';
+    const codigo=reason?` Código: ${reason}.`:'';
+    return {tipo:'warning',texto:`Pago registrado correctamente, pero la confirmación de WhatsApp no se pudo preparar: ${detalle}${codigo}`};
+}
 
 async function cargarPagos(){
     pagosBody.innerHTML='<tr><td colspan="7" class="empty">Cargando pagos...</td></tr>';
@@ -177,7 +197,7 @@ formPago.addEventListener('submit',async e=>{
     if(tipo==='INTENSIVO')datos.curso_intensivo_id=cursoId;
     try{
         const response=await fetch('/api/pagos.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(datos)});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'No se pudo registrar el pago');
-        mostrarMensaje(message,data.pago_intensivo_historico?'Pago histórico registrado y auditado correctamente.':'Pago registrado correctamente.','success');cerrarModal();await cargarPagos();
+        const estado=estadoNotificacionPago(data);mostrarMensaje(message,estado.texto,estado.tipo);cerrarModal();await cargarPagos();
     }catch(error){mostrarMensaje(formMessage,error.message||'Error al registrar el pago.','error');}
 });
 
