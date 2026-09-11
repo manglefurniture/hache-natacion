@@ -28,6 +28,8 @@ jobs:
         run: php tests/sharky-schedule-scope-guard-regression.php
       - name: Sharky product boundary regression
         run: php tests/sharky-product-boundary-regression.php
+      - name: Sharky field context regression
+        run: php tests/sharky-field-context-regression.php
       - name: Sharky emergency Brain disable regression
         run: php tests/sharky-emergency-brain-disable-regression.php
       - name: Sharky Brain reactivation regression
