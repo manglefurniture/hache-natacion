@@ -101,7 +101,10 @@ function hache_sharky_commercial_reconcile_guidance(array $state,string $text): 
     $flow=is_array($state['flow']??null)?$state['flow']:null;
     $flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
     $backgroundEligible=$flowName==='qualify_prospect'&&$flowStep==='background';
-    if(!$backgroundEligible&&!is_array($flow)&&($c['swim_level']??null)==='swims'&&empty($c['program']))$backgroundEligible=true;
+    // Brain may already know the active product while the swimmer's training
+    // history is still unresolved. Eligibility depends on background, not on
+    // whether a product recommendation happens to be present.
+    if(!$backgroundEligible&&!is_array($flow)&&($c['swim_level']??null)==='swims'&&empty($c['background']))$backgroundEligible=true;
 
     if($backgroundEligible){
         $background=hache_sharky_commercial_background_choice($text);
