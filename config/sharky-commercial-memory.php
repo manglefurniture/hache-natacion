@@ -23,7 +23,11 @@ function hache_sharky_commercial_force_intensive_eligibility(array $state): arra
 {
     if(!hache_sharky_commercial_regular_restricted($state))return $state;
     $c=&$state['commercial_context'];
-    $c['recommended_program']='intensive';
+    $program=(string)($c['program']??'');
+    $recommended=(string)($c['recommended_program']??'');
+    // Repair an absent/stale product, but do not mutate an already-clean confirmed
+    // intensive state merely because a harmless side question arrived.
+    if($program!=='intensive'||$recommended==='regular')$c['recommended_program']='intensive';
     $c['program']='intensive';
     foreach(['plan_id','plan_name','sessions_per_week','plan_price'] as $key)unset($c[$key]);
     return $state;
@@ -72,9 +76,9 @@ function hache_sharky_commercial_background_choice(string $text): ?string
     if(preg_match('/^(?:si|si\s+he\s+tomado\s+clases|he\s+tomado\s+clases|ya\s+tome\s+clases|con\s+profesor|con\s+entrenador|formal(?:mente)?)[.! ]*$/u',$t)===1)return 'formal';
     if(preg_match('/^(?:por\s+mi\s+cuenta|aprendi\s+solo|aprendi\s+sola|autodidacta)[.! ]*$/u',$t)===1)return 'self_taught';
     if(preg_match('/^(?:no(?:\s+nunca)?|nunca|no\s+he\s+tomado\s+clases|nunca\s+he\s+tomado\s+clases|jamas\s+he\s+tomado\s+clases)[.! ]*$/u',$t)===1)return 'no_formal';
-    if(preg_match('/\b(?:nunca|jamas)\b.{0,42}\b(?:he\s+)?(?:tomado|recibido|tenido)\b.{0,24}\bclases?\b/u',$t)===1)return 'no_formal';
-    if(preg_match('/\bno\s+(?:he\s+)?(?:tomado|recibido|tenido)\b.{0,24}\bclases?\b/u',$t)===1)return 'no_formal';
-    if(preg_match('/\b(?:sin|ninguna?)\s+clases?\s+(?:formales?\s+)?(?:de\s+)?natacion\b/u',$t)===1)return 'no_formal';
+    if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?\s+de\s+natacion\b/u',$t)===1)return 'no_formal';
+    if(preg_match('/\b(?:sin|ninguna?)\s+clases?(?:\s+formales?)?\s+(?:de\s+)?natacion\b/u',$t)===1)return 'no_formal';
+    if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?(?:\s+antes)?[.!¡!\s]*$/u',$t)===1)return 'no_formal';
     if(preg_match('/\b(?:aprendi|nado|he\s+nadado)\b.{0,30}\b(?:solo|sola|por\s+mi\s+cuenta|autodidacta)\b/u',$t)===1)return 'self_taught';
     return null;
 }
