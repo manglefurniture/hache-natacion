@@ -1,0 +1,109 @@
+
+> test
+> node tests/static-regressions.mjs && node tests/financial-periods-regression.mjs && node tests/dashboard-period-regression.mjs && node tests/backend-relief-regression.mjs && node tests/backend-relief-link-actions-regression.mjs && node tests/backend-relief-top-edge-regression.mjs && node tests/backend-dark-mode-regression.mjs && node tests/backend-dark-mode-final-review-regression.mjs && php tests/dashboard-fecha-operativa.php && node tests/continuidad-prorrateo-regression.mjs && node tests/codex-review-pr29-31-regressions.mjs && node tests/intensivo-payment-regressions.mjs && node tests/payment-whatsapp-visibility-regression.mjs && node tests/intensivo-transferencia-regression.mjs && php tests/intensivo-fecha-transferencia-regression.php && node tests/admin-intensivo-delete-regressions.mjs && node tests/finance-iframe-regression.mjs && node tests/verificador-permissions-regression.mjs && node tests/seo-regressions.mjs && node tests/seo-guide-bridge-regression.mjs && node tests/seo-guide-http-indexability-regression.mjs && php tests/seo-guides.php && node tests/go-shortlinks-regression.mjs && node tests/historias-regression.mjs && node tests/notification-routes-regression.mjs && node tests/sharky-presentation-static.mjs && node tests/whatsapp-webhook-static.mjs && node tests/sharky-ops-suite-regression.mjs && php tests/sharky-config-validation-regression.php && php tests/sharky-intent-regression.php && php tests/sharky-commercial-memory-regression.php && php tests/sharky-guided-referral-date-regression.php && php tests/sharky-commercial-memory-adapter-regression.php && php tests/sharky-orchestrator-regression.php && php tests/sharky-whatsapp-flow-birthdate-regression.php && php tests/sharky-commerce-flows-regression.php && php tests/sharky-commerce-hardening-regression.php && php tests/sharky-commerce-flow-v2-pinning-regression.php && php tests/sharky-virtual-intensive-date-regression.php && php tests/sharky-deferred-close-regression.php && php tests/sharky-pr89-review-regression.php && php tests/sharky-groups-regression.php && php tests/sharky-conversation-coherence-regression.php && node tests/sharky-orchestrator-static.mjs && php tests/sharky-whatsapp-adapter-regression.php && php tests/sharky-batch-context-regression.php && php tests/sharky-takeover-resume-command-regression.php && php tests/sharky-flow-side-question-regression.php && php tests/sharky-conversation-cases-regression.php && php tests/sharky-cross-feature-coherence-regression.php && php tests/sharky-conversation-brain-regression.php && php tests/sharky-brain-phase2ba-regression.php && php tests/sharky-brain-pr156-review-regression.php && php tests/sharky-conversation-lab.php && php tests/sharky-underage-venue-reselection-regression.php && php tests/sharky-guided-onboarding-regression.php && php tests/sharky-qualification-priority-regression.php && php tests/sharky-guided-first-prospect-regression.php && php tests/sharky-pr162-review-regression.php && php tests/sharky-commercial-next-action-regression.php && php tests/sharky-context-drift-regression.php && php tests/sharky-pr85-followups-venue-ux-regression.php && php tests/sharky-deterministic-replies-regression.php && php tests/sharky-regular-schedule-funnel-regression.php && php tests/sharky-followup-regression.php && php tests/sharky-followup-registration-gate-regression.php && php tests/sharky-payment-reminder-regression.php && php tests/sharky-member-ops-regression.php && php tests/sharky-draft-parity-regression.php && php tests/sharky-war-games-regression.php && php tests/sharky-outbox-concurrency-regression.php && php tests/sharky-registration-recovery-regression.php && php tests/sharky-state-privacy-schema-regression.php && php tests/sharky-post-pr72-regression.php && php tests/sharky-review-306a-regression.php && php tests/sharky-activation-prep-regression.php && php tests/sharky-delivery-status-regression.php && php tests/sharky-rollback-kill-switch-regression.php && node tests/sharky-transactional-static.mjs && php -l config/sharky-business-actions.php && php -l config/sharky-identity-verification.php && php -l config/sharky-orchestrator-store.php && php -l config/sharky-action-recovery.php && php -l config/sharky-orchestrator-db.php && php -l config/sharky-registration-recovery.php && php -l config/sharky-inbox.php && php -l config/sharky-outbox.php && php -l config/sharky-delivery-status.php && php -l config/sharky-followup.php && php -l config/sharky-payment-reminder.php && php -l config/sharky-member-ops.php && php -l config/sharky-member-payments.php && php -l config/sharky-groups.php && php -l config/sharky-whatsapp-flows.php && php -l config/sharky-whatsapp-flow-runtime.php && php -l config/sharky-commerce-flows.php && php -l config/sharky-commerce-runtime.php && php -l config/sharky-mercadopago.php && php -l config/sharky-deterministic-replies.php && php -l config/sharky-lab-worker.php && php -l config/sharky-entry-guidance.php && php -l config/sharky-whatsapp-adapter.php && php -l config/sharky-whatsapp-batching.php && php -l config/sharky-whatsapp-echoes.php && php -l config/sharky-draft-parity.php && php -l config/sharky-post-pr72.php && php -l config/sharky-activation.php && php -l config/sharky-conversation-brain.php && php -l config/sharky-brain-live-router.php && php -l config/sharky-commerce-flow-v2.php && php -l tests/sharky-guided-referral-date-regression.php && php -l tests/sharky-guided-onboarding-regression.php && php -l tests/sharky-guided-first-prospect-regression.php && php -l tests/sharky-pr162-review-regression.php && php -l tests/sharky-commercial-next-action-regression.php && php -l tests/sharky-context-drift-regression.php && php -l tests/sharky-pr85-followups-venue-ux-regression.php && php -l tests/sharky-deterministic-replies-regression.php && php -l tests/sharky-regular-schedule-funnel-regression.php && php -l tests/sharky-followup-regression.php && php -l tests/sharky-followup-registration-gate-regression.php && php -l tests/sharky-payment-reminder-regression.php && php -l tests/sharky-member-ops-regression.php && php -l tests/sharky-commerce-flows-regression.php && php -l tests/sharky-commerce-hardening-regression.php && php -l tests/sharky-commerce-flow-v2-pinning-regression.php && php -l tests/sharky-pr89-review-regression.php && php -l tests/sharky-groups-regression.php && php -l tests/sharky-state-privacy-schema-regression.php && php -l tests/sharky-review-306a-regression.php && php -l tests/sharky-activation-prep-regression.php && php -l tests/sharky-delivery-status-regression.php && php -l tests/sharky-rollback-kill-switch-regression.php && php -l tests/sharky-batch-context-regression.php && php -l tests/sharky-takeover-resume-command-regression.php && php -l tests/sharky-flow-side-question-regression.php && php -l tests/sharky-conversation-cases-regression.php && php -l tests/sharky-cross-feature-coherence-regression.php && php -l tests/sharky-conversation-brain-regression.php && php -l tests/sharky-brain-phase2ba-regression.php && php -l tests/sharky-brain-pr156-review-regression.php && php -l tests/sharky-conversation-lab.php && php -l tests/sharky-underage-venue-reselection-regression.php && php -l tests/sharky-whatsapp-flow-birthdate-regression.php && php -l bin/sharky-inbox-dispatch.php && php -l bin/sharky-outbox-dispatch.php && php -l bin/sharky-orchestrator-preflight.php && php -l bin/migrate-sharky-orchestrator.php && php -l bin/sharky-orchestrator-status.php && php -l bin/production-readiness-evidence.php && php -l api/whatsapp-webhook.php && php -l api/ausencias-programadas.php && php -l api/profesores.php && php -l public/sharky-verificar.php && php -l public/profesores.php && php -l public/api/whatsapp-orchestrator-lab.php && php -l public/api/sharky-whatsapp-dispatch.php && node tests/check-js-syntax.mjs
+
+✓ no quedan llamadas a la función DDL eliminada
+✓ las funciones auxiliares propias llamadas están definidas
+✓ el portal obtiene la sede de la sesión mediante el horario
+✓ el health check público usa la conexión existente
+✓ ficha y edición de alumno respetan la sede activa
+✓ los pagos toman el actor de la sesión y no del cliente
+✓ editar e invalidar pagos bloquean la fila y conservan el alcance de sede
+✓ el alta de pagos serializa por alumno antes de revisar duplicados
+✓ las altas de intensivos serializan por alumno antes de validar exclusividad
+✓ la decisión de continuidad bloquea la relación y recalcula ambos caminos
+✓ la asistencia bloquea la sesión antes de validar que siga abierta
+✓ la generación concurrente de sesiones es idempotente
+✓ la consulta n8n exige bearer y usa comparación constante
+✓ el catálogo administrativo de sedes permanece detrás de autenticación
+✓ Sharky acepta una clave por entorno o archivo env sin exponerla
+✓ el formulario público muestra el aviso de privacidad antes de enviarse
+✓ mensajes quedan ligados a sede por migración y aplicación
+✓ no existe una contraseña temporal compartida
+✓ las solicitudes web no ejecutan DDL
+✓ las exportaciones con texto neutralizan fórmulas CSV
+✓ los endpoints mutables rechazan JSON malformado
+✓ las páginas administrativas sensibles declaran su rol
+✓ los atajos de asistencia autentican incluso cuando no hay clases
+✓ el flujo de pagos escapa los planes antes de usar innerHTML
+✓ el registro público separa errores esperados de fallas internas
+✓ las altas y ediciones de alumnos serializan la identidad y revalidan WhatsApp
+✓ el registro público entrega la contraseña aleatoria una sola vez
+✓ la edición rápida de WhatsApp usa la misma exclusión de identidad
+✓ el cambio rápido de horario se serializa con el ingreso a intensivos
+✓ la edición completa revalida alumno, horario y plan dentro de la transacción
+✓ el detalle de pago escapa etiquetas derivadas antes de usar innerHTML
+✓ el dashboard neutraliza errores y datos de horario antes de renderizarlos
+✓ la gestión y asignación de alumnos son atómicas y bloquean su fila
+✓ el portal conserva el país al editar teléfonos internacionales
+✓ los avisos de ausencia se serializan por alumno
+✓ el formulario administrativo de alumno exige CSRF
+✓ la creación de cursos intensivos serializa por sede y fecha
+✓ las altas revalidan sus referencias activas después de adquirir el bloqueo
+✓ el cierre de sesión inexistente no reporta éxito
+✓ la reconciliación global no se repite en cada vista
+✓ el diagnóstico acepta eventos de verificadores sin abrir otras mutaciones
+✓ las sesiones se revalidan contra cuentas activas antes de mutar
+✓ cambiar o restablecer contraseña invalida las demás sesiones
+✓ roles y sede del verificador se validan tanto al entrar como al revalidar
+✓ el pago rápido confía en la sesión del servidor y no en sessionStorage
+✓ las páginas administrativas también revalidan la cuenta
+✓ toda cuenta nueva debe cambiar la contraseña entregada por el administrador
+✓ un verificador solo recibe configuración operativa explícitamente permitida
+✓ el cierre calcula su fotografía dentro de la transacción protegida
+✓ la promoción de planes se autentica, limita a sede y valida el plan
+✓ un pago histórico no cambia el plan vigente del alumno
+✓ el cobro bloquea el plan y una invalidación conserva pagos válidos duplicados
+✓ comisiones PROA usa el convenio configurado y detecta eliminaciones inexistentes
+✓ las migraciones de intensivos conservan delimitadores estructurales
+✓ la migración de intensivos completa checks en tablas preexistentes
+✓ los triggers de mensualidad no reescriben periodos históricos
+✓ el login normaliza el rol antes de validar sus vínculos
+✓ las sesiones públicas conservan cookies seguras detrás del proxy HTTPS
+✓ la interfaz financiera usa la sede autorizada por la sesión
+✓ las clases visuales derivadas de datos se limitan a valores permitidos
+✓ el sexto aviso justificado de intensivo no crea otro crédito
+✓ los importadores históricos no mezclan horarios, planes ni cursos entre sedes
+✓ las inclusiones literales basadas en __DIR__ apuntan a archivos existentes
+✓ las rutas locales literales apuntan a controladores y recursos existentes
+
+64 regresiones estáticas verificadas.
+financial period regression checks: OK
+dashboard period regression checks: OK
+backend relief regression checks: OK
+backend relief link action checks: OK
+backend relief top edge checks: OK
+BACKEND_DARK_MODE_REGRESSION_OK
+BACKEND_DARK_MODE_FINAL_REVIEW_OK
+dashboard Cancun operational boundary: OK
+Continuidad, prorrateo, inicio futuro, periodo explícito y cambio P1/P15: regresiones OK
+Codex Review PR #29/#30/#31 regression checks: OK
+✓ regresiones de integridad de intensivos verificadas
+PAYMENT_WHATSAPP_VISIBILITY_OK
+INTENSIVO_TRANSFERENCIA_REGRESSION_OK
+INTENSIVO_FECHA_TRANSFERENCIA_REGRESSION_OK
+OK: altas de intensivo, creación/corrección histórica ADMIN y eliminación administrativa protegidas.
+OK: el centro financiero permite iframes internos y evita selectores de sede duplicados.
+verificador permissions regression: ok
+✓ regresiones SEO verificadas
+✓ puente interno hacia guías verificado
+✓ indexabilidad HTTP real de /guias y rutas negativas verificada
+✓ guías SEO renderizadas y verificadas
+go shortlinks regression: ok
+✓ regresiones de Historias verificadas
+notification-routes-regression: OK
+Sharky presentation static checks: OK
+WhatsApp webhook static checks: OK
+Sharky operations suite regressions: OK
+SHARKY_CONFIG_VALIDATION_REGRESSION_OK
+Sharky handoff intent regression: OK
+[sharky-runtime] database unavailable
+SHARKY_COMMERCIAL_MEMORY_OK
+SHARKY_GUIDED_REFERRAL_DATE_OK
+PHP Warning:  Undefined variable $now in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php on line 1106
+PHP Fatal error:  Uncaught TypeError: hache_sharky_whatsapp_swim_level_conflict(): Argument #3 ($now) must be of type int, null given, called in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php on line 1106 and defined in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php:213
+Stack trace:
+#0 /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php(1106): hache_sharky_whatsapp_swim_level_conflict()
+#1 /home/runner/work/hache-natacion/hache-natacion/tests/sharky-commercial-memory-adapter-regression.php(54): hache_sharky_whatsapp_process()
+#2 {main}
+  thrown in /home/runner/work/hache-natacion/hache-natacion/config/sharky-whatsapp-adapter.php on line 213
