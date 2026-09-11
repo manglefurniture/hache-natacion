@@ -13,26 +13,21 @@ function product_boundary_ok(bool $condition,string $message): void
 $beginner=[
     'identity'=>['kind'=>'prospect'],
     'commercial_context'=>[
-        'program'=>'intensive',
-        'recommended_program'=>'intensive',
-        'entry_interest'=>'intensive',
-        'swim_level'=>'beginner',
-        'sede_clave'=>'MONTEVERDE',
+        'program'=>'intensive','recommended_program'=>'intensive','entry_interest'=>'intensive',
+        'swim_level'=>'beginner','sede_clave'=>'MONTEVERDE',
     ],
 ];
 $noFormal=[
     'identity'=>['kind'=>'prospect'],
     'commercial_context'=>[
-        'program'=>'intensive',
-        'recommended_program'=>'intensive',
-        'swim_level'=>'swims',
-        'background'=>'no_formal',
-        'sede_clave'=>'MONTEVERDE',
+        'program'=>'intensive','recommended_program'=>'intensive','swim_level'=>'swims',
+        'background'=>'no_formal','sede_clave'=>'MONTEVERDE',
     ],
 ];
 $selfTaught=$noFormal;$selfTaught['commercial_context']['background']='self_taught';
 $unknownBackground=$noFormal;unset($unknownBackground['commercial_context']['background']);
 $formal=$noFormal;$formal['commercial_context']['background']='formal';
+$fresh=['identity'=>['kind'=>'prospect'],'commercial_context'=>[]];
 
 product_boundary_ok(hache_sharky_product_boundary_weekly_frequency('Me gustaría 2 veces por semana')===2,'Real conversation: 2 veces por semana must be recognized as frequency, not as a product.');
 product_boundary_ok(hache_sharky_product_boundary_weekly_frequency('Quiero tres clases a la semana')===3,'Spelled-out weekly frequencies must be recognized.');
@@ -47,12 +42,19 @@ foreach([
 ] as $text){
     product_boundary_ok(hache_sharky_product_boundary_no_formal_signal($text),'No-formal natural language must activate the hard eligibility rule: '.$text);
 }
+foreach([
+    'No he tomado clases esta semana',
+    'Nunca he tomado clases en la mañana',
+] as $text){
+    product_boundary_ok(!hache_sharky_product_boundary_no_formal_signal($text),'Local schedule/attendance wording must not overwrite formal training history: '.$text);
+}
 
 product_boundary_ok(hache_sharky_product_boundary_regular_restricted($beginner),'A beginner is never auto-eligible for regular classes.');
 product_boundary_ok(hache_sharky_product_boundary_regular_restricted($noFormal),'A swimmer without formal lessons is never auto-eligible for regular classes.');
 product_boundary_ok(hache_sharky_product_boundary_regular_restricted($selfTaught),'A self-taught swimmer is never auto-eligible for regular classes.');
 product_boundary_ok(!hache_sharky_product_boundary_regular_restricted($formal),'A prospect with formal lessons may be eligible for regular classes.');
 product_boundary_ok(hache_sharky_product_boundary_regular_pending_background($unknownBackground),'A swimmer with unknown training history must be qualified before regular classes are offered.');
+product_boundary_ok(hache_sharky_product_boundary_regular_pending_background($fresh),'A fresh prospect with no qualification evidence must be treated as pending before regular classes are offered.');
 
 foreach(['Prefiero clases regulares','Quiero la mensualidad','Me gustaría 2 veces por semana','Quiero 3 clases por semana'] as $text){
     $reply=hache_sharky_product_boundary_reply($text,$beginner)??'';
@@ -86,6 +88,8 @@ $guarded=hache_sharky_product_boundary_model_answer($modelRegular,$beginner,'Pre
 product_boundary_ok(!str_contains(hache_sharky_product_boundary_normalize($guarded),'3 clases por semana')&&str_contains(hache_sharky_product_boundary_normalize($guarded),'persona del equipo'),'Model output cannot leak a regular plan to a beginner.');
 $guardedPending=hache_sharky_product_boundary_model_answer($modelRegular,$unknownBackground,'¿Qué planes hay?');
 product_boundary_ok(str_contains(hache_sharky_product_boundary_normalize($guardedPending),'has tomado clases formales'),'Model output cannot offer regular plans before formal-history qualification.');
+$guardedFresh=hache_sharky_product_boundary_model_answer($modelRegular,$fresh,'¿Qué opciones tienen?');
+product_boundary_ok(str_contains(hache_sharky_product_boundary_normalize($guardedFresh),'has tomado clases formales'),'A model-authored regular offer must be blocked even on a first-turn prospect with empty commercial context.');
 $intensiveAnswer='El curso intensivo dura 3 semanas, de lunes a viernes.';
 product_boundary_ok(hache_sharky_product_boundary_model_answer($intensiveAnswer,$beginner,'¿Cómo funciona?')===$intensiveAnswer,'An intensive-only answer must remain untouched.');
 
