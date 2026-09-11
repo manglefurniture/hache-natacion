@@ -497,16 +497,13 @@ function hache_sharky_commercial_reply(array $state,string $answer,array $catalo
     $state=hache_sharky_commercial_force_intensive_eligibility($state);
     $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
 
-    if(($c['program']??null)==='regular'&&($c['swim_level']??null)!=='swims'){
-        return hache_sharky_orchestrator_decision('commercial_level_required','Antes de continuar con clases regulares necesito confirmar algo: ¿ya sabes nadar o estás empezando desde cero?');
-    }
-    if(($c['program']??null)==='regular'&&($c['background']??null)!=='formal'){
-        return hache_sharky_orchestrator_decision('commercial_background_required','Antes de ofrecerte clases regulares necesito confirmar algo: ¿has tomado clases formales de natación con un profesor o entrenador?');
-    }
-
-    $catalogSede=(string)($catalog['_sede']??'');$catalogProgram=(string)($catalog['_program']??'');
-    $catalogStale=($catalogSede!==''&&$catalogSede!==(string)($c['sede_clave']??''))
-        ||($catalogProgram!==''&&$catalogProgram!==(string)($c['program']??''));
+    // A catalog is tied to the program+sede that produced it. If structured
+    // context changed later in the same turn, never render stale controls.
+    $hasCatalogScope=array_key_exists('_sede',$catalog)||array_key_exists('_program',$catalog);
+    $catalogStale=$hasCatalogScope&&(
+        (string)($catalog['_sede']??'')!==(string)($c['sede_clave']??'')
+        ||(string)($catalog['_program']??'')!==(string)($c['program']??'')
+    );
     if($catalogStale){
         $safe=trim(preg_replace('/¿[^?]*\?/u','',$answer)??$answer);
         if($safe===''){
