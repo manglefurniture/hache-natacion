@@ -32,7 +32,6 @@ $burst=hache_sharky_whatsapp_batch_unpack("Que precio tienen las clases de natac
 batch_context_ok(($burst['text']??'')==='Que precio tienen las clases de natación',"Batch must keep the customer's free-text question separate from button metadata.");
 batch_context_ok(count($burst['interactives']??[])===1&&($burst['interactives'][0]['id']??'')==='qualify:beginner','Batch must retain beginner button semantics instead of flattening it to plain text.');
 
-// A safe tap may join only a queue whose debounce deadline is still in the future.
 $contact='529980000001';
 $dir=hache_sharky_orchestrator_runtime_dir('batch');
 batch_context_ok($dir!=='','Batch runtime directory must be available in CLI regression.');
@@ -46,8 +45,6 @@ file_put_contents($queue,json_encode($pending,JSON_UNESCAPED_UNICODE|JSON_UNESCA
 batch_context_ok(!hache_sharky_whatsapp_batch_pending_question($contact),'An expired queued question must not absorb a later discovery tap.');
 @unlink($queue);
 
-// A side question must keep the semantic pass's next-step controls instead of
-// replacing buttons/list with a plain-text-only payload.
 $semanticDecision=hache_sharky_orchestrator_decision(
     'qualification_background',
     '¿Cómo aprendiste a nadar?',
@@ -66,8 +63,6 @@ batch_context_ok(($merged['decision']['kind']??'')==='side_question','Merged sid
 batch_context_ok(($merged['decision']['ui']['type']??'')==='buttons','Semantic next-step buttons must survive the text pass.');
 batch_context_ok(str_contains((string)($merged['decision']['message']??''),'El precio depende del programa.')&&str_contains((string)($merged['decision']['message']??''),'¿Cómo aprendiste a nadar?'),'Merged reply must include both the answer and the semantic next-step prompt.');
 
-// Long answers containing bare venue labels exercise the renderer's display-label
-// expansion (Monteverde -> Colegio Monteverde) before the 1,024-character cap.
 $longAnswer=str_repeat('Monteverde ',140);
 $longTextResult=[
     'decision'=>['kind'=>'side_question','message'=>$longAnswer,'ui'=>[],'action'=>null],
@@ -87,7 +82,6 @@ $handoffResult=['decision'=>$handoffDecision,'payload'=>hache_sharky_whatsapp_re
 $handoffMerged=hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$handoffResult);
 batch_context_ok(($handoffMerged['decision']['kind']??'')==='student_human_takeover','A policy decision must supersede semantic controls.');
 
-// Historical venue buttons are durable navigation, not stale transactional actions.
 $venueState=hache_sharky_orchestrator_state(null,1788640000);
 $venueState['identity']=array_replace($venueState['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
 $venueState['commercial_context']['program']='intensive';
@@ -152,19 +146,18 @@ batch_context_ok(!str_contains($source,'hache_sharky_whatsapp_batch_answer_after
 batch_context_ok(str_contains($source,"if(\$groupId!=='')return hache_sharky_whatsapp_process_with_delivery_lock"),'Group messages must remain outside direct-chat batching.');
 batch_context_ok(str_contains($source,'hache_sharky_whatsapp_guarded_historical_venue_reselection($deferredState,$event')&&str_contains($source,'hache_sharky_whatsapp_underage_gate($state,$event,$minAge)'),'Historical venue correction must pass through the minimum-age guard before stale-button handling.');
 
-$pendingReadPos=strpos($dbSource,"$pending=$GLOBALS['hache_sharky_db_state_pending']??null");
+$pendingReadPos=strpos($dbSource,"\$pending=\$GLOBALS['hache_sharky_db_state_pending']??null");
 $readyCheckPos=strpos($dbSource,'if(!hache_sharky_db_state_ready($pdo))');
 batch_context_ok($pendingReadPos!==false&&$readyCheckPos!==false&&$pendingReadPos<$readyCheckPos,'Deferred state load must read its own pending write before durable DB reload.');
-batch_context_ok(str_contains($dbSource,"(string)($pending['contact']??'')===$contact")&&str_contains($dbSource,"is_array($pending['state']??null)"),'Deferred read-your-writes must be scoped to the same contact and a valid state array.');
+batch_context_ok(str_contains($dbSource,"(string)(\$pending['contact']??'')===\$contact")&&str_contains($dbSource,"is_array(\$pending['state']??null)"),'Deferred read-your-writes must be scoped to the same contact and a valid state array.');
 
-// Manual takeover and resume are a control-plane pause, not a memory reset.
 $resumeStart=strpos($runtimeSource,'function hache_sharky_takeover_resume_hash');
 $resumeEnd=$resumeStart===false?false:strpos($runtimeSource,"\nfunction ",$resumeStart+10);
 $resumeBody=$resumeStart===false?'':substr($runtimeSource,$resumeStart,$resumeEnd===false?null:$resumeEnd-$resumeStart);
 batch_context_ok($resumeStart!==false&&str_contains($resumeBody,'@unlink($path)'),'Resume must only remove the takeover marker.');
 batch_context_ok(!str_contains($resumeBody,'sharky_conversation_state')&&!str_contains($resumeBody,'hache_sharky_db_state_'),'Resume must never delete or rewrite Sharky conversation memory.');
-$echoStart=strpos($labSource,"if($kind==='echo'){");
-$echoEnd=$echoStart===false?false:strpos($labSource,"\n\n    $contact=preg_replace",$echoStart);
+$echoStart=strpos($labSource,"if(\$kind==='echo'){");
+$echoEnd=$echoStart===false?false:strpos($labSource,"\n\n    \$contact=preg_replace",$echoStart);
 $echoBody=$echoStart===false?'':substr($labSource,$echoStart,$echoEnd===false?null:$echoEnd-$echoStart);
 batch_context_ok($echoStart!==false&&str_contains($echoBody,'hache_sharky_takeover_mark($contact'),'A manual WhatsApp echo must activate takeover.');
 batch_context_ok(!str_contains($echoBody,'hache_sharky_db_state_save')&&!str_contains($echoBody,'hache_sharky_orchestrator_clear_flow'),'A manual human message must not clear or overwrite the saved conversational state that Sharky will resume later.');
