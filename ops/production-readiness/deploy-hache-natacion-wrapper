@@ -149,6 +149,14 @@ reactivate_brain_conversational_once() {
   php "$script"
 }
 
+run_sharky_reengagement_backfill_dry_run() {
+  local script="$REPO/bin/sharky-reengagement-backfill-dry-run.php"
+  [[ -f "$script" && ! -L "$script" ]] || fail "script dry-run de reconquista ausente."
+  require_command php
+  cd "$REPO"
+  php "$script" --dry-run
+}
+
 main() {
   require_root
   [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -164,6 +172,10 @@ main() {
     brain-reactivate-once)
       [[ "$#" -eq 1 ]] || fail "brain-reactivate-once no acepta argumentos adicionales."
       reactivate_brain_conversational_once
+      ;;
+    sharky-backfill-dry-run)
+      [[ "$#" -eq 1 ]] || fail "sharky-backfill-dry-run no acepta argumentos adicionales."
+      run_sharky_reengagement_backfill_dry_run
       ;;
     *)
       [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."
