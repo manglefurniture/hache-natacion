@@ -214,7 +214,10 @@ function hache_sharky_brain_conversational_pause_result(array $state,array $resu
 }
 
 /**
- * Conversational experiment: remove only the guided qualification rail.
+ * Conversational experiment: replace the visible guided qualification response
+ * while retaining the semantic qualification cursor in state. Brain stays free
+ * to converse, but the next short answer (for example "No") still has an exact
+ * deterministic meaning and cannot lose the pending question.
  *
  * Protected flows remain untouched. If the model is unavailable or returns an
  * empty answer, the original deterministic result is returned as an automatic
@@ -264,11 +267,9 @@ function hache_sharky_brain_conversational_apply(
     $kind=(string)($decision['kind']??'');
     $softKinds=['conversation','conversation_identity_prompt','side_question','commercial_progress'];
 
-    // Once the guided rail has been removed, keep the existing natural response
-    // path. An explicit “déjame pensarlo/analizarlo” is the one deterministic
-    // conversational intervention: stop the sales push and wait for the person.
-    // Ambiguous numeric age drift is the other exception: the contaminated reply
-    // must be regenerated once with the corrected state instead of passed through.
+    // Outside qualification, keep the existing natural response path. An
+    // explicit “déjame pensarlo/analizarlo” stops the sales push and waits for
+    // the person. Ambiguous numeric age drift is regenerated once instead.
     if(!$qualificationFlow&&!$ambiguousAgeDrift){
         if(hache_sharky_brain_conversational_explicit_pause($message)){
             return hache_sharky_brain_conversational_pause_result($state,$result,$contact,$now);
@@ -289,9 +290,11 @@ function hache_sharky_brain_conversational_apply(
         return $result;
     }
 
-    $openState=$qualificationFlow&&function_exists('hache_sharky_orchestrator_clear_flow')
-        ?hache_sharky_orchestrator_clear_flow($state)
-        :$state;
+    // Keep the qualify_prospect flow as an invisible semantic cursor. The
+    // outgoing UI is still replaced by Brain text, but next-turn parsers retain
+    // the exact pending slot and short replies cannot be reinterpreted loosely.
+    $openState=$state;
+    $qualificationStep=$qualificationFlow?(string)($flow['step']??''):'';
     $now??=time();
     $openState['brain_conversational_experiment']=true;
     $openState['updated_at']=$now;
@@ -299,6 +302,11 @@ function hache_sharky_brain_conversational_apply(
     $seed=hache_sharky_orchestrator_decision('conversation','');
     $instruction=hache_sharky_whatsapp_style_instruction($seed,$openState);
     $instruction.="\n\nMODO BRAIN CONVERSACIONAL EXPERIMENTAL: responde primero a lo que realmente preguntó la persona y conduce la conversación con naturalidad. Haz como máximo una pregunta útil por turno cuando haga falta avanzar. En el primer turno no saludes ni añadas muletillas como ‘¡Claro!’ o ‘¡Con gusto!’: la presentación de Sharky se agrega de forma determinística aparte. Si commercial_context.entry_source es meta_ad y entry_interest es intensive, considera el curso intensivo como el tema actual y no preguntes intensivo vs. clases regulares salvo que la persona cambie explícitamente de interés. Mantén la respuesta breve y móvil: no vuelques todos los horarios, fechas o variantes cuando basta un resumen. Un número aislado es ambiguo: no lo conviertas en edad por tu cuenta; resuélvelo con el contexto conversacional anterior y, si sigue siendo ambiguo, pregunta brevemente qué significa. Solo trata una edad como confirmada cuando la persona la expresa inequívocamente (por ejemplo, ‘tengo 62 años’). Puedes explicar, comparar y cambiar de tema usando únicamente datos confirmados por el contexto de Hache Natación. No inventes precios, horarios, cupos, políticas ni datos del alumno. No afirmes haber ejecutado pagos, inscripciones, cancelaciones, reposiciones, cambios de datos ni ninguna operación sensible: esas acciones pertenecen exclusivamente a los flujos y ejecutores determinísticos del backend. Si una operación requiere un flujo protegido, deja que el backend tome el control.";
+    if($qualificationStep==='swim')$instruction.="\nPaso pendiente de calificación: NIVEL. Si hace falta avanzar, pregunta únicamente si ya sabe nadar o empieza desde cero; no le pidas elegir producto todavía.";
+    elseif($qualificationStep==='background')$instruction.="\nPaso pendiente de calificación: FORMACIÓN PREVIA. Si hace falta avanzar, pregunta únicamente si ha tomado clases formales de natación o aprendió por su cuenta. No repitas esta pregunta si commercial_context.background ya está confirmado.";
+    elseif($qualificationStep==='program')$instruction.="\nPaso pendiente de calificación: PROGRAMA. Solo una persona con formación formal confirmada puede elegir regulares automáticamente.";
+    elseif($qualificationStep==='sede')$instruction.="\nPaso pendiente de calificación: SEDE. Conserva el programa ya confirmado y pregunta únicamente qué sede prefiere si todavía no la indicó.";
+    elseif($qualificationStep==='daypart')$instruction.="\nPaso pendiente de calificación: TURNO. Conserva programa y sede; pregunta únicamente matutino o vespertino si aún falta esa preferencia.";
 
     $context=[
         'today'=>function_exists('hache_sharky_lab_today')?hache_sharky_lab_today():date('Y-m-d'),
