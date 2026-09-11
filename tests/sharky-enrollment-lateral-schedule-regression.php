@@ -86,6 +86,22 @@ $notRegularMessage=(string)($notRegular['decision']['message']??'');
 lateral_ok(str_contains($notRegularMessage,'Palapas Protudec'),'Rejecting regular classes must still allow the requested intensive opposite-venue lookup.');
 lateral_ok(str_contains($notRegularMessage,'07:00–08:00'),'Negated regular mention must not create a false P1 block.');
 
+// Follow-up Codex edge: a natural explicit intensive qualifier plus "no de
+// clases regulares" must preserve the active intensive interpretation.
+$explicitIntensive=hache_sharky_orchestrate($state,[
+    'id'=>'lateral-explicit-intensive','from'=>'529900000109','type'=>'text','interactive_id'=>'',
+    'text'=>'Quiero los horarios del curso intensivo, no de clases regulares, en Palapas.',
+],array_replace($context,['now'=>$now+3]));
+$explicitIntensiveMessage=(string)($explicitIntensive['decision']['message']??'');
+lateral_ok(($explicitIntensive['decision']['kind']??'')==='side_question','Explicit intensive qualifier must remain an intensive side lookup.');
+lateral_ok(str_contains($explicitIntensiveMessage,'Palapas Protudec'),'Explicit intensive qualifier must answer the requested Palapas venue.');
+foreach(['07:00–08:00','08:00–09:00','09:00–10:00','20:00–21:00'] as $hour){
+    lateral_ok(str_contains($explicitIntensiveMessage,$hour),'Explicit intensive qualifier must retain verified Palapas intensive hour '.$hour.'.');
+}
+lateral_ok(!str_contains(hache_sharky_orchestrator_normalize($explicitIntensiveMessage),'producto distinto'),'Negated regular qualifier must not trigger the regular-product blocker.');
+lateral_ok(($explicitIntensive['state']['commercial_context']['program']??'')==='intensive','Explicit intensive qualifier must keep the active intensive product.');
+lateral_ok(($explicitIntensive['state']['commercial_context']['sede_clave']??'')==='MONTEVERDE','Informational Palapas lookup must not mutate the protected Monteverde enrollment.');
+
 // Codex P2: a successful side lookup close to the 30-minute TTL must renew the
 // protected flow. A continuation seconds later must therefore keep the enrollment.
 $nearExpiryNow=$now-HACHE_SHARKY_FLOW_TTL+2;
