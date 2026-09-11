@@ -40,11 +40,12 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -Eeuo pipefail
           token="$(openssl rand -hex 32)"
           test "${#token}" = "64"
-          token_path="/tmp/hache-sharky-backfill-token-${GITHUB_RUN_ID}"
+          token_path="/tmp/hache-pr-evidence-token-${GITHUB_RUN_ID}"
 
           printf '%s' "$token" | ssh \
             -p "$DEPLOY_PORT" \
@@ -77,7 +78,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Backfill-Run-Id: $GITHUB_RUN_ID' --header 'X-Hache-Backfill-Token: $token' https://hnatacion.com/api/sharky-reengagement-backfill-dry-run.php")"
+            "curl --silent --show-error --fail --resolve hnatacion.com:443:127.0.0.1 --request POST --header 'X-Hache-Evidence-Run-Id: $GITHUB_RUN_ID' --header 'X-Hache-Evidence-Token: $token' --header 'X-Hache-Evidence-Mode: sharky_reengagement_backfill_dry_run' https://hnatacion.com/api/production-readiness-evidence.php")"
 
           cleanup_token
           trap - EXIT
@@ -87,6 +88,11 @@ jobs:
             $p=json_decode((string)getenv("RESULT"),true,512,JSON_THROW_ON_ERROR);
             if(($p["ok"]??false)!==true||($p["mode"]??"")!=="dry-run"||($p["privacy"]??"")!=="aggregate_counts_only"){
               fwrite(STDERR,"invalid dry-run response\n"); exit(1);
+            }
+            $expected=(string)getenv("EXPECTED_SHA");
+            $deployed=(string)($p["deployed_sha"]??"");
+            if($expected===""||$deployed===""||!hash_equals($expected,$deployed)){
+              fwrite(STDERR,"production SHA mismatch\n"); exit(1);
             }
             echo json_encode($p,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR),"\n";
           '
