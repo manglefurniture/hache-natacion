@@ -24,18 +24,26 @@ jobs:
           node-version: '22'
       - name: Apply narrow Sharky patch
         run: python .github/scripts/patch_sharky_priority.py
-      - name: Syntax and focused regressions
-        run: |
-          php -l config/sharky-whatsapp-adapter.php
-          php -l config/sharky-commercial-memory.php
-          php -l config/sharky-product-boundary-guard.php
-          php -l config/sharky-post-pr72.php
-          php -l tests/sharky-qualification-priority-regression.php
-          php tests/sharky-qualification-priority-regression.php
-          php tests/sharky-pr162-review-regression.php
-          php tests/sharky-product-boundary-regression.php
-          php tests/sharky-guided-onboarding-regression.php
-          php tests/sharky-commercial-memory-regression.php
+      - name: Syntax adapter
+        run: php -l config/sharky-whatsapp-adapter.php
+      - name: Syntax commercial memory
+        run: php -l config/sharky-commercial-memory.php
+      - name: Syntax product boundary
+        run: php -l config/sharky-product-boundary-guard.php
+      - name: Syntax policy
+        run: php -l config/sharky-post-pr72.php
+      - name: Syntax priority regression
+        run: php -l tests/sharky-qualification-priority-regression.php
+      - name: Priority regression
+        run: php tests/sharky-qualification-priority-regression.php
+      - name: PR162 regression
+        run: php tests/sharky-pr162-review-regression.php
+      - name: Product boundary regression
+        run: php tests/sharky-product-boundary-regression.php
+      - name: Guided onboarding regression
+        run: php tests/sharky-guided-onboarding-regression.php
+      - name: Commercial memory regression
+        run: php tests/sharky-commercial-memory-regression.php
       - name: Full regression suite
         run: npm test
       - name: Commit verified patch
