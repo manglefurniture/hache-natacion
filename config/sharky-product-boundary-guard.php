@@ -136,9 +136,15 @@ function hache_sharky_product_boundary_regular_offer(string $answer): bool
 
 function hache_sharky_product_boundary_sanitize_state(array $state,string $userText=''): array
 {
-    if(!hache_sharky_product_boundary_regular_restricted($state,$userText))return $state;
     if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
     $c=&$state['commercial_context'];
+    if(($c['swim_level']??null)==='swims'&&($c['background']??null)==='formal'){
+        $c['recommended_program']='regular';
+        $c['program']='regular';
+        foreach(['course_id','fecha_inicio','course_price','date_preference'] as $key)unset($c[$key]);
+        return $state;
+    }
+    if(!hache_sharky_product_boundary_regular_restricted($state,$userText))return $state;
     if($userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText))$c['background']='no_formal';
     $c['recommended_program']='intensive';
     $c['program']='intensive';

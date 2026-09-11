@@ -74,7 +74,10 @@ product_boundary_ok(str_contains(hache_sharky_product_boundary_normalize($pendin
 $pendingRegular=hache_sharky_product_boundary_reply('Prefiero clases regulares',$unknownBackground)??'';
 product_boundary_ok(str_contains(hache_sharky_product_boundary_normalize($pendingRegular),'has tomado clases formales'),'An explicit regular preference still requires training-history qualification when background is unknown.');
 
-product_boundary_ok(hache_sharky_product_boundary_reply('Prefiero clases regulares',$formal)===null,'Only a prospect with formal training may explicitly switch to regular classes automatically.');
+product_boundary_ok(hache_sharky_product_boundary_reply('Prefiero clases regulares',$formal)===null,'A prospect with formal training may continue with regular classes without a human exception.');
+$formalClean=hache_sharky_product_boundary_sanitize_state($formal);
+product_boundary_ok(($formalClean['commercial_context']['program']??null)==='regular','Formal swimmer state must canonicalize to regular classes automatically.');
+product_boundary_ok(($formalClean['commercial_context']['recommended_program']??null)==='regular','Formal swimmer recommendation must canonicalize to regular classes.');
 
 $dirty=$beginner;
 $dirty['commercial_context']=array_replace($dirty['commercial_context'],[

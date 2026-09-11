@@ -122,21 +122,23 @@ function hache_sharky_commercial_reconcile_guidance(array $state,string $text): 
                 if(in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
                     $state=hache_sharky_orchestrator_clear_flow($state);
                 }else{
-                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',['recommended_program'=>'intensive','background'=>$background],(int)($state['updated_at']??time()));
+                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',['recommended_program'=>'intensive','background'=>$background,'venue_proposal'=>'MONTEVERDE'],(int)($state['updated_at']??time()));
                 }
                 $c=&$state['commercial_context'];
                 $flow=$state['flow']??null;$flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
             }else{
-                if($background==='formal'&&in_array(($c['entry_interest']??null),['intensive','regular'],true))$c['recommended_program']=$c['entry_interest'];
-                if(empty($c['program'])){
-                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','program',[
-                        'recommended_program'=>$c['recommended_program']??null,
-                        'background'=>$background,
-                        'preferred_program'=>$c['entry_interest']??null,
+                $c['recommended_program']='regular';
+                $c['program']='regular';
+                foreach(['course_id','fecha_inicio','course_price','date_preference'] as $key)unset($c[$key]);
+                if(in_array(($c['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
+                    $state=hache_sharky_orchestrator_clear_flow($state);
+                }else{
+                    $state=hache_sharky_orchestrator_flow($state,'qualify_prospect','sede',[
+                        'recommended_program'=>'regular','background'=>'formal','venue_proposal'=>'MONTEVERDE',
                     ],(int)($state['updated_at']??time()));
-                    $c=&$state['commercial_context'];
-                    $flow=$state['flow'];$flowName='qualify_prospect';$flowStep='program';
                 }
+                $c=&$state['commercial_context'];
+                $flow=$state['flow']??null;$flowName=(string)($flow['name']??'');$flowStep=(string)($flow['step']??'');
             }
         }
     }
