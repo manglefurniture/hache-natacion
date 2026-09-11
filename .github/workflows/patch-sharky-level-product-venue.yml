@@ -47,8 +47,26 @@ jobs:
       - name: Commercial memory regression
         run: php tests/sharky-commercial-memory-regression.php
       - name: Full regression suite
-        run: npm test
+        run: |
+          set +e
+          npm test > /tmp/sharky-full-test.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            tail -n 160 /tmp/sharky-full-test.log > .github/sharky-test-failure.log
+          fi
+          exit $status
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          if [ -f .github/sharky-test-failure.log ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/sharky-test-failure.log
+            git commit -m "Capture temporary Sharky regression diagnostics"
+            git push origin HEAD:fix/sharky-level-product-venue-priority
+          fi
       - name: Commit verified patch
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
