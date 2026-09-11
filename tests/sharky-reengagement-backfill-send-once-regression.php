@@ -8,8 +8,10 @@ function backfill_send_once_ok(bool $condition,string $message): void
 }
 
 $sender=file_get_contents(__DIR__.'/../bin/sharky-reengagement-backfill-send-once.php')?:'';
+$status=file_get_contents(__DIR__.'/../bin/sharky-reengagement-backfill-status-once.php')?:'';
 $wrapper=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion-wrapper')?:'';
 $workflow=file_get_contents(__DIR__.'/../.github/workflows/sharky-reengagement-backfill-send-once.yml')?:'';
+$statusWorkflow=file_get_contents(__DIR__.'/../.github/workflows/sharky-reengagement-backfill-status-once.yml')?:'';
 
 backfill_send_once_ok(str_contains($sender,"HACHE_SHARKY_BACKFILL_APPROVAL_SNAPSHOT_UTC = '2026-09-11T17:35:33+00:00'"),'Approved cohort must be pinned to the successful dry-run snapshot.');
 backfill_send_once_ok(str_contains($sender,"'not_in_approved_snapshot' => 0")&&str_contains($sender,"'outside_current_window' => 0"),'Sender must reject newly aged or now-expired contacts.');
@@ -44,5 +46,18 @@ backfill_send_once_ok(str_contains($wrapper,'sharky-backfill-send-once)')&&str_c
 backfill_send_once_ok(str_contains($workflow,"contains(github.event.workflow_run.head_commit.message, 'Ops: enviar reconquista retroactiva aprobada')"),'Workflow must only fire for the specifically approved merge.');
 backfill_send_once_ok(str_contains($workflow,'deploy-hache-natacion sharky-backfill-send-once'),'Workflow must cross the existing privileged helper boundary.');
 backfill_send_once_ok(!str_contains($workflow,'workflow_dispatch'),'The approved send must not become a reusable manual campaign trigger.');
+
+backfill_send_once_ok(str_contains($status,"HACHE_SHARKY_BACKFILL_STATUS_APPROVAL_SNAPSHOT_UTC = '2026-09-11T17:35:33+00:00'"),'Read-only diagnostic must inspect only the approved cohort.');
+backfill_send_once_ok(str_contains($status,"'mode'=>'approved-backfill-status-once'")&&str_contains($status,"'privacy'=>'aggregate_counts_only'")&&str_contains($status,"'read_only'=>true"),'Diagnostic output must be explicitly aggregate-only and read-only.');
+backfill_send_once_ok(str_contains($status,"'status'=>['PENDING'=>0,'SENT'=>0,'DEAD'=>0,'CANCELLED'=>0,'OTHER'=>0]")&&str_contains($status,"'errors'=>[]")&&str_contains($status,"'attempts'=>['zero'=>0,'one'=>0,'multiple'=>0]"),'Diagnostic must expose queue status, errors and retry counts without PII.');
+foreach(['UPDATE sharky_outbox','INSERT INTO sharky_outbox','DELETE FROM sharky_outbox','hache_sharky_outbox_enqueue_raw','hache_sharky_outbox_dispatch(','hache_sharky_delivery_meta_send','hache_sharky_db_state_save'] as $mutation){
+    backfill_send_once_ok(!str_contains($status,$mutation),'Read-only diagnostic must never mutate or dispatch.');
+}
+backfill_send_once_ok(str_contains($status,'--status-approved-20260911'),'Direct diagnostic execution must require the bounded cohort gate.');
+backfill_send_once_ok(str_contains($wrapper,'sharky-backfill-status-once)')&&str_contains($wrapper,'--status-approved-20260911'),'Root helper must expose the bounded read-only diagnostic.');
+backfill_send_once_ok(str_contains($statusWorkflow,"contains(github.event.workflow_run.head_commit.message, 'Ops: diagnosticar reconquista retroactiva')"),'Diagnostic workflow must only fire for its dedicated merge.');
+backfill_send_once_ok(str_contains($statusWorkflow,'deploy-hache-natacion sharky-backfill-status-once'),'Diagnostic workflow must cross the existing privileged helper boundary.');
+backfill_send_once_ok(str_contains($statusWorkflow,'systemctl is-active hache-sharky-outbox.timer')&&str_contains($statusWorkflow,'systemctl is-enabled hache-sharky-outbox.timer'),'Diagnostic must report live outbox timer state.');
+backfill_send_once_ok(!str_contains($statusWorkflow,'workflow_dispatch'),'Diagnostic must remain one-shot and non-reusable from the UI.');
 
 fwrite(STDOUT,"SHARKY_BACKFILL_SEND_ONCE_OK\n");
