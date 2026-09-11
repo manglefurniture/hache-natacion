@@ -54,6 +54,9 @@ Un prospecto entra desde un anuncio de Meta relacionado con aprender a nadar. Sh
 - Solo un prospecto con formación formal confirmada puede cambiar automáticamente a clases regulares mediante una preferencia explícita. Si no es elegible, Sharky no muestra planes, precios ni horarios regulares y deriva la excepción a una persona.
 - La preferencia posterior del cliente se respeta dentro de las reglas de elegibilidad; una preferencia no autoriza a Sharky a saltarse una valoración humana requerida.
 - La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo.
+- En una consulta de horarios, “ambos”, “las dos sedes” o equivalente significa **ambas sedes dentro del programa activo**, salvo que la persona nombre explícitamente productos distintos. Una pregunta posterior por mañana/tarde/noche conserva ese alcance de sedes.
+- Los horarios se validan **por programa y por sede**; nunca se forma una unión de horarios de Monteverde y Palapas para luego presentarla como si aplicara a ambas.
+- Referencia operativa actual del intensivo: Colegio Monteverde tiene 08:00–09:00, 19:00–20:00 y 20:00–21:00; Palapas Protudec tiene 07:00–08:00, 08:00–09:00, 09:00–10:00 y 20:00–21:00. En Palapas esos cuatro horarios también están habilitados para clases regulares. Si la configuración administrativa cambia, el backend vuelve a ser la autoridad y las regresiones deben actualizarse de forma explícita.
 - Horario y fecha se eligen usando disponibilidad real del backend y siempre dentro del programa activo.
 - El modelo no puede ampliar, mezclar ni inventar horarios fuera del catálogo verificado del backend; si la disponibilidad no puede verificarse, se falla cerrado.
 - Una vez que empieza un flow protegido de inscripción o pago, Brain no reescribe ni suplanta ese flow.
@@ -81,6 +84,9 @@ Considerar GP-001 roto si una adecuación provoca cualquiera de estos comportami
 - cambiar de intensivo a regulares porque el usuario dijo de forma genérica “clases”, “precio” u otra referencia ambigua;
 - presentar 2/3/5 clases por semana como si fueran modalidades del curso intensivo;
 - interpretar “de las dos” como una orden para cambiar de producto;
+- responder una comparación de sedes con el catálogo de una sola sede;
+- mezclar horarios regulares de Monteverde dentro de una respuesta de intensivo o copiar horarios de una sede a la otra;
+- perder el alcance “ambas sedes” en una pregunta de seguimiento sobre mañana/tarde/noche;
 - ofrecer horarios del otro producto, horarios inventados o horarios no verificables;
 - convertir una respuesta conversacional de Brain en una operación sensible directa;
 - reiniciar el onboarding al entrar al flow de inscripción;
