@@ -37,13 +37,26 @@ function hache_sharky_product_boundary_weekly_frequency(string $text): ?int
     return $value>=1&&$value<=7?$value:null;
 }
 
+/**
+ * Detect only statements about the person's swimming-training history.
+ * Local absences such as "no he tomado clases esta semana" or schedule
+ * qualifiers such as "nunca he tomado clases en la mañana" are deliberately
+ * not lifetime/no-formal signals.
+ */
 function hache_sharky_product_boundary_no_formal_signal(string $text): bool
 {
     $t=hache_sharky_product_boundary_normalize($text);
     if($t==='')return false;
-    if(preg_match('/\b(?:nunca|jamas)\b.{0,42}\b(?:he\s+)?(?:tomado|recibido|tenido)\b.{0,24}\bclases?\b/u',$t)===1)return true;
-    if(preg_match('/\bno\s+(?:he\s+)?(?:tomado|recibido|tenido)\b.{0,24}\bclases?\b/u',$t)===1)return true;
-    if(preg_match('/\b(?:sin|ninguna?)\s+clases?\s+(?:formales?\s+)?(?:de\s+)?natacion\b/u',$t)===1)return true;
+
+    // Explicitly names swimming/formal instruction anywhere in the sentence.
+    if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?\s+de\s+natacion\b/u',$t)===1)return true;
+    if(preg_match('/\b(?:sin|ninguna?)\s+clases?(?:\s+formales?)?\s+(?:de\s+)?natacion\b/u',$t)===1)return true;
+
+    // A bare "nunca/no he tomado clases" is accepted only when that training
+    // statement closes the utterance (or explicitly says "antes/formales").
+    // This avoids converting "esta semana" / "en la mañana" into a lifetime fact.
+    if(preg_match('/\b(?:nunca|jamas|no)\s+(?:he\s+)?(?:tomado|recibido|tenido)\s+clases?(?:\s+formales?)?(?:\s+antes)?[.!¡!\s]*$/u',$t)===1)return true;
+
     if(preg_match('/\b(?:aprendi|nado|he\s+nadado)\b.{0,30}\b(?:solo|sola|por\s+mi\s+cuenta|autodidacta)\b/u',$t)===1)return true;
     return false;
 }
@@ -56,11 +69,19 @@ function hache_sharky_product_boundary_regular_restricted(array $state,string $u
     return $userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText);
 }
 
+/**
+ * Regular classes require affirmative evidence of formal prior instruction.
+ * Missing qualification is therefore pending, including a brand-new prospect
+ * with an empty commercial context. Restricted states are handled by the harder
+ * gate before this one; this function covers the not-yet-proven case.
+ */
 function hache_sharky_product_boundary_regular_pending_background(array $state): bool
 {
     $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
-    if(($c['swim_level']??null)!=='swims')return false;
-    return !in_array(($c['background']??null),['formal','self_taught','no_formal'],true);
+    $background=(string)($c['background']??'');
+    if($background==='formal')return false;
+    if(in_array($background,['self_taught','no_formal'],true))return false;
+    return true;
 }
 
 function hache_sharky_product_boundary_intensive_context(array $state): bool
@@ -92,11 +113,6 @@ function hache_sharky_product_boundary_regular_offer(string $answer): bool
     return false;
 }
 
-/**
- * A beginner or a prospect without formal swimming lessons is not eligible for
- * automatic regular-class sales. Intensive remains the only automatic product;
- * a human may assess an exception.
- */
 function hache_sharky_product_boundary_sanitize_state(array $state,string $userText=''): array
 {
     if(!hache_sharky_product_boundary_regular_restricted($state,$userText))return $state;
