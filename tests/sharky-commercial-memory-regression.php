@@ -38,13 +38,16 @@ function memory_turn(array $state,string $text,array $catalog,string $answer='Co
     return [hache_sharky_orchestrator_state($loaded),$payload,$decision];
 }
 $ivan=memory_new();$introductions=0;
-foreach(['Buenas noches','Clases regulares','Monteverde','5 clases','7-8'] as $text){
+// Regular is only an automatic option after swimming ability and formal training
+// are both confirmed. Keep the long-lived memory regression aligned with GP-001.
+foreach(['Buenas noches','Ya sé nadar','He tomado clases','Clases regulares','Monteverde','5 clases','7-8'] as $text){
     [$ivan,$payload,$decision]=memory_turn($ivan,$text,$catalog);
     $introductions+=substr_count(hache_sharky_draft_payload_text($payload),'Soy Sharky');
 }
 memory_ok($introductions===1,'Iván: exactly one AI disclosure');
 $c=$ivan['commercial_context'];
 memory_ok($c['program']==='regular'&&$c['sede_clave']==='MONTEVERDE','Iván: program and venue');
+memory_ok(($c['swim_level']??null)==='swims'&&($c['background']??null)==='formal','Iván: regular eligibility must be explicitly established.');
 memory_ok($c['plan_id']==='p5'&&$c['plan_name']==='Regular 5'&&$c['sessions_per_week']===5,'Iván: backend plan authority');
 memory_ok($c['schedule_id']==='h7'&&$c['schedule_label']==='07:00–08:00','Iván: persisted schedule');
 memory_ok(($decision['ui']['buttons'][0]['id']??'')==='action:human','Regular immediate controlled handoff CTA');
@@ -61,7 +64,7 @@ memory_ok($changed['commercial_context']['plan_id']==='p3'&&$changed['commercial
 [$changed]=memory_turn($ivan,'Mejor Palapas',$catalog);
 memory_ok(empty($changed['commercial_context']['plan_id'])&&empty($changed['commercial_context']['schedule_id']),'Venue change invalidates venue-bound ids');
 $ambiguous=$catalog;$ambiguous['plans'][]=['id'=>'p5other','nombre'=>'Regular Plus','sesiones_semana'=>5,'precio'=>1600];
-$base=memory_new();$base['commercial_context']=['program'=>'regular','sede_clave'=>'MONTEVERDE'];
+$base=memory_new();$base['commercial_context']=['program'=>'regular','sede_clave'=>'MONTEVERDE','swim_level'=>'swims','background'=>'formal'];
 [$amb]=memory_turn($base,'5 clases',$ambiguous);
 memory_ok(empty($amb['commercial_context']['plan_id'])&&$amb['commercial_context']['sessions_per_week']===5,'Same-frequency plans must not be guessed');
 [$amb]=memory_turn($amb,'Regular Plus',$ambiguous);
