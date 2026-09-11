@@ -32,7 +32,6 @@ $burst=hache_sharky_whatsapp_batch_unpack("Que precio tienen las clases de natac
 batch_context_ok(($burst['text']??'')==='Que precio tienen las clases de natación',"Batch must keep the customer's free-text question separate from button metadata.");
 batch_context_ok(count($burst['interactives']??[])===1&&($burst['interactives'][0]['id']??'')==='qualify:beginner','Batch must retain beginner button semantics instead of flattening it to plain text.');
 
-// A safe tap may join only a queue whose debounce deadline is still in the future.
 $contact='529980000001';
 $dir=hache_sharky_orchestrator_runtime_dir('batch');
 batch_context_ok($dir!=='','Batch runtime directory must be available in CLI regression.');
@@ -46,8 +45,6 @@ file_put_contents($queue,json_encode($pending,JSON_UNESCAPED_UNICODE|JSON_UNESCA
 batch_context_ok(!hache_sharky_whatsapp_batch_pending_question($contact),'An expired queued question must not absorb a later discovery tap.');
 @unlink($queue);
 
-// A side question must keep the semantic pass's next-step controls instead of
-// replacing buttons/list with a plain-text-only payload.
 $semanticDecision=hache_sharky_orchestrator_decision(
     'qualification_background',
     '¿Cómo aprendiste a nadar?',
@@ -66,8 +63,6 @@ batch_context_ok(($merged['decision']['kind']??'')==='side_question','Merged sid
 batch_context_ok(($merged['decision']['ui']['type']??'')==='buttons','Semantic next-step buttons must survive the text pass.');
 batch_context_ok(str_contains((string)($merged['decision']['message']??''),'El precio depende del programa.')&&str_contains((string)($merged['decision']['message']??''),'¿Cómo aprendiste a nadar?'),'Merged reply must include both the answer and the semantic next-step prompt.');
 
-// Long answers containing bare venue labels exercise the renderer's display-label
-// expansion (Monteverde -> Colegio Monteverde) before the 1,024-character cap.
 $longAnswer=str_repeat('Monteverde ',140);
 $longTextResult=[
     'decision'=>['kind'=>'side_question','message'=>$longAnswer,'ui'=>[],'action'=>null],
@@ -87,7 +82,6 @@ $handoffResult=['decision'=>$handoffDecision,'payload'=>hache_sharky_whatsapp_re
 $handoffMerged=hache_sharky_whatsapp_batch_merge_semantic_controls($contact,$semanticResult,$handoffResult);
 batch_context_ok(($handoffMerged['decision']['kind']??'')==='student_human_takeover','A policy decision must supersede semantic controls.');
 
-// Historical venue buttons are durable navigation, not stale transactional actions.
 $venueState=hache_sharky_orchestrator_state(null,1788640000);
 $venueState['identity']=array_replace($venueState['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
 $venueState['commercial_context']['program']='intensive';
@@ -115,11 +109,13 @@ batch_context_ok(is_array($sameVenue)&&($sameVenue[1]['kind']??'')==='commercial
 
 $regularState=$venueState;
 $regularState['commercial_context']['program']='regular';
+$regularState['commercial_context']['swim_level']='swims';
+$regularState['commercial_context']['background']='formal';
 $regularState['commercial_context']['sede_clave']='PALAPAS';
 $regularChange=hache_sharky_whatsapp_historical_venue_reselection($regularState,[
     'interactive_id'=>'sede:monteverde','text'=>'Colegio Monteverde',
 ]);
-batch_context_ok(is_array($regularChange)&&($regularChange[0]['commercial_context']['program']??'')==='regular','Regular-program venue correction must preserve the regular program.');
+batch_context_ok(is_array($regularChange)&&($regularChange[0]['commercial_context']['program']??'')==='regular','Regular-program venue correction must preserve the regular program for a formally trained swimmer.');
 $regularButtons=array_map(static fn(array $button):string=>(string)($button['id']??''),(array)($regularChange[1]['ui']['buttons']??[]));
 batch_context_ok(in_array('action:commercial_schedules',$regularButtons,true)&&in_array('action:commercial_price',$regularButtons,true)&&!in_array('action:register_intensive',$regularButtons,true),'Regular venue correction must offer schedule and price without an intensive-registration action.');
 
@@ -155,7 +151,6 @@ $readyCheckPos=strpos($dbSource,'if(!hache_sharky_db_state_ready($pdo))');
 batch_context_ok($pendingReadPos!==false&&$readyCheckPos!==false&&$pendingReadPos<$readyCheckPos,'Deferred state load must read its own pending write before durable DB reload.');
 batch_context_ok(str_contains($dbSource,"(string)(\$pending['contact']??'')===\$contact")&&str_contains($dbSource,"is_array(\$pending['state']??null)"),'Deferred read-your-writes must be scoped to the same contact and a valid state array.');
 
-// Manual takeover and resume are a control-plane pause, not a memory reset.
 $resumeStart=strpos($runtimeSource,'function hache_sharky_takeover_resume_hash');
 $resumeEnd=$resumeStart===false?false:strpos($runtimeSource,"\nfunction ",$resumeStart+10);
 $resumeBody=$resumeStart===false?'':substr($runtimeSource,$resumeStart,$resumeEnd===false?null:$resumeEnd-$resumeStart);

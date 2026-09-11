@@ -125,38 +125,39 @@ $limitedBody=hache_sharky_draft_payload_text($limitedPayload);
 memory_ok(mb_strlen($limitedBody)<=1024,'Presentation must reapply the Meta 1024-character interactive body cap.');
 memory_ok(str_starts_with($limitedBody,'Soy Sharky 🦈, el asistente IA de Hache Natación.'),'Length limiting must preserve the AI disclosure at the beginning.');
 
-// Production regression: Sharky had recommended intensive, answered a venue side question,
-// then forgot the recommendation and asked the swim-level question again.
+// Hard eligibility regression: once the prospect says there were no formal lessons,
+// regular classes disappear from the automatic funnel and intensive becomes canonical.
 $guided=memory_new();
 $guided['commercial_context']['swim_level']='swims';
 $guided=hache_sharky_orchestrator_flow($guided,'qualify_prospect','background',[],$now);
 $guided=hache_sharky_commercial_capture($guided,'No nunca',$catalog,$today);
 memory_ok(($guided['commercial_context']['background']??null)==='no_formal','Guided memory must normalize “No nunca” as no formal classes.');
 memory_ok(($guided['commercial_context']['recommended_program']??null)==='intensive','No-formal background must persist the intensive recommendation.');
-memory_ok(empty($guided['commercial_context']['program']),'A recommendation must not masquerade as an explicit program selection.');
-memory_ok(($guided['flow']['name']??null)==='qualify_prospect'&&($guided['flow']['step']??null)==='program','Recommendation must keep the prospect inside the guided program step.');
+memory_ok(($guided['commercial_context']['program']??null)==='intensive','No-formal background must make intensive the only automatic product.');
+memory_ok(($guided['flow']['name']??null)==='qualify_prospect'&&($guided['flow']['step']??null)==='sede','No-formal qualification must advance directly to venue instead of reopening product choice.');
 $pdoGuided=new PDO('sqlite::memory:');
 [$guidedPromptState,$guidedPrompt]=hache_sharky_whatsapp_qualification_input($pdoGuided,$guided,['text'=>'No nunca','interactive_id'=>''],$now,12);
 $guidedIds=array_column($guidedPrompt['ui']['buttons']??[],'id');
-memory_ok($guidedIds===['qualify:intensive','qualify:regular'],'Recommendation must resolve with program buttons instead of free-form discovery.');
+memory_ok($guidedIds===['sede:monteverde','sede:palapas'],'No-formal prospect must see venue choices, never a Regulares product button.');
 $sideResult=[
     'state'=>$guided,
-    'decision'=>['kind'=>'side_question','message'=>'Sí, por lo que me contaste te recomendé el intensivo.','ui'=>[],'action'=>null],
-    'payload'=>hache_sharky_whatsapp_text_payload('529981112233','Sí, por lo que me contaste te recomendé el intensivo.'),
+    'decision'=>['kind'=>'side_question','message'=>'Sí, por lo que me contaste seguimos con el intensivo.','ui'=>[],'action'=>null],
+    'payload'=>hache_sharky_whatsapp_text_payload('529981112233','Sí, por lo que me contaste seguimos con el intensivo.'),
 ];
 $resumed=hache_sharky_whatsapp_batch_resume_qualification_controls($pdoGuided,'529981112233',$sideResult,['now'=>$now,'min_age'=>12]);
 $resumeIds=array_column($resumed['decision']['ui']['buttons']??[],'id');
-memory_ok($resumeIds===['qualify:intensive','qualify:regular'],'A side question about the recommendation must resume the exact guided buttons.');
+memory_ok($resumeIds===['sede:monteverde','sede:palapas'],'A side question must resume venue choices without resurrecting Regulares.');
 memory_ok(!str_contains((string)($resumed['decision']['message']??''),'¿Ya sabes nadar'),'Recommendation resume must never regress to swim-level discovery.');
 $guidedYes=hache_sharky_commercial_capture($guided,'Sí',$catalog,$today);
-memory_ok(($guidedYes['commercial_context']['program']??null)==='intensive','Typed “Sí” at the recommendation step must confirm the recommended program.');
-memory_ok(($guidedYes['flow']['step']??null)==='sede','Without a known venue, confirming the recommendation must advance to the venue step.');
+memory_ok(($guidedYes['commercial_context']['program']??null)==='intensive','A generic confirmation cannot alter the intensive-only eligibility.');
+memory_ok(($guidedYes['flow']['step']??null)==='sede','Without a known venue, the restricted prospect stays on venue selection.');
 [$guidedVenueState,$guidedVenue]=hache_sharky_whatsapp_qualification_input($pdoGuided,$guidedYes,['text'=>'Sí','interactive_id'=>''],$now,12);
 $venueIds=array_column($guidedVenue['ui']['buttons']??[],'id');
-memory_ok($venueIds===['sede:monteverde','sede:palapas'],'After confirming the recommendation Sharky must guide venue selection with buttons.');
+memory_ok($venueIds===['sede:monteverde','sede:palapas'],'Restricted prospect must continue with venue buttons.');
 $guidedKnown=$guided;$guidedKnown['commercial_context']['sede_clave']='MONTEVERDE';
 $guidedKnown=hache_sharky_commercial_capture($guidedKnown,'Sí',$catalog,$today);
-memory_ok(($guidedKnown['commercial_context']['program']??null)==='intensive'&&!is_array($guidedKnown['flow']??null),'A known venue plus recommendation confirmation must finish qualification without reopening old discovery.');
+$guidedKnown=hache_sharky_whatsapp_reconcile_qualification_context($guidedKnown);
+memory_ok(($guidedKnown['commercial_context']['program']??null)==='intensive'&&!is_array($guidedKnown['flow']??null),'Known venue plus intensive-only eligibility must finish qualification without reopening product choice.');
 
 $shadow=hache_sharky_brain_shadow_evaluate($ignacia,$ignacia,['text'=>'14 de septiembre de 2026'],['decision'=>hache_sharky_commercial_reply($ignacia,'Listo.')]);
 memory_ok($shadow['match']===true&&$shadow['live_action']==='show_commercial_menu','Brain shadow observes immediate enrollment invitation accurately');

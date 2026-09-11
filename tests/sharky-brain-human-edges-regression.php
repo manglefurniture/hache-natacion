@@ -165,7 +165,7 @@ human_edge_ok(
 );
 human_edge_ok(
     hache_sharky_orchestrator_program_choice('Prefiero clases regulares')==='regular',
-    'An explicit regular preference must remain able to change program.'
+    'An explicit regular preference must remain detectable even though eligibility is enforced separately.'
 );
 $intensiveInstruction=hache_sharky_whatsapp_style_instruction(['kind'=>'conversation'],$prospect);
 human_edge_ok(
@@ -176,9 +176,9 @@ human_edge_ok(
 $policy=hache_sharky_post72_whatsapp_style_policy();
 foreach([
     'prioriza conocer el nivel antes de pedir que elija programa',
-    'curso intensivo es la recomendación primaria de Hache Natación',
-    'respeta su decisión y continúa con regulares sin insistir',
-    'ese es el programa activo de la conversación hasta que el usuario lo cambie explícitamente',
+    'El único producto automático es el curso intensivo de 3 semanas, lunes a viernes',
+    'Una excepción a regulares solo puede decidirla una persona del equipo',
+    'ese es el programa activo de la conversación hasta que exista un cambio permitido y explícito',
     'La palabra “clases” por sí sola NO significa clases regulares',
     'Una consulta lateral sobre regulares no cambia por sí sola el programa activo',
     'no asumas que esa es su elección final',

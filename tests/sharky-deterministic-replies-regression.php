@@ -59,19 +59,19 @@ final class DeterministicPdo extends PDO
     public function prepare(string $query,array $options=[]): PDOStatement|false{$this->lastQuery=$query;return new DeterministicStatement($this->rows);}
 }
 $pdo=new DeterministicPdo([
+    ['hora_inicio'=>'06:00:00','hora_fin'=>'07:00:00'],
+    ['hora_inicio'=>'07:00:00','hora_fin'=>'08:00:00'],
     ['hora_inicio'=>'08:00:00','hora_fin'=>'09:00:00'],
-    ['hora_inicio'=>'19:00:00','hora_fin'=>'20:00:00'],
-    ['hora_inicio'=>'20:00:00','hora_fin'=>'21:00:00'],
 ]);
 $hours=hache_sharky_deterministic_active_schedules($pdo,'intensive','MONTEVERDE');
-deterministic_ok($hours===['08:00–09:00','19:00–20:00','20:00–21:00'],'Schedule lookup must format active rows deterministically.');
+deterministic_ok($hours===['06:00–07:00','07:00–08:00','08:00–09:00'],'Schedule lookup must format the current Monteverde intensive morning rows deterministically.');
 deterministic_ok(str_contains($pdo->lastQuery,'s.clave=:c'),'Schedule lookup must remain venue-scoped.');
 deterministic_ok(str_contains($pdo->lastQuery,'h.intensivo=1'),'Intensive requests must query only intensive schedules.');
 
 $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
 $wrapper=file_get_contents(__DIR__.'/../api/sharky.php')?:'';
 deterministic_ok(str_contains($wrapper,'sharky-whatsapp-dispatch.php'),'Public Sharky wrapper must route through the WhatsApp dispatcher.');
-deterministic_ok(str_contains($dispatcher,"source'=>'deterministic'"),'Dispatcher must expose deterministic responses without calling the LLM.');
+deterministic_ok(str_contains($dispatcher,'$deterministicSource')&&str_contains($dispatcher,"'source'=>\$deterministicSource"),'Dispatcher must expose deterministic/guarded deterministic responses without calling the LLM.');
 deterministic_ok(str_contains($dispatcher,"sede: colegio monteverde"),'Dispatcher must recover Colegio Monteverde from the system context before deterministic price/schedule handling.');
 deterministic_ok(str_contains($dispatcher,'hache_sharky_reply_looks_incomplete'),'Dispatcher must guard incomplete model answers.');
 deterministic_ok(str_contains($dispatcher,'hache_sharky_dispatcher_clean_model_answer'),'Dispatcher must clean repeated greetings and empty bullets.');
