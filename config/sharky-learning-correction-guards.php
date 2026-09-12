@@ -8,6 +8,13 @@ function hache_sharky_learning_guard_normalize(string $text): string
     return strtr($text,['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
 }
 
+function hache_sharky_learning_guard_canonicalize_daypart_followup(string $text): string
+{
+    $t=hache_sharky_learning_guard_normalize($text);
+    if(preg_match('/^[¿?¡!\s]*(?:(?:en|por)\s+la\s+)?(?:manana|matutino|matutina|tarde|noche|vespertino|vespertina|nocturno|nocturna)[¿?¡!.\s]*$/u',$t)!==1)return $text;
+    return trim(preg_replace('/[¿?¡!]+/u','',$text)??$text);
+}
+
 function hache_sharky_learning_guard_natural_venue_preference(string $text): ?string
 {
     if(str_contains($text,'?')||str_contains($text,'¿'))return null;
@@ -60,10 +67,6 @@ function hache_sharky_learning_guard_pending_location_reply(string $message,arra
             $proposed=$previousAssistant!==''?hache_sharky_deterministic_detect_explicit_sede($previousAssistant):null;
             if($proposed!==null)return hache_sharky_deterministic_location_message($proposed,$state);
 
-            // En el flujo canónico, una vez resuelto el producto y sin sede elegida,
-            // la propuesta activa es Monteverde. Una referencia singular inmediata
-            // como “¿en dónde está?” puede resolverse sin depender de que el productor
-            // haya serializado el texto exacto del turno anterior.
             $singularReference=preg_match('/\b(?:donde\s+esta|donde\s+queda|en\s+donde\s+esta)\b/u',$t)===1
                 && preg_match('/\b(?:sedes|ambas|las\s+dos|monteverde.*palapas|palapas.*monteverde)\b/u',$t)!==1;
             if($singularReference&&in_array(($commercial['program']??null),['intensive','regular'],true)){
@@ -89,19 +92,10 @@ function hache_sharky_learning_guard_prevenue_reply(string $message,array $state
         '/\b(?:kit|gorro|gorros|goggle|goggles|lentes|inscripcion|inscribirme|inscribirse|registro|registrarme|recargo|comision|mensualidad|plan\s+regular|clases\s+regulares)\b/u',
         $t
     )===1;
-    $paymentContext=preg_match(
-        '/\b(?:tarjeta|pago|pagos|pagar|transferencia|efectivo)\b/u',
-        $t
-    )===1;
+    $paymentContext=preg_match('/\b(?:tarjeta|pago|pagos|pagar|transferencia|efectivo)\b/u',$t)===1;
     $cardContext=preg_match('/\b(?:tarjeta|credito|debito)\b/u',$t)===1;
-    $explicitCoursePrice=$asksPrice&&preg_match(
-        '/\b(?:curso(?:\s+intensivo)?|intensivo)\b/u',
-        $t
-    )===1;
-    $operatingHours=preg_match(
-        '/\b(?:abren|abre|apertura|cierran|cierra|cierre|atienden|atencion)\b/u',
-        $t
-    )===1;
+    $explicitCoursePrice=$asksPrice&&preg_match('/\b(?:curso(?:\s+intensivo)?|intensivo)\b/u',$t)===1;
+    $operatingHours=preg_match('/\b(?:abren|abre|apertura|cierran|cierra|cierre|atienden|atencion)\b/u',$t)===1;
 
     if($explicitIndependentSubject||$operatingHours||$cardContext)return null;
     if($paymentContext&&!$explicitCoursePrice)return null;
@@ -120,7 +114,6 @@ function hache_sharky_learning_guard_enforce_confirmed_swim(string $answer,array
 {
     $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
     if(!in_array(($commercial['swim_level']??null),['beginner','swims'],true))return $answer;
-
     $parts=preg_split('/\n+|(?<=[.!?;])\s+|(?=¿)/u',trim($answer))?:[];
     $kept=[];$removed=false;
     foreach($parts as $part){
@@ -141,7 +134,6 @@ function hache_sharky_learning_guard_enforce_venue_priority(string $answer,array
     $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
     if(!in_array(($commercial['program']??null),['intensive','regular'],true))return $answer;
     if(in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))return $answer;
-
     $parts=preg_split('/\n+|(?<=[.!?;])\s+|(?=¿)/u',trim($answer))?:[];
     $kept=[];$replaced=false;
     foreach($parts as $part){
@@ -154,8 +146,7 @@ function hache_sharky_learning_guard_enforce_venue_priority(string $answer,array
         );
         if($asksVenue){
             if(!$replaced)$kept[]='📍 Te propongo primero Colegio Monteverde. ¿Te funciona esta sede?';
-            $replaced=true;
-            continue;
+            $replaced=true;continue;
         }
         $kept[]=$part;
     }
