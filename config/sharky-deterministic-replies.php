@@ -168,7 +168,7 @@ function hache_sharky_deterministic_price_message(array $state): ?string
     }
     $p3=hache_sharky_config_int($business,'sharky_precio_regular_3',1000,0,100000);
     $p5=hache_sharky_config_int($business,'sharky_precio_regular_5',1200,0,100000);
-    return '💰 Clases regulares en '.$label.':'."\n\n".'• 3 clases por semana: $'.number_format($p3,0,'.',').' MXN mensuales'."\n".'• 5 clases por semana: $'.number_format($p5,0,'.',').' MXN mensuales'."\n".'• Inscripción: $'.number_format($fee,0,'.',').' MXN.';
+    return '💰 Clases regulares en '.$label.':'."\n\n".'• 3 clases por semana: $'.number_format($p3,0,'.',',').' MXN mensuales'."\n".'• 5 clases por semana: $'.number_format($p5,0,'.',',').' MXN mensuales'."\n".'• Inscripción: $'.number_format($fee,0,'.',',').' MXN.';
 }
 
 function hache_sharky_deterministic_location_message(string $text,array $state): ?string
