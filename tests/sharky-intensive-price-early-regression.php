@@ -71,10 +71,20 @@ intensive_price_ok(
     str_contains($monthlyReply,'no es mensual')&&str_contains($monthlyReply,'curso completo de 3 semanas')&&str_contains($monthlyReply,'$1,200 MXN'),
     'El intensivo debe aclarar explícitamente que $1,200 cubre las 3 semanas completas y no un mes.'
 );
+$perMonthReply=hache_sharky_deterministic_reply('¿Son 1200 al mes?',$priceState)??'';
+intensive_price_ok(
+    str_contains($perMonthReply,'no es mensual')&&str_contains($perMonthReply,'curso completo de 3 semanas'),
+    'La variante al mes también debe aclarar que el intensivo cubre 3 semanas completas.'
+);
 $plainPriceReply=hache_sharky_deterministic_reply('¿Cuánto cuesta?',$priceState)??'';
 intensive_price_ok(
     !str_contains($plainPriceReply,'no es mensual')&&str_contains($plainPriceReply,'Duración: 3 semanas, lunes a viernes'),
     'Una pregunta normal de precio conserva la respuesta breve existente sin añadir una negación innecesaria.'
+);
+$startMonthReply=hache_sharky_deterministic_reply('¿Cuánto cuesta el curso que empieza el próximo mes?',$priceState)??'';
+intensive_price_ok(
+    !str_contains($startMonthReply,'no es mensual'),
+    'Mes usado como fecha de inicio no debe confundirse con una pregunta de cobro mensual.'
 );
 
 $source=(string)file_get_contents(__DIR__.'/../config/sharky-brain-live-router.php');
