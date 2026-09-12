@@ -199,9 +199,16 @@ Cuando Sharky ya está vendiendo/proponiendo el **curso intensivo**, debe dejar 
 
 - duración: **3 semanas**;
 - frecuencia: **lunes a viernes**;
-- precio vigente obtenido de la **configuración comercial**, actualmente **$1,200 MXN**.
+- precio obtenido de la autoridad comercial vigente.
 
-El precio no debe quedar oculto hasta el final de la conversación ni estar hardcodeado fuera de la autoridad de configuración vigente.
+Jerarquía de precio:
+
+1. si ya existe un **curso intensivo concreto seleccionado** y el backend tiene `course_price` para ese curso, **ese precio del curso es la autoridad y prevalece**;
+2. si todavía no hay un curso concreto seleccionado, usar el precio general vigente de la configuración comercial (`sharky_precio_intensivo`), actualmente **$1,200 MXN**.
+
+Por ejemplo, si un curso seleccionado tiene precio de $1,350 MXN, Sharky debe respetar $1,350 aunque la configuración general siga en $1,200.
+
+El precio no debe quedar oculto hasta el final de la conversación ni hardcodeado fuera de sus autoridades de backend/configuración.
 
 ## 13. Memoria y contexto
 
@@ -385,7 +392,7 @@ Cambios que requieren actualización de este documento incluyen:
 - relación Brain ↔ autoridades determinísticas;
 - persistencia de contexto en takeover/reactivación;
 - política de botones y controles;
-- cuándo mostrar precio;
+- jerarquía de precio general vs. precio del curso seleccionado;
 - seguimiento automático;
 - memoria/conflictos;
 - confirmaciones y mutaciones;
@@ -406,6 +413,7 @@ Antes de aprobar un cambio de Sharky, responder **sí** a todo lo siguiente:
 - [ ] ¿Monteverde sigue siendo la primera propuesta cuando no hay sede?
 - [ ] ¿Palapas se acepta inmediatamente cuando Monteverde no funciona o el usuario la pide?
 - [ ] ¿Una frecuencia semanal o la palabra “clases” evita cambiar silenciosamente de producto?
+- [ ] ¿El precio de un curso concreto seleccionado prevalece sobre el precio general cuando aplica?
 - [ ] ¿El estado estructurado confirmado prevalece sobre inferencias ambiguas de texto libre?
 - [ ] ¿Brain sigue siendo conversacional sin convertirse en autoridad única de reglas comerciales o mutaciones?
 - [ ] ¿Ninguna regla fundamental nueva quedó implementada únicamente en un prompt?
