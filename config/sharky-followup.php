@@ -53,7 +53,11 @@ function hache_sharky_followup_user_deferred(string $text): bool
     $t=hache_sharky_orchestrator_normalize($text);
     $t=preg_replace('/\s+/u',' ',trim($t))??trim($t);
     if($t==='')return false;
-    return preg_match('/^(?:(?:gracias|muchas\s+gracias|perfecto|ok|vale)[,;.!\s]+)?(?:(?:te\s+)?(?:confirmo|aviso|digo)\s+(?:mas\s+tarde|luego|despues|manana)|(?:mas\s+tarde|luego|despues|manana)\s+(?:te\s+)?(?:confirmo|aviso|digo)|dejame\s+(?:checar|revisar(?:lo)?|ver|pensar(?:lo)?)(?:\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))?|(?:lo|me\s+lo)\s+(?:pienso|checo|reviso)\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))[.!\s]*$/u',$t)===1;
+    if(preg_match('/^(?:(?:gracias|muchas\s+gracias|perfecto|ok|vale)[,;.!\s]+)?(?:(?:te\s+)?(?:confirmo|aviso|digo)\s+(?:mas\s+tarde|luego|despues|manana)|(?:mas\s+tarde|luego|despues|manana)\s+(?:te\s+)?(?:confirmo|aviso|digo)|dejame\s+(?:checar|revisar(?:lo)?|ver|pensar(?:lo)?)(?:\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))?|(?:lo|me\s+lo)\s+(?:pienso|checo|reviso)\s+y\s+(?:te\s+)?(?:digo|aviso|confirmo))[.!\s]*$/u',$t)===1)return true;
+    // This authority is deliberately broader than the immediate conversational
+    // close. A prospect may receive Sharky's natural reply while a clear
+    // deliberation/consultation intent suppresses the 15m/90m sales reminders.
+    return preg_match('/^(?:(?:gracias|muchas\s+gracias|perfecto|ok|vale)[,;.!\s]+)?(?:(?:lo|esto|eso|me\s+lo)\s+(?:voy\s+a\s+)?(?:pensar|analizar|estudiar|considerar|revisar)(?:lo)?(?:\s+(?:mejor|bien|con\s+calma))?|(?:voy|vamos)\s+a\s+(?:pensar|analizar|estudiar|considerar|revisar)(?:lo)?(?:\s+(?:mejor|bien|con\s+calma))?|(?:lo|esto|eso|me\s+lo)\s+(?:voy\s+a\s+)?(?:platicar|hablar|consultar|comentar)(?:lo)?(?:\s+con\s+.+)?|(?:voy|vamos)\s+a\s+(?:platicar|hablar|consultar|comentar)(?:lo)?(?:\s+con\s+.+)?|dejame\s+(?:platicar|hablar|consultar|comentar)(?:lo)?(?:\s+con\s+.+)?)[.!\s]*$/u',$t)===1;
 }
 
 function hache_sharky_followup_user_opted_out(string $text): bool
