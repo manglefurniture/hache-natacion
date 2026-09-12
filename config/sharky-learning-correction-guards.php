@@ -15,6 +15,21 @@ function hache_sharky_learning_guard_canonicalize_daypart_followup(string $text)
     return trim(preg_replace('/[¿?¡!]+/u','',$text)??$text);
 }
 
+function hache_sharky_learning_guard_polite_close_reply(string $message,array $state): ?string
+{
+    if(str_contains($message,'?')||str_contains($message,'¿'))return null;
+    $t=preg_replace('/\s+/u',' ',trim(hache_sharky_learning_guard_normalize($message)))??'';
+    if($t==='')return null;
+
+    $pureThanks=preg_match('/^(?:muchas\s+)?gracias(?:\s+(?:por\s+todo|por\s+la\s+informacion|por\s+la\s+info))?[.!\s☺️🙂🙏]*$/u',$t)===1;
+    $distanceClose=preg_match('/\b(?:me\s+queda|me\s+quedan|esta|estan)\s+(?:muy\s+)?(?:retirad[oa]s?|lejos)\b/u',$t)===1
+        && preg_match('/\bgracias\b/u',$t)===1;
+    $explicitClose=preg_match('/\b(?:por\s+ahora\s+lo\s+dejamos|lo\s+dejamos\s+por\s+ahora|hasta\s+aqui|no\s+me\s+interesa\s+por\s+ahora)\b/u',$t)===1;
+    if(!$pureThanks&&!$distanceClose&&!$explicitClose)return null;
+
+    return 'Con gusto 😊. Lo dejamos aquí por ahora. Cuando quieras retomarlo, seguimos desde donde quedamos.';
+}
+
 function hache_sharky_learning_guard_natural_venue_preference(string $text): ?string
 {
     if(str_contains($text,'?')||str_contains($text,'¿'))return null;
