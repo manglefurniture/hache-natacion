@@ -12,142 +12,66 @@ DB_OPS_USER="deploy_hache_ops"
 DB_OPS_HOME="/home/deploy-hache"
 DB_OPS_CNF="${DB_OPS_HOME}/.my.cnf"
 
-fail() {
-  echo "ERROR: $*" >&2
-  exit 1
-}
-
-require_root() {
-  [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "este wrapper debe ejecutarse como root mediante sudo."
-}
-
-require_command() {
-  command -v "$1" >/dev/null 2>&1 || fail "falta el comando requerido: $1"
-}
-
-validate_sha() {
-  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "se requiere un SHA Git completo de 40 caracteres."
-}
+fail() { echo "ERROR: $*" >&2; exit 1; }
+require_root() { [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "este wrapper debe ejecutarse como root mediante sudo."; }
+require_command() { command -v "$1" >/dev/null 2>&1 || fail "falta el comando requerido: $1"; }
+validate_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]] || fail "se requiere un SHA Git completo de 40 caracteres."; }
 
 publish_deployed_sha() {
-  local sha="$1" temp
-  validate_sha "$sha"
+  local sha="$1" temp; validate_sha "$sha"
   temp="$(mktemp "${REPO}/.hache-deployed-sha.tmp.XXXXXX")"
-  printf '%s\n' "$sha" > "$temp"
-  chmod 0644 "$temp"
-  chown root:root "$temp"
-  mv -f -- "$temp" "$DEPLOY_SHA_FILE"
+  printf '%s\n' "$sha" > "$temp"; chmod 0644 "$temp"; chown root:root "$temp"; mv -f -- "$temp" "$DEPLOY_SHA_FILE"
 }
 
 normalize_tracked_worktree_permissions() {
-  local entry mode path parent
-  cd "$REPO"
-  chmod 0755 "$REPO"
-
+  local entry mode path parent; cd "$REPO"; chmod 0755 "$REPO"
   while IFS= read -r -d '' entry; do
-    mode="${entry%% *}"
-    path="${entry#*$'\t'}"
-
-    [[ "$path" != /* && "$path" != ".." && "$path" != ../* && "$path" != */../* ]] || \
-      fail "ruta Git inesperada durante normalización."
-
+    mode="${entry%% *}"; path="${entry#*$'\t'}"
+    [[ "$path" != /* && "$path" != ".." && "$path" != ../* && "$path" != */../* ]] || fail "ruta Git inesperada durante normalización."
     parent="$(dirname -- "$path")"
     while [[ "$parent" != "." && "$parent" != "/" ]]; do
       [[ -d "$REPO/$parent" && ! -L "$REPO/$parent" ]] || break
-      chmod 0755 -- "$REPO/$parent"
-      parent="$(dirname -- "$parent")"
+      chmod 0755 -- "$REPO/$parent"; parent="$(dirname -- "$parent")"
     done
-
     case "$mode" in
-      100644)
-        [[ -f "$REPO/$path" && ! -L "$REPO/$path" ]] && chmod 0644 -- "$REPO/$path"
-        ;;
-      100755)
-        [[ -f "$REPO/$path" && ! -L "$REPO/$path" ]] && chmod 0755 -- "$REPO/$path"
-        ;;
-      120000|160000)
-        ;;
-      *)
-        fail "modo Git inesperado durante normalización: $mode"
-        ;;
+      100644) [[ -f "$REPO/$path" && ! -L "$REPO/$path" ]] && chmod 0644 -- "$REPO/$path" ;;
+      100755) [[ -f "$REPO/$path" && ! -L "$REPO/$path" ]] && chmod 0755 -- "$REPO/$path" ;;
+      120000|160000) ;;
+      *) fail "modo Git inesperado durante normalización: $mode" ;;
     esac
   done < <(git ls-files -z --stage)
 }
 
-extract_target_file() {
-  local sha="$1" repo_path="$2" destination="$3"
-  git -C "$REPO" show "${sha}:${repo_path}" > "$destination"
-}
+extract_target_file() { local sha="$1" repo_path="$2" destination="$3"; git -C "$REPO" show "${sha}:${repo_path}" > "$destination"; }
 
 sync_wrapper_from_target_if_present() {
-  local sha="$1" candidate
-  candidate="$(mktemp /tmp/hache-deploy-wrapper.XXXXXX)"
-
+  local sha="$1" candidate; candidate="$(mktemp /tmp/hache-deploy-wrapper.XXXXXX)"
   if extract_target_file "$sha" "$WRAPPER_PATH" "$candidate" 2>/dev/null; then
-    bash -n "$candidate"
-    chmod 0755 "$candidate"
-    chown root:root "$candidate"
-    if ! cmp -s "$candidate" "$INSTALLED_HELPER"; then
-      install -o root -g root -m 0755 "$candidate" "$INSTALLED_HELPER"
-      echo "DEPLOY_HELPER_SYNC sha=$sha"
-    fi
+    bash -n "$candidate"; chmod 0755 "$candidate"; chown root:root "$candidate"
+    if ! cmp -s "$candidate" "$INSTALLED_HELPER"; then install -o root -g root -m 0755 "$candidate" "$INSTALLED_HELPER"; echo "DEPLOY_HELPER_SYNC sha=$sha"; fi
   fi
-
   rm -f -- "$candidate"
 }
 
 run_target_deploy() {
-  local sha="$1" implementation rc=0 deployed
-  validate_sha "$sha"
-  require_command git
-  require_command mktemp
-  require_command install
-  require_command cmp
-
-  cd "$REPO"
-  git fetch origin main
-  [[ "$(git rev-parse origin/main)" == "$sha" ]] || \
-    fail "origin/main no coincide con el SHA aprobado."
-
+  local sha="$1" implementation rc=0 deployed; validate_sha "$sha"
+  require_command git; require_command mktemp; require_command install; require_command cmp
+  cd "$REPO"; git fetch origin main
+  [[ "$(git rev-parse origin/main)" == "$sha" ]] || fail "origin/main no coincide con el SHA aprobado."
   sync_wrapper_from_target_if_present "$sha"
-
   implementation="$(mktemp /tmp/hache-deploy-implementation.XXXXXX)"
-  extract_target_file "$sha" "$IMPLEMENTATION_PATH" "$implementation"
-  bash -n "$implementation"
-  chmod 0700 "$implementation"
-
-  set +e
-  bash "$implementation" "$sha"
-  rc=$?
-  set -e
-  rm -f -- "$implementation"
-
+  extract_target_file "$sha" "$IMPLEMENTATION_PATH" "$implementation"; bash -n "$implementation"; chmod 0700 "$implementation"
+  set +e; bash "$implementation" "$sha"; rc=$?; set -e; rm -f -- "$implementation"
   deployed="$(git -C "$REPO" rev-parse HEAD 2>/dev/null || true)"
-  if [[ "$deployed" == "$sha" ]]; then
-    normalize_tracked_worktree_permissions
-    publish_deployed_sha "$deployed"
-    echo "WORKTREE_PERMISSIONS_OK sha=$deployed"
-  fi
-
+  if [[ "$deployed" == "$sha" ]]; then normalize_tracked_worktree_permissions; publish_deployed_sha "$deployed"; echo "WORKTREE_PERMISSIONS_OK sha=$deployed"; fi
   return "$rc"
 }
 
-run_current_implementation() {
-  local implementation="$REPO/$IMPLEMENTATION_PATH"
-  [[ -f "$implementation" ]] || fail "helper de implementación ausente."
-  bash -n "$implementation"
-  bash "$implementation" "$@"
-}
+run_current_implementation() { local implementation="$REPO/$IMPLEMENTATION_PATH"; [[ -f "$implementation" ]] || fail "helper de implementación ausente."; bash -n "$implementation"; bash "$implementation" "$@"; }
 
 bootstrap_db_ops_access() {
-  local password temp_cnf
-  require_command mariadb
-  require_command openssl
-  require_command install
-  require_command runuser
-  id deploy-hache >/dev/null 2>&1 || fail "usuario Linux deploy-hache ausente."
-  [[ -d "$DB_OPS_HOME" ]] || fail "home de deploy-hache ausente."
-
+  local password temp_cnf; require_command mariadb; require_command openssl; require_command install; require_command runuser
+  id deploy-hache >/dev/null 2>&1 || fail "usuario Linux deploy-hache ausente."; [[ -d "$DB_OPS_HOME" ]] || fail "home de deploy-hache ausente."
   password="$(openssl rand -hex 32)"
   mariadb --protocol=socket -uroot <<SQL
 CREATE USER IF NOT EXISTS '${DB_OPS_USER}'@'localhost' IDENTIFIED BY '${password}';
@@ -156,7 +80,6 @@ REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${DB_OPS_USER}'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON \`${DB_NAME}\`.* TO '${DB_OPS_USER}'@'localhost';
 FLUSH PRIVILEGES;
 SQL
-
   temp_cnf="$(mktemp /tmp/deploy-hache-db.XXXXXX)"
   cat > "$temp_cnf" <<EOF
 [client]
@@ -166,99 +89,43 @@ host=localhost
 protocol=socket
 database=${DB_NAME}
 EOF
-  install -o deploy-hache -g deploy-hache -m 0600 "$temp_cnf" "$DB_OPS_CNF"
-  rm -f -- "$temp_cnf"
-
+  install -o deploy-hache -g deploy-hache -m 0600 "$temp_cnf" "$DB_OPS_CNF"; rm -f -- "$temp_cnf"
   runuser -u deploy-hache -- mariadb --defaults-extra-file="$DB_OPS_CNF" --batch --skip-column-names -e 'SELECT DATABASE(), CURRENT_USER();' >/dev/null
   echo "DB_OPS_ACCESS_OK user=${DB_OPS_USER} database=${DB_NAME} credentials=${DB_OPS_CNF}"
 }
 
 check_db_ops_access() {
-  require_command runuser
-  require_command mariadb
+  require_command runuser; require_command mariadb
   [[ -f "$DB_OPS_CNF" ]] || fail "credencial MariaDB de deploy-hache ausente."
   [[ "$(stat -c '%U:%G:%a' "$DB_OPS_CNF")" == 'deploy-hache:deploy-hache:600' ]] || fail "permisos inseguros en $DB_OPS_CNF"
   runuser -u deploy-hache -- mariadb --defaults-extra-file="$DB_OPS_CNF" --batch --skip-column-names -e 'SELECT DATABASE(), CURRENT_USER(); SHOW GRANTS FOR CURRENT_USER();'
 }
 
-disable_brain_conversational() {
-  local script="$REPO/bin/emergency-disable-brain-conversational.php"
-  [[ -f "$script" && ! -L "$script" ]] || fail "script de kill switch de Brain ausente."
-  require_command php
-  php "$script"
-}
-
-reactivate_brain_conversational_once() {
-  local script="$REPO/bin/reactivate-brain-conversational-once.php"
-  [[ -f "$script" && ! -L "$script" ]] || fail "script one-shot de reactivación de Brain ausente."
-  require_command php
-  php "$script"
-}
-
-run_sharky_reengagement_backfill_dry_run() {
-  local script="$REPO/bin/sharky-reengagement-backfill-dry-run.php"
-  [[ -f "$script" && ! -L "$script" ]] || fail "script dry-run de reconquista ausente."
-  require_command php
-  cd "$REPO"
-  php "$script" --dry-run
-}
-
-run_sharky_reengagement_backfill_send_once() {
-  local script="$REPO/bin/sharky-reengagement-backfill-send-once.php"
-  [[ -f "$script" && ! -L "$script" ]] || fail "script one-shot de reconquista ausente."
-  require_command php
-  cd "$REPO"
-  php "$script" --execute-approved-20260911
-}
-
-run_sharky_reengagement_backfill_status_once() {
-  local script="$REPO/bin/sharky-reengagement-backfill-status-once.php"
-  [[ -f "$script" && ! -L "$script" ]] || fail "script de diagnóstico de reconquista ausente."
-  require_command php
-  cd "$REPO"
-  php "$script" --status-approved-20260911
-}
+run_php_guarded() { local script="$1"; shift; [[ -f "$script" && ! -L "$script" ]] || fail "script autorizado ausente."; require_command php; cd "$REPO"; php "$script" "$@"; }
+disable_brain_conversational() { run_php_guarded "$REPO/bin/emergency-disable-brain-conversational.php"; }
+reactivate_brain_conversational_once() { run_php_guarded "$REPO/bin/reactivate-brain-conversational-once.php"; }
+run_sharky_reengagement_backfill_dry_run() { run_php_guarded "$REPO/bin/sharky-reengagement-backfill-dry-run.php" --dry-run; }
+run_sharky_reengagement_backfill_send_once() { run_php_guarded "$REPO/bin/sharky-reengagement-backfill-send-once.php" --execute-approved-20260911; }
+run_sharky_reengagement_backfill_status_once() { run_php_guarded "$REPO/bin/sharky-reengagement-backfill-status-once.php" --status-approved-20260911; }
+run_sharky_learning_pending() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --pending 10; }
+run_sharky_learning_summary() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --summary; }
+run_sharky_learning_verdict() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --verdict; }
 
 main() {
-  require_root
-  [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
-
+  require_root; [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
   case "$1" in
-    backup|restore-drill)
-      run_current_implementation "$@"
-      ;;
-    db-ops-bootstrap)
-      [[ "$#" -eq 1 ]] || fail "db-ops-bootstrap no acepta argumentos adicionales."
-      bootstrap_db_ops_access
-      ;;
-    db-ops-status)
-      [[ "$#" -eq 1 ]] || fail "db-ops-status no acepta argumentos adicionales."
-      check_db_ops_access
-      ;;
-    brain-off)
-      [[ "$#" -eq 1 ]] || fail "brain-off no acepta argumentos adicionales."
-      disable_brain_conversational
-      ;;
-    brain-reactivate-once)
-      [[ "$#" -eq 1 ]] || fail "brain-reactivate-once no acepta argumentos adicionales."
-      reactivate_brain_conversational_once
-      ;;
-    sharky-backfill-dry-run)
-      [[ "$#" -eq 1 ]] || fail "sharky-backfill-dry-run no acepta argumentos adicionales."
-      run_sharky_reengagement_backfill_dry_run
-      ;;
-    sharky-backfill-send-once)
-      [[ "$#" -eq 1 ]] || fail "sharky-backfill-send-once no acepta argumentos adicionales."
-      run_sharky_reengagement_backfill_send_once
-      ;;
-    sharky-backfill-status-once)
-      [[ "$#" -eq 1 ]] || fail "sharky-backfill-status-once no acepta argumentos adicionales."
-      run_sharky_reengagement_backfill_status_once
-      ;;
-    *)
-      [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."
-      run_target_deploy "$1"
-      ;;
+    backup|restore-drill) run_current_implementation "$@" ;;
+    db-ops-bootstrap) [[ "$#" -eq 1 ]] || fail "db-ops-bootstrap no acepta argumentos adicionales."; bootstrap_db_ops_access ;;
+    db-ops-status) [[ "$#" -eq 1 ]] || fail "db-ops-status no acepta argumentos adicionales."; check_db_ops_access ;;
+    brain-off) [[ "$#" -eq 1 ]] || fail "brain-off no acepta argumentos adicionales."; disable_brain_conversational ;;
+    brain-reactivate-once) [[ "$#" -eq 1 ]] || fail "brain-reactivate-once no acepta argumentos adicionales."; reactivate_brain_conversational_once ;;
+    sharky-backfill-dry-run) [[ "$#" -eq 1 ]] || fail "sharky-backfill-dry-run no acepta argumentos adicionales."; run_sharky_reengagement_backfill_dry_run ;;
+    sharky-backfill-send-once) [[ "$#" -eq 1 ]] || fail "sharky-backfill-send-once no acepta argumentos adicionales."; run_sharky_reengagement_backfill_send_once ;;
+    sharky-backfill-status-once) [[ "$#" -eq 1 ]] || fail "sharky-backfill-status-once no acepta argumentos adicionales."; run_sharky_reengagement_backfill_status_once ;;
+    sharky-learning-pending) [[ "$#" -eq 1 ]] || fail "sharky-learning-pending no acepta argumentos."; run_sharky_learning_pending ;;
+    sharky-learning-summary) [[ "$#" -eq 1 ]] || fail "sharky-learning-summary no acepta argumentos."; run_sharky_learning_summary ;;
+    sharky-learning-verdict) [[ "$#" -eq 1 ]] || fail "sharky-learning-verdict no acepta argumentos; recibe JSON por stdin."; run_sharky_learning_verdict ;;
+    *) [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."; run_target_deploy "$1" ;;
   esac
 }
 
