@@ -89,7 +89,6 @@ function hache_sharky_conversation_review_price_answer(string $text): bool
     return str_contains($text,'$')||preg_match('/\b(?:mxn|pesos?|precio|cuesta|costo)\b/u',$t)===1;
 }
 
-
 function hache_sharky_conversation_review_location_request(string $text): bool
 {
     $t=hache_sharky_conversation_review_normalize($text);
@@ -125,15 +124,25 @@ function hache_sharky_conversation_review_finding(string $type,string $severity,
     return ['type'=>$type,'severity'=>$severity,'source_id'=>$sourceId,'related_id'=>$relatedId,'evidence'=>$evidence];
 }
 
-/** @param list<array{direction:string,id:string,ts:int,text:string}> $timeline */
+/** @param list<array{direction:string,actor?:string,id:string,ts:int,text:string}> $timeline */
 function hache_sharky_conversation_review_analyze(array $timeline): array
 {
     usort($timeline,static fn(array $a,array $b):int=>($a['ts']<=>$b['ts'])?:strcmp($a['id'],$b['id']));
-    $findings=[];$lastInboundByText=[];$lastQuestion=[];$familyCount=[];$lastOutboundProduct=null;$lastOutboundProductIndex=null;
+    $findings=[];$lastInboundByText=[];$lastQuestion=[];$familyCount=[];$lastOutboundProduct=null;$lastOutboundProductIndex=null;$humanSourceId='';$humanCount=0;
 
     foreach($timeline as $i=>$turn){
-        $dir=$turn['direction'];$text=$turn['text'];$id=$turn['id'];$ts=(int)$turn['ts'];
+        $dir=(string)($turn['direction']??'');$actor=(string)($turn['actor']??($dir==='in'?'USUARIO':($dir==='out'?'SHARKY':($dir==='human'?'HUMANO_HACHE':''))));$text=(string)($turn['text']??'');$id=(string)($turn['id']??'');$ts=(int)($turn['ts']??0);
         if($text==='')continue;
+        if($dir==='human'||$actor==='HUMANO_HACHE'){
+            $humanNormalized=hache_sharky_conversation_review_normalize($text);
+            if($humanNormalized!=='sharky vuelve ahora'){
+                if($humanSourceId==='')$humanSourceId=$id;$humanCount++;
+            }
+            // La intervención humana es contexto para la revisión, no conducta atribuible a Sharky.
+            // Reinicia comparaciones automáticas que no son fiables a través de un takeover.
+            $lastInboundByText=[];$lastQuestion=[];$familyCount=[];$lastOutboundProduct=null;$lastOutboundProductIndex=null;
+            continue;
+        }
 
         if($dir==='in'){
             $n=hache_sharky_conversation_review_normalize($text);
@@ -215,6 +224,10 @@ function hache_sharky_conversation_review_analyze(array $timeline): array
         if($product!==null){$lastOutboundProduct=$product;$lastOutboundProductIndex=$i;}
     }
 
+    if($humanCount>0){
+        $findings[]=hache_sharky_conversation_review_finding('HUMAN_INTERVENTION','INFO',$humanSourceId,'',['human_turns'=>$humanCount,'actor'=>'HUMANO_HACHE']);
+    }
+
     $unique=[];
     foreach($findings as $finding){
         $key=$finding['type'].'|'.$finding['source_id'].'|'.$finding['related_id'];
@@ -223,23 +236,25 @@ function hache_sharky_conversation_review_analyze(array $timeline): array
     return array_values($unique);
 }
 
-/** @return list<array{direction:string,id:string,ts:int,text:string}> */
+/** @return list<array{direction:string,actor:string,id:string,ts:int,text:string}> */
 function hache_sharky_conversation_review_timeline(PDO $pdo,string $contactHash,int $since): array
 {
     $timeline=[];$limit=HACHE_SHARKY_REVIEW_MAX_ROWS_PER_DIRECTION;
-    $in=$pdo->prepare("SELECT message_id,UNIX_TIMESTAMP(received_at) ts,payload_ciphertext,payload_iv,payload_tag FROM sharky_message_receipts WHERE contact_hash=:c AND received_at>=FROM_UNIXTIME(:s) AND payload_ciphertext IS NOT NULL ORDER BY received_at DESC LIMIT $limit");
+    $in=$pdo->prepare("SELECT message_id,message_type,UNIX_TIMESTAMP(received_at) ts,payload_ciphertext,payload_iv,payload_tag FROM sharky_message_receipts WHERE contact_hash=:c AND received_at>=FROM_UNIXTIME(:s) AND payload_ciphertext IS NOT NULL ORDER BY received_at DESC LIMIT $limit");
     $in->execute([':c'=>$contactHash,':s'=>$since]);
     foreach(array_reverse($in->fetchAll(PDO::FETCH_ASSOC)) as $row){
         $event=hache_sharky_inbox_decrypt($row);if(!is_array($event))continue;
         $text=trim((string)($event['text']??''));if($text==='')continue;
-        $timeline[]=['direction'=>'in','id'=>(string)$row['message_id'],'ts'=>(int)$row['ts'],'text'=>$text];
+        $kind=strtolower(trim((string)($event['kind']??$row['message_type']??'')));
+        if($kind==='echo')$timeline[]=['direction'=>'human','actor'=>'HUMANO_HACHE','id'=>(string)$row['message_id'],'ts'=>(int)$row['ts'],'text'=>$text];
+        else $timeline[]=['direction'=>'in','actor'=>'USUARIO','id'=>(string)$row['message_id'],'ts'=>(int)$row['ts'],'text'=>$text];
     }
     $out=$pdo->prepare("SELECT id,UNIX_TIMESTAMP(COALESCE(sent_at,created_at)) ts,payload_ciphertext,payload_iv,payload_tag FROM sharky_outbox WHERE contact_hash=:c AND status='SENT' AND COALESCE(sent_at,created_at)>=FROM_UNIXTIME(:s) ORDER BY COALESCE(sent_at,created_at) DESC LIMIT $limit");
     $out->execute([':c'=>$contactHash,':s'=>$since]);
     foreach(array_reverse($out->fetchAll(PDO::FETCH_ASSOC)) as $row){
         $payload=hache_sharky_outbox_decrypt($row);if(!is_array($payload))continue;
         $text=hache_sharky_conversation_review_outbound_text($payload);if($text==='')continue;
-        $timeline[]=['direction'=>'out','id'=>(string)$row['id'],'ts'=>(int)$row['ts'],'text'=>$text];
+        $timeline[]=['direction'=>'out','actor'=>'SHARKY','id'=>(string)$row['id'],'ts'=>(int)$row['ts'],'text'=>$text];
     }
     usort($timeline,static fn(array $a,array $b):int=>($a['ts']<=>$b['ts'])?:strcmp($a['id'],$b['id']));
     return $timeline;
