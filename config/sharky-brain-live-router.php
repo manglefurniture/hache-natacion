@@ -29,6 +29,13 @@ function hache_sharky_brain_2ba_config_value_valid(string $key,string $value): b
     return false;
 }
 
+function hache_sharky_brain_2ba_merge_business_values(array $values,array $business): array
+{
+    $price=trim((string)($business['sharky_precio_intensivo']??''));
+    if($price!==''&&is_numeric($price))$values['sharky_precio_intensivo']=$price;
+    return $values;
+}
+
 /** @return list<array{clave:string,valor:string,descripcion:string,tipo:string,etiqueta:string}> */
 function hache_sharky_brain_2ba_config_rows(array $values): array
 {
@@ -61,6 +68,9 @@ function hache_sharky_brain_2ba_config_rows(array $values): array
 function hache_sharky_brain_2ba_config(PDO $pdo): array
 {
     $values=hache_sharky_brain_2ba_config_defaults();
+    if(function_exists('hache_sharky_business_values')){
+        $values=hache_sharky_brain_2ba_merge_business_values($values,hache_sharky_business_values($pdo));
+    }
     try{
         $st=$pdo->prepare('SELECT clave,valor FROM configuracion WHERE clave IN (?,?,?)');
         $st->execute([
@@ -79,6 +89,7 @@ function hache_sharky_brain_2ba_config(PDO $pdo): array
             HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'0',
             HACHE_SHARKY_BRAIN_2BA_CANARY_KEY=>'0',
             HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY=>'0',
+            'sharky_precio_intensivo'=>(string)($values['sharky_precio_intensivo']??'1200'),
         ];
     }
 }
