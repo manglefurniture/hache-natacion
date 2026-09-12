@@ -212,7 +212,71 @@ El precio no debe quedar oculto hasta el final de la conversación ni estar hard
 - Una preferencia de producto capturada antes de calificar nivel no prevalece sobre la matriz nivel → producto.
 - El contexto conversacional ayuda a entender; **no sustituye las autoridades del backend** para precios, registros, pagos, estados o acciones reales.
 
-## 14. Seguimientos automáticos
+## 14. Estado estructurado manda sobre texto libre
+
+La conversación natural sirve para interpretar lo que quiere el usuario; no debe convertirse en una fuente paralela de verdad que contradiga el estado confirmado.
+
+- Identidad, nivel, formación, producto, sede y demás contexto estructurado confirmado deben conservarse mientras sigan siendo válidos.
+- Brain no debe volver a preguntar un dato ya confirmado solo porque la redacción del turno actual sea ambigua.
+- Un dato estructurado solo se cambia por una señal explícita y válida, una contradicción real que obligue a aclarar o una regla legítima de expiración/revalidación.
+- Una frase ambigua, una palabra aislada o una inferencia del modelo no deben borrar contexto confirmado.
+- Si texto libre y estado estructurado parecen entrar en conflicto, se aplica la regla específica de conflicto; no se reescribe el estado por intuición del modelo.
+
+## 15. Brain conversa; las reglas de negocio no dependen de Brain
+
+Brain es una capa de comprensión y redacción. Puede hacer la conversación más natural, entender variantes lingüísticas y formular respuestas útiles, pero **no es la autoridad final de las reglas fundamentales del negocio**.
+
+Brain no decide por sí solo:
+
+- elegibilidad de producto;
+- la matriz nivel → producto;
+- prioridad de sede;
+- precios o disponibilidad autoritativa;
+- pagos, inscripción, registros o mutaciones;
+- autorizaciones, confirmaciones o excepciones comerciales.
+
+Esas decisiones deben quedar respaldadas por estado, guards, flows, configuración o ejecutores determinísticos según corresponda.
+
+### Regla fundamental: no dejar una regla estable solo en un prompt
+
+Una regla comercial esencial —por ejemplo nivel → producto, prioridad de sede, seguimiento, confirmaciones o límites de mutación— **no puede existir únicamente como instrucción textual dentro de un prompt**.
+
+Si una regla es estable y fundamental debe, cuando sea técnicamente verificable:
+
+1. estar documentada en este archivo;
+2. estar representada en estado/código determinista, guard o autoridad equivalente;
+3. tener una regresión que demuestre que no se rompe.
+
+El prompt puede reflejar la regla para ayudar a Brain a conversar correctamente, pero no debe ser su única defensa.
+
+## 16. Takeover, pausa y reactivación — no perder contexto válido
+
+La intervención humana no debe destruir el contexto comercial útil ya confirmado.
+
+Cuando una persona del equipo toma la conversación y posteriormente Sharky se reactiva:
+
+- no reiniciar la conversación desde cero sin necesidad;
+- no volver a preguntar nivel, producto, sede u otros datos que sigan siendo válidos;
+- no borrar memoria comercial válida únicamente por el cambio de control humano/IA;
+- revalidar solo aquello que por tiempo, contradicción, cambio administrativo o seguridad realmente deba revalidarse;
+- mantener siempre claro para el usuario cuándo vuelve a interactuar con el asistente virtual con IA.
+
+Takeover cambia quién responde; no debe cambiar por sí solo la verdad comercial ya establecida.
+
+## 17. Botones y controles — guía, no sustituto del entendimiento
+
+Los botones, listas y controles interactivos son herramientas de UX para reducir fricción y evitar que el usuario se pierda. No son la autoridad semántica de Sharky.
+
+- El usuario debe poder expresar en texto natural una intención equivalente y Sharky debe entenderla cuando sea inequívoca.
+- Los botones no deben obligar a reiniciar información ya conocida.
+- Para prospectos nuevos se puede usar guía clara y controles cuando ayuden a avanzar por el orden comercial obligatorio.
+- Para usuarios ya identificados o con contexto suficiente, evitar pasos interactivos innecesarios.
+- Un botón obsoleto o fuera de contexto no puede saltarse guards, elegibilidad ni estado actual.
+- Quitar botones nunca autoriza a Brain a improvisar reglas de negocio; añadir botones tampoco autoriza a convertir toda la conversación en un flujo rígido.
+
+La meta es combinar **orientación clara + entendimiento natural + reglas determinísticas**.
+
+## 18. Seguimientos automáticos
 
 Los recordatorios automáticos existen para recuperar conversaciones abandonadas, no para presionar a una persona que ya indicó que tomará tiempo para decidir.
 
@@ -246,7 +310,7 @@ En esos casos:
 
 Una pregunta o una solicitud informativa como “déjame ver los horarios” no debe confundirse automáticamente con una decisión de aplazar.
 
-## 15. Acciones reales — fail closed
+## 19. Acciones reales — fail closed
 
 Para cualquier mutación real —registro, pago, cambio administrativo, inscripción u otra acción que afecte datos— deben mantenerse estas invariantes:
 
@@ -258,7 +322,7 @@ Para cualquier mutación real —registro, pago, cambio administrativo, inscripc
 
 Ante duda, Sharky debe fallar cerrado antes que realizar una mutación incorrecta.
 
-## 16. Implementación que actualmente materializa estas reglas
+## 20. Implementación que actualmente materializa estas reglas
 
 Las reglas de nivel, producto y sede están actualmente reflejadas, entre otros puntos, en:
 
@@ -282,7 +346,7 @@ La regresión `tests/sharky-qualification-priority-regression.php` debe seguir c
 
 Este documento describe la regla; el código y las pruebas deben demostrar que la cumplen.
 
-## 17. No romper lo que ya funciona
+## 21. No romper lo que ya funciona
 
 Una corrección pequeña debe ser **localizada, reversible y cubierta por regresión**.
 
@@ -297,7 +361,7 @@ Antes de mergear un cambio de Sharky:
 
 No se deben hacer “mejoras generales” alrededor de un bug puntual sin una razón explícita.
 
-## 18. Flujo de trabajo del repositorio
+## 22. Flujo de trabajo del repositorio
 
 Para Hache Natación el flujo normal es:
 
@@ -307,7 +371,7 @@ No usar el acceso directo al VPS para sustituir este flujo de cambios de código
 
 No llamar manualmente al agente de revisión/Codex. Revisar únicamente los comentarios automáticos que aparezcan en el PR.
 
-## 19. Regla documental obligatoria
+## 23. Regla documental obligatoria
 
 Si un cambio introduce, elimina o modifica una **regla estable de comportamiento de Sharky**, este archivo debe actualizarse en el mismo PR o en un PR documental inmediatamente asociado.
 
@@ -318,6 +382,9 @@ Cambios que requieren actualización de este documento incluyen:
 - matriz nivel → producto;
 - prioridad de sede;
 - tratamiento de contradicciones;
+- relación Brain ↔ autoridades determinísticas;
+- persistencia de contexto en takeover/reactivación;
+- política de botones y controles;
 - cuándo mostrar precio;
 - seguimiento automático;
 - memoria/conflictos;
@@ -326,7 +393,7 @@ Cambios que requieren actualización de este documento incluyen:
 
 Un ajuste puramente interno que no altere comportamiento observable no necesita añadir una nueva regla aquí.
 
-## 20. Checklist obligatorio para futuros cambios
+## 24. Checklist obligatorio para futuros cambios
 
 Antes de aprobar un cambio de Sharky, responder **sí** a todo lo siguiente:
 
@@ -339,6 +406,11 @@ Antes de aprobar un cambio de Sharky, responder **sí** a todo lo siguiente:
 - [ ] ¿Monteverde sigue siendo la primera propuesta cuando no hay sede?
 - [ ] ¿Palapas se acepta inmediatamente cuando Monteverde no funciona o el usuario la pide?
 - [ ] ¿Una frecuencia semanal o la palabra “clases” evita cambiar silenciosamente de producto?
+- [ ] ¿El estado estructurado confirmado prevalece sobre inferencias ambiguas de texto libre?
+- [ ] ¿Brain sigue siendo conversacional sin convertirse en autoridad única de reglas comerciales o mutaciones?
+- [ ] ¿Ninguna regla fundamental nueva quedó implementada únicamente en un prompt?
+- [ ] ¿Takeover/reactivación conserva contexto válido y evita reinicios innecesarios?
+- [ ] ¿Los botones guían sin convertirse en la única forma válida de expresar una intención?
 - [ ] ¿Usa datos comerciales vigentes y no inventados?
 - [ ] ¿Mantiene visibles los datos esenciales de venta, incluido el precio cuando corresponde?
 - [ ] ¿Respeta las reglas de seguimiento y deliberación?
@@ -355,4 +427,4 @@ Si alguna respuesta es **no** o **no sabemos**, el cambio no está listo para me
 
 ## Regla de oro
 
-> **Primero se determina correctamente quién es el prospecto y qué nivel/formación tiene. De ahí sale el producto; después la sede; después el resto. Sharky puede ser flexible al conversar, pero no puede ser flexible con esa estructura, con las reglas comerciales fundamentales ni con la seguridad.**
+> **Primero se determina correctamente quién es el prospecto y qué nivel/formación tiene. De ahí sale el producto; después la sede; después el resto. Brain puede entender y conversar con flexibilidad, pero las reglas fundamentales deben quedar protegidas por estado, código y pruebas, no solo por lenguaje natural o prompts.**
