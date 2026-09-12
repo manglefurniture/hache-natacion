@@ -183,6 +183,18 @@ function hache_sharky_brain_conversational_strip_opening_filler(string $answer):
     return $clean!==''?$clean:$answer;
 }
 
+function hache_sharky_brain_conversational_intensive_offer_guard(string $answer,array $state,array $business,string $qualificationStep): string
+{
+    if($qualificationStep!=='sede'||($state['commercial_context']['program']??null)!=='intensive')return $answer;
+    $raw=$business['sharky_precio_intensivo']??1200;
+    $price=is_numeric($raw)?max(0,min(100000,(int)$raw)):1200;
+    $priceText=number_format($price,0,'.',',');
+    $canonical='curso intensivo (3 semanas, lunes a viernes, $'.$priceText.' MXN)';
+    $replaced=preg_replace('/\bcurso\s+intensivo(?:\s+b[aá]sico)?(?:\s*\([^)]*\))?/iu',$canonical,$answer,1,$count);
+    if(is_string($replaced)&&$count>0)return $replaced;
+    return '🏊 Curso intensivo: 3 semanas, lunes a viernes, $'.$priceText." MXN.\n\n".$answer;
+}
+
 function hache_sharky_brain_conversational_pause_result(array $state,array $result,string $contact,?int $now=null): array
 {
     $now??=time();
@@ -297,6 +309,7 @@ function hache_sharky_brain_conversational_apply(
         $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$openState,$message);
         if(hache_sharky_whatsapp_answer_looks_incomplete($answer))$answer=hache_sharky_whatsapp_incomplete_recovery($openState);
         $answer=hache_sharky_brain_conversational_strip_opening_filler($answer);
+        $answer=hache_sharky_brain_conversational_intensive_offer_guard($answer,$openState,$business,$qualificationStep);
         $answer=trim($answer);
     }catch(Throwable $e){
         error_log('[sharky-brain-conversational] model/guard pipeline failed; deterministic fallback used');
