@@ -52,9 +52,6 @@ $locationDirect=hache_sharky_learning_guard_pending_location_reply('¿En dónde 
 learning_correction_ok(is_string($locationDirect)&&$locationDirect!=='','A location question must inherit the single venue just proposed.');
 learning_correction_ok(!str_contains((string)$locationDirect,'¿Necesitas la ubicación de Colegio Monteverde o la de Palapas Protudec?'),'Inherited single venue must not ask the user to choose the venue again.');
 
-// El productor real no siempre serializa el turno anterior del asistente. Con
-// producto canónico y sede aún vacía, una referencia singular sigue apuntando a
-// la propuesta obligatoria de Monteverde.
 $locationWithoutAssistant=$state;
 $locationWithoutAssistant['previous_assistant_text']='';
 $locationFallback=hache_sharky_learning_guard_pending_location_reply('¿En dónde está?',$locationWithoutAssistant);
@@ -89,7 +86,9 @@ $loader=static function(string $program,string $sede): array {
         ?['07:00–08:00','08:00–09:00','09:00–10:00','20:00–21:00']
         :['08:00–09:00','19:00–20:00','20:00–21:00'];
 };
-$evening=hache_sharky_schedule_guard_scoped_reply('por la tarde??',$recovered,$loader)??'';
+$eveningInput=hache_sharky_learning_guard_canonicalize_daypart_followup('por la tarde??');
+$evening=hache_sharky_schedule_guard_scoped_reply($eveningInput,$recovered,$loader)??'';
+learning_correction_ok($eveningInput==='por la tarde','WhatsApp punctuation on a bare daypart must canonicalize before schedule scoping.');
 learning_correction_ok(str_contains($evening,'Palapas Protudec')&&str_contains($evening,'20:00–21:00'),'Evening follow-up after Palapas choice must stay in Palapas intensive.');
 learning_correction_ok(!str_contains($evening,'Colegio Monteverde'),'Palapas evening follow-up must not mix Monteverde schedules.');
 learning_correction_ok(!str_contains($evening,'19:00–20:00'),'Monteverde-only intensive slot must not leak into Palapas.');
@@ -106,6 +105,7 @@ learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Dónde est�
 $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
 learning_correction_ok(str_contains($dispatcher,"sharky-learning-correction-guards.php"),'WhatsApp loopback dispatcher must load approved learning guards.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_recover_recent_venue'),'Dispatcher must recover a recent natural venue selection before schedule scoping.');
+learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_canonicalize_daypart_followup'),'Dispatcher must normalize bare daypart punctuation before schedule scoping.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_prevenue_reply'),'Dispatcher must answer pre-venue intensive price/schedule questions deterministically.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_enforce_confirmed_swim'),'Dispatcher must protect confirmed swim context on model output.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_enforce_venue_priority'),'Dispatcher must enforce Monteverde-first on model output.');
