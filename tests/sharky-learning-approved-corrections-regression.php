@@ -52,6 +52,15 @@ $locationDirect=hache_sharky_learning_guard_pending_location_reply('¿En dónde 
 learning_correction_ok(is_string($locationDirect)&&$locationDirect!=='','A location question must inherit the single venue just proposed.');
 learning_correction_ok(!str_contains((string)$locationDirect,'¿Necesitas la ubicación de Colegio Monteverde o la de Palapas Protudec?'),'Inherited single venue must not ask the user to choose the venue again.');
 
+// El productor real no siempre serializa el turno anterior del asistente. Con
+// producto canónico y sede aún vacía, una referencia singular sigue apuntando a
+// la propuesta obligatoria de Monteverde.
+$locationWithoutAssistant=$state;
+$locationWithoutAssistant['previous_assistant_text']='';
+$locationFallback=hache_sharky_learning_guard_pending_location_reply('¿En dónde está?',$locationWithoutAssistant);
+learning_correction_ok(is_string($locationFallback)&&str_contains($locationFallback,'Colegio Monteverde'),'Singular location reference must resolve to the canonical Monteverde proposal without assistant history.');
+learning_correction_ok(!str_contains((string)$locationFallback,'Palapas Protudec'),'Singular Monteverde fallback must not re-open both venues.');
+
 $locationChoiceState=$state;
 $locationChoiceState['previous_user_text']='¿En dónde está?';
 $locationChoiceState['previous_assistant_text']='Claro. ¿Necesitas la ubicación de Colegio Monteverde o la de Palapas Protudec?';
@@ -64,11 +73,9 @@ learning_correction_ok(is_string($mixedCash)&&str_contains($mixedCash,'$1,200 MX
 $mixedTransfer=hache_sharky_learning_guard_prevenue_reply('¿Cuánto sale el intensivo si pago por transferencia?',$state,1200);
 learning_correction_ok(is_string($mixedTransfer)&&str_contains($mixedTransfer,'$1,200 MXN'),'Explicit intensive price with transfer context must remain deterministic.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta pagar con tarjeta?',$state,1200)===null,'Payment-only price question must stay in the payment authority flow.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el curso si pago con tarjeta?',$state,1200)===null,'Course price with card payment must stay in surcharge/payment authority.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el curso y la inscripción?',$state,1200)===null,'Mixed course and enrollment fee question must not hide the independent enrollment authority.');
 
-// Caso real anonimizado: la persona ya eligió Palapas por cercanía y después
-// pregunta por la tarde. La sede debe sobrevivir aunque la memoria estructurada
-// del turno previo todavía no la haya persistido.
 $historyData=['history'=>[
     ['role'=>'assistant','content'=>'Te propongo primero Colegio Monteverde.'],
     ['role'=>'user','content'=>'me quedaría más cerca la de las palapas'],
