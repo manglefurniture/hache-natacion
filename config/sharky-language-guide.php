@@ -85,6 +85,21 @@ function hache_sharky_language_background_step_text(array $state,string $text): 
     return null;
 }
 
+function hache_sharky_language_venue_step_text(array $state,string $text): ?string
+{
+    $flow=is_array($state['flow']??null)?$state['flow']:[];
+    if(($flow['name']??'')!=='qualify_prospect'||($flow['step']??'')!=='sede')return null;
+    if(($flow['data']['venue_proposal']??null)!=='MONTEVERDE')return null;
+    $t=hache_sharky_language_normalized($text);
+    if($t==='')return null;
+
+    // Una afirmación corta solo es selección de Monteverde cuando la pregunta
+    // pendiente ya propone explícitamente esa sede. Fuera de este paso sigue
+    // siendo una respuesta ambigua y no debe cambiar sede por sí sola.
+    if(preg_match('/^(?:si|si\s+me\s+funciona|me\s+funciona|esta\s+bien|ok|okay|vale)[.! ]*$/u',$t)===1)return 'Monteverde';
+    return null;
+}
+
 function hache_sharky_language_daypart(string $text): ?string
 {
     $t=hache_sharky_language_normalized($text);
@@ -128,6 +143,8 @@ function hache_sharky_language_prepare_text(array $state,string $text): string
     if($qualification!==null)return $qualification;
     $background=hache_sharky_language_background_step_text($state,$text);
     if($background!==null)return $background;
+    $venue=hache_sharky_language_venue_step_text($state,$text);
+    if($venue!==null)return $venue;
     $schedule=hache_sharky_language_schedule_fallback_text($state,$text);
     if($schedule!==null)return $schedule;
     return $text;

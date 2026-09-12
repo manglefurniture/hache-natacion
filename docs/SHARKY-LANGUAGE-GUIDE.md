@@ -64,6 +64,21 @@ Cuando Sharky ya confirmó que la persona sabe nadar:
 
 La palabra aislada `nunca` no se canonicaliza globalmente. Solo es inequívoca como **sin formación formal** cuando el estado estructurado confirma que Sharky está en el paso de antecedentes de formación.
 
+## Confirmación de la sede propuesta
+
+Cuando el estado estructurado está exactamente en `qualify_prospect → sede` y la propuesta pendiente es **Colegio Monteverde**, una afirmación corta e inequívoca puede canonicalizarse como selección de Monteverde.
+
+Ejemplos válidos en ese contexto:
+
+- sí;
+- sí me funciona;
+- me funciona;
+- está bien;
+- ok;
+- vale.
+
+Esta interpretación es estrictamente contextual. Un `sí` aislado fuera de esa pregunta pendiente **no selecciona sede**, y una negativa o una elección explícita de Palapas se conserva para que la resuelva el flujo determinístico existente.
+
 ## Horarios y sede alternativa
 
 Si ya existe un producto y una sede confirmados y el usuario pregunta por **más horarios** sin nombrar otra sede, Sharky puede interpretar la pregunta como una búsqueda informativa de alternativas en la otra sede, sin cambiar automáticamente la sede activa.
