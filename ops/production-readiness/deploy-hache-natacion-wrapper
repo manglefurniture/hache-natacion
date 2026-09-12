@@ -7,6 +7,10 @@ IMPLEMENTATION_PATH="ops/production-readiness/deploy-hache-natacion"
 WRAPPER_PATH="ops/production-readiness/deploy-hache-natacion-wrapper"
 INSTALLED_HELPER="/usr/local/sbin/deploy-hache-natacion"
 DEPLOY_SHA_FILE="${REPO}/.hache-deployed-sha"
+DB_NAME="hache_natacion"
+DB_OPS_USER="deploy_hache_ops"
+DB_OPS_HOME="/home/deploy-hache"
+DB_OPS_CNF="${DB_OPS_HOME}/.my.cnf"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -135,6 +139,48 @@ run_current_implementation() {
   bash "$implementation" "$@"
 }
 
+bootstrap_db_ops_access() {
+  local password temp_cnf
+  require_command mariadb
+  require_command openssl
+  require_command install
+  require_command runuser
+  id deploy-hache >/dev/null 2>&1 || fail "usuario Linux deploy-hache ausente."
+  [[ -d "$DB_OPS_HOME" ]] || fail "home de deploy-hache ausente."
+
+  password="$(openssl rand -hex 32)"
+  mariadb --protocol=socket -uroot <<SQL
+CREATE USER IF NOT EXISTS '${DB_OPS_USER}'@'localhost' IDENTIFIED BY '${password}';
+ALTER USER '${DB_OPS_USER}'@'localhost' IDENTIFIED BY '${password}';
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${DB_OPS_USER}'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON \`${DB_NAME}\`.* TO '${DB_OPS_USER}'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+
+  temp_cnf="$(mktemp /tmp/deploy-hache-db.XXXXXX)"
+  cat > "$temp_cnf" <<EOF
+[client]
+user=${DB_OPS_USER}
+password=${password}
+host=localhost
+protocol=socket
+database=${DB_NAME}
+EOF
+  install -o deploy-hache -g deploy-hache -m 0600 "$temp_cnf" "$DB_OPS_CNF"
+  rm -f -- "$temp_cnf"
+
+  runuser -u deploy-hache -- mariadb --defaults-extra-file="$DB_OPS_CNF" --batch --skip-column-names -e 'SELECT DATABASE(), CURRENT_USER();' >/dev/null
+  echo "DB_OPS_ACCESS_OK user=${DB_OPS_USER} database=${DB_NAME} credentials=${DB_OPS_CNF}"
+}
+
+check_db_ops_access() {
+  require_command runuser
+  require_command mariadb
+  [[ -f "$DB_OPS_CNF" ]] || fail "credencial MariaDB de deploy-hache ausente."
+  [[ "$(stat -c '%U:%G:%a' "$DB_OPS_CNF")" == 'deploy-hache:deploy-hache:600' ]] || fail "permisos inseguros en $DB_OPS_CNF"
+  runuser -u deploy-hache -- mariadb --defaults-extra-file="$DB_OPS_CNF" --batch --skip-column-names -e 'SELECT DATABASE(), CURRENT_USER(); SHOW GRANTS FOR CURRENT_USER();'
+}
+
 disable_brain_conversational() {
   local script="$REPO/bin/emergency-disable-brain-conversational.php"
   [[ -f "$script" && ! -L "$script" ]] || fail "script de kill switch de Brain ausente."
@@ -180,6 +226,14 @@ main() {
   case "$1" in
     backup|restore-drill)
       run_current_implementation "$@"
+      ;;
+    db-ops-bootstrap)
+      [[ "$#" -eq 1 ]] || fail "db-ops-bootstrap no acepta argumentos adicionales."
+      bootstrap_db_ops_access
+      ;;
+    db-ops-status)
+      [[ "$#" -eq 1 ]] || fail "db-ops-status no acepta argumentos adicionales."
+      check_db_ops_access
       ;;
     brain-off)
       [[ "$#" -eq 1 ]] || fail "brain-off no acepta argumentos adicionales."
