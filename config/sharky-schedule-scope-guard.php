@@ -64,6 +64,9 @@ function hache_sharky_schedule_guard_requested_venues(string $text,array $state)
     if($mv)return ['MONTEVERDE'];
     if($pal)return ['PALAPAS'];
     if(hache_sharky_schedule_guard_both_venues_reference($text))return ['MONTEVERDE','PALAPAS'];
+    if(preg_match('/\b(?:la\s+)?otra\s+sede\b/u',$t)===1){
+        return [$commercial['sede']==='MONTEVERDE'?'PALAPAS':'MONTEVERDE'];
+    }
 
     // Preserve an explicit previous both-venue scope only when the user really
     // named both venues/sedes. Bare words such as "ambos" are intentionally
