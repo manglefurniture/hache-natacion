@@ -18,7 +18,7 @@ learning_ok(str_contains($service,"'CORRECTO','MEJORABLE','ERROR_REAL','FALSO_PO
 learning_ok(str_contains($service,"reviewer='chatgpt'"),'ChatGPT reviewer marker missing');
 learning_ok(str_contains($service,'REGRESSION_CANDIDATE'),'validated regression candidate state missing');
 learning_ok(str_contains($service,'hache_sharky_learning_context_is_reviewable'),'learning export must verify Sharky participation');
-learning_ok(str_contains($service,"if($in<1||$out<1)return false")&&str_contains($service,"$kind!=='GOOD_SAMPLE'||$out>=2"),'origin filter must require inbound/outbound and stronger positive sample evidence');
+learning_ok(str_contains($service,'if($in<1||$out<1)return false')&&str_contains($service,"\$kind!=='GOOD_SAMPLE'||\$out>=2"),'origin filter must require inbound/outbound and stronger positive sample evidence');
 learning_ok(str_contains($service,'hache_sharky_learning_auto_dismiss_non_sharky')&&str_contains($service,"reviewer='system_filter'"),'non-Sharky historical cases must be auto-dismissed');
 learning_ok(str_contains($worker,'hache_sharky_learning_apply_additive_migration')&&str_contains($worker,"['learning_queue']"),'worker must migrate and sync learning queue');
 learning_ok(str_contains($cli,"--pending")&&str_contains($cli,"--verdict")&&str_contains($cli,"--summary"),'learning CLI modes missing');
