@@ -15,23 +15,32 @@ function hache_sharky_learning_guard_prevenue_reply(string $message,array $state
     if(in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))return null;
 
     $t=hache_sharky_learning_guard_normalize($message);
+    $asksPrice=preg_match('/\b(?:precio|precios|costo|costos|cuanto\s+cuesta|cuanto\s+sale)\b/u',$t)===1;
+    $asksSchedule=preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
+    if(!$asksPrice&&!$asksSchedule)return null;
 
-    // Las referencias genéricas a precio/horarios pertenecen al producto activo,
-    // pero una pregunta que nombra explícitamente otro concepto debe seguir su
-    // flujo autoritativo normal en lugar de ser secuestrada por este guard.
-    $explicitOtherSubject=preg_match(
-        '/\b(?:kit|gorro|gorros|goggle|goggles|lentes|inscripcion|inscribirme|inscribirse|registro|registrarme|tarjeta|recargo|comision|mensualidad|plan\s+regular|clases\s+regulares|pago|pagos|transferencia|efectivo)\b/u',
+    // Un concepto con autoridad propia debe conservar su flujo normal. Los medios
+    // de pago se tratan aparte porque también pueden aparecer como modificadores
+    // de una pregunta explícita sobre el precio del curso activo.
+    $explicitIndependentSubject=preg_match(
+        '/\b(?:kit|gorro|gorros|goggle|goggles|lentes|inscripcion|inscribirme|inscribirse|registro|registrarme|recargo|comision|mensualidad|plan\s+regular|clases\s+regulares)\b/u',
+        $t
+    )===1;
+    $paymentContext=preg_match(
+        '/\b(?:tarjeta|pago|pagos|pagar|transferencia|efectivo)\b/u',
+        $t
+    )===1;
+    $explicitCoursePrice=$asksPrice&&preg_match(
+        '/\b(?:curso(?:\s+intensivo)?|intensivo)\b/u',
         $t
     )===1;
     $operatingHours=preg_match(
         '/\b(?:abren|abre|apertura|cierran|cierra|cierre|atienden|atencion)\b/u',
         $t
     )===1;
-    if($explicitOtherSubject||$operatingHours)return null;
 
-    $asksPrice=preg_match('/\b(?:precio|precios|costo|costos|cuanto\s+cuesta|cuanto\s+sale)\b/u',$t)===1;
-    $asksSchedule=preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
-    if(!$asksPrice&&!$asksSchedule)return null;
+    if($explicitIndependentSubject||$operatingHours)return null;
+    if($paymentContext&&!$explicitCoursePrice)return null;
 
     $parts=[];
     if($asksPrice){
