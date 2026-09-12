@@ -8,6 +8,38 @@ function hache_sharky_learning_guard_normalize(string $text): string
     return strtr($text,['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
 }
 
+function hache_sharky_learning_guard_pending_location_reply(string $message,array $state): ?string
+{
+    if(!function_exists('hache_sharky_deterministic_location_request')
+        ||!function_exists('hache_sharky_deterministic_detect_explicit_sede')
+        ||!function_exists('hache_sharky_deterministic_location_message'))return null;
+
+    $t=hache_sharky_learning_guard_normalize($message);
+    $currentVenue=hache_sharky_deterministic_detect_explicit_sede($message);
+    $venueOnly=$currentVenue!==null
+        && preg_match('/^[¿?¡!\s]*(?:colegio\s+)?(?:monteverde|palapas(?:\s+protudec)?)[?!.¿¡\s]*$/u',$t)===1;
+    $previousUser=trim((string)($state['previous_user_text']??''));
+    $previousAssistant=trim((string)($state['previous_assistant_text']??''));
+
+    // Si la persona acaba de pedir una ubicación y responde solo con la sede,
+    // completar esa intención antes de avanzar a horarios u otro paso comercial.
+    if($venueOnly&&(
+        ($previousUser!==''&&hache_sharky_deterministic_location_request($previousUser))
+        ||($previousAssistant!==''&&hache_sharky_deterministic_location_request($previousAssistant))
+    ))return hache_sharky_deterministic_location_message($message,$state);
+
+    // Una referencia como "¿En dónde está?" hereda la única sede propuesta en
+    // el turno anterior. Si el mensaje anterior menciona ambas, no adivinamos.
+    if(hache_sharky_deterministic_location_request($message)&&$currentVenue===null){
+        $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+        if(!in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
+            $proposed=$previousAssistant!==''?hache_sharky_deterministic_detect_explicit_sede($previousAssistant):null;
+            if($proposed!==null)return hache_sharky_deterministic_location_message($proposed,$state);
+        }
+    }
+    return null;
+}
+
 function hache_sharky_learning_guard_prevenue_reply(string $message,array $state,float $price): ?string
 {
     $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
