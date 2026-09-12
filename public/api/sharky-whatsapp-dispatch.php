@@ -23,13 +23,17 @@ function hache_sharky_dispatcher_state_from_history(array $data): array
         'commercial_context'=>['program'=>null,'sede_clave'=>null,'age'=>null],
         'assistant_presentation_queued'=>false,
         'previous_user_text'=>'',
+        'previous_assistant_text'=>'',
         'selected_course_price'=>null,
     ];
     foreach(array_slice(is_array($data['history']??null)?$data['history']:[],-12) as $turn){
         if(!is_array($turn))continue;
         $role=(string)($turn['role']??'');
         $content=trim((string)($turn['content']??''));
-        if($role==='assistant'&&$content!=='')$state['assistant_presentation_queued']=true;
+        if($role==='assistant'&&$content!==''){
+            $state['assistant_presentation_queued']=true;
+            $state['previous_assistant_text']=$content;
+        }
         if($role==='user'&&$content!==''){$state['previous_user_text']=$content;continue;}
         if($role!=='system'||$content==='')continue;
         if(preg_match('/Precio del curso intensivo seleccionado en backend:\s*\$([0-9]+(?:\.[0-9]+)?)/u',$content,$pm)===1)$state['selected_course_price']=(float)$pm[1];
@@ -99,6 +103,10 @@ $state=hache_sharky_product_boundary_sanitize_state($state,$message);
 $deterministicInput=hache_sharky_schedule_guard_canonicalize_venue_spacing($message);
 $deterministic=$message!==''?hache_sharky_product_boundary_reply($deterministicInput,$state):null;
 $deterministicSource=$deterministic!==null?'deterministic_product_boundary':'deterministic';
+if($deterministic===null&&$message!==''){
+    $deterministic=hache_sharky_learning_guard_pending_location_reply($deterministicInput,$state);
+    if($deterministic!==null)$deterministicSource='deterministic_learning_guard';
+}
 if($deterministic===null&&$message!==''){
     $deterministic=hache_sharky_schedule_guard_scoped_reply($deterministicInput,$state);
     if($deterministic!==null)$deterministicSource='deterministic_schedule_guard';
