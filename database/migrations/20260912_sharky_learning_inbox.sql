@@ -1,0 +1,26 @@
+-- Sharky learning inbox: stores verdict metadata only; never raw conversation text.
+CREATE TABLE IF NOT EXISTS sharky_learning_cases (
+  id CHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  review_id CHAR(36) NOT NULL,
+  finding_id CHAR(36) NULL,
+  contact_hash CHAR(64) NOT NULL,
+  case_kind ENUM('FINDING','GOOD_SAMPLE') NOT NULL DEFAULT 'FINDING',
+  status ENUM('PENDING','REVIEWED','APPROVED','DISMISSED') NOT NULL DEFAULT 'PENDING',
+  verdict ENUM('CORRECTO','MEJORABLE','ERROR_REAL','FALSO_POSITIVO','GOOD_PATTERN') NULL,
+  priority ENUM('LOW','MEDIUM','HIGH','CRITICAL') NOT NULL DEFAULT 'MEDIUM',
+  regression_required TINYINT(1) NOT NULL DEFAULT 0,
+  rule_area VARCHAR(80) NULL,
+  rationale TEXT NULL,
+  expected_behavior TEXT NULL,
+  recommendation TEXT NULL,
+  reviewer VARCHAR(64) NULL,
+  reviewed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_sharky_learning_finding (finding_id),
+  UNIQUE KEY uq_sharky_learning_good_review (review_id, case_kind),
+  INDEX idx_sharky_learning_queue (status, priority, created_at),
+  INDEX idx_sharky_learning_contact (contact_hash, created_at),
+  CONSTRAINT fk_sharky_learning_review FOREIGN KEY (review_id) REFERENCES sharky_conversation_reviews(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sharky_learning_finding FOREIGN KEY (finding_id) REFERENCES sharky_conversation_findings(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
