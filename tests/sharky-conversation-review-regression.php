@@ -72,6 +72,21 @@ $lostLocationFindings=hache_sharky_conversation_review_analyze($lostLocation);
 review_ok(in_array('CONTEXT_LOSS_LOCATION_INTENT',finding_types($lostLocationFindings),true),'A pending location question must not be classified as a clean sample when Sharky jumps to schedules.');
 review_ok(count(array_filter($lostLocationFindings,static fn(array $f):bool=>$f['type']==='CONTEXT_LOSS_LOCATION_INTENT'&&$f['severity']==='WARN'))===1,'Location intent loss must create a reviewable warning.');
 
+$humanContext=[
+    ['direction'=>'out','actor'=>'SHARKY','id'=>'o1','ts'=>100,'text'=>'¿Ya sabes nadar o estás empezando desde cero?'],
+    ['direction'=>'in','actor'=>'USUARIO','id'=>'i1','ts'=>110,'text'=>'Desde cero'],
+    ['direction'=>'human','actor'=>'HUMANO_HACHE','id'=>'h1','ts'=>120,'text'=>'Sí, para empezar desde cero manejamos el curso intensivo de 3 semanas.'],
+    ['direction'=>'in','actor'=>'USUARIO','id'=>'i2','ts'=>130,'text'=>'Gracias'],
+];
+$humanFindings=hache_sharky_conversation_review_analyze($humanContext);
+review_ok(in_array('HUMAN_INTERVENTION',finding_types($humanFindings),true),'A manual Hache reply must become reviewable learning context.');
+review_ok(!in_array('REPEATED_QUESTION',finding_types($humanFindings),true),'Human intervention must not be misread as a Sharky qualification turn.');
+review_ok(!in_array('PRODUCT_DRIFT',finding_types($humanFindings),true),'Human wording must never be attributed to Sharky product drift.');
+$resumeCommand=[['direction'=>'human','actor'=>'HUMANO_HACHE','id'=>'h2','ts'=>140,'text'=>'Sharky vuelve ahora']];
+review_ok(!in_array('HUMAN_INTERVENTION',finding_types(hache_sharky_conversation_review_analyze($resumeCommand)),true),'The operational resume command must not create learning noise.');
+$reviewSource=(string)file_get_contents(__DIR__.'/../config/sharky-conversation-review.php');
+review_ok(str_contains($reviewSource,"'HUMANO_HACHE'")&&str_contains($reviewSource,"message_type"),'Review timeline must identify encrypted manual echoes as HUMANO_HACHE.');
+
 $migration=(string)file_get_contents(__DIR__.'/../database/migrations/20260912_sharky_conversation_review.sql');
 review_ok(str_contains($migration,'sharky_conversation_findings'),'Review findings must be durable.');
 review_ok(!preg_match('/\b(?:raw_text|message_text|conversation_text)\b/i',$migration),'Review tables must not duplicate raw conversation text.');

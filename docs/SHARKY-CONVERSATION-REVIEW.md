@@ -16,10 +16,10 @@ No se crea un segundo log de texto libre.
 
 La revisión reutiliza:
 
-- `sharky_message_receipts`: mensajes entrantes cifrados;
-- `sharky_outbox`: mensajes salientes cifrados.
+- `sharky_message_receipts`: mensajes entrantes cifrados y ecos manuales `smb_message_echoes` cifrados;
+- `sharky_outbox`: mensajes salientes cifrados de Sharky.
 
-Los textos se descifran únicamente en memoria durante la revisión. Las tablas de revisión guardan solo hashes de contacto, IDs de mensajes, tipo/severidad del hallazgo y metadatos técnicos no sensibles.
+Los textos se descifran únicamente en memoria durante la revisión. El transcript distingue `USUARIO`, `SHARKY` y `HUMANO_HACHE`; una respuesta manual sirve como contexto de aprendizaje y nunca se atribuye a Sharky. Las tablas de revisión guardan solo hashes de contacto, IDs de mensajes, tipo/severidad del hallazgo y metadatos técnicos no sensibles.
 
 ## Cadencia
 
@@ -37,9 +37,10 @@ La primera versión es determinística y sin consumo adicional de modelos extern
 - pérdida contextual ante una respuesta corta como `Nunca` en formación (`CONTEXT_LOSS_SHORT_ANSWER`);
 - pérdida de una intención pendiente de ubicación cuando, tras elegir la sede solicitada, Sharky salta a horarios (`CONTEXT_LOSS_LOCATION_INTENT`);
 - pregunta directa de precio desplazada por otra pregunta de calificación (`DIRECT_PRICE_QUESTION_DEFERRED`);
-- cambio silencioso entre curso intensivo y clases regulares (`PRODUCT_DRIFT`).
+- cambio silencioso entre curso intensivo y clases regulares (`PRODUCT_DRIFT`);
+- intervención manual del equipo (`HUMAN_INTERVENTION`), para que ChatGPT pueda comparar la pregunta, la respuesta de Sharky y cómo la resolvió una persona de Hache.
 
-Estas señales son **candidatos de revisión**, no nuevas reglas comerciales.
+Estas señales son **candidatos de revisión**, no nuevas reglas comerciales. `HUMAN_INTERVENTION` es informativa: no significa que Sharky haya fallado; abre contexto para aprender de la resolución humana sin copiarla automáticamente.
 
 ## Aprendizaje controlado
 

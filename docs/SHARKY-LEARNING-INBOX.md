@@ -15,7 +15,7 @@ La bandeja recibe:
 - `FINDING`: hallazgos `REVIEW`/`PROBLEM` detectados por las reglas horarias;
 - `GOOD_SAMPLE`: una muestra limpia por ventana para identificar patrones positivos que conviene proteger.
 
-No se persiste una segunda copia del texto de WhatsApp. El contexto se descifra únicamente al exportar un caso pendiente para revisión y se mantiene fuera de la tabla de aprendizaje.
+No se persiste una segunda copia del texto de WhatsApp. El contexto se descifra únicamente al exportar un caso pendiente para revisión y se mantiene fuera de la tabla de aprendizaje. Cuando Meta entrega un eco manual (`smb_message_echoes`), el mensaje ya cifrado en el inbox durable se presenta en el transcript como `HUMANO_HACHE`, separado de `USUARIO` y `SHARKY`.
 
 ## Veredictos
 
@@ -31,7 +31,7 @@ Cada veredicto incluye prioridad, área de regla, explicación, comportamiento e
 
 ## Autoridad
 
-El revisor no modifica reglas, prompts ni código desde la bandeja. Un caso marcado como aprendizaje aprobado solo puede avanzar mediante las reglas de `AGENTS.md`, `SHARKY-CORE-RULES.md`, la guía lingüística y los patrones positivos.
+Las respuestas de `HUMANO_HACHE` son evidencia y referencia de aprendizaje, no autoridad automática: pueden inspirar un `GOOD_PATTERN`, una mejora o una regresión, pero nunca se copian ni modifican reglas/prompts/código por sí solas. El revisor no modifica reglas, prompts ni código desde la bandeja. Un caso marcado como aprendizaje aprobado solo puede avanzar mediante las reglas de `AGENTS.md`, `SHARKY-CORE-RULES.md`, la guía lingüística y los patrones positivos.
 
 Cuando `regression_required=true`, el finding asociado pasa a `REGRESSION_CANDIDATE`. Esto sigue siendo una señal de trabajo pendiente, no una modificación automática.
 
