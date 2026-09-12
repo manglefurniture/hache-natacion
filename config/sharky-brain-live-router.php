@@ -190,7 +190,7 @@ function hache_sharky_brain_conversational_intensive_offer_guard(string $answer,
     $price=is_numeric($raw)?max(0,min(100000,(int)$raw)):1200;
     $priceText=number_format($price,0,'.',',');
     $canonical='curso intensivo (3 semanas, lunes a viernes, $'.$priceText.' MXN)';
-    $replaced=preg_replace('/\bcurso\s+intensivo(?:\s+b[aá]sico)?(?:\s*\([^)]*\))?/iu',$canonical,$answer,1,$count);
+    $replaced=preg_replace_callback('/\bcurso\s+intensivo(?:\s+b[aá]sico)?(?:\s*\([^)]*\))?/iu',static fn(array $match): string=>$canonical,$answer,1,$count);
     if(is_string($replaced)&&$count>0)return $replaced;
     return '🏊 Curso intensivo: 3 semanas, lunes a viernes, $'.$priceText." MXN.\n\n".$answer;
 }
