@@ -91,6 +91,38 @@ human_edge_ok(
     hache_sharky_followup_user_deferred('Lo reviso y te digo'),
     'Follow-up authority must also recognize natural review-and-reply close.'
 );
+
+$deliberationFollowupCases=[
+    'Perfecto lo platico con mi Esposa',
+    'Lo voy a pensar mejor',
+    'Lo consulto con mi esposa',
+    'Voy a platicarlo con mi familia',
+    'Déjame hablarlo con mi pareja',
+    'Lo voy a revisar con calma',
+];
+foreach($deliberationFollowupCases as $text){
+    human_edge_ok(
+        hache_sharky_followup_user_deferred($text),
+        'A clear deliberation/consultation close must suppress automated follow-up: '.$text
+    );
+    human_edge_ok(
+        hache_sharky_followup_user_opted_out($text),
+        'Deliberation must be authoritative for the 15m/90m follow-up scheduler: '.$text
+    );
+}
+
+$deliberationState=hache_sharky_orchestrator_state(null,1788886800);
+$deliberationState['identity']=array_replace($deliberationState['identity'],[
+    'kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched',
+]);
+$deliberationState['commercial_context']['program']='intensive';
+$deliberationState['commercial_context']['sede_clave']='MONTEVERDE';
+$deliberationState['last_user_text']='Perfecto lo platico con mi Esposa';
+human_edge_ok(
+    !hache_sharky_followup_commercial_ready($deliberationState),
+    'A prospect who says they will discuss it with their spouse must not arm the automatic sales follow-up.'
+);
+
 human_edge_ok(
     !hache_sharky_whatsapp_deferred_close_request('Déjame ver los horarios'),
     'Information request must not become deferred close.'
@@ -102,6 +134,10 @@ human_edge_ok(
 human_edge_ok(
     !hache_sharky_whatsapp_deferred_close_request('Déjame revisar los horarios'),
     'Ambiguous review-with-object must stay out of the text-only deferred-close detector.'
+);
+human_edge_ok(
+    !hache_sharky_followup_user_deferred('¿Lo puedo consultar con mi esposa?'),
+    'A question about consulting someone must not itself suppress follow-up before the user actually defers.'
 );
 human_edge_ok(
     hache_sharky_followup_user_opted_out('gracias'),
