@@ -45,7 +45,8 @@ function hache_sharky_deterministic_schedule_request(string $text): bool
 function hache_sharky_deterministic_price_request(string $text): bool
 {
     $t=hache_sharky_deterministic_normalize($text);
-    return preg_match('/\b(precio|precios|costo|costos|cuesta|cuestan|mensual|mensuales|mensualidad|cuanto\s+sale|cuanto\s+es)\b/u',$t)===1;
+    return preg_match('/\b(precio|precios|costo|costos|cuesta|cuestan|mensual|mensuales|mensualidad|cuanto\s+sale|cuanto\s+es)\b/u',$t)===1
+        || preg_match('/\b(?:al|por)\s+mes\b/u',$t)===1;
 }
 
 function hache_sharky_deterministic_location_request(string $text): bool
@@ -155,7 +156,7 @@ function hache_sharky_deterministic_price_message(array $state): ?string
         $price=is_numeric($selected)?(float)$selected:(float)hache_sharky_config_int($business,'sharky_precio_intensivo',1200,0,100000);
         $priceText=rtrim(rtrim(number_format($price,2,'.',','),'0'),'.');
         $label=is_numeric($selected)?'Precio del curso seleccionado':'Precio general';
-        $monthly=preg_match('/\b(mensual|mensuales|mensualidad|mes)\b/u',hache_sharky_deterministic_normalize((string)($state['_deterministic_user_text']??'')))===1;
+        $monthly=preg_match('/\b(?:mensual|mensuales|mensualidad)\b|\b(?:al|por)\s+mes\b/u',hache_sharky_deterministic_normalize((string)($state['_deterministic_user_text']??'')))===1;
         $prefix=$monthly?'No. El curso intensivo no es mensual. El precio cubre el curso completo de 3 semanas.':'💰 Curso intensivo';
         return $prefix."\n\n".'• '.$label.': $'.$priceText.' MXN'."\n".'• Duración: 3 semanas, lunes a viernes'."\n".'• No cobra inscripción.';
     }
