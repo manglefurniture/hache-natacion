@@ -98,6 +98,7 @@ if(!is_array($data)||!hache_sharky_dispatcher_is_loopback_whatsapp($data)){
 }
 
 $state=hache_sharky_dispatcher_state_from_history($data);
+$state=hache_sharky_learning_guard_recover_recent_venue($data,$state);
 $message=trim((string)($data['message']??''));
 $state=hache_sharky_product_boundary_sanitize_state($state,$message);
 $deterministicInput=hache_sharky_schedule_guard_canonicalize_venue_spacing($message);
