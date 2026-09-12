@@ -57,7 +57,9 @@ function hache_sharky_learning_context(PDO $pdo,array $case): array
         $text=preg_replace('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu','[email]',$text)??$text;
         $text=preg_replace('/\b(?:\+?\d[\s().-]*){8,15}\b/u','[telefono]',$text)??$text;
         $text=preg_replace('/https?:\/\/\S+/iu','[url]',$text)??$text;
-        $turns[]=['n'=>++$i,'direction'=>$turn['direction'],'text'=>$text];
+        $direction=(string)($turn['direction']??'');
+        $actor=(string)($turn['actor']??($direction==='in'?'USUARIO':($direction==='out'?'SHARKY':($direction==='human'?'HUMANO_HACHE':'DESCONOCIDO'))));
+        $turns[]=['n'=>++$i,'actor'=>$actor,'direction'=>$direction,'text'=>$text];
     }
     return $turns;
 }
@@ -66,8 +68,9 @@ function hache_sharky_learning_context_is_reviewable(array $turns,string $kind):
 {
     $in=0;$out=0;
     foreach($turns as $turn){
-        if(($turn['direction']??'')==='in')$in++;
-        elseif(($turn['direction']??'')==='out')$out++;
+        $actor=(string)($turn['actor']??'');$direction=(string)($turn['direction']??'');
+        if($actor==='USUARIO'||$direction==='in')$in++;
+        elseif($actor==='SHARKY'||$direction==='out')$out++;
     }
     if($in<1||$out<1)return false;
     return $kind!=='GOOD_SAMPLE'||$out>=2;
