@@ -40,6 +40,15 @@ intensive_price_ok(
     'El guard debe usar el precio vigente del contexto comercial, no fijar $1,200.'
 );
 
+$liveConfig=hache_sharky_brain_2ba_merge_business_values(
+    hache_sharky_brain_2ba_config_defaults(),
+    ['sharky_precio_intensivo'=>'1350']
+);
+intensive_price_ok(
+    ($liveConfig['sharky_precio_intensivo']??null)==='1350',
+    'La configuración live de Brain debe incorporar el precio vigente del negocio.'
+);
+
 $regular=$state;$regular['commercial_context']['program']='regular';
 intensive_price_ok(
     hache_sharky_brain_conversational_intensive_offer_guard($answer,$regular,['sharky_precio_intensivo'=>'1200'],'sede')===$answer,
@@ -56,6 +65,10 @@ $guard=strpos($source,'hache_sharky_brain_conversational_intensive_offer_guard($
 intensive_price_ok(
     $cleanup!==false&&$guard!==false&&$guard>$cleanup,
     'El guard de precio debe estar conectado al pipeline final de Brain después de limpiar la respuesta.'
+);
+intensive_price_ok(
+    str_contains($source,'hache_sharky_brain_2ba_merge_business_values($values,hache_sharky_business_values($pdo))'),
+    'La ruta live debe cargar el precio vigente desde la configuración comercial antes de aplicar Brain.'
 );
 
 fwrite(STDOUT,"SHARKY_INTENSIVE_PRICE_EARLY_OK\n");
