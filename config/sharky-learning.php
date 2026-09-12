@@ -26,8 +26,6 @@ function hache_sharky_learning_sync(PDO $pdo): array
         ."FROM sharky_conversation_findings f WHERE f.status='NEW'";
     $created+=(int)$pdo->exec($sql);
 
-    // Sample at most one clean conversation per hourly review window so positive
-    // patterns are learned without flooding the queue.
     $sql="INSERT IGNORE INTO sharky_learning_cases(id,review_id,finding_id,contact_hash,case_kind,priority)\n"
         ."SELECT UUID(),r.id,NULL,r.contact_hash,'GOOD_SAMPLE','LOW' FROM sharky_conversation_reviews r\n"
         ."LEFT JOIN sharky_learning_cases lc ON lc.review_id=r.id AND lc.case_kind='GOOD_SAMPLE'\n"
@@ -64,16 +62,44 @@ function hache_sharky_learning_context(PDO $pdo,array $case): array
     return $turns;
 }
 
+function hache_sharky_learning_context_is_reviewable(array $turns,string $kind): bool
+{
+    $in=0;$out=0;
+    foreach($turns as $turn){
+        if(($turn['direction']??'')==='in')$in++;
+        elseif(($turn['direction']??'')==='out')$out++;
+    }
+    if($in<1||$out<1)return false;
+    return $kind!=='GOOD_SAMPLE'||$out>=2;
+}
+
+function hache_sharky_learning_auto_dismiss_non_sharky(PDO $pdo,array $case): void
+{
+    $st=$pdo->prepare("UPDATE sharky_learning_cases SET status='DISMISSED',verdict='FALSO_POSITIVO',priority='LOW',regression_required=0,rule_area='filtro de origen',rationale='El contexto no contiene suficientes turnos salientes de Sharky para una revisión fiable.',expected_behavior='Solo revisar conversaciones con participación verificable de Sharky.',recommendation='Excluir este caso del aprendizaje.',reviewer='system_filter',reviewed_at=NOW() WHERE id=:id AND status='PENDING'");
+    $st->execute([':id'=>$case['id']]);
+    $finding=trim((string)($case['finding_id']??''));
+    if($finding!==''){
+        $u=$pdo->prepare("UPDATE sharky_conversation_findings SET status='IGNORED',regression_candidate=0,reviewed_at=NOW() WHERE id=:id AND status='NEW'");
+        $u->execute([':id'=>$finding]);
+    }
+}
+
 function hache_sharky_learning_export(PDO $pdo,int $limit=10): array
 {
     $out=[];
-    foreach(hache_sharky_learning_pending($pdo,$limit) as $case){
+    foreach(hache_sharky_learning_pending($pdo,max($limit*3,$limit)) as $case){
+        $turns=hache_sharky_learning_context($pdo,$case);
+        if(!hache_sharky_learning_context_is_reviewable($turns,(string)$case['case_kind'])){
+            hache_sharky_learning_auto_dismiss_non_sharky($pdo,$case);
+            continue;
+        }
         $out[]=[
             'case_id'=>$case['id'],'kind'=>$case['case_kind'],'priority'=>$case['priority'],
             'classification'=>$case['classification'],'finding_type'=>$case['finding_type']??null,
             'severity'=>$case['severity']??null,'evidence'=>json_decode((string)($case['evidence_json']??''),true),
-            'transcript'=>hache_sharky_learning_context($pdo,$case),
+            'transcript'=>$turns,
         ];
+        if(count($out)>=$limit)break;
     }
     return $out;
 }
