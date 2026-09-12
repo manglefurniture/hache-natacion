@@ -8,6 +8,34 @@ function hache_sharky_learning_guard_normalize(string $text): string
     return strtr($text,['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
 }
 
+function hache_sharky_learning_guard_natural_venue_preference(string $text): ?string
+{
+    if(str_contains($text,'?')||str_contains($text,'¿'))return null;
+    $t=hache_sharky_learning_guard_normalize($text);
+    $mv=preg_match('/\bmonteverde\b/u',$t)===1;
+    $pal=preg_match('/\bpalapas(?:\s+protudec)?\b/u',$t)===1;
+    if($mv===$pal)return null;
+    $preference=preg_match('/\b(?:prefiero|elijo|escojo|me\s+conviene|me\s+queda(?:ria)?\s+(?:mejor|mas\s+cerca)|me\s+quedaria\s+mas\s+cerca)\b/u',$t)===1;
+    if(!$preference)return null;
+    return $pal?'PALAPAS':'MONTEVERDE';
+}
+
+function hache_sharky_learning_guard_recover_recent_venue(array $data,array $state): array
+{
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    if(in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true))return $state;
+    $history=is_array($data['history']??null)?$data['history']:[];
+    foreach(array_reverse(array_slice($history,-12)) as $turn){
+        if(!is_array($turn)||($turn['role']??'')!=='user')continue;
+        $venue=hache_sharky_learning_guard_natural_venue_preference(trim((string)($turn['content']??'')));
+        if($venue===null)continue;
+        if(!isset($state['commercial_context'])||!is_array($state['commercial_context']))$state['commercial_context']=[];
+        $state['commercial_context']['sede_clave']=$venue;
+        return $state;
+    }
+    return $state;
+}
+
 function hache_sharky_learning_guard_pending_location_reply(string $message,array $state): ?string
 {
     if(!function_exists('hache_sharky_deterministic_location_request')
@@ -21,15 +49,11 @@ function hache_sharky_learning_guard_pending_location_reply(string $message,arra
     $previousUser=trim((string)($state['previous_user_text']??''));
     $previousAssistant=trim((string)($state['previous_assistant_text']??''));
 
-    // Si la persona acaba de pedir una ubicación y responde solo con la sede,
-    // completar esa intención antes de avanzar a horarios u otro paso comercial.
     if($venueOnly&&(
         ($previousUser!==''&&hache_sharky_deterministic_location_request($previousUser))
         ||($previousAssistant!==''&&hache_sharky_deterministic_location_request($previousAssistant))
     ))return hache_sharky_deterministic_location_message($message,$state);
 
-    // Una referencia como "¿En dónde está?" hereda la única sede propuesta en
-    // el turno anterior. Si el mensaje anterior menciona ambas, no adivinamos.
     if(hache_sharky_deterministic_location_request($message)&&$currentVenue===null){
         $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
         if(!in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
@@ -51,9 +75,6 @@ function hache_sharky_learning_guard_prevenue_reply(string $message,array $state
     $asksSchedule=preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1;
     if(!$asksPrice&&!$asksSchedule)return null;
 
-    // Un concepto con autoridad propia debe conservar su flujo normal. Los medios
-    // de pago se tratan aparte porque también pueden aparecer como modificadores
-    // de una pregunta explícita sobre el precio del curso activo.
     $explicitIndependentSubject=preg_match(
         '/\b(?:kit|gorro|gorros|goggle|goggles|lentes|inscripcion|inscribirme|inscribirse|registro|registrarme|recargo|comision|mensualidad|plan\s+regular|clases\s+regulares)\b/u',
         $t
