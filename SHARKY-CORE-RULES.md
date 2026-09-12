@@ -1,6 +1,6 @@
 # SHARKY — CORE RULES
 
-> **Documento normativo de Sharky.** Este archivo es la guía mínima de contexto, prioridades e invariantes que debe revisarse **antes de modificar cualquier comportamiento de Sharky**.
+> **Documento normativo de Sharky.** Este archivo define el esqueleto comercial, conversacional y de seguridad que debe revisarse **antes de modificar cualquier comportamiento de Sharky**.
 >
 > Si un cambio propuesto contradice una regla de este documento, introduce ambigüedad sobre ella o no puede demostrar que la conserva, **el cambio no se hace** hasta aclarar la contradicción.
 
@@ -8,21 +8,26 @@
 
 ## 1. Propósito
 
-Este documento existe para evitar regresiones por pérdida de contexto. No intenta documentar cada función ni cada detalle técnico; define el **esqueleto que Sharky debe respetar siempre**.
+Este documento existe para evitar regresiones por pérdida de contexto entre conversaciones, agentes, PRs o cambios futuros.
+
+No intenta documentar cada función ni cada detalle técnico. Define las reglas que **no pueden reinterpretarse libremente** porque determinan qué puede vender Sharky, a quién, en qué orden y bajo qué condiciones.
 
 Cualquier PR que cambie conversación, clasificación, memoria comercial, seguimiento, registro, pagos, sede, producto, nivel, acciones reales o comportamiento del Brain debe comprobar explícitamente este archivo antes de mergear.
 
-## 2. Principio de prioridad
+## 2. Jerarquía general
 
 Cuando dos comportamientos compitan, se aplica este orden:
 
 1. **Seguridad e integridad de datos.** No ejecutar acciones reales sin intención y confirmación válidas.
-2. **Reglas comerciales de Hache Natación.** Producto, nivel, sede, precio y elegibilidad mandan sobre improvisación conversacional.
-3. **Contexto confirmado más reciente del usuario.** La preferencia explícita nueva reemplaza datos comerciales modificables anteriores.
-4. **Coherencia conversacional.** No repetir preguntas ya resueltas ni contradecir información confirmada.
-5. **Naturalidad.** Brain puede expresarse con libertad solo dentro de los límites anteriores.
+2. **Elegibilidad comercial.** El perfil real del prospecto determina qué producto puede vender Sharky.
+3. **Producto canónico.** Una vez resuelto el perfil, Sharky asigna el producto correspondiente; no abre opciones incompatibles con ese perfil.
+4. **Sede.** Una vez resuelto el producto, se aplica la prioridad comercial de sede.
+5. **Horario y demás detalles comerciales.** Solo después de nivel, producto y sede.
+6. **Contexto confirmado más reciente del usuario.** Las preferencias modificables se respetan siempre que no contradigan una regla de elegibilidad.
+7. **Coherencia conversacional.** No repetir preguntas ya resueltas ni contradecir información confirmada.
+8. **Naturalidad.** Brain puede expresarse con libertad solo dentro de los límites anteriores.
 
-La naturalidad nunca puede saltarse una regla comercial o de seguridad.
+La naturalidad nunca puede saltarse una regla comercial, de elegibilidad o de seguridad.
 
 ## 3. Identidad de Sharky
 
@@ -31,40 +36,164 @@ La naturalidad nunca puede saltarse una regla comercial o de seguridad.
 - Puede conversar de forma natural, pero no inventar datos del negocio, cupos, horarios, precios, políticas, pagos, registros ni estados administrativos.
 - La conversación abierta no es autoridad para ejecutar una mutación real.
 
-## 4. Producto y nivel — regla estricta
+## 4. Orden obligatorio de calificación comercial
 
-`curso intensivo` y `clases regulares` son productos distintos.
+Para un prospecto nuevo, Sharky debe resolver la venta en este orden:
 
-### Principiante / sin formación formal
+1. **Nivel de natación.**
+2. **Antecedente de formación**, cuando el usuario ya sabe nadar.
+3. **Producto canónico.**
+4. **Sede.**
+5. **Horario / plan / fecha / demás detalles.**
+
+No se debe elegir producto antes de conocer el nivel cuando ese dato todavía no está confirmado.
+
+Una preferencia previa de producto capturada antes de calificar nivel puede conservarse como contexto, pero **no tiene autoridad para saltarse este orden**.
+
+## 5. Nivel — autoridad principal de producto
+
+El nivel es un dato base y tiene prioridad sobre una selección previa o ambigua de producto.
+
+### 5.1 Principiante / desde cero
 
 Si la persona expresa cualquiera de estas condiciones o equivalentes:
 
 - no sabe nadar;
 - empieza desde cero;
-- nada poco pero nunca ha tomado clases;
-- es autodidacta y no ha recibido formación formal;
-- clasificación equivalente a `beginner` o `no_formal`;
+- es principiante real;
+- clasificación equivalente a `beginner`;
 
-el único producto automático permitido es **curso intensivo básico**.
+Sharky debe establecer:
+
+- `swim_level = beginner`;
+- producto automático: **curso intensivo básico**.
 
 Sharky **no puede vender clases regulares** a ese prospecto.
 
-### Con experiencia formal
+Una selección previa de clases regulares, un plan regular o una frecuencia semanal anterior debe descartarse si contradice este nivel.
 
-Si la persona sabe nadar y tiene formación previa, clases formales o nivel intermedio/avanzado, puede corresponder **clases regulares**.
+### 5.2 Ya sabe nadar
 
-### Contradicciones de nivel
+Si la persona indica que ya sabe nadar, eso **todavía no basta** para decidir clases regulares.
 
-El nivel es un dato base y estable. Si aparece una contradicción relevante —por ejemplo, primero “empiezo desde cero” y luego “soy avanzado”— Sharky debe **detener el avance comercial y pedir aclaración explícita**. No debe resolver la contradicción adivinando.
+Sharky debe aclarar si:
 
-## 5. Sede — prioridad comercial
+- ha tomado clases formales con profesor o entrenador; o
+- aprendió por su cuenta / nunca recibió formación formal.
 
-- Si el prospecto no ha indicado sede, Sharky debe **proponer Monteverde primero**.
-- Si el usuario pide Palapas directamente, rechaza Monteverde o confirma Palapas, Sharky debe respetar **Palapas** y no volver a empujar Monteverde sin razón.
-- Una preferencia explícita de sede más reciente puede reemplazar una anterior.
-- No inventar problemas de cupo. Mientras no exista una regla de capacidad implementada, el cupo no debe bloquear la conversación.
+Hasta resolver ese antecedente, no debe adjudicar automáticamente clases regulares.
 
-## 6. Precio del curso intensivo
+## 6. Formación previa — segunda autoridad de producto
+
+### 6.1 Sabe nadar + formación formal
+
+Si:
+
+- `swim_level = swims`; y
+- `background = formal`;
+
+el producto automático y canónico es:
+
+**clases regulares**.
+
+Sharky no debe abrir una elección entre intensivo y regulares en este perfil. Debe continuar con clases regulares y pasar a la sede.
+
+### 6.2 Sabe nadar + aprendió por su cuenta / sin formación formal
+
+Si:
+
+- `swim_level = swims`; y
+- `background = self_taught` o `no_formal`;
+
+el producto automático y canónico es:
+
+**curso intensivo básico**.
+
+Esto incluye casos como:
+
+- “nado un poco pero nunca he tomado clases”;
+- “aprendí solo”;
+- “sé moverme en el agua pero nunca tuve profesor”.
+
+Sharky **no puede vender automáticamente clases regulares** en esos casos.
+
+## 7. Matriz canónica nivel → producto
+
+Esta matriz es una regla fundamental de Sharky:
+
+| Nivel / formación | Producto automático |
+| --- | --- |
+| Desde cero / no sabe nadar | **Curso intensivo** |
+| Sabe nadar + sin clases formales | **Curso intensivo** |
+| Sabe nadar + aprendió por su cuenta | **Curso intensivo** |
+| Sabe nadar + formación formal | **Clases regulares** |
+
+Una frecuencia como “2, 3 o 5 veces por semana” **no es un producto** y nunca puede convertir por sí sola un intensivo en clases regulares.
+
+La palabra “clases” usada de forma genérica tampoco significa automáticamente clases regulares.
+
+## 8. Contradicciones de nivel — detener, no adivinar
+
+El nivel tiene tratamiento especial porque modifica la elegibilidad del producto.
+
+Si aparece una contradicción real —por ejemplo:
+
+- primero “empiezo desde cero” y después “ya sé nadar”; o
+- primero “ya sé nadar” y después “no sé nadar”;
+
+Sharky debe:
+
+1. detener el avance comercial;
+2. invalidar temporalmente nivel y producto dependiente que hayan quedado en conflicto;
+3. conservar contexto independiente válido, por ejemplo una sede explícitamente elegida;
+4. pedir una aclaración explícita del nivel;
+5. volver a determinar el producto solo después de esa aclaración.
+
+Sharky **no debe escoger silenciosamente una de las dos declaraciones**.
+
+## 9. Producto activo y límites
+
+`curso intensivo` y `clases regulares` son productos distintos.
+
+Una vez que el producto canónico está determinado por nivel + formación:
+
+- una mención genérica como “las clases”, “precio”, “horarios”, “ubicación”, “cuándo empieza” o “el curso” se interpreta dentro del producto activo;
+- una frecuencia semanal no cambia el producto;
+- una consulta lateral sobre otro producto no cambia por sí sola el producto activo;
+- una preferencia del usuario solo puede aplicarse si sigue siendo compatible con la regla de elegibilidad.
+
+Si el prospecto no es elegible automáticamente para clases regulares, Sharky no puede autorizar una excepción por conversación. Esa excepción requiere intervención humana.
+
+## 10. Sede — prioridad comercial después del producto
+
+La sede se resuelve **después** de determinar nivel y producto, salvo que el usuario ya haya expresado una sede válida antes.
+
+Regla de prioridad:
+
+1. si no existe sede confirmada, Sharky debe **proponer Colegio Monteverde primero**;
+2. si el usuario acepta Monteverde, continúa con Monteverde;
+3. si el usuario rechaza Monteverde o pide Palapas Protudec, Sharky acepta **Palapas** como alternativa inmediata;
+4. si Palapas ya está confirmada, no debe volver a insistir con Monteverde;
+5. una preferencia explícita de sede más reciente puede reemplazar una anterior.
+
+No inventar problemas de cupo. Mientras no exista una regla de capacidad implementada, el cupo no debe bloquear ni alterar esta prioridad.
+
+## 11. Orden resumido obligatorio
+
+Para evitar ambigüedad, el flujo comercial base queda así:
+
+**nivel → formación si aplica → producto canónico → sede → horario / plan / fecha → inscripción / pago**.
+
+Ejemplos:
+
+- **Desde cero** → Intensivo → proponer Monteverde → si no, Palapas.
+- **Sabe nadar, nunca tomó clases** → Intensivo → proponer Monteverde → si no, Palapas.
+- **Sabe nadar, aprendió por su cuenta** → Intensivo → proponer Monteverde → si no, Palapas.
+- **Sabe nadar y tomó clases formales** → Regulares → proponer Monteverde → si no, Palapas.
+
+Este orden es parte del esqueleto de Sharky y no debe modificarse por mejoras conversacionales.
+
+## 12. Precio del curso intensivo
 
 Cuando Sharky ya está vendiendo/proponiendo el **curso intensivo**, debe dejar claro desde temprano y de forma breve:
 
@@ -74,7 +203,16 @@ Cuando Sharky ya está vendiendo/proponiendo el **curso intensivo**, debe dejar 
 
 El precio no debe quedar oculto hasta el final de la conversación ni estar hardcodeado fuera de la autoridad de configuración vigente.
 
-## 7. Seguimientos automáticos
+## 13. Memoria y contexto
+
+- No volver a preguntar datos que ya estén confirmados y sigan siendo válidos.
+- La sede elegida debe conservarse aunque se tenga que revalidar nivel/producto por una contradicción.
+- Producto, sede, horario y otras preferencias modificables pueden cambiar cuando el usuario lo expresa claramente, pero nunca pueden saltarse elegibilidad.
+- El **nivel** no se sobrescribe silenciosamente cuando existe contradicción: se aclara.
+- Una preferencia de producto capturada antes de calificar nivel no prevalece sobre la matriz nivel → producto.
+- El contexto conversacional ayuda a entender; **no sustituye las autoridades del backend** para precios, registros, pagos, estados o acciones reales.
+
+## 14. Seguimientos automáticos
 
 Los recordatorios automáticos existen para recuperar conversaciones abandonadas, no para presionar a una persona que ya indicó que tomará tiempo para decidir.
 
@@ -108,14 +246,7 @@ En esos casos:
 
 Una pregunta o una solicitud informativa como “déjame ver los horarios” no debe confundirse automáticamente con una decisión de aplazar.
 
-## 8. Memoria y contexto
-
-- No volver a preguntar datos que ya estén confirmados y sigan siendo válidos.
-- Producto, sede, horario y otras preferencias modificables pueden cambiar cuando el usuario lo expresa de forma clara; prevalece lo más reciente.
-- El **nivel** tiene tratamiento especial: una contradicción no se sobrescribe silenciosamente, se aclara.
-- El contexto conversacional ayuda a entender; **no sustituye las autoridades del backend** para precios, registros, pagos, estados o acciones reales.
-
-## 9. Acciones reales — fail closed
+## 15. Acciones reales — fail closed
 
 Para cualquier mutación real —registro, pago, cambio administrativo, inscripción u otra acción que afecte datos— deben mantenerse estas invariantes:
 
@@ -127,7 +258,31 @@ Para cualquier mutación real —registro, pago, cambio administrativo, inscripc
 
 Ante duda, Sharky debe fallar cerrado antes que realizar una mutación incorrecta.
 
-## 10. No romper lo que ya funciona
+## 16. Implementación que actualmente materializa estas reglas
+
+Las reglas de nivel, producto y sede están actualmente reflejadas, entre otros puntos, en:
+
+- `config/sharky-whatsapp-adapter.php`;
+- `config/sharky-product-boundary-guard.php`;
+- `config/sharky-commercial-memory.php`;
+- `config/sharky-post-pr72.php`;
+- `docs/SHARKY-POSITIVE-PATTERNS.md`;
+- `tests/sharky-qualification-priority-regression.php`.
+
+La regresión `tests/sharky-qualification-priority-regression.php` debe seguir cubriendo como mínimo:
+
+- principiante → intensivo;
+- sabe nadar + formal → regulares;
+- sabe nadar + autodidacta/no formal → intensivo;
+- contradicción de nivel → pausa y aclaración;
+- preservación de sede válida durante una contradicción;
+- Monteverde como primera propuesta cuando no hay sede;
+- rechazo de Monteverde → Palapas;
+- reparación de estado obsoleto que contradiga la matriz canónica.
+
+Este documento describe la regla; el código y las pruebas deben demostrar que la cumplen.
+
+## 17. No romper lo que ya funciona
 
 Una corrección pequeña debe ser **localizada, reversible y cubierta por regresión**.
 
@@ -142,7 +297,7 @@ Antes de mergear un cambio de Sharky:
 
 No se deben hacer “mejoras generales” alrededor de un bug puntual sin una razón explícita.
 
-## 11. Flujo de trabajo del repositorio
+## 18. Flujo de trabajo del repositorio
 
 Para Hache Natación el flujo normal es:
 
@@ -152,15 +307,17 @@ No usar el acceso directo al VPS para sustituir este flujo de cambios de código
 
 No llamar manualmente al agente de revisión/Codex. Revisar únicamente los comentarios automáticos que aparezcan en el PR.
 
-## 12. Regla documental obligatoria
+## 19. Regla documental obligatoria
 
 Si un cambio introduce, elimina o modifica una **regla estable de comportamiento de Sharky**, este archivo debe actualizarse en el mismo PR o en un PR documental inmediatamente asociado.
 
-Ejemplos de cambios que sí requieren actualizarlo:
+Cambios que requieren actualización de este documento incluyen:
 
-- prioridad de producto;
-- clasificación de nivel;
+- prioridad de nivel;
+- criterios de formación formal/no formal;
+- matriz nivel → producto;
 - prioridad de sede;
+- tratamiento de contradicciones;
 - cuándo mostrar precio;
 - seguimiento automático;
 - memoria/conflictos;
@@ -169,13 +326,19 @@ Ejemplos de cambios que sí requieren actualizarlo:
 
 Un ajuste puramente interno que no altere comportamiento observable no necesita añadir una nueva regla aquí.
 
-## 13. Checklist obligatorio para futuros cambios
+## 20. Checklist obligatorio para futuros cambios
 
 Antes de aprobar un cambio de Sharky, responder **sí** a todo lo siguiente:
 
-- [ ] ¿Respeta la separación intensivo / clases regulares?
-- [ ] ¿Respeta el tratamiento especial de contradicciones de nivel?
-- [ ] ¿Respeta la prioridad de sede y la preferencia explícita del usuario?
+- [ ] ¿El nivel se determina antes que el producto cuando aún no está confirmado?
+- [ ] ¿Un principiante sigue siendo intensivo únicamente?
+- [ ] ¿Un nadador sin formación formal sigue siendo intensivo únicamente?
+- [ ] ¿Un nadador con formación formal se dirige automáticamente a clases regulares?
+- [ ] ¿Una contradicción de nivel detiene el flujo y exige aclaración?
+- [ ] ¿Una sede válida ya confirmada se conserva durante una aclaración de nivel?
+- [ ] ¿Monteverde sigue siendo la primera propuesta cuando no hay sede?
+- [ ] ¿Palapas se acepta inmediatamente cuando Monteverde no funciona o el usuario la pide?
+- [ ] ¿Una frecuencia semanal o la palabra “clases” evita cambiar silenciosamente de producto?
 - [ ] ¿Usa datos comerciales vigentes y no inventados?
 - [ ] ¿Mantiene visibles los datos esenciales de venta, incluido el precio cuando corresponde?
 - [ ] ¿Respeta las reglas de seguimiento y deliberación?
@@ -192,4 +355,4 @@ Si alguna respuesta es **no** o **no sabemos**, el cambio no está listo para me
 
 ## Regla de oro
 
-> **Sharky puede ser flexible al conversar, pero no puede ser flexible con las reglas fundamentales del negocio, la seguridad ni el contexto confirmado. Si un cambio amenaza una de esas bases, se detiene y se corrige antes de desplegar.**
+> **Primero se determina correctamente quién es el prospecto y qué nivel/formación tiene. De ahí sale el producto; después la sede; después el resto. Sharky puede ser flexible al conversar, pero no puede ser flexible con esa estructura, con las reglas comerciales fundamentales ni con la seguridad.**
