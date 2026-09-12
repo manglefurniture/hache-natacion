@@ -11,6 +11,7 @@ require_once __DIR__.'/../config/sharky-member-routing.php';
 require_once __DIR__.'/../config/sharky-takeover-maintenance.php';
 require_once __DIR__.'/../config/sharky-groups.php';
 require_once __DIR__.'/../config/sharky-conversation-review.php';
+require_once __DIR__.'/../config/sharky-learning.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
@@ -34,10 +35,17 @@ function hache_sharky_conversation_review_apply_additive_migration(PDO $pdo): vo
     if(!hache_sharky_conversation_review_schema_ready($pdo))throw new RuntimeException('Sharky conversation-review migration verification failed');
 }
 
+function hache_sharky_learning_apply_additive_migration(PDO $pdo): void
+{
+    if(hache_sharky_learning_schema_ready($pdo))return;
+    $file=__DIR__.'/../database/migrations/20260912_sharky_learning_inbox.sql';
+    $sql=is_readable($file)?file_get_contents($file):false;
+    if(!is_string($sql)||trim($sql)==='')throw new RuntimeException('Sharky learning migration missing');
+    $pdo->exec($sql);
+    if(!hache_sharky_learning_schema_ready($pdo))throw new RuntimeException('Sharky learning migration verification failed');
+}
+
 try{
-    // The existing inbox timer already runs every minute. Reuse that durable
-    // cadence for the midnight takeover reset instead of introducing a second
-    // systemd timer that could drift out of deployment/configuration parity.
     $takeoverMaintenance=hache_sharky_takeover_midnight_tick();
     if(($takeoverMaintenance['ok']??false)!==true)throw new RuntimeException('Takeover midnight maintenance failed');
     if((int)($takeoverMaintenance['released']??0)>0){
@@ -52,9 +60,9 @@ try{
     if(strlen(hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY'))<32)throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY missing');
     $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
     if(!hache_sharky_orchestrator_store_ready($pdo))throw new RuntimeException('Sharky 2.0 migration incomplete');
-    // Additive DDL stays in this CLI-only worker. Web requests never execute schema changes.
     hache_sharky_contact_book_apply_additive_migration($pdo);
     hache_sharky_conversation_review_apply_additive_migration($pdo);
+    hache_sharky_learning_apply_additive_migration($pdo);
     $business=hache_sharky_business_values($pdo);
     $minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);
     $threshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
@@ -66,13 +74,7 @@ try{
             hache_sharky_metric_increment('messages_skipped_group');
             return hache_sharky_orchestrator_mark_processed($pdo,$messageId);
         }
-        // Recovered inbox events must pass through the same contextual language
-        // normalization as realtime webhook traffic before semantic routing.
         $event=hache_sharky_language_prepare_event($pdo,$event);
-        // Recovery must preserve the same semantic lanes used by the realtime
-        // webhook. Otherwise a registered-student turn can be replayed through
-        // the legacy known-student handoff shortcut minutes after member-ops
-        // already completed it.
         if(hache_sharky_commerce_event_candidate($event)){
             return hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
         }
@@ -80,19 +82,11 @@ try{
         if($member!==null)return $member;
         return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$threshold);
     };
-    // Recovery is intentionally bounded: realtime webhook processing does the
-    // normal path; this worker catches abandoned rows without monopolizing a timer.
-    // Recovered group events are re-gated so disabling the admin checkbox is
-    // authoritative even for traffic persisted while the feature was enabled.
     $stats=hache_sharky_inbox_dispatch($pdo,$processor,10,$enabled);
     if($enabled())hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',10);
-    // Google mutations stay out of the webhook critical path. The same existing
-    // one-minute worker serializes them and retries failed writes conservatively.
     $stats['contact_sync']=hache_sharky_contact_book_sync_pending($pdo,10);
-    // Conversation quality review piggybacks on this existing timer but claims
-    // work atomically at most once per hour. It is read-only over encrypted
-    // conversation logs and stores only metadata/findings, never raw chat text.
     $stats['conversation_review']=hache_sharky_conversation_review_maybe_run($pdo);
+    $stats['learning_queue']=hache_sharky_learning_sync($pdo);
     fwrite(STDOUT,json_encode($stats,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
     exit($stats['dead']>0?1:0);
 }catch(Throwable $e){fwrite(STDERR,'Sharky inbox: '.$e->getMessage().PHP_EOL);exit(1);}

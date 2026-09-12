@@ -8,6 +8,7 @@ Antes de modificar cualquier archivo relacionado con Sharky —Brain, WhatsApp, 
 - `docs/SHARKY-POSITIVE-PATTERNS.md`
 - `docs/SHARKY-LANGUAGE-GUIDE.md`
 - `docs/SHARKY-CONVERSATION-REVIEW.md` cuando el cambio nace de conversaciones reales o hallazgos automáticos.
+- `docs/SHARKY-LEARNING-INBOX.md` cuando el cambio nace de un veredicto de la bandeja de aprendizaje.
 
 `SHARKY-CORE-RULES.md` es la fuente normativa de las reglas núcleo de Sharky: nivel, elegibilidad, producto, sede, memoria, seguimiento, acciones reales y límites de Brain. Si un cambio contradice ese documento o no puede demostrar que conserva sus invariantes, no debe avanzar hasta resolver la contradicción.
 
@@ -16,6 +17,8 @@ Los patrones `GP-*` documentados en `docs/SHARKY-POSITIVE-PATTERNS.md` son **con
 `docs/SHARKY-LANGUAGE-GUIDE.md` registra expresiones coloquiales, variantes reales y faltas frecuentes que pueden canonicalizarse antes de entrar a las reglas determinísticas. Es una guía de interpretación, no una autoridad comercial; cualquier ampliación debe ser inequívoca y acompañarse de regresión cuando sea verificable.
 
 `docs/SHARKY-CONVERSATION-REVIEW.md` define el circuito de aprendizaje desde conversaciones reales. Un hallazgo automático es solo un **candidato de revisión**: nunca puede modificar por sí solo reglas, prompts, código, elegibilidad, precios, horarios, pagos o datos administrativos.
+
+`docs/SHARKY-LEARNING-INBOX.md` define el segundo filtro del circuito: ChatGPT revisa contexto real de forma transitoria, emite un veredicto estructurado y puede marcar un caso como candidato a regresión o patrón positivo. Ese veredicto tampoco modifica producción por sí mismo.
 
 Al tocar Sharky:
 
@@ -31,5 +34,6 @@ Al tocar Sharky:
 10. Si una conversación real demuestra un recorrido exitoso nuevo, considerar registrarlo como un nuevo `GP-*` antes de realizar adecuaciones que puedan afectarlo.
 11. Si el cambio modifica una regla estable de Sharky, actualizar `SHARKY-CORE-RULES.md` en el mismo PR o en un PR documental inmediatamente asociado.
 12. Si un hallazgo automático se valida, convertirlo primero en un caso anonimizado/regresión y después aplicar el cambio mediante PR; no implementar aprendizaje autónomo directo en producción.
+13. Un veredicto `ERROR_REAL`, `MEJORABLE` o `GOOD_PATTERN` en la bandeja autoriza análisis y preparación de un caso, no cambio automático. El cambio sigue pasando por PR, Quality y deploy.
 
 El objetivo no es congelar Sharky. Es permitir que evolucione corrigiendo errores sin destruir reglas fundamentales ni comportamientos que ya demostraron funcionar con usuarios reales.
