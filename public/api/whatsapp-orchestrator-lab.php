@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-lab-worker.php';
+require_once __DIR__.'/../../config/sharky-language-guide.php';
 require_once __DIR__.'/../../config/sharky-member-ops.php';
 require_once __DIR__.'/../../config/sharky-member-payments.php';
 require_once __DIR__.'/../../config/sharky-member-routing.php';
@@ -248,6 +249,7 @@ foreach($processing as $event){
         if($member!==null)continue;
     }
     sharky_lab_assume_unmatched_prospect($pdo,$event,$identityBefore);
+    $event=hache_sharky_language_prepare_event($pdo,$event);
     hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
     sharky_lab_notify_registration_transition($pdo,$event,$identityBefore);
 }
