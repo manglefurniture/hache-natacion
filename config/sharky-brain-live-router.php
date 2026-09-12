@@ -29,6 +29,13 @@ function hache_sharky_brain_2ba_config_value_valid(string $key,string $value): b
     return false;
 }
 
+function hache_sharky_brain_2ba_merge_business_values(array $values,array $business): array
+{
+    $price=trim((string)($business['sharky_precio_intensivo']??''));
+    if($price!==''&&is_numeric($price))$values['sharky_precio_intensivo']=$price;
+    return $values;
+}
+
 /** @return list<array{clave:string,valor:string,descripcion:string,tipo:string,etiqueta:string}> */
 function hache_sharky_brain_2ba_config_rows(array $values): array
 {
@@ -61,6 +68,9 @@ function hache_sharky_brain_2ba_config_rows(array $values): array
 function hache_sharky_brain_2ba_config(PDO $pdo): array
 {
     $values=hache_sharky_brain_2ba_config_defaults();
+    if(function_exists('hache_sharky_business_values')){
+        $values=hache_sharky_brain_2ba_merge_business_values($values,hache_sharky_business_values($pdo));
+    }
     try{
         $st=$pdo->prepare('SELECT clave,valor FROM configuracion WHERE clave IN (?,?,?)');
         $st->execute([
@@ -79,6 +89,7 @@ function hache_sharky_brain_2ba_config(PDO $pdo): array
             HACHE_SHARKY_BRAIN_2BA_ENABLED_KEY=>'0',
             HACHE_SHARKY_BRAIN_2BA_CANARY_KEY=>'0',
             HACHE_SHARKY_BRAIN_CONVERSATIONAL_ENABLED_KEY=>'0',
+            'sharky_precio_intensivo'=>(string)($values['sharky_precio_intensivo']??'1200'),
         ];
     }
 }
@@ -181,6 +192,18 @@ function hache_sharky_brain_conversational_strip_opening_filler(string $answer):
     }
     $clean=trim(implode("\n",$lines));
     return $clean!==''?$clean:$answer;
+}
+
+function hache_sharky_brain_conversational_intensive_offer_guard(string $answer,array $state,array $business,string $qualificationStep): string
+{
+    if($qualificationStep!=='sede'||($state['commercial_context']['program']??null)!=='intensive')return $answer;
+    $raw=$business['sharky_precio_intensivo']??1200;
+    $price=is_numeric($raw)?max(0,min(100000,(int)$raw)):1200;
+    $priceText=number_format($price,0,'.',',');
+    $canonical='curso intensivo (3 semanas, lunes a viernes, $'.$priceText.' MXN)';
+    $replaced=preg_replace_callback('/\bcurso\s+intensivo(?:\s+b[aá]sico)?(?:\s*\([^)]*\))?/iu',static fn(array $match): string=>$canonical,$answer,1,$count);
+    if(is_string($replaced)&&$count>0)return $replaced;
+    return '🏊 Curso intensivo: 3 semanas, lunes a viernes, $'.$priceText." MXN.\n\n".$answer;
 }
 
 function hache_sharky_brain_conversational_pause_result(array $state,array $result,string $contact,?int $now=null): array
@@ -297,6 +320,7 @@ function hache_sharky_brain_conversational_apply(
         $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$openState,$message);
         if(hache_sharky_whatsapp_answer_looks_incomplete($answer))$answer=hache_sharky_whatsapp_incomplete_recovery($openState);
         $answer=hache_sharky_brain_conversational_strip_opening_filler($answer);
+        $answer=hache_sharky_brain_conversational_intensive_offer_guard($answer,$openState,$business,$qualificationStep);
         $answer=trim($answer);
     }catch(Throwable $e){
         error_log('[sharky-brain-conversational] model/guard pipeline failed; deterministic fallback used');
