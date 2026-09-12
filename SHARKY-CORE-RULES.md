@@ -176,6 +176,10 @@ Regla de prioridad:
 4. si Palapas ya está confirmada, no debe volver a insistir con Monteverde;
 5. una preferencia explícita de sede más reciente puede reemplazar una anterior.
 
+Si ya existe una sede activa y el prospecto pregunta por **más, otro u otros horarios** que la opción mostrada no cubre, Sharky puede consultar informativamente la otra sede usando únicamente disponibilidad verificada del backend. Esa consulta **no cambia la sede activa**: solo una aceptación o selección explícita del prospecto puede hacerlo.
+
+Cuando el contexto inmediato ya fijó un periodo —por ejemplo mañana/matutino o tarde/noche— la búsqueda de alternativas debe conservar ese periodo. Así, una pregunta como “¿no tienes más horario?” después de consultar horarios de la mañana en Colegio Monteverde puede mostrar los horarios matutinos disponibles en Palapas, sin fingir que pertenecen a Monteverde y sin cambiar silenciosamente de sede.
+
 No inventar problemas de cupo. Mientras no exista una regla de capacidad implementada, el cupo no debe bloquear ni alterar esta prioridad.
 
 ## 11. Orden resumido obligatorio
@@ -228,6 +232,8 @@ La conversación natural sirve para interpretar lo que quiere el usuario; no deb
 - Un dato estructurado solo se cambia por una señal explícita y válida, una contradicción real que obligue a aclarar o una regla legítima de expiración/revalidación.
 - Una frase ambigua, una palabra aislada o una inferencia del modelo no deben borrar contexto confirmado.
 - Si texto libre y estado estructurado parecen entrar en conflicto, se aplica la regla específica de conflicto; no se reescribe el estado por intuición del modelo.
+- Una capa lingüística puede canonicalizar expresiones coloquiales, mexicanismos, variantes y faltas frecuentes cuando la intención sea inequívoca —por ejemplo “de ceros”, “nada de nada” o “no ce nadar” durante la pregunta de nivel—, pero la canonicalización **no crea una autoridad comercial nueva**: entrega una intención equivalente a las reglas determinísticas existentes.
+- La interpretación lingüística debe ser contextual y estrecha. No se debe convertir una frase ambigua en una selección de nivel, producto, sede o acción sensible solo por parecido léxico.
 
 ## 15. Brain conversa; las reglas de negocio no dependen de Brain
 
@@ -331,16 +337,19 @@ Ante duda, Sharky debe fallar cerrado antes que realizar una mutación incorrect
 
 ## 20. Implementación que actualmente materializa estas reglas
 
-Las reglas de nivel, producto y sede están actualmente reflejadas, entre otros puntos, en:
+Las reglas de nivel, producto, sede e interpretación lingüística están actualmente reflejadas, entre otros puntos, en:
 
 - `config/sharky-whatsapp-adapter.php`;
+- `config/sharky-language-guide.php`;
 - `config/sharky-product-boundary-guard.php`;
 - `config/sharky-commercial-memory.php`;
 - `config/sharky-post-pr72.php`;
+- `docs/SHARKY-LANGUAGE-GUIDE.md`;
 - `docs/SHARKY-POSITIVE-PATTERNS.md`;
-- `tests/sharky-qualification-priority-regression.php`.
+- `tests/sharky-qualification-priority-regression.php`;
+- `tests/sharky-language-guide-regression.php`.
 
-La regresión `tests/sharky-qualification-priority-regression.php` debe seguir cubriendo como mínimo:
+Las regresiones deben seguir cubriendo como mínimo:
 
 - principiante → intensivo;
 - sabe nadar + formal → regulares;
@@ -349,7 +358,9 @@ La regresión `tests/sharky-qualification-priority-regression.php` debe seguir c
 - preservación de sede válida durante una contradicción;
 - Monteverde como primera propuesta cuando no hay sede;
 - rechazo de Monteverde → Palapas;
-- reparación de estado obsoleto que contradiga la matriz canónica.
+- reparación de estado obsoleto que contradiga la matriz canónica;
+- variantes coloquiales/ortográficas inequívocas de nivel → misma intención canónica;
+- consulta de más horarios → alternativas verificadas de la otra sede sin cambiar la sede activa.
 
 Este documento describe la regla; el código y las pruebas deben demostrar que la cumplen.
 
@@ -389,6 +400,8 @@ Cambios que requieren actualización de este documento incluyen:
 - matriz nivel → producto;
 - prioridad de sede;
 - tratamiento de contradicciones;
+- canonicalización lingüística que pueda afectar decisiones estructuradas;
+- alternativas de sede por incompatibilidad de horario;
 - relación Brain ↔ autoridades determinísticas;
 - persistencia de contexto en takeover/reactivación;
 - política de botones y controles;
@@ -412,7 +425,9 @@ Antes de aprobar un cambio de Sharky, responder **sí** a todo lo siguiente:
 - [ ] ¿Una sede válida ya confirmada se conserva durante una aclaración de nivel?
 - [ ] ¿Monteverde sigue siendo la primera propuesta cuando no hay sede?
 - [ ] ¿Palapas se acepta inmediatamente cuando Monteverde no funciona o el usuario la pide?
+- [ ] ¿Preguntar por más horarios puede mostrar alternativas verificadas sin cambiar silenciosamente la sede activa?
 - [ ] ¿Una frecuencia semanal o la palabra “clases” evita cambiar silenciosamente de producto?
+- [ ] ¿Las variantes coloquiales/ortográficas solo se canonicalizan cuando la intención es inequívoca y contextual?
 - [ ] ¿El precio de un curso concreto seleccionado prevalece sobre el precio general cuando aplica?
 - [ ] ¿El estado estructurado confirmado prevalece sobre inferencias ambiguas de texto libre?
 - [ ] ¿Brain sigue siendo conversacional sin convertirse en autoridad única de reglas comerciales o mutaciones?
