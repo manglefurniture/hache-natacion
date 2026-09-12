@@ -36,7 +36,7 @@ function hache_sharky_language_swim_step_text(array $state,string $text): ?strin
         '/\bno\s+(?:se|ce)\s+nada\s+de\s+nada\b/u',
         '/\bnunca\s+he\s+nadado\b/u',
         '/\bno\s+(?:se|ce)\s+flotar\b/u',
-        '/\bquiero\s+aprender\s+a\s+nadar\b/u',
+        '/^quiero\s+aprender\s+a\s+nadar(?:\s+y\s+flotar)?[.! ]*$/u',
         '/\b(?:empiezo|empezando|voy)\s+(?:de|desde|en)\s+ceros?\b/u',
     ];
     foreach($beginner as $pattern)if(preg_match($pattern,$t)===1)return 'Desde cero';
