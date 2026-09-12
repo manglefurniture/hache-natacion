@@ -62,6 +62,16 @@ $correction=[
 ];
 review_ok(in_array('USER_CORRECTION',finding_types(hache_sharky_conversation_review_analyze($correction)),true),'Explicit user correction must raise a high-signal finding.');
 
+$lostLocation=[
+    ['direction'=>'in','id'=>'i1','ts'=>100,'text'=>'¿En dónde está?'],
+    ['direction'=>'out','id'=>'o1','ts'=>110,'text'=>'Claro. ¿Necesitas la ubicación de Colegio Monteverde o la de Palapas Protudec?'],
+    ['direction'=>'in','id'=>'i2','ts'=>120,'text'=>'Monteverde'],
+    ['direction'=>'out','id'=>'o2','ts'=>130,'text'=>'Horarios vigentes del curso intensivo: 08:00–09:00, 19:00–20:00.'],
+];
+$lostLocationFindings=hache_sharky_conversation_review_analyze($lostLocation);
+review_ok(in_array('CONTEXT_LOSS_LOCATION_INTENT',finding_types($lostLocationFindings),true),'A pending location question must not be classified as a clean sample when Sharky jumps to schedules.');
+review_ok(count(array_filter($lostLocationFindings,static fn(array $f):bool=>$f['type']==='CONTEXT_LOSS_LOCATION_INTENT'&&$f['severity']==='WARN'))===1,'Location intent loss must create a reviewable warning.');
+
 $migration=(string)file_get_contents(__DIR__.'/../database/migrations/20260912_sharky_conversation_review.sql');
 review_ok(str_contains($migration,'sharky_conversation_findings'),'Review findings must be durable.');
 review_ok(!preg_match('/\b(?:raw_text|message_text|conversation_text)\b/i',$migration),'Review tables must not duplicate raw conversation text.');

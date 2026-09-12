@@ -89,6 +89,37 @@ function hache_sharky_conversation_review_price_answer(string $text): bool
     return str_contains($text,'$')||preg_match('/\b(?:mxn|pesos?|precio|cuesta|costo)\b/u',$t)===1;
 }
 
+
+function hache_sharky_conversation_review_location_request(string $text): bool
+{
+    $t=hache_sharky_conversation_review_normalize($text);
+    return preg_match('/\b(?:ubicacion|direccion|maps|mapa|donde\s+(?:esta|queda)|como\s+(?:llego|llegar))\b/u',$t)===1;
+}
+
+function hache_sharky_conversation_review_explicit_venue(string $text): ?string
+{
+    $t=hache_sharky_conversation_review_normalize($text);
+    $mv=preg_match('/\bmonteverde\b/u',$t)===1;
+    $pal=preg_match('/\bpalapas(?:\s+protudec)?\b/u',$t)===1;
+    if($mv&&!$pal)return 'MONTEVERDE';
+    if($pal&&!$mv)return 'PALAPAS';
+    return null;
+}
+
+function hache_sharky_conversation_review_location_answer(string $text): bool
+{
+    $t=hache_sharky_conversation_review_normalize($text);
+    return str_contains($t,' url ')
+        || preg_match('/\b(?:ubicacion|direccion|indicaciones|maps|mapa)\b/u',$t)===1;
+}
+
+function hache_sharky_conversation_review_schedule_answer(string $text): bool
+{
+    $t=hache_sharky_conversation_review_normalize($text);
+    return preg_match('/\bhorarios?\b/u',$t)===1
+        || preg_match('/\b\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}\b/u',$t)===1;
+}
+
 function hache_sharky_conversation_review_finding(string $type,string $severity,string $sourceId,string $relatedId='',array $evidence=[]): array
 {
     return ['type'=>$type,'severity'=>$severity,'source_id'=>$sourceId,'related_id'=>$relatedId,'evidence'=>$evidence];
@@ -143,6 +174,21 @@ function hache_sharky_conversation_review_analyze(array $timeline): array
                 }
             }
             $lastQuestion[$family]=['id'=>$id,'ts'=>$ts,'index'=>$i];
+        }
+
+        if($i>=3
+            &&($timeline[$i-1]['direction']??'')==='in'
+            &&($timeline[$i-2]['direction']??'')==='out'
+            &&($timeline[$i-3]['direction']??'')==='in'
+            &&hache_sharky_conversation_review_location_request((string)$timeline[$i-3]['text'])
+            &&hache_sharky_conversation_review_explicit_venue((string)$timeline[$i-1]['text'])!==null
+            &&hache_sharky_conversation_review_location_request((string)$timeline[$i-2]['text'])
+            &&hache_sharky_conversation_review_schedule_answer($text)
+            &&!hache_sharky_conversation_review_location_answer($text)){
+            $findings[]=hache_sharky_conversation_review_finding(
+                'CONTEXT_LOSS_LOCATION_INTENT','WARN',(string)$timeline[$i-1]['id'],$id,
+                ['expected'=>'location_for_selected_venue']
+            );
         }
 
         if($i>=2&&($timeline[$i-1]['direction']??'')==='in'&&($timeline[$i-2]['direction']??'')==='out'){

@@ -35,6 +35,7 @@ La primera versión es determinística y sin consumo adicional de modelos extern
 - usuario obligado a repetir una respuesta (`USER_REPEAT`);
 - repetición de una pregunta de calificación (`REPEATED_QUESTION`);
 - pérdida contextual ante una respuesta corta como `Nunca` en formación (`CONTEXT_LOSS_SHORT_ANSWER`);
+- pérdida de una intención pendiente de ubicación cuando, tras elegir la sede solicitada, Sharky salta a horarios (`CONTEXT_LOSS_LOCATION_INTENT`);
 - pregunta directa de precio desplazada por otra pregunta de calificación (`DIRECT_PRICE_QUESTION_DEFERRED`);
 - cambio silencioso entre curso intensivo y clases regulares (`PRODUCT_DRIFT`).
 
