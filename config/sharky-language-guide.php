@@ -29,9 +29,11 @@ function hache_sharky_language_swim_step_text(array $state,string $text): ?strin
     // deliberadamente corta y basada en lenguaje real; no es un corrector global.
     $beginner=[
         '/^(?:de|desde|en)\s+ceros?[.! ]*$/u',
-        '/^(?:cero|ceros|nada\s+de\s+nada)[.! ]*$/u',
+        '/^(?:cero|ceros)[.! ]*$/u',
+        '/\bnada\s+de\s+nada\b/u',
         '/\bno\s+(?:se|ce)\s+nadar\b/u',
         '/\bno\s+(?:se|ce)\s+(?:nada\s+)?de\s+nadar\b/u',
+        '/\bno\s+(?:se|ce)\s+nada\s+de\s+nada\b/u',
         '/\bnunca\s+he\s+nadado\b/u',
         '/\bno\s+(?:se|ce)\s+flotar\b/u',
         '/\bquiero\s+aprender\s+a\s+nadar\b/u',
