@@ -233,6 +233,7 @@ La conversación natural sirve para interpretar lo que quiere el usuario; no deb
 - Una frase ambigua, una palabra aislada o una inferencia del modelo no deben borrar contexto confirmado.
 - Si texto libre y estado estructurado parecen entrar en conflicto, se aplica la regla específica de conflicto; no se reescribe el estado por intuición del modelo.
 - Una capa lingüística puede canonicalizar expresiones coloquiales, mexicanismos, variantes y faltas frecuentes cuando la intención sea inequívoca —por ejemplo “de ceros”, “nada de nada” o “no ce nadar” durante la pregunta de nivel—, pero la canonicalización **no crea una autoridad comercial nueva**: entrega una intención equivalente a las reglas determinísticas existentes.
+- Dentro del paso específico de **formación previa**, una respuesta aislada “Nunca” puede canonicalizarse como ausencia de formación formal porque la pregunta inmediata elimina la ambigüedad. Fuera de ese paso, “Nunca” por sí solo sigue siendo ambiguo y no debe cambiar nivel, formación, producto ni sede.
 - La interpretación lingüística debe ser contextual y estrecha. No se debe convertir una frase ambigua en una selección de nivel, producto, sede o acción sensible solo por parecido léxico.
 
 ## 15. Brain conversa; las reglas de negocio no dependen de Brain
@@ -360,6 +361,7 @@ Las regresiones deben seguir cubriendo como mínimo:
 - rechazo de Monteverde → Palapas;
 - reparación de estado obsoleto que contradiga la matriz canónica;
 - variantes coloquiales/ortográficas inequívocas de nivel → misma intención canónica;
+- “Nunca” aislado durante la pregunta de formación → sin formación formal, pero ambiguo fuera de ese paso;
 - consulta de más horarios → alternativas verificadas de la otra sede sin cambiar la sede activa.
 
 Este documento describe la regla; el código y las pruebas deben demostrar que la cumplen.

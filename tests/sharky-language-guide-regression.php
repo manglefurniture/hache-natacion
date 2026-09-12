@@ -25,6 +25,9 @@ $beginnerCases=[
 foreach($beginnerCases as $case){
     language_ok(hache_sharky_language_prepare_text($state,$case)==='Desde cero','Beginner phrase must canonicalize: '.$case);
 }
+language_ok(hache_sharky_language_prepare_text($state,'Nunca')==='Nunca','A bare Nunca must stay ambiguous outside the background step.');
+language_ok(hache_sharky_language_prepare_text($state,'Quiero aprender a nadar mejor')==='Quiero aprender a nadar mejor','A qualified learning goal must not be rewritten as beginner.');
+language_ok(hache_sharky_language_prepare_text($state,'Quiero aprender a nadar mariposa; ya sé pecho')==='Quiero aprender a nadar mariposa; ya sé pecho','A learning goal with explicit swimming evidence must remain available for clarification.');
 
 $swimsCases=['Nado un poco','Nado perrito','Me defiendo en el agua','Me mantengo a flote'];
 foreach($swimsCases as $case){
@@ -34,6 +37,8 @@ foreach($swimsCases as $case){
 $background=$state;
 $background['commercial_context']['swim_level']='swims';
 $background=hache_sharky_orchestrator_flow($background,'qualify_prospect','background',[],$now+1);
+language_ok(hache_sharky_language_prepare_text($background,'Nunca')==='Por mi cuenta','Bare Nunca must mean no formal training only while answering the background question.');
+language_ok(hache_sharky_language_prepare_text($background,'Nunca.')==='Por mi cuenta','Punctuated bare Nunca must stay contextual to the background step.');
 language_ok(hache_sharky_language_prepare_text($background,'Nunca he tomado clases')==='Por mi cuenta','No formal training must canonicalize as self-taught.');
 language_ok(hache_sharky_language_prepare_text($background,'Aprendí sola')==='Por mi cuenta','Self-taught colloquial answer must canonicalize.');
 language_ok(hache_sharky_language_prepare_text($background,'Sí he tomado clases con profesor')==='He tomado clases','Formal training must canonicalize.');
@@ -60,5 +65,11 @@ $regular=$commercial;
 $regular['commercial_context']['program']='regular';
 language_ok(hache_sharky_language_prepare_text($regular,'¿No tienes más horario?')==='¿No tienes más horario?','Intensive fallback must not rewrite a regular-classes query.');
 language_ok(hache_sharky_language_prepare_text($commercial,'¿Hay más horarios en Palapas?')==='¿Hay más horarios en Palapas?','Explicit venue query must never be rewritten as an opposite-venue fallback.');
+
+$worker=(string)file_get_contents(__DIR__.'/../bin/sharky-inbox-dispatch.php');
+language_ok(str_contains($worker,"require_once __DIR__.'/../config/sharky-language-guide.php';"),'Durable inbox recovery must load the language normalization layer.');
+$preparePos=strpos($worker,'$event=hache_sharky_language_prepare_event($pdo,$event);');
+$processPos=strpos($worker,'hache_sharky_lab_process_event($pdo,$event',$preparePos===false?0:$preparePos);
+language_ok($preparePos!==false&&$processPos!==false&&$preparePos<$processPos,'Recovered inbox events must be normalized before the shared Sharky processor.');
 
 fwrite(STDOUT,"SHARKY_LANGUAGE_GUIDE_OK\n");
