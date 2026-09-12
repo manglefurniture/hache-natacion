@@ -1,0 +1,61 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__.'/../config/sharky-whatsapp-adapter.php';
+require_once __DIR__.'/../config/sharky-brain-live-router.php';
+
+function intensive_price_ok(bool $condition,string $message): void
+{
+    if(!$condition){fwrite(STDERR,"SHARKY INTENSIVE PRICE FAIL: {$message}\n");exit(1);}
+}
+
+$state=hache_sharky_orchestrator_state(null,1788886800);
+$state['identity']=array_replace($state['identity'],[
+    'kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched',
+]);
+$state['flow']=['name'=>'qualify_prospect','step'=>'sede','data'=>['venue_proposal'=>'MONTEVERDE']];
+$state['commercial_context']['program']='intensive';
+$state['commercial_context']['recommended_program']='intensive';
+$state['commercial_context']['swim_level']='beginner';
+
+$answer="Perfecto, desde cero lo mejor para ti es el curso intensivo (3 semanas, lunes a viernes).\n\n¿Cuál sede prefieres: Colegio Monteverde o Palapas Protudec?";
+$guarded=hache_sharky_brain_conversational_intensive_offer_guard($answer,$state,['sharky_precio_intensivo'=>'1200'],'sede');
+intensive_price_ok(
+    str_contains($guarded,'curso intensivo (3 semanas, lunes a viernes, $1,200 MXN)'),
+    'La primera oferta del intensivo debe incluir duración, frecuencia y precio.'
+);
+intensive_price_ok(
+    str_contains($guarded,'¿Cuál sede prefieres'),
+    'Agregar el precio no debe romper la siguiente pregunta de sede.'
+);
+intensive_price_ok(
+    substr_count($guarded,'curso intensivo')===1,
+    'La normalización no debe duplicar la oferta del intensivo.'
+);
+
+$custom=hache_sharky_brain_conversational_intensive_offer_guard('¿Qué sede prefieres?',$state,['sharky_precio_intensivo'=>'1350'],'sede');
+intensive_price_ok(
+    str_contains($custom,'3 semanas, lunes a viernes, $1,350 MXN'),
+    'El guard debe usar el precio vigente del contexto comercial, no fijar $1,200.'
+);
+
+$regular=$state;$regular['commercial_context']['program']='regular';
+intensive_price_ok(
+    hache_sharky_brain_conversational_intensive_offer_guard($answer,$regular,['sharky_precio_intensivo'=>'1200'],'sede')===$answer,
+    'El guard no debe modificar clases regulares.'
+);
+intensive_price_ok(
+    hache_sharky_brain_conversational_intensive_offer_guard($answer,$state,['sharky_precio_intensivo'=>'1200'],'swim')===$answer,
+    'El guard solo debe actuar al presentar el intensivo antes de elegir sede.'
+);
+
+$source=(string)file_get_contents(__DIR__.'/../config/sharky-brain-live-router.php');
+$cleanup=strpos($source,'hache_sharky_brain_conversational_strip_opening_filler($answer)');
+$guard=strpos($source,'hache_sharky_brain_conversational_intensive_offer_guard($answer,$openState,$business,$qualificationStep)');
+intensive_price_ok(
+    $cleanup!==false&&$guard!==false&&$guard>$cleanup,
+    'El guard de precio debe estar conectado al pipeline final de Brain después de limpiar la respuesta.'
+);
+
+fwrite(STDOUT,"SHARKY_INTENSIVE_PRICE_EARLY_OK\n");
