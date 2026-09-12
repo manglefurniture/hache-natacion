@@ -43,6 +43,21 @@ language_ok(hache_sharky_language_prepare_text($background,'Nunca he tomado clas
 language_ok(hache_sharky_language_prepare_text($background,'Aprendí sola')==='Por mi cuenta','Self-taught colloquial answer must canonicalize.');
 language_ok(hache_sharky_language_prepare_text($background,'Sí he tomado clases con profesor')==='He tomado clases','Formal training must canonicalize.');
 
+$venue=$state;
+$venue['commercial_context']=array_replace($venue['commercial_context'],[
+    'swim_level'=>'beginner','program'=>'intensive','recommended_program'=>'intensive',
+]);
+$venue=hache_sharky_orchestrator_flow($venue,'qualify_prospect','sede',['venue_proposal'=>'MONTEVERDE'],$now+2);
+foreach(['Si','Sí.','Sí me funciona','Me funciona','Está bien','Ok','Vale'] as $case){
+    language_ok(hache_sharky_language_prepare_text($venue,$case)==='Monteverde','Short affirmation must bind only to the pending Monteverde proposal: '.$case);
+}
+language_ok(hache_sharky_language_prepare_text($venue,'No')==='No','A venue rejection must remain available for the existing Palapas fallback.');
+language_ok(hache_sharky_language_prepare_text($venue,'Palapas')==='Palapas','An explicit Palapas choice must never be rewritten.');
+$noProposal=$venue;
+$noProposal['flow']['data']['venue_proposal']='PALAPAS';
+language_ok(hache_sharky_language_prepare_text($noProposal,'Si')==='Si','A bare affirmation must not become Monteverde without the explicit pending proposal.');
+language_ok(hache_sharky_language_prepare_text($state,'Si')==='Si','A bare affirmation outside the venue step must remain ambiguous.');
+
 $commercial=$state;
 $commercial=hache_sharky_orchestrator_clear_flow($commercial);
 $commercial['commercial_context']=array_replace($commercial['commercial_context'],[
