@@ -26,6 +26,8 @@ jobs:
         run: php tests/sharky-intensive-price-early-regression.php
       - name: Sharky Brain human edge regression
         run: php tests/sharky-brain-human-edges-regression.php
+      - name: Sharky conversation review regression
+        run: php tests/sharky-conversation-review-regression.php
       - name: Sharky schedule scope guard regression
         run: php tests/sharky-schedule-scope-guard-regression.php
       - name: Sharky product boundary regression
@@ -120,6 +122,14 @@ jobs:
           DELIVERY_DB_USER: root
           DELIVERY_DB_PASS: root
         run: php tests/sharky-contact-book-mariadb.php
+      - name: Sharky conversation review MariaDB regression
+        env:
+          DELIVERY_DB_HOST: 127.0.0.1
+          DELIVERY_DB_PORT: 3306
+          DELIVERY_DB_NAME: hache_delivery_test
+          DELIVERY_DB_USER: root
+          DELIVERY_DB_PASS: root
+        run: php tests/sharky-conversation-review-mariadb.php
       - name: Intensive partial payments MariaDB regression
         env:
           DELIVERY_DB_HOST: 127.0.0.1
