@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/../config/sharky-deterministic-replies.php';
+require_once __DIR__.'/../config/sharky-schedule-scope-guard.php';
 require_once __DIR__.'/../config/sharky-learning-correction-guards.php';
 
 function learning_correction_ok(bool $condition,string $message): void
@@ -37,8 +38,6 @@ learning_correction_ok(str_contains((string)$direct,'dependen de la sede'),'Sche
 learning_correction_ok(str_contains((string)$direct,'Te propongo primero Colegio Monteverde'),'Direct question must continue with Monteverde-first venue proposal.');
 learning_correction_ok(!str_contains(mb_strtolower((string)$direct,'UTF-8'),'sabes nadar'),'Direct question must not restart level qualification.');
 
-// Codex P2: el guard de curso no debe secuestrar preguntas que nombran
-// explícitamente otro concepto con autoridad propia.
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el kit de gorro y goggles?',$state,1200)===null,'Kit price must remain in its authoritative flow.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta la inscripción?',$state,1200)===null,'Enrollment fee must remain in its authoritative flow.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuál es el recargo por pagar con tarjeta?',$state,1200)===null,'Card fee must remain in its authoritative flow.');
@@ -46,7 +45,6 @@ learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿A qué hora
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué precio tiene el curso?',$state,1200)!==null,'Explicit course price must still be handled before venue.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué horarios tienen?',$state,1200)!==null,'Generic schedule must still refer to the active intensive.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta?',$state,1200)!==null,'Generic price must still refer to the active intensive.');
-
 
 $locationState=$state;
 $locationState['previous_assistant_text']='Perfecto. 📍 Te propongo primero Colegio Monteverde. ¿Te funciona esta sede?';
@@ -61,14 +59,33 @@ $locationChoice=hache_sharky_learning_guard_pending_location_reply('Monteverde',
 learning_correction_ok(is_string($locationChoice)&&$locationChoice!=='','Venue-only reply after a location question must complete location intent.');
 learning_correction_ok(!str_contains(mb_strtolower((string)$locationChoice,'UTF-8'),'horarios vigentes'),'Pending location intent must not jump to schedules.');
 
-// Codex P2 de seguimiento: un medio de pago puede modificar una pregunta
-// explícita sobre el precio del curso sin volver ese precio model-dependent.
 $mixedCash=hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el curso si pago en efectivo?',$state,1200);
 learning_correction_ok(is_string($mixedCash)&&str_contains($mixedCash,'$1,200 MXN'),'Explicit course price with cash context must keep the authoritative intensive price.');
 $mixedTransfer=hache_sharky_learning_guard_prevenue_reply('¿Cuánto sale el intensivo si pago por transferencia?',$state,1200);
 learning_correction_ok(is_string($mixedTransfer)&&str_contains($mixedTransfer,'$1,200 MXN'),'Explicit intensive price with transfer context must remain deterministic.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta pagar con tarjeta?',$state,1200)===null,'Payment-only price question must stay in the payment authority flow.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el curso y la inscripción?',$state,1200)===null,'Mixed course and enrollment fee question must not hide the independent enrollment authority.');
+
+// Caso real anonimizado: la persona ya eligió Palapas por cercanía y después
+// pregunta por la tarde. La sede debe sobrevivir aunque la memoria estructurada
+// del turno previo todavía no la haya persistido.
+$historyData=['history'=>[
+    ['role'=>'assistant','content'=>'Te propongo primero Colegio Monteverde.'],
+    ['role'=>'user','content'=>'me quedaría más cerca la de las palapas'],
+    ['role'=>'assistant','content'=>'Perfecto, entonces sería en Palapas Protudec.'],
+]];
+$recovered=hache_sharky_learning_guard_recover_recent_venue($historyData,$state);
+learning_correction_ok(($recovered['commercial_context']['sede_clave']??null)==='PALAPAS','Natural proximity choice must recover Palapas as the active venue.');
+$loader=static function(string $program,string $sede): array {
+    if($program!=='intensive')return [];
+    return $sede==='PALAPAS'
+        ?['07:00–08:00','08:00–09:00','09:00–10:00','20:00–21:00']
+        :['08:00–09:00','19:00–20:00','20:00–21:00'];
+};
+$evening=hache_sharky_schedule_guard_scoped_reply('por la tarde??',$recovered,$loader)??'';
+learning_correction_ok(str_contains($evening,'Palapas Protudec')&&str_contains($evening,'20:00–21:00'),'Evening follow-up after Palapas choice must stay in Palapas intensive.');
+learning_correction_ok(!str_contains($evening,'Colegio Monteverde'),'Palapas evening follow-up must not mix Monteverde schedules.');
+learning_correction_ok(!str_contains($evening,'19:00–20:00'),'Monteverde-only intensive slot must not leak into Palapas.');
 
 $palapas=$state;$palapas['commercial_context']['sede_clave']='PALAPAS';
 $unchanged=hache_sharky_learning_guard_enforce_venue_priority($equalVenue,$palapas);
@@ -81,6 +98,7 @@ learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Dónde est�
 
 $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
 learning_correction_ok(str_contains($dispatcher,"sharky-learning-correction-guards.php"),'WhatsApp loopback dispatcher must load approved learning guards.');
+learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_recover_recent_venue'),'Dispatcher must recover a recent natural venue selection before schedule scoping.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_prevenue_reply'),'Dispatcher must answer pre-venue intensive price/schedule questions deterministically.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_enforce_confirmed_swim'),'Dispatcher must protect confirmed swim context on model output.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_enforce_venue_priority'),'Dispatcher must enforce Monteverde-first on model output.');
