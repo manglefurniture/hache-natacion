@@ -25,6 +25,7 @@ $beginnerCases=[
 foreach($beginnerCases as $case){
     language_ok(hache_sharky_language_prepare_text($state,$case)==='Desde cero','Beginner phrase must canonicalize: '.$case);
 }
+language_ok(hache_sharky_language_prepare_text($state,'Nunca')==='Nunca','A bare Nunca must stay ambiguous outside the background step.');
 
 $swimsCases=['Nado un poco','Nado perrito','Me defiendo en el agua','Me mantengo a flote'];
 foreach($swimsCases as $case){
@@ -34,6 +35,8 @@ foreach($swimsCases as $case){
 $background=$state;
 $background['commercial_context']['swim_level']='swims';
 $background=hache_sharky_orchestrator_flow($background,'qualify_prospect','background',[],$now+1);
+language_ok(hache_sharky_language_prepare_text($background,'Nunca')==='Por mi cuenta','Bare Nunca must mean no formal training only while answering the background question.');
+language_ok(hache_sharky_language_prepare_text($background,'Nunca.')==='Por mi cuenta','Punctuated bare Nunca must stay contextual to the background step.');
 language_ok(hache_sharky_language_prepare_text($background,'Nunca he tomado clases')==='Por mi cuenta','No formal training must canonicalize as self-taught.');
 language_ok(hache_sharky_language_prepare_text($background,'Aprendí sola')==='Por mi cuenta','Self-taught colloquial answer must canonicalize.');
 language_ok(hache_sharky_language_prepare_text($background,'Sí he tomado clases con profesor')==='He tomado clases','Formal training must canonicalize.');
