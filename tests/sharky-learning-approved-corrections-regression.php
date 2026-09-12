@@ -36,6 +36,16 @@ learning_correction_ok(str_contains((string)$direct,'dependen de la sede'),'Sche
 learning_correction_ok(str_contains((string)$direct,'Te propongo primero Colegio Monteverde'),'Direct question must continue with Monteverde-first venue proposal.');
 learning_correction_ok(!str_contains(mb_strtolower((string)$direct,'UTF-8'),'sabes nadar'),'Direct question must not restart level qualification.');
 
+// Codex P2: el guard de curso no debe secuestrar preguntas que nombran
+// explícitamente otro concepto con autoridad propia.
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el kit de gorro y goggles?',$state,1200)===null,'Kit price must remain in its authoritative flow.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta la inscripción?',$state,1200)===null,'Enrollment fee must remain in its authoritative flow.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuál es el recargo por pagar con tarjeta?',$state,1200)===null,'Card fee must remain in its authoritative flow.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿A qué hora cierran?',$state,1200)===null,'Operating-hours questions must not be treated as course schedule questions.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué precio tiene el curso?',$state,1200)!==null,'Explicit course price must still be handled before venue.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué horarios tienen?',$state,1200)!==null,'Generic schedule must still refer to the active intensive.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta?',$state,1200)!==null,'Generic price must still refer to the active intensive.');
+
 $palapas=$state;$palapas['commercial_context']['sede_clave']='PALAPAS';
 $unchanged=hache_sharky_learning_guard_enforce_venue_priority($equalVenue,$palapas);
 learning_correction_ok($unchanged===$equalVenue,'A confirmed venue must never be overwritten by the priority guard.');
