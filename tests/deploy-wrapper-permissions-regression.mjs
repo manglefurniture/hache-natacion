@@ -22,12 +22,22 @@ for (const fragment of [
   'bash -n "$candidate"',
   'install -o root -g root -m 0755 "$candidate" "$INSTALLED_HELPER"',
   'WORKTREE_PERMISSIONS_OK sha=$deployed',
+  'DB_OPS_USER="deploy_hache_ops"',
+  'DB_OPS_CNF="${DB_OPS_HOME}/.my.cnf"',
+  'bootstrap_db_ops_access()',
+  'db-ops-bootstrap)',
+  'db-ops-status)',
+  'install -o deploy-hache -g deploy-hache -m 0600',
+  'GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE',
 ]) {
   assert.ok(wrapper.includes(fragment), `missing deploy wrapper contract: ${fragment}`);
 }
 
 assert.ok(!wrapper.includes('chmod -R'), 'wrapper must never recursively chmod the production worktree');
 assert.ok(!wrapper.includes('find "$REPO"'), 'wrapper must not sweep untracked files; permission repair is Git-index scoped');
+assert.ok(!/GRANT\s+ALL\s+PRIVILEGES/i.test(wrapper), 'deploy-hache DB ops must never receive ALL PRIVILEGES');
+assert.ok(!/GRANT[^\n]*(?:SUPER|FILE|GRANT OPTION|CREATE USER|DROP)/i.test(wrapper), 'deploy-hache DB ops must not receive server-wide or DROP privileges');
+assert.ok(wrapper.includes("REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${DB_OPS_USER}'@'localhost';"), 'bootstrap must reset old DB privileges before applying the restricted grant');
 
 const remoteCheck = wrapper.indexOf('[[ "$(git rev-parse origin/main)" == "$sha" ]]');
 const wrapperSync = wrapper.indexOf('sync_wrapper_from_target_if_present "$sha"');
