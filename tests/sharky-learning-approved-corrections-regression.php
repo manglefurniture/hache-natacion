@@ -102,10 +102,21 @@ $unknown=$state;$unknown['commercial_context']['program']=null;
 learning_correction_ok(hache_sharky_learning_guard_enforce_venue_priority($equalVenue,$unknown)===$equalVenue,'Venue priority guard must not choose a venue before canonical product.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Dónde están las sedes?',$unknown,1200)===null,'General venue help before product must remain untouched.');
 
+foreach(['Gracias','Muchas gracias','Me queda retirado, gracias ☺️','Me queda lejos, gracias','Por ahora lo dejamos'] as $close){
+    $reply=hache_sharky_learning_guard_polite_close_reply($close,$state);
+    learning_correction_ok(is_string($reply)&&$reply!=='','Clear polite close must be handled deterministically: '.$close);
+    learning_correction_ok(!str_contains((string)$reply,'¿'),'A polite close must not reopen qualification with a question.');
+}
+foreach(['Gracias, ¿cuánto cuesta?','Gracias, pero qué horarios tienen?','Perfecto','Ok'] as $notClose){
+    learning_correction_ok(hache_sharky_learning_guard_polite_close_reply($notClose,$state)===null,'Substantive or ambiguous text must not be swallowed by the close guard: '.$notClose);
+}
+
 $dispatcher=file_get_contents(__DIR__.'/../public/api/sharky-whatsapp-dispatch.php')?:'';
 learning_correction_ok(str_contains($dispatcher,"sharky-learning-correction-guards.php"),'WhatsApp loopback dispatcher must load approved learning guards.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_recover_recent_venue'),'Dispatcher must recover a recent natural venue selection before schedule scoping.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_canonicalize_daypart_followup'),'Dispatcher must normalize bare daypart punctuation before schedule scoping.');
+learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_polite_close_reply'),'Dispatcher must stop on explicit polite closure before free-form model routing.');
+learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_pending_location_reply'),'Dispatcher must preserve pending location intent.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_prevenue_reply'),'Dispatcher must answer pre-venue intensive price/schedule questions deterministically.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_enforce_confirmed_swim'),'Dispatcher must protect confirmed swim context on model output.');
 learning_correction_ok(str_contains($dispatcher,'hache_sharky_learning_guard_enforce_venue_priority'),'Dispatcher must enforce Monteverde-first on model output.');
