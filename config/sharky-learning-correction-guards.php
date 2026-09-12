@@ -59,6 +59,16 @@ function hache_sharky_learning_guard_pending_location_reply(string $message,arra
         if(!in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)){
             $proposed=$previousAssistant!==''?hache_sharky_deterministic_detect_explicit_sede($previousAssistant):null;
             if($proposed!==null)return hache_sharky_deterministic_location_message($proposed,$state);
+
+            // En el flujo canónico, una vez resuelto el producto y sin sede elegida,
+            // la propuesta activa es Monteverde. Una referencia singular inmediata
+            // como “¿en dónde está?” puede resolverse sin depender de que el productor
+            // haya serializado el texto exacto del turno anterior.
+            $singularReference=preg_match('/\b(?:donde\s+esta|donde\s+queda|en\s+donde\s+esta)\b/u',$t)===1
+                && preg_match('/\b(?:sedes|ambas|las\s+dos|monteverde.*palapas|palapas.*monteverde)\b/u',$t)!==1;
+            if($singularReference&&in_array(($commercial['program']??null),['intensive','regular'],true)){
+                return hache_sharky_deterministic_location_message('Monteverde',$state);
+            }
         }
     }
     return null;
@@ -83,6 +93,7 @@ function hache_sharky_learning_guard_prevenue_reply(string $message,array $state
         '/\b(?:tarjeta|pago|pagos|pagar|transferencia|efectivo)\b/u',
         $t
     )===1;
+    $cardContext=preg_match('/\b(?:tarjeta|credito|debito)\b/u',$t)===1;
     $explicitCoursePrice=$asksPrice&&preg_match(
         '/\b(?:curso(?:\s+intensivo)?|intensivo)\b/u',
         $t
@@ -92,7 +103,7 @@ function hache_sharky_learning_guard_prevenue_reply(string $message,array $state
         $t
     )===1;
 
-    if($explicitIndependentSubject||$operatingHours)return null;
+    if($explicitIndependentSubject||$operatingHours||$cardContext)return null;
     if($paymentContext&&!$explicitCoursePrice)return null;
 
     $parts=[];
