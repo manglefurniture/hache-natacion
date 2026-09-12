@@ -63,6 +63,7 @@ function hache_sharky_language_background_step_text(array $state,string $text): 
     if($t==='')return null;
 
     $selfTaught=[
+        '/^nunca[.! ]*$/u',
         '/\bpor\s+mi\s+cuenta\b/u',
         '/\baprendi\s+(?:yo\s+)?sol[oa]\b/u',
         '/\bnadie\s+me\s+enseno\b/u',
