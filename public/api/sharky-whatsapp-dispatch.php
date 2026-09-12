@@ -102,6 +102,7 @@ $state=hache_sharky_learning_guard_recover_recent_venue($data,$state);
 $message=trim((string)($data['message']??''));
 $state=hache_sharky_product_boundary_sanitize_state($state,$message);
 $deterministicInput=hache_sharky_schedule_guard_canonicalize_venue_spacing($message);
+$deterministicInput=hache_sharky_learning_guard_canonicalize_daypart_followup($deterministicInput);
 $deterministic=$message!==''?hache_sharky_product_boundary_reply($deterministicInput,$state):null;
 $deterministicSource=$deterministic!==null?'deterministic_product_boundary':'deterministic';
 if($deterministic===null&&$message!==''){
