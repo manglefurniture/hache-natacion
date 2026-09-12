@@ -24,6 +24,16 @@ function hache_sharky_contact_book_apply_additive_migration(PDO $pdo): void
     if(!hache_sharky_contact_book_schema_ready($pdo))throw new RuntimeException('Sharky contact-book migration verification failed');
 }
 
+function hache_sharky_conversation_review_apply_additive_migration(PDO $pdo): void
+{
+    if(hache_sharky_conversation_review_schema_ready($pdo))return;
+    $file=__DIR__.'/../database/migrations/20260912_sharky_conversation_review.sql';
+    $sql=is_readable($file)?file_get_contents($file):false;
+    if(!is_string($sql)||trim($sql)==='')throw new RuntimeException('Sharky conversation-review migration missing');
+    $pdo->exec($sql);
+    if(!hache_sharky_conversation_review_schema_ready($pdo))throw new RuntimeException('Sharky conversation-review migration verification failed');
+}
+
 try{
     // The existing inbox timer already runs every minute. Reuse that durable
     // cadence for the midnight takeover reset instead of introducing a second
@@ -42,8 +52,9 @@ try{
     if(strlen(hache_sharky_orchestrator_secret('SHARKY_STATE_ENCRYPTION_KEY'))<32)throw new RuntimeException('SHARKY_STATE_ENCRYPTION_KEY missing');
     $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
     if(!hache_sharky_orchestrator_store_ready($pdo))throw new RuntimeException('Sharky 2.0 migration incomplete');
-    // Additive contact-book DDL is CLI-only. Web requests never execute schema changes.
+    // Additive DDL stays in this CLI-only worker. Web requests never execute schema changes.
     hache_sharky_contact_book_apply_additive_migration($pdo);
+    hache_sharky_conversation_review_apply_additive_migration($pdo);
     $business=hache_sharky_business_values($pdo);
     $minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);
     $threshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
