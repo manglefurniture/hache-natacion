@@ -50,6 +50,7 @@ Cuando Sharky ya confirmó que la persona sabe nadar:
 - sin entrenador;
 - nunca he tomado clases;
 - no he tomado clases;
+- `nunca`, solo cuando es la respuesta directa a la pregunta de si ha tomado clases formales;
 - autodidacta.
 
 **He tomado clases** puede expresarse como:
@@ -60,6 +61,8 @@ Cuando Sharky ya confirmó que la persona sabe nadar:
 - con profesor;
 - con entrenador;
 - clases formales.
+
+La palabra aislada `nunca` no se canonicaliza globalmente. Solo es inequívoca como **sin formación formal** cuando el estado estructurado confirma que Sharky está en el paso de antecedentes de formación.
 
 ## Horarios y sede alternativa
 
