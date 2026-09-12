@@ -30,6 +30,8 @@ jobs:
         run: php tests/sharky-conversation-review-regression.php
       - name: Sharky learning inbox regression
         run: php tests/sharky-learning-inbox-regression.php
+      - name: Sharky approved learning corrections regression
+        run: php tests/sharky-learning-approved-corrections-regression.php
       - name: Sharky schedule scope guard regression
         run: php tests/sharky-schedule-scope-guard-regression.php
       - name: Sharky product boundary regression
