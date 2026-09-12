@@ -6,6 +6,7 @@ require_once __DIR__.'/../config/sharky-runtime.php';
 require_once __DIR__.'/../config/sharky-inbox.php';
 require_once __DIR__.'/../config/sharky-contact-book.php';
 require_once __DIR__.'/../config/sharky-lab-worker.php';
+require_once __DIR__.'/../config/sharky-language-guide.php';
 require_once __DIR__.'/../config/sharky-member-routing.php';
 require_once __DIR__.'/../config/sharky-takeover-maintenance.php';
 require_once __DIR__.'/../config/sharky-groups.php';
@@ -53,6 +54,9 @@ try{
             hache_sharky_metric_increment('messages_skipped_group');
             return hache_sharky_orchestrator_mark_processed($pdo,$messageId);
         }
+        // Recovered inbox events must pass through the same contextual language
+        // normalization as realtime webhook traffic before semantic routing.
+        $event=hache_sharky_language_prepare_event($pdo,$event);
         // Recovery must preserve the same semantic lanes used by the realtime
         // webhook. Otherwise a registered-student turn can be replayed through
         // the legacy known-student handoff shortcut minutes after member-ops
