@@ -55,12 +55,12 @@ $explicit=[
     ['direction'=>'in','id'=>'i1','ts'=>110,'text'=>'Quiero saber de las clases regulares'],
     ['direction'=>'out','id'=>'o2','ts'=>120,'text'=>'Te explico las clases regulares de forma informativa.'],
 ];
-review_ok(!in_array('PRODUCT_DRIFT',finding_types($hache_sharky_conversation_review_analyze($explicit)),true),'An explicit cross-product question must not be flagged as silent drift.');
+review_ok(!in_array('PRODUCT_DRIFT',finding_types(hache_sharky_conversation_review_analyze($explicit)),true),'An explicit cross-product question must not be flagged as silent drift.');
+
 $correction=[
     ['direction'=>'in','id'=>'i1','ts'=>100,'text'=>'Eso ya te lo dije'],
 ];
 review_ok(in_array('USER_CORRECTION',finding_types(hache_sharky_conversation_review_analyze($correction)),true),'Explicit user correction must raise a high-signal finding.');
-
 
 $lostLocation=[
     ['direction'=>'in','id'=>'i1','ts'=>100,'text'=>'¿En dónde está?'],
