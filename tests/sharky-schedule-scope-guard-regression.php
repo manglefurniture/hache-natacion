@@ -65,6 +65,15 @@ schedule_scope_ok(!hache_sharky_schedule_guard_scope_violation_from_hours($corre
 schedule_scope_ok(hache_sharky_schedule_guard_requested_venues('¿Cuáles son los horarios de ambos?',$state)===['MONTEVERDE'],'Bare “ambos” is ambiguous and must preserve the active Monteverde venue instead of inventing a both-venue scope.');
 schedule_scope_ok(hache_sharky_schedule_guard_scoped_reply('¿Cuáles son los horarios de ambos?',$state,$loader)===null,'Ambiguous “ambos” without a daypart/product/venue qualifier must fall through to the normal active-venue schedule reply.');
 
+// The linguistic layer canonicalizes an alternative-hours request to “la otra
+// sede”. The production schedule guard must resolve that relative venue rather
+// than falling back to the active venue.
+schedule_scope_ok(hache_sharky_schedule_guard_requested_venues('¿Qué horarios de la mañana tiene la otra sede?',$state)===['PALAPAS'],'Relative “otra sede” from Monteverde must resolve to Palapas.');
+$otherMorning=hache_sharky_schedule_guard_scoped_reply('¿Qué horarios de la mañana tiene la otra sede?',$state,$loader)??'';
+schedule_scope_ok(str_contains($otherMorning,'Palapas Protudec'),'Relative venue reply must name Palapas when Monteverde is active.');
+schedule_scope_ok(str_contains($otherMorning,'07:00–08:00')&&str_contains($otherMorning,'08:00–09:00')&&str_contains($otherMorning,'09:00–10:00'),'Relative morning venue reply must use verified Palapas intensive schedules.');
+schedule_scope_ok(!str_contains($otherMorning,'Colegio Monteverde')&&!str_contains($otherMorning,'19:00–20:00'),'Relative morning venue reply must not repeat Monteverde or evening schedules.');
+
 // Patty 20:12: this is the actual failure. The follow-up asks whether there is
 // only one morning time; it must stay on Monteverde + intensive.
 $followupState=$state;
@@ -103,6 +112,7 @@ $palState=$state;$palState['commercial_context']['sede_clave']='PALAPAS';
 $palMorning=hache_sharky_schedule_guard_scoped_reply('¿Qué horarios hay por la mañana?',$palState,$loader)??'';
 schedule_scope_ok(str_contains($palMorning,'07:00–08:00')&&str_contains($palMorning,'08:00–09:00')&&str_contains($palMorning,'09:00–10:00'),'Palapas intensive morning schedules must be 07:00, 08:00 and 09:00 starts.');
 schedule_scope_ok(!str_contains($palMorning,'20:00–21:00'),'Palapas morning filter must omit the night schedule.');
+schedule_scope_ok(hache_sharky_schedule_guard_requested_venues('¿Qué horarios tiene la otra sede?',$palState)===['MONTEVERDE'],'Relative “otra sede” from Palapas must resolve back to Monteverde.');
 
 schedule_scope_ok(hache_sharky_schedule_guard_requested_programs('¿Qué horarios tienen las regulares?','intensive')===['regular'],'Explicit lateral regular-schedule question must resolve to regular.');
 $lateral=hache_sharky_schedule_guard_scoped_reply('¿Qué horarios tienen las regulares?',$state,$loader)??'';
