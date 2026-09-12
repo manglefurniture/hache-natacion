@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/../config/sharky-deterministic-replies.php';
 require_once __DIR__.'/../config/sharky-learning-correction-guards.php';
 
 function learning_correction_ok(bool $condition,string $message): void
@@ -45,6 +46,20 @@ learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿A qué hora
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué precio tiene el curso?',$state,1200)!==null,'Explicit course price must still be handled before venue.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué horarios tienen?',$state,1200)!==null,'Generic schedule must still refer to the active intensive.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta?',$state,1200)!==null,'Generic price must still refer to the active intensive.');
+
+
+$locationState=$state;
+$locationState['previous_assistant_text']='Perfecto. 📍 Te propongo primero Colegio Monteverde. ¿Te funciona esta sede?';
+$locationDirect=hache_sharky_learning_guard_pending_location_reply('¿En dónde está?',$locationState);
+learning_correction_ok(is_string($locationDirect)&&$locationDirect!=='','A location question must inherit the single venue just proposed.');
+learning_correction_ok(!str_contains((string)$locationDirect,'¿Necesitas la ubicación de Colegio Monteverde o la de Palapas Protudec?'),'Inherited single venue must not ask the user to choose the venue again.');
+
+$locationChoiceState=$state;
+$locationChoiceState['previous_user_text']='¿En dónde está?';
+$locationChoiceState['previous_assistant_text']='Claro. ¿Necesitas la ubicación de Colegio Monteverde o la de Palapas Protudec?';
+$locationChoice=hache_sharky_learning_guard_pending_location_reply('Monteverde',$locationChoiceState);
+learning_correction_ok(is_string($locationChoice)&&$locationChoice!=='','Venue-only reply after a location question must complete location intent.');
+learning_correction_ok(!str_contains(mb_strtolower((string)$locationChoice,'UTF-8'),'horarios vigentes'),'Pending location intent must not jump to schedules.');
 
 // Codex P2 de seguimiento: un medio de pago puede modificar una pregunta
 // explícita sobre el precio del curso sin volver ese precio model-dependent.
