@@ -46,6 +46,15 @@ learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué precio
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Qué horarios tienen?',$state,1200)!==null,'Generic schedule must still refer to the active intensive.');
 learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta?',$state,1200)!==null,'Generic price must still refer to the active intensive.');
 
+// Codex P2 de seguimiento: un medio de pago puede modificar una pregunta
+// explícita sobre el precio del curso sin volver ese precio model-dependent.
+$mixedCash=hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el curso si pago en efectivo?',$state,1200);
+learning_correction_ok(is_string($mixedCash)&&str_contains($mixedCash,'$1,200 MXN'),'Explicit course price with cash context must keep the authoritative intensive price.');
+$mixedTransfer=hache_sharky_learning_guard_prevenue_reply('¿Cuánto sale el intensivo si pago por transferencia?',$state,1200);
+learning_correction_ok(is_string($mixedTransfer)&&str_contains($mixedTransfer,'$1,200 MXN'),'Explicit intensive price with transfer context must remain deterministic.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta pagar con tarjeta?',$state,1200)===null,'Payment-only price question must stay in the payment authority flow.');
+learning_correction_ok(hache_sharky_learning_guard_prevenue_reply('¿Cuánto cuesta el curso y la inscripción?',$state,1200)===null,'Mixed course and enrollment fee question must not hide the independent enrollment authority.');
+
 $palapas=$state;$palapas['commercial_context']['sede_clave']='PALAPAS';
 $unchanged=hache_sharky_learning_guard_enforce_venue_priority($equalVenue,$palapas);
 learning_correction_ok($unchanged===$equalVenue,'A confirmed venue must never be overwritten by the priority guard.');
