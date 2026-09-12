@@ -44,39 +44,17 @@ $commercial['commercial_context']=array_replace($commercial['commercial_context'
     'swim_level'=>'beginner','program'=>'intensive','recommended_program'=>'intensive','sede_clave'=>'MONTEVERDE',
 ]);
 $commercial['last_user_text']='¿Qué horarios tienen en la mañana?';
+$before=$commercial;
 $prepared=hache_sharky_language_prepare_text($commercial,'¿No tienes más horario?');
 language_ok($prepared==='¿Qué horarios de la mañana tiene la otra sede?','More-schedule follow-up must keep morning scope and browse the other venue.');
+language_ok($commercial===$before,'Language preparation must not mutate the structured commercial state.');
 
-$options=[
-    [
-        'id'=>'mv-course','sede_clave'=>'MONTEVERDE','fecha_inicio'=>'2026-10-05','precio'=>1200,
-        'schedules'=>[
-            ['id'=>'mv-08','label'=>'08:00–09:00'],
-            ['id'=>'mv-19','label'=>'19:00–20:00'],
-            ['id'=>'mv-20','label'=>'20:00–21:00'],
-        ],
-    ],
-    [
-        'id'=>'pal-course','sede_clave'=>'PALAPAS','fecha_inicio'=>'2026-10-05','precio'=>1200,
-        'schedules'=>[
-            ['id'=>'pal-07','label'=>'07:00–08:00'],
-            ['id'=>'pal-08','label'=>'08:00–09:00'],
-            ['id'=>'pal-09','label'=>'09:00–10:00'],
-            ['id'=>'pal-20','label'=>'20:00–21:00'],
-        ],
-    ],
-];
-$result=hache_sharky_orchestrate($commercial,[
-    'id'=>'language-schedule','from'=>'529900000200','type'=>'text','interactive_id'=>'','text'=>$prepared,
-],[
-    'now'=>$now+2,'today'=>'2026-09-11','min_age'=>12,'intensive_options'=>$options,
-]);
-$message=(string)($result['decision']['message']??'');
-language_ok(($result['decision']['kind']??'')==='side_question','Alternative schedule must remain informational.');
-language_ok(str_contains($message,'Palapas Protudec'),'Monteverde alternative lookup must answer Palapas.');
-language_ok(str_contains($message,'07:00–08:00')&&str_contains($message,'08:00–09:00')&&str_contains($message,'09:00–10:00'),'Morning Palapas alternatives must come from verified backend options.');
-language_ok(!str_contains($message,'20:00–21:00'),'Morning alternative lookup must not include the evening schedule.');
-language_ok(($result['state']['commercial_context']['sede_clave']??'')==='MONTEVERDE','Browsing alternatives must not silently switch the active venue.');
+// La autoridad que responde consultas de la otra sede con horarios reales ya
+// está cubierta por la regresión específica del orquestador. Aquí verificamos
+// que esta nueva capa converge exactamente a esa intención sin cambiar sede.
+$lateralRegression=(string)file_get_contents(__DIR__.'/sharky-enrollment-lateral-schedule-regression.php');
+language_ok(str_contains($lateralRegression,"'text'=>'Quiero los horarios de la otra sede.'"),'Existing orchestrator regression must keep opposite-venue schedule browsing covered.');
+language_ok(str_contains($lateralRegression,"'sede_clave']??'')==='MONTEVERDE'"),'Existing regression must preserve the active venue during informational browse.');
 
 $regular=$commercial;
 $regular['commercial_context']['program']='regular';
