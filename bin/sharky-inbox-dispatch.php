@@ -10,6 +10,7 @@ require_once __DIR__.'/../config/sharky-language-guide.php';
 require_once __DIR__.'/../config/sharky-member-routing.php';
 require_once __DIR__.'/../config/sharky-takeover-maintenance.php';
 require_once __DIR__.'/../config/sharky-groups.php';
+require_once __DIR__.'/../config/sharky-conversation-review.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
@@ -77,6 +78,10 @@ try{
     // Google mutations stay out of the webhook critical path. The same existing
     // one-minute worker serializes them and retries failed writes conservatively.
     $stats['contact_sync']=hache_sharky_contact_book_sync_pending($pdo,10);
+    // Conversation quality review piggybacks on this existing timer but claims
+    // work atomically at most once per hour. It is read-only over encrypted
+    // conversation logs and stores only metadata/findings, never raw chat text.
+    $stats['conversation_review']=hache_sharky_conversation_review_maybe_run($pdo);
     fwrite(STDOUT,json_encode($stats,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
     exit($stats['dead']>0?1:0);
 }catch(Throwable $e){fwrite(STDERR,'Sharky inbox: '.$e->getMessage().PHP_EOL);exit(1);}
