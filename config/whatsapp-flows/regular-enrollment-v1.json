@@ -11,6 +11,7 @@
       "data": {
         "venue_key": {"type": "string", "__example__": "MONTEVERDE"},
         "venue_label": {"type": "string", "__example__": "Colegio Monteverde"},
+        "age_helper": {"type": "string", "__example__": "Clases de 12 a 65 años"},
         "min_birthdate": {"type": "string", "__example__": "1960-09-14"},
         "max_birthdate": {"type": "string", "__example__": "2014-09-13"},
         "profiles": {
@@ -40,7 +41,7 @@
               {"type": "TextCaption", "text": "Sede fija:"},
               {"type": "TextBody", "text": "${data.venue_label}"},
               {"type": "TextInput", "name": "full_name", "label": "Nombre completo", "required": true},
-              {"type": "DatePicker", "name": "birthdate", "label": "Fecha de nacimiento", "helper-text": "Clases de 12 a 65 años", "min-date": "${data.min_birthdate}", "max-date": "${data.max_birthdate}", "required": true},
+              {"type": "DatePicker", "name": "birthdate", "label": "Fecha de nacimiento", "helper-text": "${data.age_helper}", "min-date": "${data.min_birthdate}", "max-date": "${data.max_birthdate}", "required": true},
               {"type": "Dropdown", "name": "level_profile", "label": "Tu nivel", "data-source": "${data.profiles}", "required": true},
               {"type": "Dropdown", "name": "plan_id", "label": "Plan", "data-source": "${data.plans}", "required": true},
               {"type": "Dropdown", "name": "schedule_id", "label": "Horario", "data-source": "${data.schedules}", "required": true},
