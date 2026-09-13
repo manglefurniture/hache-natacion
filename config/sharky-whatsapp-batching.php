@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-whatsapp-adapter.php';
+require_once __DIR__.'/sharky-prospect-onboarding.php';
 
 function hache_sharky_whatsapp_student_claim_requires_handoff(array $state,array $event): bool
 {
@@ -174,6 +175,7 @@ function hache_sharky_whatsapp_batch_pending_question(string $contact): bool
 function hache_sharky_whatsapp_batch_joinable_interactive(string $interactiveId): bool
 {
     $id=strtolower(trim($interactiveId));
+    if(str_starts_with($id,'onboarding:'))return true;
     if(in_array($id,[
         'qualify:swims','qualify:beginner','qualify:formal','qualify:self',
         'qualify:intensive','qualify:regular',
@@ -380,6 +382,9 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
             $deferredState=hache_sharky_orchestrator_expire_flow($state,$now);
             $directChat=trim((string)($event['group_id']??''))==='';
             $knownIdentity=$directChat?hache_sharky_business_identity_by_whatsapp($pdo,$contact):['found'=>false];
+            if($directChat&&($knownIdentity['found']??false)!==true){
+                hache_sharky_prospect_onboarding_refresh_contact($pdo,$deferredState,$contact);
+            }
             if(($knownIdentity['found']??false)===true){
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
                 if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
@@ -413,6 +418,39 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
                 hache_sharky_db_state_save($pdo,$contact,$state);
                 hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
                 $result=['skip'=>false,'code'=>'FAMILY_AGE_SCOPE_UNAVAILABLE','state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision),'action_result'=>null];
+            }elseif($directChat&&hache_sharky_prospect_onboarding_active($deferredState)){
+                $hash=hache_sharky_orchestrator_contact_hash($contact);
+                if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
+                    hache_sharky_orchestrator_unlock($lock);
+                    return ['skip'=>true,'code'=>'DUPLICATE'];
+                }
+                $handled=hache_sharky_prospect_onboarding_handle(
+                    $pdo,
+                    $deferredState,
+                    $event,
+                    $now,
+                    (int)($extraContext['min_age']??12),
+                    $extraContext
+                );
+                if(!is_array($handled)){
+                    $state=hache_sharky_orchestrator_clear_flow($deferredState);
+                    $decision=hache_sharky_orchestrator_decision('prospect_onboarding_recovery','No pude recuperar este paso. Voy a dejarte con una persona del equipo para continuar sin hacerte repetir información.',[],['type'=>'human_takeover']);
+                }else{
+                    [$state,$decision]=$handled;
+                }
+                $state['updated_at']=$now;$state['last_user_text']=trim((string)($event['text']??''));
+                $ref=hache_sharky_orchestrator_referral($event,$now);if($ref)$state=hache_sharky_orchestrator_capture_referral($state,$ref);
+                hache_sharky_prospect_onboarding_refresh_contact($pdo,$state,$contact);
+                hache_sharky_db_state_save($pdo,$contact,$state);
+                hache_sharky_whatsapp_complete_receipt($pdo,$messageId,$extraContext);
+                $result=[
+                    'skip'=>false,
+                    'code'=>'PROSPECT_ONBOARDING',
+                    'state'=>$state,
+                    'decision'=>$decision,
+                    'payload'=>hache_sharky_whatsapp_render($contact,$decision),
+                    'action_result'=>null,
+                ];
             }elseif($directChat&&hache_sharky_whatsapp_pause_eligible($deferredState,$event)){
                 $hash=hache_sharky_orchestrator_contact_hash($contact);
                 if(!hache_sharky_orchestrator_claim_message($pdo,$messageId,$hash,(string)($event['type']??'message'))){
@@ -548,10 +586,8 @@ function hache_sharky_whatsapp_process_with_delivery_lock(PDO $pdo,array $event,
 }
 
 /**
- * The first real direct-chat turn of a newly assumed WhatsApp prospect must not
- * be stranded in the text debounce queue. Contact capture happens before reply
- * processing, so this narrow fast path is limited to the untouched bootstrap
- * state created by hache_sharky_entry_guided_first_prospect().
+ * The legacy first-turn fast path remains only for older qualify_prospect/swim
+ * states. New profile-first prospects use the normal 2.8 s debounce window.
  */
 function hache_sharky_whatsapp_first_prospect_welcome_turn(array $state,array $event): bool
 {
@@ -567,10 +603,9 @@ function hache_sharky_whatsapp_first_prospect_welcome_turn(array $state,array $e
 }
 
 /**
- * Text turns wait for the normal debounce window. The only text exception is
- * the untouched first turn of a newly assumed prospect, whose welcome must be
- * delivered immediately. A safe discovery button may join an already-open
- * direct-chat question burst; groups and business-changing actions bypass batching.
+ * Text turns wait for the normal debounce window. The legacy qualify_prospect
+ * bootstrap is the only text exception; profile-first onboarding intentionally
+ * waits for HACHE_SHARKY_BATCH_WINDOW_MS (2.8 s by default).
  */
 function hache_sharky_whatsapp_enqueue(PDO $pdo,array $event,callable $conversationAnswer,array $extraContext=[]): array
 {
