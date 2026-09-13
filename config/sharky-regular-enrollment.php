@@ -172,7 +172,7 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
         if($action==='cancel'){
             $sede=strtoupper((string)($flow['data']['sede_clave']??($state['commercial_context']['sede_clave']??'')));
             if(($state['commercial_context']['entry_source']??'')==='meta_ad'&&($state['commercial_context']['program']??'')==='regular'&&in_array($sede,['MONTEVERDE','PALAPAS'],true)&&defined('HACHE_SHARKY_META_FLOW')&&function_exists('hache_sharky_meta_venue_detail')){
-                $state['commercial_context']['sede_clave']=$sede;$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue_detail',['sede_clave'=>$sede],time());
+                $state['commercial_context']['sede_clave']=$sede;$state['commercial_context']['meta_step']='venue_detail';$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue_detail',['sede_clave'=>$sede],time());
                 $decision=hache_sharky_meta_venue_detail($pdo,$state,$sede);
             }else{
                 $state=hache_sharky_orchestrator_clear_flow($state);$decision=hache_sharky_orchestrator_decision('regular_enrollment_cancelled','Entendido. Cancelé el formulario y no registré nada. Puedes continuar desde la sede que habías elegido.');
@@ -183,7 +183,9 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
         if(($flow['name']??'')!=='register_regular'||($flow['step']??'')!=='form'){
             hache_sharky_db_state_defer_cancel();
             $decision=hache_sharky_orchestrator_decision('regular_enrollment_stale','Ese formulario pertenece a una inscripción anterior. No hice cambios; te dejo con el equipo para revisarlo.',[],['type'=>'human_takeover']);
-            hache_sharky_takeover_mark($contact,'regular_enrollment_stale','Regular enrollment stale');$payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_render($contact,$decision));
+            if(!hache_sharky_lab_mark_handoff_pending($pdo,$eventId))return false;
+            if(!hache_sharky_takeover_mark($contact,'regular_enrollment_stale','Regular enrollment stale'))return false;
+            $payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_render($contact,$decision));
             return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|regular-stale',$eventId);
         }
         $expected=strtoupper((string)($flow['data']['sede_clave']??''));$submitted=strtoupper(trim((string)($data['venue_key']??'')));
@@ -218,15 +220,19 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
             }
         }
         if(!is_array($result))throw new RuntimeException('Regular enrollment completed without a recoverable result');
-        $state=hache_sharky_orchestrator_clear_flow($state);$state['commercial_context']['age']=(new DateTimeImmutable((string)$data['birthdate']))->diff(new DateTimeImmutable(hache_sharky_lab_today()))->y;$state['commercial_context']['swim_level']=$profile;
-        $decision=hache_sharky_orchestrator_decision('regular_enrollment_received','✅ '.$successMessage,[],['type'=>'human_takeover']);hache_sharky_db_state_save($pdo,$contact,$state);$deferred=hache_sharky_db_state_defer_take();
-        hache_sharky_takeover_mark($contact,'regular_enrollment_payment','Regular enrollment requires human payment coordination');$payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_render($contact,$decision));
+        $state=hache_sharky_orchestrator_clear_flow($state);unset($state['commercial_context']['meta_step']);$state['commercial_context']['age']=(new DateTimeImmutable((string)$data['birthdate']))->diff(new DateTimeImmutable(hache_sharky_lab_today()))->y;$state['commercial_context']['swim_level']=$profile;
+        $decision=hache_sharky_orchestrator_decision('regular_enrollment_received','✅ '.$successMessage,[],['type'=>'human_takeover']);hache_sharky_db_state_save($pdo,$contact,$state);
+        if(!hache_sharky_lab_mark_handoff_pending($pdo,$eventId)){hache_sharky_db_state_defer_cancel();return false;}
+        if(!hache_sharky_takeover_mark($contact,'regular_enrollment_payment','Regular enrollment requires human payment coordination')){hache_sharky_db_state_defer_cancel();return false;}
+        $deferred=hache_sharky_db_state_defer_take();$payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_render($contact,$decision));
         return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|regular-created|'.(string)$result['student_id'],$eventId,[],$deferred);
     }catch(HacheSharkyBusinessException $e){
-        $state=isset($state)&&is_array($state)?hache_sharky_orchestrator_clear_flow($state):[];
+        $state=isset($state)&&is_array($state)?hache_sharky_orchestrator_clear_flow($state):[];if($state)unset($state['commercial_context']['meta_step']);
         $ageProblem=in_array($e->codeName,['MIN_AGE','MAX_AGE'],true);$message=$ageProblem?'Hache Natación atiende personas de '.$minAge.' a '.$maxAge.' años. Te dejo con el equipo para revisar tu caso.':'No pude completar la inscripción de forma segura. Te dejo con el equipo para revisarlo contigo.';
-        $decision=hache_sharky_orchestrator_decision('regular_enrollment_handoff',$message,[],['type'=>'human_takeover']);if($state)hache_sharky_db_state_save($pdo,$contact,$state);$deferred=hache_sharky_db_state_defer_take();
-        hache_sharky_takeover_mark($contact,'regular_enrollment_error','Regular enrollment validation failed: '.$e->codeName);$payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_render($contact,$decision));
+        $decision=hache_sharky_orchestrator_decision('regular_enrollment_handoff',$message,[],['type'=>'human_takeover']);if($state)hache_sharky_db_state_save($pdo,$contact,$state);
+        if(!hache_sharky_lab_mark_handoff_pending($pdo,$eventId)){hache_sharky_db_state_defer_cancel();return false;}
+        if(!hache_sharky_takeover_mark($contact,'regular_enrollment_error','Regular enrollment validation failed: '.$e->codeName)){hache_sharky_db_state_defer_cancel();return false;}
+        $deferred=hache_sharky_db_state_defer_take();$payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_render($contact,$decision));
         return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|regular-error|'.$e->codeName,$eventId,[],is_array($deferred)?$deferred:null);
     }catch(Throwable $e){hache_sharky_db_state_defer_cancel();error_log('[sharky-regular] enrollment processing failed');return false;}finally{hache_sharky_orchestrator_unlock($lock);}
 }
