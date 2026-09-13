@@ -13,6 +13,11 @@
         "venue_label": {"type": "string", "__example__": "Colegio Monteverde"},
         "min_birthdate": {"type": "string", "__example__": "1960-09-14"},
         "max_birthdate": {"type": "string", "__example__": "2014-09-13"},
+        "profiles": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}}},
+          "__example__": [{"id": "intermediate", "title": "Intermedio"}, {"id": "advanced", "title": "Avanzado"}]
+        },
         "plans": {
           "type": "array",
           "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}}},
@@ -36,6 +41,7 @@
               {"type": "TextBody", "text": "${data.venue_label}"},
               {"type": "TextInput", "name": "full_name", "label": "Nombre completo", "required": true},
               {"type": "DatePicker", "name": "birthdate", "label": "Fecha de nacimiento", "helper-text": "Clases de 12 a 65 años", "min-date": "${data.min_birthdate}", "max-date": "${data.max_birthdate}", "required": true},
+              {"type": "Dropdown", "name": "level_profile", "label": "Tu nivel", "data-source": "${data.profiles}", "required": true},
               {"type": "Dropdown", "name": "plan_id", "label": "Plan", "data-source": "${data.plans}", "required": true},
               {"type": "Dropdown", "name": "schedule_id", "label": "Horario", "data-source": "${data.schedules}", "required": true},
               {
@@ -51,6 +57,7 @@
                     "venue_label": "${data.venue_label}",
                     "full_name": "",
                     "birthdate": "",
+                    "level_profile": "",
                     "plan_id": "",
                     "schedule_id": ""
                   }
@@ -69,6 +76,7 @@
                     "venue_label": "${data.venue_label}",
                     "full_name": "${form.full_name}",
                     "birthdate": "${form.birthdate}",
+                    "level_profile": "${form.level_profile}",
                     "plan_id": "${form.plan_id}",
                     "schedule_id": "${form.schedule_id}"
                   }
@@ -90,6 +98,7 @@
         "venue_label": {"type": "string", "__example__": "Colegio Monteverde"},
         "full_name": {"type": "string", "__example__": "Cliente Prueba"},
         "birthdate": {"type": "string", "__example__": "1983-06-01"},
+        "level_profile": {"type": "string", "__example__": "intermediate"},
         "plan_id": {"type": "string", "__example__": "plan-id"},
         "schedule_id": {"type": "string", "__example__": "schedule-id"}
       },
@@ -112,6 +121,8 @@
                     {"type": "TextBody", "text": "${data.full_name}"},
                     {"type": "TextCaption", "text": "Nacimiento"},
                     {"type": "TextBody", "text": "${data.birthdate}"},
+                    {"type": "TextCaption", "text": "Nivel"},
+                    {"type": "TextBody", "text": "${data.level_profile}"},
                     {"type": "TextBody", "text": "Al volver al chat, Sharky validará el plan y horario antes de registrar y te pasará con el equipo para coordinar el pago."}
                   ],
                   "cancel": [
@@ -131,6 +142,7 @@
                     "venue_key": "${data.venue_key}",
                     "full_name": "${data.full_name}",
                     "birthdate": "${data.birthdate}",
+                    "level_profile": "${data.level_profile}",
                     "plan_id": "${data.plan_id}",
                     "schedule_id": "${data.schedule_id}"
                   }
