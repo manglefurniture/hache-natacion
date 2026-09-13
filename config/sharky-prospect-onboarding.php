@@ -29,16 +29,23 @@ function hache_sharky_prospect_onboarding_name(string $text): ?string
     if(preg_match('/(?:https?:\/\/|www\.|\b\S+@\S+\b|\.(?:com|mx|net|org)\b)/iu',$name)===1)return null;
     if(preg_match('/\d/u',$name)===1)return null;
     if(preg_match('/^[\p{L}\p{M}][\p{L}\p{M}.\'’\- ]*$/u',$name)!==1)return null;
+    $normalized=hache_sharky_orchestrator_normalize($name);
+    // No persistir como nombre frases conversacionales comunes. El usuario puede
+    // responderlas al no entender la pregunta; en ese caso debemos reintentar.
+    if(preg_match('/^(?:hola|buenas?|gracias|no\s+entendi|no\s+entiendo|no\s+se|quiero|quisiera|necesito|busco|me\s+interesa|dame|mandame|informacion)\b/u',$normalized)===1)return null;
     $parts=array_values(array_filter(preg_split('/\s+/u',$name)?:[],static fn(string $part):bool=>$part!==''));
     if(count($parts)<1||count($parts)>6)return null;
     return mb_convert_case($name,MB_CASE_TITLE,'UTF-8');
 }
 
-function hache_sharky_prospect_onboarding_yes_no(string $text,string $interactiveId=''): ?bool
+function hache_sharky_prospect_onboarding_yes_no(string $text,string $interactiveId='',string $scope=''): ?bool
 {
     $id=strtolower(trim($interactiveId));
-    if(in_array($id,['onboarding:self:yes','onboarding:background:yes'],true))return true;
-    if(in_array($id,['onboarding:self:no','onboarding:background:no'],true))return false;
+    $expectedYes=$scope==='background'?'onboarding:background:yes':'onboarding:self:yes';
+    $expectedNo=$scope==='background'?'onboarding:background:no':'onboarding:self:no';
+    if($id===$expectedYes)return true;
+    if($id===$expectedNo)return false;
+    // Un botón de un paso anterior no puede responder otro paso.
     if($id!=='')return null;
     $t=hache_sharky_orchestrator_normalize($text);
     if(preg_match('/^(?:si|sí|claro|correcto|asi\s+es|así\s+es|para\s+mi|son\s+para\s+mi|yo)[.! ]*$/u',$t)===1)return true;
@@ -57,7 +64,8 @@ function hache_sharky_prospect_onboarding_level(string $text,string $interactive
     if(isset($map[$id]))return $map[$id];
     if($id!=='')return null;
     $t=hache_sharky_orchestrator_normalize($text);
-    if(preg_match('/^(?:principiante|basico|basica|desde\s+cero)[.! ]*$/u',$t)===1)return 'beginner';
+    if(preg_match('/^(?:principiante|basico|basica|desde\s+cero|de\s+ceros?|nada\s+de\s+nada|no\s+(?:se\s+)?nadar|quiero\s+aprender\s+a\s+nadar)[.! ]*$/u',$t)===1)return 'beginner';
+    if(function_exists('hache_sharky_whatsapp_detect_swim_level')&&hache_sharky_whatsapp_detect_swim_level($text)==='beginner')return 'beginner';
     if(preg_match('/^(?:intermedio|intermedia)[.! ]*$/u',$t)===1)return 'intermediate';
     if(preg_match('/^(?:avanzado|avanzada)[.! ]*$/u',$t)===1)return 'advanced';
     return null;
@@ -246,7 +254,7 @@ function hache_sharky_prospect_onboarding_handle(PDO $pdo,array $state,array $ev
     }
 
     if($step==='participant'){
-        $self=hache_sharky_prospect_onboarding_yes_no($text,$id);
+        $self=hache_sharky_prospect_onboarding_yes_no($text,$id,'participant');
         if($self===null){
             return [$state,hache_sharky_orchestrator_decision(
                 'prospect_participant_prompt',
@@ -332,7 +340,7 @@ function hache_sharky_prospect_onboarding_handle(PDO $pdo,array $state,array $ev
     }
 
     if($step==='intermediate_background'){
-        $formal=hache_sharky_prospect_onboarding_yes_no($text,$id);
+        $formal=hache_sharky_prospect_onboarding_yes_no($text,$id,'background');
         if($formal===null){
             return [$state,hache_sharky_orchestrator_decision(
                 'prospect_intermediate_background_prompt',
