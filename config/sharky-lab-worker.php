@@ -231,6 +231,10 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         hache_sharky_metric_increment('brain_diag_error');
         error_log('[sharky-brain-shadow] unable to load pre-turn state');
     }
+    $metaDeterministic=is_array($brainBeforeState)
+        &&($brainBeforeState['commercial_context']['entry_source']??'')==='meta_ad'
+        &&function_exists('hache_sharky_meta_active')
+        &&hache_sharky_meta_active($brainBeforeState);
 
     $handoffPending=hache_sharky_inbox_handoff_pending($pdo,$eventId);
     if(hache_sharky_takeover_active($contact)&&!$handoffPending){
@@ -242,7 +246,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         }
         return hache_sharky_orchestrator_mark_processed($pdo,$eventId);
     }
-    $minAge??=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold??=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
+    $minAge??=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$maxAge=hache_sharky_config_int($business,'sharky_edad_maxima',65,1,120);$escalationThreshold??=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
     $secretResolver=static fn(string $name):string=>hache_sharky_lab_secret($name);
     if(($event['type']??'')==='audio'){
         $text=hache_sharky_draft_transcribe_audio($event,$business,$secretResolver);
@@ -259,7 +263,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     $text=trim((string)($event['text']??''));
     $paymentException=$text!==''&&hache_sharky_post72_payment_exception_request($text);
     $startAuthority=$text!==''?hache_sharky_start_authority_handoff($text):null;
-    if($text!==''&&(is_array($startAuthority)||$paymentException||hache_sharky_draft_requires_handoff($text))){
+    if(!$metaDeterministic&&$text!==''&&(is_array($startAuthority)||$paymentException||hache_sharky_draft_requires_handoff($text))){
         $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock))return false;
         try{
             if(!hache_sharky_lab_claim_early($pdo,$event,$contact,(string)($event['type']??'text')))return false;
@@ -291,6 +295,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         $result=hache_sharky_whatsapp_enqueue($pdo,$event,'hache_sharky_lab_answer',[
             'verification_base_url'=>'https://hnatacion.com/sharky-verificar.php',
             'min_age'=>$minAge,
+            'max_age'=>$maxAge,
             'today'=>hache_sharky_lab_today(),
             'defer_receipt_completion'=>true,
             'defer_delivery_unlock'=>true,
@@ -301,14 +306,17 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
     if($result['skip']??false){hache_sharky_lab_release_delivery_lock($deliveryLock);return false;}
 
     if(is_array($brainBeforeState)&&is_array($result['state']??null)){
-        // Preserve the raw live decision in the shadow cohort first. Phase 2B-A
-        // is deliberately downstream so its canary cannot inflate agreement.
+        // Keep the read-only diagnostic shadow, but never let Brain 2B-A rewrite
+        // a Sharky 3.0 Meta state-machine decision. Other channels stay unchanged.
         hache_sharky_brain_shadow_observe($brainBeforeState,$result['state'],$event,$result,$groupId==='');
-        $brain2baConfig=hache_sharky_brain_2ba_config($pdo);
-        $result=hache_sharky_brain_2ba_apply($brainBeforeState,$result,$event,$brain2baConfig,$contact,$groupId==='');
-        if(($result['_brain_2ba']['applied']??false)===true&&is_array($result['state']??null)){
-            if(is_array($deferredState))$deferredState['state']=$result['state'];
-            else $deferredState=['contact'=>$contact,'state'=>$result['state'],'ttl'=>86400];
+        $metaResultLocked=$metaDeterministic||(string)($result['code']??'')==='META_AD_ONBOARDING';
+        if(!$metaResultLocked){
+            $brain2baConfig=hache_sharky_brain_2ba_config($pdo);
+            $result=hache_sharky_brain_2ba_apply($brainBeforeState,$result,$event,$brain2baConfig,$contact,$groupId==='');
+            if(($result['_brain_2ba']['applied']??false)===true&&is_array($result['state']??null)){
+                if(is_array($deferredState))$deferredState['state']=$result['state'];
+                else $deferredState=['contact'=>$contact,'state'=>$result['state'],'ttl'=>86400];
+            }
         }
     }
 
