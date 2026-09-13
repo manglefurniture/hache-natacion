@@ -8,6 +8,7 @@ require_once __DIR__.'/sharky-followup.php';
 require_once __DIR__.'/sharky-payment-reminder.php';
 require_once __DIR__.'/sharky-groups.php';
 require_once __DIR__.'/sharky-delivery-status.php';
+require_once __DIR__.'/sharky-age-policy.php';
 
 const HACHE_SHARKY_OUTBOX_LEASE_SECONDS=90;
 
@@ -70,6 +71,7 @@ function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload
     if(!hache_sharky_orchestrator_store_ready($pdo))return false;$availableAt??=time();
     try{
         $payload=hache_sharky_outbox_add_venue_hints($payload);$payload=hache_sharky_outbox_add_sales_close($payload);
+        $payload=hache_sharky_age_policy_apply_flow_bounds($pdo,$payload);
         $sealed=hache_sharky_outbox_encrypt($payload);$dedupe=hash('sha256','outbox|'.$dedupeSeed);
         $st=$pdo->prepare("INSERT IGNORE INTO sharky_outbox(dedupe_key,contact_hash,payload_ciphertext,payload_iv,payload_tag,status,available_at) VALUES(:d,:c,:p,:iv,:tag,'PENDING',FROM_UNIXTIME(:a))");
         $st->execute([':d'=>$dedupe,':c'=>hache_sharky_orchestrator_contact_hash($contact),':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':a'=>$availableAt]);
