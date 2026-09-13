@@ -22,7 +22,7 @@ $agePolicy=file_get_contents($root.'/config/sharky-age-policy.php')?:'';
 $outbox=file_get_contents($root.'/config/sharky-outbox.php')?:'';
 $spec=file_get_contents($root.'/docs/SHARKY-3-META-FLOW.md')?:'';
 
-meta3_expect(str_contains($entry,"'entry_source'=>'meta_ad'")||str_contains($entry,"'entry_source' => 'meta_ad'"),'Meta referral must be tagged as meta_ad.');
+meta3_expect(str_contains($entry,"['source'=>'meta_ad'")||str_contains($entry,"['source' => 'meta_ad'"),'Meta referral must be tagged as meta_ad.');
 meta3_expect(str_contains($entry,'HACHE_SHARKY_META_FLOW')||str_contains($entry,"'meta_ad_onboarding'"),'Meta referrals must bootstrap the dedicated state machine.');
 meta3_expect(str_contains($meta,"(\$state['commercial_context']['entry_source']??'')!=='meta_ad'"),'Meta handler must reject non-Meta sources.');
 meta3_expect(str_contains($meta,"(\$state['identity']['kind']??'unknown')!=='prospect'"),'Known/non-prospect identities must not enter the Meta funnel.');
