@@ -79,10 +79,27 @@ function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload
     }catch(Throwable $e){error_log('[sharky-outbox] enqueue failed');return false;}
 }
 
+function hache_sharky_outbox_sequence_predecessor_key(string $dedupeSeed,int $index): string
+{
+    if($index<=0)return '';
+    return hash('sha256','outbox|'.$dedupeSeed.'|sequence|'.($index-1));
+}
+
+function hache_sharky_outbox_sequence_predecessor_status(PDO $pdo,array $payload): string
+{
+    $key=strtolower(trim((string)($payload['_sharky_sequence_predecessor']??'')));
+    if($key==='')return 'READY';
+    if(preg_match('/^[a-f0-9]{64}$/',$key)!==1)return 'INVALID';
+    try{$st=$pdo->prepare('SELECT status FROM sharky_outbox WHERE dedupe_key=:d LIMIT 1');$st->execute([':d'=>$key]);$status=$st->fetchColumn();return is_string($status)&&$status!==''?strtoupper($status):'MISSING';}
+    catch(Throwable $e){return 'ERROR';}
+}
+
 /**
  * A Sharky visual card set is represented internally as `_sharky_sequence`.
  * Every child becomes its own encrypted outbox row inside the caller's existing
- * transaction, preserving retries/idempotency. Only the final conversational
+ * transaction. Children after the first persist the predecessor dedupe key, so
+ * dispatch cannot send controls before their preceding images even when UUID
+ * ordering or retries would otherwise reorder rows. Only the final conversational
  * payload arms normal follow-up logic; media cards never do so by themselves.
  */
 function hache_sharky_outbox_enqueue_sequence(PDO $pdo,string $contact,array $items,string $dedupeSeed): bool
@@ -90,6 +107,7 @@ function hache_sharky_outbox_enqueue_sequence(PDO $pdo,string $contact,array $it
     $items=array_values(array_filter($items,'is_array'));if(!$items)return false;$last=array_key_last($items);
     foreach($items as $index=>$item){
         $seed=$dedupeSeed.'|sequence|'.$index;
+        $predecessor=hache_sharky_outbox_sequence_predecessor_key($dedupeSeed,$index);if($predecessor!=='')$item['_sharky_sequence_predecessor']=$predecessor;
         $ok=$index===$last?hache_sharky_outbox_enqueue($pdo,$contact,$item,$seed):hache_sharky_outbox_enqueue_raw($pdo,$contact,$item,$seed,time());
         if(!$ok)return false;
     }
@@ -161,6 +179,12 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
         if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;$claimed=$lockedHash!==''?hache_sharky_outbox_claim($pdo,1,$lockedHash):hache_sharky_outbox_claim($pdo,1);if(!$claimed)break;$row=$claimed[0];$owner=trim((string)($row['owner_token']??''));$id=(string)($row['id']??'');$payload=hache_sharky_outbox_decrypt($row);
         if($payload===null){if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,7,'DECRYPT_FAILED'))$stats['dead']++;continue;}
         if(($payload['_sharky_group']??false)===true&&!hache_sharky_groups_enabled($pdo)){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,'GROUPS_DISABLED'))$stats['cancelled']++;continue;}
+        $sequenceStatus=hache_sharky_outbox_sequence_predecessor_status($pdo,$payload);unset($payload['_sharky_sequence_predecessor']);
+        if(in_array($sequenceStatus,['INVALID','MISSING','DEAD','CANCELLED'],true)){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,'SEQUENCE_PREDECESSOR_'.$sequenceStatus))$stats['cancelled']++;continue;}
+        if(!in_array($sequenceStatus,['READY','SENT'],true)){
+            if(hache_sharky_outbox_reschedule_owner($pdo,$id,$owner,time()+2,'SEQUENCE_WAITING_'.$sequenceStatus))continue;
+            if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'SEQUENCE_RESCHEDULE_FAILED'))$stats['failed']++;continue;
+        }
         $allowTakeover=($payload['_sharky_allow_takeover']??false)===true;unset($payload['_sharky_allow_takeover']);
         $followupArm=is_array($payload['_sharky_followup_arm']??null)?$payload['_sharky_followup_arm']:null;unset($payload['_sharky_followup_arm']);$followupMeta=is_array($payload['_sharky_followup']??null)?$payload['_sharky_followup']:null;unset($payload['_sharky_followup']);
         $paymentReminderArm=is_array($payload['_sharky_payment_reminder_arm']??null)?$payload['_sharky_payment_reminder_arm']:null;unset($payload['_sharky_payment_reminder_arm']);$paymentReminderMeta=is_array($payload['_sharky_payment_reminder']??null)?$payload['_sharky_payment_reminder']:null;unset($payload['_sharky_payment_reminder']);
