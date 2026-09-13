@@ -10,6 +10,7 @@ function meta3_expect(bool $ok,string $message): void
 $root=dirname(__DIR__);
 $meta=file_get_contents($root.'/config/sharky-meta-ad-flow.php')?:'';
 $entry=file_get_contents($root.'/config/sharky-entry-guidance.php')?:'';
+$language=file_get_contents($root.'/config/sharky-language-guide.php')?:'';
 $worker=file_get_contents($root.'/config/sharky-lab-worker.php')?:'';
 $webhook=file_get_contents($root.'/public/api/whatsapp-orchestrator-lab.php')?:'';
 $recovery=file_get_contents($root.'/bin/sharky-inbox-dispatch.php')?:'';
@@ -27,6 +28,7 @@ meta3_expect(str_contains($meta,"(\$state['commercial_context']['entry_source']?
 meta3_expect(str_contains($meta,"(\$state['identity']['kind']??'unknown')!=='prospect'"),'Known/non-prospect identities must not enter the Meta funnel.');
 meta3_expect(str_contains($meta,'hache_sharky_meta_program_retry()')&&str_contains($meta,'hache_sharky_meta_venue_retry($state)'),'Closed steps must retry deterministic buttons instead of free-text interpretation.');
 meta3_expect(str_contains($meta,'hache_sharky_meta_program_ui(false)')&&str_contains($meta,'hache_sharky_meta_venue_ui(false)'),'Retries must omit visual cards.');
+meta3_expect(str_contains($language,"\$event['interactive_id']='meta:free_text'")&&str_contains($language,'hache_sharky_meta_active($state)'),'Typed Meta replies must be tagged before legacy side-question shortcuts so closed steps remain deterministic.');
 meta3_expect(str_contains($meta,'meta:regular:no')&&str_contains($meta,"recommended_program']='intensive'"),'Regular background No must route directly to intensive.');
 meta3_expect(str_contains($meta,'meta:venue:other')&&str_contains($meta,"commercial_context']['program'"),'Venue reselection must preserve the selected program in commercial context.');
 meta3_expect(str_contains($meta,'HACHE_SHARKY_META_IMAGE_LEARN')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_REGULAR')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_MONTEVERDE')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_PALAPAS'),'All four approved visual asset routes must be wired.');
@@ -49,6 +51,7 @@ meta3_expect(str_contains($regular,"hache_sharky_orchestrator_flow(\$state,HACHE
 meta3_expect(str_contains($business,"require_once __DIR__.'/sharky-age-policy.php'")&&str_contains($business,'hache_sharky_age_policy_validate'),'Intensive registration must enforce the central age policy transactionally.');
 meta3_expect(str_contains($agePolicy,"'max'=>\$max")&&str_contains($agePolicy,"'sharky_edad_maxima'"),'Central age policy must expose the configured maximum age authority.');
 meta3_expect(str_contains($agePolicy,"['ENROLLMENT','REGULAR_ENROLLMENT']"),'Both enrollment Flows must use the central DOB bounds.');
+meta3_expect(str_contains($outbox,'hache_sharky_age_policy_apply_flow_bounds($pdo,$payload)'),'Every enrollment Flow must receive central DOB bounds before durable outbox encryption.');
 meta3_expect(str_contains($spec,'12')&&str_contains($spec,'65'),'Meta specification must retain the approved 12–65 scope.');
 
 echo "Sharky Meta 3.0 regression checks passed\n";
