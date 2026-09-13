@@ -14,15 +14,38 @@ require_once __DIR__.'/sharky-regular-enrollment.php';
  */
 
 const HACHE_SHARKY_META_FLOW='meta_ad_onboarding';
-const HACHE_SHARKY_META_IMAGE_LEARN='https://hnatacion.com/assets/sharky/meta-aprende-a-nadar.jpg';
-const HACHE_SHARKY_META_IMAGE_REGULAR='https://hnatacion.com/assets/sharky/meta-clases-regulares.jpg';
-const HACHE_SHARKY_META_IMAGE_MONTEVERDE='https://hnatacion.com/assets/sharky/sede-monteverde.jpg';
-const HACHE_SHARKY_META_IMAGE_PALAPAS='https://hnatacion.com/assets/sharky/sede-palapas.jpg';
+const HACHE_SHARKY_META_IMAGE_LEARN='https://hnatacion.com/assets/Aprende%20a%20nadar%20en%20tres%20semanas.png';
+const HACHE_SHARKY_META_IMAGE_REGULAR='https://hnatacion.com/assets/Clases%20regulares%20de%20nataci%C3%B3n%20nocturna.png';
+const HACHE_SHARKY_META_IMAGE_MONTEVERDE='https://hnatacion.com/assets/Sede%20Monteverde.png';
+const HACHE_SHARKY_META_IMAGE_PALAPAS='https://hnatacion.com/assets/SEDE%20Palapas%20PROTUDEC.png';
 
 function hache_sharky_meta_active(array $state): bool
 {
     $flow=$state['flow']??null;
-    return is_array($flow)&&($flow['name']??'')===HACHE_SHARKY_META_FLOW;
+    if(is_array($flow))return ($flow['name']??'')===HACHE_SHARKY_META_FLOW;
+    $step=(string)($state['commercial_context']['meta_step']??'');
+    return ($state['identity']['kind']??'unknown')==='prospect'
+        &&($state['commercial_context']['entry_source']??'')==='meta_ad'
+        &&in_array($step,['program','regular_background','venue','venue_detail'],true);
+}
+
+function hache_sharky_meta_flow(array $state,string $step,array $data,int $now): array
+{
+    $state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,$step,$data,$now);
+    if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+    $state['commercial_context']['meta_step']=$step;
+    return $state;
+}
+
+function hache_sharky_meta_restore_expired(array $state,int $now): array
+{
+    if(is_array($state['flow']??null))return $state;
+    $step=(string)($state['commercial_context']['meta_step']??'program');
+    if(!in_array($step,['program','regular_background','venue','venue_detail'],true))$step='program';
+    $data=[];
+    if($step==='venue')$data['program']=(string)($state['commercial_context']['program']??'');
+    if($step==='venue_detail')$data['sede_clave']=(string)($state['commercial_context']['sede_clave']??'');
+    return hache_sharky_meta_flow($state,$step,$data,$now);
 }
 
 function hache_sharky_meta_button(string $id,string $title): array
@@ -50,11 +73,13 @@ function hache_sharky_meta_venue_ui(bool $images=false): array
     return $ui;
 }
 
-function hache_sharky_meta_welcome(bool $images=true): array
+function hache_sharky_meta_welcome(PDO $pdo,bool $images=true): array
 {
+    $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];
+    $policy=hache_sharky_age_policy($pdo,$business);$min=(int)$policy['min'];$max=(int)$policy['max'];
     $message="¡Hola! Soy Sharky 🦈, el asistente IA de Hache Natación.\n"
         ."Te ayudo a encontrar la opción que buscas.\n\n"
-        ."Importante: nuestros cursos y clases son para personas de 12 a 65 años.\n\n"
+        ."Importante: nuestros cursos y clases son para personas de ".$min." a ".$max." años.\n\n"
         ."¿Qué te interesa? 👇";
     return hache_sharky_orchestrator_decision('meta_program_prompt',$message,hache_sharky_meta_program_ui($images));
 }
@@ -93,15 +118,25 @@ function hache_sharky_meta_intensive_info(PDO $pdo,bool $images=true): array
     return hache_sharky_orchestrator_decision('meta_intensive_info',$message,hache_sharky_meta_venue_ui($images));
 }
 
+function hache_sharky_meta_regular_price_line(PDO $pdo,int $sessions): string
+{
+    try{
+        $st=$pdo->prepare('SELECT MIN(p.precio) min_price,MAX(p.precio) max_price,COUNT(*) total FROM planes p JOIN sedes s ON s.id=p.sede_id WHERE p.activo=1 AND s.activo=1 AND p.sesiones_semana=:n');$st->execute([':n'=>$sessions]);$row=$st->fetch(PDO::FETCH_ASSOC);
+        if(is_array($row)&&(int)($row['total']??0)>0){
+            $min=(float)$row['min_price'];$max=(float)$row['max_price'];
+            if(abs($min-$max)<0.01)return '• Plan '.$sessions.'x ('.$sessions.' clases por semana): $'.number_format($min,0,'.',',').' MXN al mes.';
+            return '• Plan '.$sessions.'x ('.$sessions.' clases por semana): el precio se muestra según la sede que elijas.';
+        }
+    }catch(Throwable $e){error_log('[sharky-meta] regular price summary failed');}
+    return '• Plan '.$sessions.'x ('.$sessions.' clases por semana): precio disponible al elegir sede.';
+}
+
 function hache_sharky_meta_regular_info(PDO $pdo,bool $images=true): array
 {
-    $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];
-    $price3=is_numeric($business['sharky_precio_regular_3']??null)?(int)$business['sharky_precio_regular_3']:1000;
-    $price5=is_numeric($business['sharky_precio_regular_5']??null)?(int)$business['sharky_precio_regular_5']:1200;
     $message="Clases regulares de natación\n\n"
         ."• Modalidad: clases continuas por mensualidad.\n"
-        ."• Plan 3x (3 clases por semana): $".number_format($price3,0,'.',',')." MXN al mes.\n"
-        ."• Plan 5x (5 clases por semana): $".number_format($price5,0,'.',',')." MXN al mes.\n"
+        .hache_sharky_meta_regular_price_line($pdo,3)."\n"
+        .hache_sharky_meta_regular_price_line($pdo,5)."\n"
         ."• Dirigido a: personas que ya han tomado clases de natación y tienen nivel intermedio o avanzado.\n"
         ."• Estos planes llevan un pago de inscripción, cuyo costo depende de la sede que elijas.\n\n"
         ."Para tomar las clases necesitas:\n"
@@ -140,6 +175,16 @@ function hache_sharky_meta_business_int(PDO $pdo,string $key,int $fallback): int
     $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$value=$business[$key]??null;return is_numeric($value)?max(0,(int)$value):$fallback;
 }
 
+function hache_sharky_meta_regular_plan_lines(PDO $pdo,string $sede): array
+{
+    if(!in_array($sede,['MONTEVERDE','PALAPAS'],true))return [];
+    try{
+        $st=$pdo->prepare('SELECT p.sesiones_semana,p.precio FROM planes p JOIN sedes s ON s.id=p.sede_id WHERE s.clave=:c AND s.activo=1 AND p.activo=1 AND p.sesiones_semana IN (3,5) ORDER BY p.sesiones_semana,p.precio,p.id');$st->execute([':c'=>$sede]);$lines=[];
+        foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){$sessions=(int)($row['sesiones_semana']??0);if(!in_array($sessions,[3,5],true))continue;$line='• Plan '.$sessions.'x: $'.number_format((float)($row['precio']??0),0,'.',',').' MXN/mes';$lines[$line]=$line;}
+        return array_values($lines);
+    }catch(Throwable $e){error_log('[sharky-meta] regular venue plans failed');return [];}
+}
+
 function hache_sharky_meta_venue_detail(PDO $pdo,array $state,string $sede): array
 {
     $program=(string)($state['commercial_context']['program']??'');$business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$isMonteverde=$sede==='MONTEVERDE';
@@ -148,7 +193,10 @@ function hache_sharky_meta_venue_detail(PDO $pdo,array $state,string $sede): arr
     $reference=$isMonteverde?'La alberca está al final del estacionamiento del colegio. No necesitas entrar a la escuela; solo ingresa al estacionamiento por Av. Bonampak. Puedes utilizar el estacionamiento durante tu clase.':'Entra por calle Alcatraces, viniendo desde Av. Cobá, por la zona del IMSS. Estamos aproximadamente a 100 metros del Parque de las Palapas.';
     $hours=hache_sharky_meta_schedules($pdo,$sede,$program);$morning=$hours['morning']?implode("\n",array_map(static fn(string $h):string=>'• '.$h,$hours['morning'])):'• Sin horarios activos en este momento';$evening=$hours['evening']?implode("\n",array_map(static fn(string $h):string=>'• '.$h,$hours['evening'])):'• Sin horarios activos en este momento';
     $message=$name."\n\n";
-    if($program==='regular'){$fee=hache_sharky_meta_business_int($pdo,$isMonteverde?'sharky_inscripcion_monteverde':'sharky_inscripcion_palapas',$isMonteverde?500:400);$message.='Inscripción: $'.number_format($fee,0,'.',',')." MXN.\n\n";}
+    if($program==='regular'){
+        $plans=hache_sharky_meta_regular_plan_lines($pdo,$sede);if($plans)$message.="Mensualidades:\n".implode("\n",$plans)."\n\n";
+        $fee=hache_sharky_meta_business_int($pdo,$isMonteverde?'sharky_inscripcion_monteverde':'sharky_inscripcion_palapas',$isMonteverde?500:400);$message.='Inscripción: $'.number_format($fee,0,'.',',')." MXN.\n\n";
+    }
     $message.="Ubicación: ".$location."\n".$maps."\n\nReferencia para llegar:\n".$reference."\n\nMATUTINOS:\n".$morning."\n\nVESPERTINOS:\n".$evening;
     if($program==='intensive')$message.="\n\nIniciamos el próximo lunes.";
     $registerId=$program==='regular'?'meta:register:regular':'meta:register:intensive';
@@ -165,48 +213,49 @@ function hache_sharky_meta_regular_flow_data(PDO $pdo,string $sede,int $minAge=1
     foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row)$schedules[]=['id'=>(string)$row['id'],'title'=>hache_sharky_meta_schedule_label((string)$row['hora_inicio'],(string)$row['hora_fin'])];
     if(!$plans||!$schedules)return null;
     $tz=new DateTimeZone('America/Cancun');$todayObj=DateTimeImmutable::createFromFormat('!Y-m-d',$today?:date('Y-m-d'),$tz)?:new DateTimeImmutable('today',$tz);$minAge=max(1,$minAge);$maxAge=max($minAge,$maxAge);
-    return ['venue_key'=>$sede,'venue_label'=>$sede==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec','min_birthdate'=>$todayObj->modify('-'.($maxAge+1).' years')->modify('+1 day')->format('Y-m-d'),'max_birthdate'=>$todayObj->modify('-'.$minAge.' years')->format('Y-m-d'),'profiles'=>[['id'=>'intermediate','title'=>'Intermedio'],['id'=>'advanced','title'=>'Avanzado']],'plans'=>$plans,'schedules'=>$schedules];
+    return ['venue_key'=>$sede,'venue_label'=>$sede==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec','age_helper'=>'Clases de '.$minAge.' a '.$maxAge.' años','min_birthdate'=>$todayObj->modify('-'.($maxAge+1).' years')->modify('+1 day')->format('Y-m-d'),'max_birthdate'=>$todayObj->modify('-'.$minAge.' years')->format('Y-m-d'),'profiles'=>[['id'=>'intermediate','title'=>'Intermedio'],['id'=>'advanced','title'=>'Avanzado']],'plans'=>$plans,'schedules'=>$schedules];
 }
 
 function hache_sharky_meta_regular_form(PDO $pdo,array $state,int $now,array $extraContext=[]): array
 {
-    $sede=(string)($state['commercial_context']['sede_clave']??'');$minAge=(int)($extraContext['min_age']??12);$maxAge=(int)($extraContext['max_age']??65);
+    $sede=(string)($state['commercial_context']['sede_clave']??'');$business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$policy=hache_sharky_age_policy($pdo,$business);$minAge=(int)$policy['min'];$maxAge=(int)$policy['max'];
     $data=hache_sharky_meta_regular_flow_data($pdo,$sede,$minAge,$maxAge,(string)($extraContext['today']??''));$flowId=hache_sharky_regular_flow_cached_id();
-    if(!is_array($data)||$flowId===null){$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('regular_enrollment_unavailable','No pude abrir el formulario de inscripción de forma segura. Te dejo con una persona del equipo para continuar sin hacerte repetir información.',[],['type'=>'human_takeover'])];}
-    $state=hache_sharky_orchestrator_flow($state,'register_regular','form',['sede_clave'=>$sede],$now);
+    if(!is_array($data)||$flowId===null){unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('regular_enrollment_unavailable','No pude abrir el formulario de inscripción de forma segura. Te dejo con una persona del equipo para continuar sin hacerte repetir información.',[],['type'=>'human_takeover'])];}
+    unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_flow($state,'register_regular','form',['sede_clave'=>$sede],$now);
     $payload=hache_sharky_commerce_flow_payload((string)($extraContext['contact']??''),'Completa tus datos para inscribirte a clases regulares. La sede ya queda fija en '.$data['venue_label'].'.',$flowId,'REGULAR_ENROLLMENT','Completar inscripción',$data);
     return [$state,hache_sharky_orchestrator_decision('regular_enrollment_form','Completa tus datos para continuar.',['type'=>'raw_payload','payload'=>$payload])];
 }
 
 function hache_sharky_meta_human_takeover(array $state,string $message='Te dejo con una persona del equipo de Hache Natación para que continúe contigo por este mismo chat.'): array
 {
-    $state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('human_takeover',$message,[],['type'=>'human_takeover'])];
+    unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('human_takeover',$message,[],['type'=>'human_takeover'])];
 }
 
 function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,array $extraContext=[]): ?array
 {
     if(!hache_sharky_meta_active($state))return null;if(($state['identity']['kind']??'unknown')!=='prospect')return null;if(($state['commercial_context']['entry_source']??'')!=='meta_ad')return null;if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+    $state=hache_sharky_meta_restore_expired($state,$now);
     $text=trim((string)($event['text']??''));$id=strtolower(trim((string)($event['interactive_id']??'')));$intent=hache_sharky_orchestrator_contextual_intent($state,$text,$id);
     if($id==='action:human'||$intent==='human')return hache_sharky_meta_human_takeover($state);if($intent==='student_claim')return hache_sharky_meta_human_takeover($state,'Como indicas que ya eres alumno, te dejo directamente con una persona del equipo para revisar tu expediente por este mismo chat.');
     $flow=$state['flow'];$step=(string)($flow['step']??'');$data=is_array($flow['data']??null)?$flow['data']:[];
     if($step==='program'){
-        if(($data['entry_bootstrap']??false)===true){$data['entry_bootstrap']=false;$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'program',$data,$now);return [$state,hache_sharky_meta_welcome(true)];}
-        if($id==='meta:program:learn'){$state['commercial_context']['program']='intensive';$state['commercial_context']['recommended_program']='intensive';unset($state['commercial_context']['background']);$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue',['program'=>'intensive'],$now);return [$state,hache_sharky_meta_intensive_info($pdo,true)];}
-        if($id==='meta:program:regular'){$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'regular_background',[],$now);return [$state,hache_sharky_meta_regular_background_prompt()];}
+        if(($data['entry_bootstrap']??false)===true){$data['entry_bootstrap']=false;$state=hache_sharky_meta_flow($state,'program',$data,$now);return [$state,hache_sharky_meta_welcome($pdo,true)];}
+        if($id==='meta:program:learn'){$state['commercial_context']['program']='intensive';$state['commercial_context']['recommended_program']='intensive';unset($state['commercial_context']['background']);$state=hache_sharky_meta_flow($state,'venue',['program'=>'intensive'],$now);return [$state,hache_sharky_meta_intensive_info($pdo,true)];}
+        if($id==='meta:program:regular'){$state=hache_sharky_meta_flow($state,'regular_background',[],$now);return [$state,hache_sharky_meta_regular_background_prompt()];}
         return [$state,hache_sharky_meta_program_retry()];
     }
     if($step==='regular_background'){
-        if($id==='meta:regular:no'){$state['commercial_context']['program']='intensive';$state['commercial_context']['recommended_program']='intensive';$state['commercial_context']['background']='no_formal';$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue',['program'=>'intensive'],$now);return [$state,hache_sharky_meta_intensive_info($pdo,true)];}
-        if($id==='meta:regular:yes'){$state['commercial_context']['program']='regular';$state['commercial_context']['recommended_program']='regular';$state['commercial_context']['background']='formal';$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue',['program'=>'regular'],$now);return [$state,hache_sharky_meta_regular_info($pdo,true)];}
+        if($id==='meta:regular:no'){$state['commercial_context']['program']='intensive';$state['commercial_context']['recommended_program']='intensive';$state['commercial_context']['background']='no_formal';$state=hache_sharky_meta_flow($state,'venue',['program'=>'intensive'],$now);return [$state,hache_sharky_meta_intensive_info($pdo,true)];}
+        if($id==='meta:regular:yes'){$state['commercial_context']['program']='regular';$state['commercial_context']['recommended_program']='regular';$state['commercial_context']['background']='formal';$state=hache_sharky_meta_flow($state,'venue',['program'=>'regular'],$now);return [$state,hache_sharky_meta_regular_info($pdo,true)];}
         return [$state,hache_sharky_meta_regular_background_prompt()];
     }
     if($step==='venue'){
-        $sede=$id==='meta:venue:monteverde'?'MONTEVERDE':($id==='meta:venue:palapas'?'PALAPAS':'');if($sede==='')return [$state,hache_sharky_meta_venue_retry($state)];$state['commercial_context']['sede_clave']=$sede;$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue_detail',['sede_clave'=>$sede],$now);return [$state,hache_sharky_meta_venue_detail($pdo,$state,$sede)];
+        $sede=$id==='meta:venue:monteverde'?'MONTEVERDE':($id==='meta:venue:palapas'?'PALAPAS':'');if($sede==='')return [$state,hache_sharky_meta_venue_retry($state)];$state['commercial_context']['sede_clave']=$sede;$state=hache_sharky_meta_flow($state,'venue_detail',['sede_clave'=>$sede],$now);return [$state,hache_sharky_meta_venue_detail($pdo,$state,$sede)];
     }
     if($step==='venue_detail'){
         $current=(string)($state['commercial_context']['sede_clave']??'');
-        if($id==='meta:venue:other'){$other=$current==='MONTEVERDE'?'PALAPAS':'MONTEVERDE';$state['commercial_context']['sede_clave']=$other;$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue_detail',['sede_clave'=>$other],$now);return [$state,hache_sharky_meta_venue_detail($pdo,$state,$other)];}
-        if($id==='meta:register:intensive'&&($state['commercial_context']['program']??'')==='intensive'){$state=hache_sharky_orchestrator_clear_flow($state);$context=function_exists('hache_sharky_whatsapp_context')?hache_sharky_whatsapp_context($pdo,(string)($event['from']??''),$extraContext):$extraContext;return hache_sharky_whatsapp_registration_form_from_context($state,$context,$now,'Perfecto.');}
+        if($id==='meta:venue:other'){$other=$current==='MONTEVERDE'?'PALAPAS':'MONTEVERDE';$state['commercial_context']['sede_clave']=$other;$state=hache_sharky_meta_flow($state,'venue_detail',['sede_clave'=>$other],$now);return [$state,hache_sharky_meta_venue_detail($pdo,$state,$other)];}
+        if($id==='meta:register:intensive'&&($state['commercial_context']['program']??'')==='intensive'){unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);$context=function_exists('hache_sharky_whatsapp_context')?hache_sharky_whatsapp_context($pdo,(string)($event['from']??''),$extraContext):$extraContext;return hache_sharky_whatsapp_registration_form_from_context($state,$context,$now,'Perfecto.');}
         if($id==='meta:register:regular'&&($state['commercial_context']['program']??'')==='regular'){$extraContext['contact']=(string)($event['from']??'');return hache_sharky_meta_regular_form($pdo,$state,$now,$extraContext);}
         return [$state,hache_sharky_meta_venue_detail($pdo,$state,$current)];
     }
