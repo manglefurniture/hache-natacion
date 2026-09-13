@@ -201,12 +201,29 @@ function hache_sharky_prospect_onboarding_handle(PDO $pdo,array $state,array $ev
         $state=hache_sharky_orchestrator_clear_flow($state);
         return [$state,hache_sharky_orchestrator_decision('human_takeover','Voy a dejar la conversación al equipo para que continúe contigo.',[],['type'=>'human_takeover'])];
     }
+    if($intent==='student_claim'){
+        $state=hache_sharky_orchestrator_clear_flow($state);
+        return [$state,hache_sharky_orchestrator_decision(
+            'student_human_takeover',
+            'Perfecto. Como ya eres alumno, te dejo directamente con una persona del equipo de Hache Natación para que continúe contigo por este mismo chat.',
+            [],
+            ['type'=>'human_takeover']
+        )];
+    }
     if($intent==='cancel'){
         $state=hache_sharky_orchestrator_clear_flow($state);
         return [$state,hache_sharky_orchestrator_decision('flow_cancelled','Listo, cancelé este proceso. Podemos seguir conversando normalmente.')];
     }
 
     if($step==='name'){
+        if(($data['entry_bootstrap']??false)===true){
+            $data['entry_bootstrap']=false;
+            $state=hache_sharky_orchestrator_flow($state,'prospect_onboarding','name',$data,$now);
+            return [$state,hache_sharky_orchestrator_decision(
+                'prospect_name_prompt',
+                'Necesito un par de datos tuyos para conocernos mejor. Por favor, ¿me puedes decir tu nombre?'
+            )];
+        }
         $name=hache_sharky_prospect_onboarding_name($text);
         if($name===null){
             return [$state,hache_sharky_orchestrator_decision(
@@ -334,11 +351,10 @@ function hache_sharky_prospect_onboarding_handle(PDO $pdo,array $state,array $ev
         $program=(string)($data['program']??($state['commercial_context']['program']??''));
         $expected=$program==='regular'?'onboarding:info:regular':'onboarding:info:intensive';
         if($id!==$expected){
-            $label=$program==='regular'?'Ver información':'Ver información';
             return [$state,hache_sharky_orchestrator_decision(
                 'prospect_product_info_prompt',
                 'Para continuar, toca el botón para ver la información.',
-                ['type'=>'buttons','buttons'=>[hache_sharky_orchestrator_button($expected,$label)]]
+                ['type'=>'buttons','buttons'=>[hache_sharky_orchestrator_button($expected,'Ver información')]]
             )];
         }
         return hache_sharky_prospect_onboarding_product_information($pdo,$state,$program,$now);
