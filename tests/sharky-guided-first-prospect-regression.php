@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/../config/sharky-lab-worker.php';
+require_once __DIR__.'/../config/sharky-product-boundary-guard.php';
 
 function guided_first_ok(bool $ok,string $message): void
 {
