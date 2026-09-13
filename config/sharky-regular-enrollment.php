@@ -100,7 +100,9 @@ function hache_sharky_business_register_regular(PDO $pdo,array $action,int $minA
 {
     $sede=strtoupper(trim((string)($action['sede_clave']??'')));$scheduleId=trim((string)($action['schedule_id']??''));$planId=trim((string)($action['plan_id']??''));
     $name=preg_replace('/\s+/u',' ',trim((string)($action['name']??'')))??'';$birthdate=trim((string)($action['birthdate']??''));$phone=hache_sharky_regular_phone((string)($action['contact_phone']??''));
+    $profile=strtolower(trim((string)($action['level_profile']??'')));
     if(!in_array($sede,['MONTEVERDE','PALAPAS'],true)||$scheduleId===''||$planId==='')throw new HacheSharkyBusinessException('Faltan datos para completar la inscripción.','MISSING_DATA');
+    if(!in_array($profile,['intermediate','advanced'],true))throw new HacheSharkyBusinessException('Debes confirmar si tu perfil es intermedio o avanzado.','INVALID_PROFILE');
     if(mb_strlen($name)<4||mb_strlen($name)>180)throw new HacheSharkyBusinessException('El nombre completo no es válido.','INVALID_NAME');
     $age=hache_sharky_business_validate_birthdate($birthdate,max(1,$minAge),$today);$maxAge=max($minAge,$maxAge);
     if((int)$age['age']>$maxAge)throw new HacheSharkyBusinessException('La persona supera la edad máxima atendida por este servicio.','MAX_AGE');
@@ -117,13 +119,14 @@ function hache_sharky_business_register_regular(PDO $pdo,array $action,int $minA
         $st=$pdo->prepare('SELECT id,nombre,sesiones_semana,precio FROM planes WHERE id=:p AND sede_id=:s AND activo=1 AND sesiones_semana IN (3,5) LIMIT 1 FOR UPDATE');$st->execute([':p'=>$planId,':s'=>$siteId]);$plan=$st->fetch(PDO::FETCH_ASSOC);if(!$plan)throw new HacheSharkyBusinessException('El plan seleccionado dejó de estar disponible.','PLAN_UNAVAILABLE',409);
 
         $studentId=hache_sharky_business_uuid($pdo);$tempPassword=password_temporal_segura();$hash=password_hash($tempPassword,PASSWORD_DEFAULT);
+        $profileLabel=$profile==='advanced'?'AVANZADO':'INTERMEDIO';
         $st=$pdo->prepare("INSERT INTO alumnos(id,sede_id,nombre,fecha_nacimiento,whatsapp,correo,fecha_inicio,horario_preferido_id,plan_actual_id,estado_administrativo,observaciones) VALUES(:id,:s,:n,:birth,:w,NULL,:f,:h,:p,'PENDIENTE',:o)");
-        $st->execute([':id'=>$studentId,':s'=>$siteId,':n'=>$name,':birth'=>$birthdate,':w'=>$phone,':f'=>$start,':h'=>$scheduleId,':p'=>$planId,':o'=>'Registro conversacional Sharky REGULAR. Pendiente de coordinación de pago.']);
+        $st->execute([':id'=>$studentId,':s'=>$siteId,':n'=>$name,':birth'=>$birthdate,':w'=>$phone,':f'=>$start,':h'=>$scheduleId,':p'=>$planId,':o'=>'Registro conversacional Sharky REGULAR. Perfil declarado: '.$profileLabel.'. Pendiente de coordinación de pago.']);
         $username=hache_sharky_business_username($pdo,$name);$userId=hache_sharky_business_uuid($pdo);
         $st=$pdo->prepare("INSERT INTO usuarios(id,usuario,password_hash,rol,activo,debe_cambiar_password,alumno_id) VALUES(:id,:u,:p,'ALUMNO',1,1,:a)");$st->execute([':id'=>$userId,':u'=>$username,':p'=>$hash,':a'=>$studentId]);
         $st=$pdo->prepare("INSERT INTO registros_publicos(id,alumno_id,sede_id,tipo,horario_id,fecha_inicio_intensivo) VALUES(:id,:a,:s,'REGULAR',:h,NULL)");$st->execute([':id'=>hache_sharky_business_uuid($pdo),':a'=>$studentId,':s'=>$siteId,':h'=>$scheduleId]);
         $pdo->commit();
-        return ['ok'=>true,'student_id'=>$studentId,'username'=>$username,'temporary_password'=>$tempPassword,'sede_clave'=>$sede,'sede_nombre'=>(string)$site['nombre'],'plan_id'=>$planId,'plan_name'=>(string)$plan['nombre'],'sessions_per_week'=>(int)$plan['sesiones_semana'],'plan_price'=>(float)$plan['precio'],'schedule_id'=>$scheduleId,'schedule_label'=>substr((string)$schedule['hora_inicio'],0,5).'–'.substr((string)$schedule['hora_fin'],0,5),'code'=>'CREATED'];
+        return ['ok'=>true,'student_id'=>$studentId,'username'=>$username,'temporary_password'=>$tempPassword,'sede_clave'=>$sede,'sede_nombre'=>(string)$site['nombre'],'plan_id'=>$planId,'plan_name'=>(string)$plan['nombre'],'sessions_per_week'=>(int)$plan['sesiones_semana'],'plan_price'=>(float)$plan['precio'],'schedule_id'=>$scheduleId,'schedule_label'=>substr((string)$schedule['hora_inicio'],0,5).'–'.substr((string)$schedule['hora_fin'],0,5),'level_profile'=>$profile,'code'=>'CREATED'];
     }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 
@@ -137,7 +140,13 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
         $state=hache_sharky_db_state_load($pdo,$contact);$flow=is_array($state['flow']??null)?$state['flow']:[];$data=is_array($event['regular_enrollment']??null)?$event['regular_enrollment']:[];
         $action=strtolower(trim((string)($data['user_action']??'')));
         if($action==='cancel'){
-            $state=hache_sharky_orchestrator_clear_flow($state);$decision=hache_sharky_orchestrator_decision('regular_enrollment_cancelled','Entendido. Cancelé el formulario y no registré nada. Puedes continuar desde la sede que habías elegido.');
+            $sede=strtoupper((string)($flow['data']['sede_clave']??($state['commercial_context']['sede_clave']??'')));
+            if(($state['commercial_context']['entry_source']??'')==='meta_ad'&&($state['commercial_context']['program']??'')==='regular'&&in_array($sede,['MONTEVERDE','PALAPAS'],true)&&defined('HACHE_SHARKY_META_FLOW')&&function_exists('hache_sharky_meta_venue_detail')){
+                $state['commercial_context']['sede_clave']=$sede;$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue_detail',['sede_clave'=>$sede],time());
+                $decision=hache_sharky_meta_venue_detail($pdo,$state,$sede);
+            }else{
+                $state=hache_sharky_orchestrator_clear_flow($state);$decision=hache_sharky_orchestrator_decision('regular_enrollment_cancelled','Entendido. Cancelé el formulario y no registré nada. Puedes continuar desde la sede que habías elegido.');
+            }
             hache_sharky_db_state_save($pdo,$contact,$state);$deferred=hache_sharky_db_state_defer_take();$payload=hache_sharky_whatsapp_render($contact,$decision);
             return hache_sharky_lab_queue_and_complete($pdo,$contact,$payload,$eventId.'|regular-cancel',$eventId,[],$deferred);
         }
@@ -148,10 +157,11 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
         }
         $expected=strtoupper((string)($flow['data']['sede_clave']??''));$submitted=strtoupper(trim((string)($data['venue_key']??'')));
         if($expected===''||$expected!==$submitted)throw new HacheSharkyBusinessException('La sede del formulario ya no coincide con la selección vigente.','SITE_MISMATCH',409);
+        $profile=strtolower(trim((string)($data['level_profile']??'')));
         $result=hache_sharky_business_register_regular($pdo,[
-            'sede_clave'=>$expected,'schedule_id'=>(string)($data['schedule_id']??''),'plan_id'=>(string)($data['plan_id']??''),'name'=>(string)($data['full_name']??''),'birthdate'=>(string)($data['birthdate']??''),'contact_phone'=>$contact,
+            'sede_clave'=>$expected,'schedule_id'=>(string)($data['schedule_id']??''),'plan_id'=>(string)($data['plan_id']??''),'name'=>(string)($data['full_name']??''),'birthdate'=>(string)($data['birthdate']??''),'contact_phone'=>$contact,'level_profile'=>$profile,
         ],$minAge,$maxAge,hache_sharky_lab_today());
-        $state=hache_sharky_orchestrator_clear_flow($state);$state['commercial_context']['age']=(new DateTimeImmutable((string)$data['birthdate']))->diff(new DateTimeImmutable(hache_sharky_lab_today()))->y;
+        $state=hache_sharky_orchestrator_clear_flow($state);$state['commercial_context']['age']=(new DateTimeImmutable((string)$data['birthdate']))->diff(new DateTimeImmutable(hache_sharky_lab_today()))->y;$state['commercial_context']['swim_level']=$profile;
         $message='✅ Recibí tu inscripción a clases regulares. Ya tengo tu sede, plan y horario. Ahora te dejo con una persona del equipo para revisar contigo el pago de inscripción y mensualidad.';
         $decision=hache_sharky_orchestrator_decision('regular_enrollment_received',$message,[],['type'=>'human_takeover']);hache_sharky_db_state_save($pdo,$contact,$state);$deferred=hache_sharky_db_state_defer_take();
         hache_sharky_takeover_mark($contact,'regular_enrollment_payment','Regular enrollment requires human payment coordination');$payload=hache_sharky_outbox_allow_during_takeover(hache_sharky_whatsapp_render($contact,$decision));
