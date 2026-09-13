@@ -262,9 +262,45 @@ function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,ar
     return hache_sharky_meta_human_takeover($state,'No pude recuperar este paso del proceso. Te dejo con una persona del equipo para continuar sin hacerte repetir información.');
 }
 
+function hache_sharky_meta_visual_choice(string $to,array $button,string $image): ?array
+{
+    $id=trim((string)($button['id']??''));
+    $title=trim((string)($button['title']??''));
+    $image=trim($image);
+    if($id===''||$title===''||$image==='')return null;
+    return [
+        'messaging_product'=>'whatsapp',
+        'recipient_type'=>'individual',
+        'to'=>$to,
+        'type'=>'interactive',
+        'interactive'=>[
+            'type'=>'button',
+            'header'=>['type'=>'image','image'=>['link'=>$image]],
+            'body'=>['text'=>'Elige esta opción 👇'],
+            'action'=>['buttons'=>[[
+                'type'=>'reply',
+                'reply'=>['id'=>$id,'title'=>$title],
+            ]]],
+        ],
+    ];
+}
+
 function hache_sharky_meta_render(string $to,array $decision): array
 {
-    $ui=is_array($decision['ui']??null)?$decision['ui']:[];if(($ui['type']??'')==='raw_payload'&&is_array($ui['payload']??null))return $ui['payload'];
-    $payload=hache_sharky_whatsapp_render($to,$decision);$images=is_array($ui['images']??null)?array_values(array_filter($ui['images'],'is_string')):[];if(!$images)return $payload;$sequence=[];
-    foreach($images as $url)$sequence[]=['messaging_product'=>'whatsapp','recipient_type'=>'individual','to'=>$to,'type'=>'image','image'=>['link'=>$url]];$sequence[]=$payload;return ['_sharky_sequence'=>$sequence,'to'=>$to];
+    $ui=is_array($decision['ui']??null)?$decision['ui']:[];
+    if(($ui['type']??'')==='raw_payload'&&is_array($ui['payload']??null))return $ui['payload'];
+
+    $images=is_array($ui['images']??null)?array_values(array_filter($ui['images'],'is_string')):[];
+    $buttons=is_array($ui['buttons']??null)?array_values(array_filter($ui['buttons'],'is_array')):[];
+    if(!$images||count($images)!==count($buttons))return hache_sharky_whatsapp_render($to,$decision);
+
+    $intro=$decision;
+    $intro['ui']=[];
+    $sequence=[hache_sharky_whatsapp_render($to,$intro)];
+    foreach($images as $index=>$url){
+        $card=hache_sharky_meta_visual_choice($to,$buttons[$index],$url);
+        if($card!==null)$sequence[]=$card;
+    }
+    if(count($sequence)===1)return hache_sharky_whatsapp_render($to,$decision);
+    return ['_sharky_sequence'=>$sequence,'to'=>$to];
 }
