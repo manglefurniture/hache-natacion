@@ -165,7 +165,7 @@ function hache_sharky_meta_regular_flow_data(PDO $pdo,string $sede,int $minAge=1
     foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row)$schedules[]=['id'=>(string)$row['id'],'title'=>hache_sharky_meta_schedule_label((string)$row['hora_inicio'],(string)$row['hora_fin'])];
     if(!$plans||!$schedules)return null;
     $tz=new DateTimeZone('America/Cancun');$todayObj=DateTimeImmutable::createFromFormat('!Y-m-d',$today?:date('Y-m-d'),$tz)?:new DateTimeImmutable('today',$tz);$minAge=max(1,$minAge);$maxAge=max($minAge,$maxAge);
-    return ['venue_key'=>$sede,'venue_label'=>$sede==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec','min_birthdate'=>$todayObj->modify('-'.($maxAge+1).' years')->modify('+1 day')->format('Y-m-d'),'max_birthdate'=>$todayObj->modify('-'.$minAge.' years')->format('Y-m-d'),'plans'=>$plans,'schedules'=>$schedules];
+    return ['venue_key'=>$sede,'venue_label'=>$sede==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec','min_birthdate'=>$todayObj->modify('-'.($maxAge+1).' years')->modify('+1 day')->format('Y-m-d'),'max_birthdate'=>$todayObj->modify('-'.$minAge.' years')->format('Y-m-d'),'profiles'=>[['id'=>'intermediate','title'=>'Intermedio'],['id'=>'advanced','title'=>'Avanzado']],'plans'=>$plans,'schedules'=>$schedules];
 }
 
 function hache_sharky_meta_regular_form(PDO $pdo,array $state,int $now,array $extraContext=[]): array
