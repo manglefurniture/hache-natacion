@@ -102,7 +102,7 @@ guided_first_ok(guided_first_button_ids($regularInfoDecision)===['sede:monteverd
 
 // Responsible-person branch asks the student's name and then that student's age.
 [$otherState,$otherNameDecision]=hache_sharky_prospect_onboarding_handle($pdo,$named,['from'=>'529981112233','text'=>'No','interactive_id'=>'onboarding:self:no'],$now+3,12);
-guided_first_ok(($otherState['flow']['step']??null)==='student_name','When classes are for someone else, Sharky must ask that person's name first.');
+guided_first_ok(($otherState['flow']['step']??null)==='student_name','When classes are for someone else, Sharky must ask the participant name first.');
 [$studentNamed,$studentAgeDecision]=hache_sharky_prospect_onboarding_handle($pdo,$otherState,['from'=>'529981112233','text'=>'Daniela','interactive_id'=>''],$now+4,12);
 guided_first_ok(($studentNamed['commercial_context']['participant_name']??null)==='Daniela'&&($studentAgeDecision['message']??'')==='¿Qué edad tiene Daniela?','Responsible-person path must keep contact and student identity separate.');
 
