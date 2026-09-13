@@ -103,33 +103,34 @@ function hache_sharky_entry_guided_first_prospect(array $state,string $userText=
 function hache_sharky_entry_intro(array $state,string $userText=''): string
 {
     $entry=hache_sharky_entry_context($state,$userText);
-    $base='Hola, soy Sharky, asistente IA de Hache Natación.';
+    $legacyBase='Soy Sharky 🦈, el asistente IA de Hache Natación.';
     $flow=is_array($state['flow']??null)?$state['flow']:null;
-    // Mientras el onboarding inicial sigue activo, la primera presentación debe
-    // permanecer neutral aunque el mensaje/referral de entrada sugiera un producto.
-    // `present_once` ya evita repetir esta presentación en turnos posteriores.
-    if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding')return $base;
+    // El saludo neutral nuevo pertenece exclusivamente al onboarding inicial.
+    // Los recorridos ya existentes conservan su presentación para evitar regresiones.
+    if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding'){
+        return 'Hola, soy Sharky, asistente IA de Hache Natación.';
+    }
     // Un alumno ya identificado no necesita el bloque comercial de captación.
-    if(($state['identity']['kind']??'unknown')==='student')return $base;
+    if(($state['identity']['kind']??'unknown')==='student')return $legacyBase;
     if($entry['source']==='meta_ad'&&$entry['interest']==='intensive'){
-        return $base."\n\n".'Veo que llegaste desde nuestro anuncio del curso intensivo. Te doy una previa y te voy guiando desde aquí.';
+        return $legacyBase."\n\n".'Veo que llegaste desde nuestro anuncio del curso intensivo. Te doy una previa y te voy guiando desde aquí.';
     }
     if($entry['source']==='meta_ad'&&$entry['interest']==='regular'){
-        return $base."\n\n".'Veo que llegaste desde uno de nuestros anuncios y ahora buscas información sobre las clases regulares. Te voy guiando desde aquí.';
+        return $legacyBase."\n\n".'Veo que llegaste desde uno de nuestros anuncios y ahora buscas información sobre las clases regulares. Te voy guiando desde aquí.';
     }
     if($entry['source']==='web'&&$entry['interest']==='intensive'){
-        return $base."\n\n".'Veo que vienes desde nuestra página buscando información sobre el curso intensivo. Te voy guiando desde aquí.';
+        return $legacyBase."\n\n".'Veo que vienes desde nuestra página buscando información sobre el curso intensivo. Te voy guiando desde aquí.';
     }
     if($entry['source']==='web'&&$entry['interest']==='regular'){
-        return $base."\n\n".'Veo que vienes desde nuestra página buscando información sobre las clases regulares. Te voy guiando desde aquí.';
+        return $legacyBase."\n\n".'Veo que vienes desde nuestra página buscando información sobre las clases regulares. Te voy guiando desde aquí.';
     }
     if($entry['interest']==='intensive'){
-        return $base."\n\n".'Veo que vienes buscando información sobre el curso intensivo. Te voy guiando paso a paso.';
+        return $legacyBase."\n\n".'Veo que vienes buscando información sobre el curso intensivo. Te voy guiando paso a paso.';
     }
     if($entry['interest']==='regular'){
-        return $base."\n\n".'Veo que vienes buscando información sobre las clases regulares. Te voy guiando paso a paso.';
+        return $legacyBase."\n\n".'Veo que vienes buscando información sobre las clases regulares. Te voy guiando paso a paso.';
     }
-    return $base."\n\n".'En Hache Natación tenemos opciones para quien empieza desde cero y para quien ya nada y quiere mejorar. Te voy guiando paso a paso.';
+    return $legacyBase."\n\n".'En Hache Natación tenemos opciones para quien empieza desde cero y para quien ya nada y quiere mejorar. Te voy guiando paso a paso.';
 }
 
 function hache_sharky_relative_monday_question(string $text): bool
