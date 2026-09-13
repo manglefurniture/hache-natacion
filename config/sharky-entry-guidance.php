@@ -105,9 +105,10 @@ function hache_sharky_entry_intro(array $state,string $userText=''): string
     $entry=hache_sharky_entry_context($state,$userText);
     $base='Hola, soy Sharky, asistente IA de Hache Natación.';
     $flow=is_array($state['flow']??null)?$state['flow']:null;
-    // En el primer turno del onboarding la apertura debe ser neutral: todavía no
-    // vendemos ni adelantamos el producto aunque la campaña sugiera un interés.
-    if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding'&&($flow['step']??'')==='name')return $base;
+    // Mientras el onboarding inicial sigue activo, la primera presentación debe
+    // permanecer neutral aunque el mensaje/referral de entrada sugiera un producto.
+    // `present_once` ya evita repetir esta presentación en turnos posteriores.
+    if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding')return $base;
     // Un alumno ya identificado no necesita el bloque comercial de captación.
     if(($state['identity']['kind']??'unknown')==='student')return $base;
     if($entry['source']==='meta_ad'&&$entry['interest']==='intensive'){
