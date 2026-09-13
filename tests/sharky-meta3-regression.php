@@ -34,6 +34,9 @@ meta3_expect(str_contains($meta,'meta:venue:other')&&str_contains($meta,"commerc
 meta3_expect(str_contains($meta,'hache_sharky_meta_restore_expired')&&str_contains($meta,"commercial_context']['meta_step'"),'Expired Meta state must recover its closed deterministic step instead of falling into legacy routing.');
 meta3_expect(str_contains($meta,'HACHE_SHARKY_META_IMAGE_LEARN')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_REGULAR')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_MONTEVERDE')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_PALAPAS'),'All four approved visual asset routes must be wired.');
 meta3_expect(!str_contains($meta,'/assets/sharky/meta-aprende-a-nadar.jpg')&&!str_contains($meta,'/assets/sharky/sede-palapas.jpg'),'Meta visual routes must not reference the rejected invalid JPG blobs.');
+meta3_expect(str_contains($meta,'function hache_sharky_meta_visual_choice')&&str_contains($meta,"'header'=>['type'=>'image','image'=>['link'=>\$image]]"),'Each Meta visual choice must bind its image to its own native reply button.');
+meta3_expect(str_contains($meta,"\$intro['ui']=[]")&&str_contains($meta,'count($images)!==count($buttons)'),'Visual blocks must render their explanatory text separately and only pair complete image/button sets.');
+meta3_expect(!str_contains($meta,"'type'=>'image','image'=>['link'=>\$url]"),'Approved Meta visuals must not be emitted as loose standalone media before a shared button block.');
 $approvedAssets=[
     'public/assets/Aprende a nadar en tres semanas.png',
     'public/assets/Clases regulares de natación nocturna.png',
