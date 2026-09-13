@@ -41,3 +41,19 @@ function hache_sharky_age_policy_validate(string $birthdate,array $policy,?strin
     if($age>$max)throw new HacheSharkyBusinessException('La persona supera la edad máxima atendida por este servicio.','MAX_AGE');
     return ['birthdate'=>$birthdate,'age'=>$age];
 }
+
+/** Apply the same central DOB range immediately before any enrollment Flow is queued. */
+function hache_sharky_age_policy_apply_flow_bounds(PDO $pdo,array $payload,?string $today=null): array
+{
+    if(($payload['type']??'')!=='interactive'||($payload['interactive']['type']??'')!=='flow')return $payload;
+    $screen=(string)($payload['interactive']['action']['parameters']['flow_action_payload']['screen']??'');
+    if(!in_array($screen,['ENROLLMENT','REGULAR_ENROLLMENT'],true))return $payload;
+    if(!is_array($payload['interactive']['action']['parameters']['flow_action_payload']['data']??null))return $payload;
+    $policy=hache_sharky_age_policy($pdo);$tz=new DateTimeZone('America/Cancun');
+    $todayObj=DateTimeImmutable::createFromFormat('!Y-m-d',$today?:'', $tz);
+    if(!$todayObj)$todayObj=new DateTimeImmutable('today',$tz);
+    $min=(int)$policy['min'];$max=(int)$policy['max'];
+    $payload['interactive']['action']['parameters']['flow_action_payload']['data']['min_birthdate']=$todayObj->modify('-'.($max+1).' years')->modify('+1 day')->format('Y-m-d');
+    $payload['interactive']['action']['parameters']['flow_action_payload']['data']['max_birthdate']=$todayObj->modify('-'.$min.' years')->format('Y-m-d');
+    return $payload;
+}
