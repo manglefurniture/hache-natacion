@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/../config/sharky-groups.php';
+require_once __DIR__.'/../config/sharky-whatsapp-adapter.php';
 
 function groups_ok(bool $condition,string $message): void
 {
@@ -25,6 +26,31 @@ $filteredMessages=$filtered['entry'][0]['changes'][0]['value']['messages']??[];
 groups_ok(count($filteredMessages)===1&&($filteredMessages[0]['id']??'')==='direct.1','Disabled mode must drop group traffic before normalization.');
 $enabled=hache_sharky_groups_filter_payload($payload,true);
 groups_ok(count($enabled['entry'][0]['changes'][0]['value']['messages']??[])===2,'Enabled mode must preserve group traffic.');
+
+$buttonPayload=['entry'=>[['changes'=>[['value'=>[
+    'metadata'=>['phone_number_id'=>'123456'],
+    'messages'=>[[
+        'id'=>'carousel.1','from'=>'529980000003','timestamp'=>'1789340000','type'=>'button',
+        'button'=>['payload'=>'meta:program:learn','text'=>'Aprende a nadar'],
+        'referral'=>['source_id'=>'ad-carousel'],
+    ]],
+]]]]]];
+$normalizedButton=hache_sharky_groups_filter_payload($buttonPayload,false);
+$normalizedMessage=$normalizedButton['entry'][0]['changes'][0]['value']['messages'][0]??[];
+groups_ok(($normalizedMessage['type']??'')==='interactive','Carousel quick reply must normalize from button to interactive.');
+groups_ok(($normalizedMessage['interactive']['type']??'')==='button_reply','Carousel quick reply must use the adapter button_reply contract.');
+groups_ok(($normalizedMessage['interactive']['button_reply']['id']??'')==='meta:program:learn','Carousel payload id must survive normalization.');
+groups_ok(($normalizedMessage['interactive']['button_reply']['title']??'')==='Aprende a nadar','Carousel visible title must survive normalization.');
+groups_ok(($normalizedMessage['referral']['source_id']??'')==='ad-carousel','Carousel normalization must preserve referral evidence.');
+$buttonEvents=hache_sharky_whatsapp_extract($normalizedButton);
+groups_ok(count($buttonEvents)===1,'Normalized carousel quick reply must reach the generic WhatsApp extractor.');
+groups_ok(($buttonEvents[0]['interactive_id']??'')==='meta:program:learn','Normalized carousel quick reply must expose its deterministic id.');
+groups_ok(($buttonEvents[0]['text']??'')==='Aprende a nadar','Normalized carousel quick reply must expose its visible text.');
+
+$invalidButton=$buttonPayload;
+$invalidButton['entry'][0]['changes'][0]['value']['messages'][0]['button']['payload']='';
+$invalidNormalized=hache_sharky_groups_filter_payload($invalidButton,false);
+groups_ok(($invalidNormalized['entry'][0]['changes'][0]['value']['messages'][0]['type']??'')==='button','Button messages without a stable payload must stay fail-closed.');
 
 $events=[['id'=>'direct.1','from'=>'529980000001'],['id'=>'group.1','from'=>'529980000002']];
 $decorated=hache_sharky_groups_decorate_events($events,$payload);
