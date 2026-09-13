@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-commerce-flows.php';
 require_once __DIR__.'/sharky-action-recovery.php';
+require_once __DIR__.'/sharky-age-policy.php';
 
 const HACHE_SHARKY_REGULAR_FLOW_KIND='regular_enrollment';
 const HACHE_SHARKY_REGULAR_FLOW_NAME='Hache_Sharky_Regular_Enrollment_v1';
@@ -161,6 +162,7 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
 {
     if(($event['kind']??'')!==HACHE_SHARKY_REGULAR_FLOW_KIND)return false;
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';$eventId=trim((string)($event['id']??''));if($contact===''||$eventId==='')return false;
+    $policy=hache_sharky_age_policy($pdo,$business);$minAge=(int)$policy['min'];$maxAge=(int)$policy['max'];
     $lock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($lock))return false;
     try{
         if(!hache_sharky_lab_claim_early($pdo,$event,$contact,HACHE_SHARKY_REGULAR_FLOW_KIND))return false;
