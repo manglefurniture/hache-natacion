@@ -25,8 +25,6 @@ function hache_sharky_language_swim_step_text(array $state,string $text): ?strin
     $t=hache_sharky_language_normalized($text);
     if($t==='')return null;
 
-    // Expresiones inequívocas de persona que empieza desde cero. La lista es
-    // deliberadamente corta y basada en lenguaje real; no es un corrector global.
     $beginner=[
         '/^(?:de|desde|en)\s+ceros?[.! ]*$/u',
         '/^(?:cero|ceros)[.! ]*$/u',
@@ -41,8 +39,6 @@ function hache_sharky_language_swim_step_text(array $state,string $text): ?strin
     ];
     foreach($beginner as $pattern)if(preg_match($pattern,$t)===1)return 'Desde cero';
 
-    // Suficiente para confirmar que ya nada, pero no para asumir formación.
-    // El siguiente paso determinístico seguirá preguntando formal vs. autodidacta.
     $swims=[
         '/\b(?:ya\s+)?(?:se|ce)\s+nadar\b/u',
         '/\bnado\s+(?:un\s+)?poco\b/u',
@@ -93,9 +89,6 @@ function hache_sharky_language_venue_step_text(array $state,string $text): ?stri
     $t=hache_sharky_language_normalized($text);
     if($t==='')return null;
 
-    // Una afirmación corta solo es selección de Monteverde cuando la pregunta
-    // pendiente ya propone explícitamente esa sede. Fuera de este paso sigue
-    // siendo una respuesta ambigua y no debe cambiar sede por sí sola.
     if(preg_match('/^(?:si|si\s+me\s+funciona|me\s+funciona|esta\s+bien|ok|okay|vale)[.! ]*$/u',$t)===1)return 'Monteverde';
     return null;
 }
@@ -117,7 +110,6 @@ function hache_sharky_language_more_schedule_request(string $text): bool
         ||preg_match('/\bhorarios?\s+(?:otro|otros|diferente|diferentes|mas)\b/u',$t)===1
         ||preg_match('/\b(?:no\s+)?(?:tienes|tienen|hay|manejan|tendras|tendran)\b.{0,26}\b(?:otro|otros|mas)\b.{0,14}\bhorarios?\b/u',$t)===1;
     if(!$matches)return false;
-    // Una selección explícita de sede no se reinterpreta como fallback.
     if(preg_match('/\b(?:monteverde|palapas|protudec|misma\s+sede)\b/u',$t)===1)return false;
     return $question||preg_match('/^(?:no\s+)?(?:tienes|tienen|hay|manejan|otro|otros|mas)\b/u',$t)===1;
 }
@@ -161,6 +153,19 @@ function hache_sharky_language_prepare_event(PDO $pdo,array $event): array
     if($contact===''||$text==='')return $event;
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return $event;}
     if(($state['identity']['kind']??'unknown')!=='prospect')return $event;
+
+    // Sharky 3.0 Meta is a closed state machine. Tag typed replies as a
+    // deterministic non-button input before legacy side-question/age shortcuts
+    // run. The Meta handler can still recognize explicit human/student requests,
+    // but all other free text simply repeats the buttons for the current step.
+    if(function_exists('hache_sharky_meta_active')
+        &&($state['commercial_context']['entry_source']??'')==='meta_ad'
+        &&hache_sharky_meta_active($state)){
+        $event['_language_original_text']=$text;
+        $event['interactive_id']='meta:free_text';
+        return $event;
+    }
+
     $prepared=hache_sharky_language_prepare_text($state,$text);
     if($prepared===$text)return $event;
     $event['_language_original_text']=$text;
