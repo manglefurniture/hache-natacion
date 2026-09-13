@@ -17,7 +17,7 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
     $normalize=static fn(string $value):string=>hache_sharky_orchestrator_normalize($value);
     $programFrom=static function(string $value) use($normalize): ?string {
         $t=$normalize($value);
-        if(preg_match('/\b(?:curso\s+)?intensivo\b/u',$t)===1)return 'intensive';
+        if(preg_match('/\b(?:curso\s+)?intensivo\b|\b(?:aprende|aprender)\s+a\s+nadar\b/u',$t)===1)return 'intensive';
         if(preg_match('/\bclases?\s+regulares?\b|\bcurso\s+regular\b/u',$t)===1)return 'regular';
         return null;
     };
