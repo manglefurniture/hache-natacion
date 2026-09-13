@@ -1,0 +1,158 @@
+{
+  "version": "7.0",
+  "routing_model": {
+    "REGULAR_ENROLLMENT": ["FINAL"],
+    "FINAL": []
+  },
+  "screens": [
+    {
+      "id": "REGULAR_ENROLLMENT",
+      "title": "Clases regulares",
+      "data": {
+        "venue_key": {"type": "string", "__example__": "MONTEVERDE"},
+        "venue_label": {"type": "string", "__example__": "Colegio Monteverde"},
+        "age_helper": {"type": "string", "__example__": "Clases de 12 a 65 años"},
+        "min_birthdate": {"type": "string", "__example__": "1960-09-14"},
+        "max_birthdate": {"type": "string", "__example__": "2014-09-13"},
+        "profiles": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}}},
+          "__example__": [{"id": "intermediate", "title": "Intermedio"}, {"id": "advanced", "title": "Avanzado"}]
+        },
+        "plans": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}}},
+          "__example__": [{"id": "plan-id", "title": "Plan 3x · $1,000/mes"}]
+        },
+        "schedules": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}}},
+          "__example__": [{"id": "schedule-id", "title": "7:00–8:00 AM"}]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "regular_enrollment_form",
+            "children": [
+              {"type": "TextHeading", "text": "Inscripción a clases regulares"},
+              {"type": "TextCaption", "text": "Sede fija:"},
+              {"type": "TextBody", "text": "${data.venue_label}"},
+              {"type": "TextInput", "name": "full_name", "label": "Nombre completo", "required": true},
+              {"type": "DatePicker", "name": "birthdate", "label": "Fecha de nacimiento", "helper-text": "${data.age_helper}", "min-date": "${data.min_birthdate}", "max-date": "${data.max_birthdate}", "required": true},
+              {"type": "Dropdown", "name": "level_profile", "label": "Tu nivel", "data-source": "${data.profiles}", "required": true},
+              {"type": "Dropdown", "name": "plan_id", "label": "Plan", "data-source": "${data.plans}", "required": true},
+              {"type": "Dropdown", "name": "schedule_id", "label": "Horario", "data-source": "${data.schedules}", "required": true},
+              {
+                "type": "EmbeddedLink",
+                "text": "Cancelar y volver",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {"type": "screen", "name": "FINAL"},
+                  "payload": {
+                    "flow_kind": "regular_enrollment",
+                    "user_action": "cancel",
+                    "venue_key": "${data.venue_key}",
+                    "venue_label": "${data.venue_label}",
+                    "full_name": "",
+                    "birthdate": "",
+                    "level_profile": "",
+                    "plan_id": "",
+                    "schedule_id": ""
+                  }
+                }
+              },
+              {
+                "type": "Footer",
+                "label": "Revisar datos",
+                "on-click-action": {
+                  "name": "navigate",
+                  "next": {"type": "screen", "name": "FINAL"},
+                  "payload": {
+                    "flow_kind": "regular_enrollment",
+                    "user_action": "submit",
+                    "venue_key": "${data.venue_key}",
+                    "venue_label": "${data.venue_label}",
+                    "full_name": "${form.full_name}",
+                    "birthdate": "${form.birthdate}",
+                    "level_profile": "${form.level_profile}",
+                    "plan_id": "${form.plan_id}",
+                    "schedule_id": "${form.schedule_id}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "FINAL",
+      "title": "Revisar inscripción",
+      "terminal": true,
+      "data": {
+        "flow_kind": {"type": "string", "__example__": "regular_enrollment"},
+        "user_action": {"type": "string", "__example__": "submit"},
+        "venue_key": {"type": "string", "__example__": "MONTEVERDE"},
+        "venue_label": {"type": "string", "__example__": "Colegio Monteverde"},
+        "full_name": {"type": "string", "__example__": "Cliente Prueba"},
+        "birthdate": {"type": "string", "__example__": "1983-06-01"},
+        "level_profile": {"type": "string", "__example__": "intermediate"},
+        "plan_id": {"type": "string", "__example__": "plan-id"},
+        "schedule_id": {"type": "string", "__example__": "schedule-id"}
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "final_form",
+            "children": [
+              {
+                "type": "Switch",
+                "value": "${data.user_action}",
+                "cases": {
+                  "submit": [
+                    {"type": "TextHeading", "text": "Revisa tu inscripción"},
+                    {"type": "TextCaption", "text": "Sede"},
+                    {"type": "TextBody", "text": "${data.venue_label}"},
+                    {"type": "TextCaption", "text": "Nombre"},
+                    {"type": "TextBody", "text": "${data.full_name}"},
+                    {"type": "TextCaption", "text": "Nacimiento"},
+                    {"type": "TextBody", "text": "${data.birthdate}"},
+                    {"type": "TextCaption", "text": "Nivel"},
+                    {"type": "TextBody", "text": "${data.level_profile}"},
+                    {"type": "TextBody", "text": "Al volver al chat, Sharky validará el plan y horario antes de registrar y te pasará con el equipo para coordinar el pago."}
+                  ],
+                  "cancel": [
+                    {"type": "TextHeading", "text": "Volver al chat"},
+                    {"type": "TextBody", "text": "No se registrará nada. Puedes continuar desde la sede elegida."}
+                  ]
+                }
+              },
+              {
+                "type": "Footer",
+                "label": "Volver a Sharky",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "flow_kind": "${data.flow_kind}",
+                    "user_action": "${data.user_action}",
+                    "venue_key": "${data.venue_key}",
+                    "full_name": "${data.full_name}",
+                    "birthdate": "${data.birthdate}",
+                    "level_profile": "${data.level_profile}",
+                    "plan_id": "${data.plan_id}",
+                    "schedule_id": "${data.schedule_id}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

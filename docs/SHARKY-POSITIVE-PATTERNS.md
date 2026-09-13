@@ -16,15 +16,17 @@ Antes de modificar Brain, onboarding, memoria comercial, flows de inscripción, 
 
 ---
 
-## GP-001 — Prospecto nuevo → perfil mínimo → producto correcto → sede → catálogo guiado
+## GP-001 — Prospecto web/directo → perfil mínimo → producto correcto → sede → catálogo guiado
 
-**Estado:** patrón positivo activo, actualizado al onboarding aprobado el 12 de septiembre de 2026  
+**Estado:** patrón positivo activo para web, WhatsApp directo y referrals no publicitarios  
 **Origen:** evolución de conversaciones reales observadas en septiembre de 2026  
 **Privacidad:** casos anonimizados; no guardar nombre, teléfono, fecha de nacimiento ni capturas del prospecto en esta bitácora.
 
 ### Contexto
 
-Un prospecto nuevo puede entrar desde Meta, web o WhatsApp directo. La fuente sirve como contexto, pero el primer objetivo ya no es vender ni inferir el producto desde el anuncio: Sharky primero obtiene una identidad mínima limpia y después resuelve el producto de forma determinística.
+Este patrón sigue siendo la autoridad del onboarding vigente para prospectos que llegan desde la web, WhatsApp directo o referrals no publicitarios. **No aplica a prospectos nuevos provenientes de publicidad Meta**: ese canal usa GP-002 y `docs/SHARKY-3-META-FLOW.md`.
+
+La fuente sirve como contexto, pero en este recorrido Sharky obtiene primero una identidad mínima limpia y después resuelve el producto de forma determinística.
 
 ### Recorrido que se debe preservar
 
@@ -46,12 +48,11 @@ Un prospecto nuevo puede entrar desde Meta, web o WhatsApp directo. La fuente si
 ### Invariantes — NO ROMPER
 
 - La presentación de Sharky como IA ocurre una sola vez salvo que el usuario pregunte expresamente quién es.
-- El primer mensaje es neutral aunque el referral provenga de un anuncio de intensivo o regulares.
-- El mensaje de entrada del prospecto no se interpreta como si fuera la respuesta a la pregunta de nombre.
+- El primer mensaje es neutral y el mensaje de entrada no se interpreta como si fuera la respuesta a la pregunta de nombre.
 - El nombre confirmado durante onboarding es la autoridad conversacional del contacto. Emojis, dominios o nombres extraños del perfil de WhatsApp no deben prevalecer sobre él.
 - Contacto y alumno son entidades distintas cuando las clases son para otra persona.
 - Si Sharky no entiende una de las preguntas iniciales, conserva el paso y responde de forma suave: “Una disculpa, no entendí…” + la pregunta correspondiente.
-- Una duda lateral informativa durante una pregunta inicial se responde sin consumirla como dato ni perder el paso; después Sharky vuelve a mostrar la pregunta/controles pendientes.
+- Una duda lateral informativa durante una pregunta inicial puede responderse sin consumirla como dato y después se vuelve a la pregunta pendiente.
 - **Principiante → intensivo** sin ofrecer regulares automáticamente.
 - **Intermedio + no ha tomado clases → intensivo**.
 - **Intermedio + sí ha tomado clases → regulares**.
@@ -59,12 +60,12 @@ Un prospecto nuevo puede entrar desde Meta, web o WhatsApp directo. La fuente si
 - Curso intensivo y clases regulares son productos distintos. Una frecuencia semanal o la palabra genérica “clases” no cambia el producto por sí sola.
 - El intensivo dura 3 semanas, de lunes a viernes, y su precio general se toma de configuración mientras no exista un curso concreto con precio propio.
 - Los precios y cuotas de regulares se toman de las autoridades vigentes; el onboarding no debe duplicar una fuente de verdad independiente.
-- El selector inicial de sede ofrece Monteverde, Palapas y Ambas. En este recorrido ya no existe una obligación de proponer Monteverde primero.
-- “Ambas ubicaciones” es una solicitud de información/comparación, no una sede confirmada. Después de mostrar ambas, se exige selección explícita.
+- El selector inicial de sede ofrece Monteverde, Palapas y Ambas. En este recorrido no existe una obligación de proponer Monteverde primero.
+- “Ambas ubicaciones” es una solicitud de información/comparación, no una sede confirmada.
 - La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo.
-- Después de confirmar sede, las opciones de plan/horario/fecha salen del catálogo/backend. El modelo no puede ampliar, mezclar ni inventar disponibilidad.
+- Después de confirmar sede, plan/horario/fecha salen del catálogo/backend. El modelo no puede ampliar, mezclar ni inventar disponibilidad.
 - Si el usuario escribe texto libre equivalente a una opción existente y es inequívoco, puede canonicalizarse a la misma intención que el botón.
-- Si el texto es ambiguo, Sharky no abre una ruta improvisada: conserva el paso y vuelve a presentar la pregunta/controles.
+- Si el texto es ambiguo, Sharky conserva el paso y vuelve a presentar la pregunta/controles.
 - Una declaración nueva que contradiga nivel o elegibilidad confirmados no reemplaza silenciosamente el estado; se aclara antes de continuar.
 - Una vez que empieza un flow protegido de inscripción o pago, Brain no reescribe ni suplanta ese flow.
 - Debe existir confirmación explícita antes de ejecutar una mutación sensible.
@@ -81,31 +82,67 @@ Un prospecto nuevo puede entrar desde Meta, web o WhatsApp directo. La fuente si
 
 ### Señales de regresión
 
-Considerar GP-001 roto si una adecuación provoca cualquiera de estos comportamientos:
-
-- abrir sin “Hola” o dejar de identificar a Sharky como IA;
-- vender un producto antes de pedir la identidad mínima del prospecto;
-- interpretar el primer “Hola, quiero información” como nombre;
-- conservar como nombre definitivo algo como un dominio, emoji o alias extraño cuando el prospecto ya dio su nombre;
-- mezclar nombre del contacto con nombre del alumno cuando son personas distintas;
-- avanzar de pregunta aunque la respuesta no se entendió;
-- volver a preguntar datos ya confirmados sin motivo;
-- ofrecer regulares a un Principiante;
-- enviar un Intermedio a regulares sin confirmar si ya tomó clases;
-- pedir formación previa adicional a un Avanzado antes de ofrecer regulares;
-- afirmar que un Avanzado tomó clases formales sin que lo haya dicho;
-- saltar directamente a sede sin mostrar la información básica del producto;
-- imponer Monteverde como primera propuesta dentro de este onboarding;
-- tratar “Ambas ubicaciones” como una sede confirmada;
-- dejar la conversación completamente abierta después de sede y perder el estado de plan/horario/fecha;
-- inventar horarios, fechas, precios o cupos fuera de sus autoridades;
-- convertir una respuesta conversacional de Brain en una operación sensible directa;
-- obligar a reiniciar el onboarding al entrar al flow de inscripción;
-- impedir una derivación humana cuando el usuario ya es alumno o requiere una excepción.
+Considerar GP-001 roto si una adecuación provoca vender antes del perfil mínimo; mezclar contacto y alumno; ofrecer regulares a un Principiante; enviar Intermedio a regulares sin confirmar clases previas; pedir formación adicional a Avanzado; inventar horarios, fechas, precios o cupos; perder la sede; o ejecutar operaciones sensibles desde texto/modelo sin los guards existentes.
 
 ### Cobertura automática relacionada
 
-La protección técnica principal de este recorrido vive en `tests/sharky-guided-first-prospect-regression.php`, junto con las regresiones de frontera/elegibilidad de producto, alcance de horarios, WhatsApp adapter, commerce flows, inscripción, follow-up y pagos. Futuras adecuaciones deben conservar esas pruebas verdes y añadir cobertura específica cuando aparezca un nuevo borde real.
+La protección técnica principal vive en `tests/sharky-guided-first-prospect-regression.php`, junto con las regresiones de frontera/elegibilidad, alcance de horarios, WhatsApp adapter, commerce flows, inscripción, follow-up y pagos.
+
+---
+
+## GP-002 — Meta Ads → selector cerrado → producto → sede → inscripción protegida
+
+**Estado:** patrón aprobado para Sharky 3.0; sustituye GP-001 únicamente en `meta_ad`  
+**Origen:** especificación aprobada el 13 de septiembre de 2026  
+**Autoridad detallada:** `docs/SHARKY-3-META-FLOW.md`
+
+### Contexto
+
+Aplica exclusivamente a **Facebook/Instagram Ads → WhatsApp → prospecto nuevo/no alumno**. No aplica a alumnos existentes, web ni WhatsApp directo. La campaña puede conservar interés para atribución, pero no puede escoger producto por el usuario.
+
+### Recorrido que se debe preservar
+
+1. Sharky se identifica explícitamente como asistente IA, informa el rango 12–65 y muestra **Aprende a nadar / Clases regulares** con sus imágenes aprobadas.
+2. En pasos cerrados, texto libre no decide ni avanza: se conserva el paso y se repiten solo los botones vigentes, sin repetir imágenes.
+3. **Aprende a nadar** muestra información completa del curso básico y después **Monteverde / Palapas**.
+4. **Clases regulares** pregunta primero si ya tomó clases en alguna escuela mediante **Sí, continuar / No, curso básico**.
+5. **No, curso básico** entra directamente al bloque completo de intensivo, sin volver al menú inicial.
+6. **Sí, continuar** muestra información de regulares y después **Monteverde / Palapas**.
+7. La sede muestra ubicación, Maps, referencia y horarios dinámicos de esa sede/producto. Intensivo añade “Iniciamos el próximo lunes”.
+8. **Ver otra sede** cambia solo la sede y conserva el producto.
+9. Intensivo reutiliza el Flow y proceso transaccional de inscripción/pago existentes.
+10. Regulares usa su Flow específico con sede fija, nombre, nacimiento, perfil Intermedio/Avanzado, plan y horario activos; al completarse registra de forma protegida y termina en takeover humano para coordinar pago.
+11. Edad válida: 12–65 inclusive. Fuera de rango no existe alta automática y se deriva a humano.
+
+### Invariantes — NO ROMPER
+
+- Alumno existente, aunque llegue desde anuncio, **no entra al funnel Meta** y pasa a takeover humano.
+- Web y WhatsApp directo conservan su flujo vigente; Sharky 3.0 no los captura.
+- Brain no interpreta texto para avanzar, no decide producto/sede/plan y no reescribe decisiones del state machine Meta.
+- Brain **no se apaga globalmente**: la exclusión es específica a `meta_ad`/Sharky 3.0.
+- Una solicitud explícita de hablar con una persona o una declaración de que ya es alumno sí deriva a humano.
+- Texto libre durante un paso cerrado tampoco activa atajos laterales del flujo antiguo; salvo los handoffs anteriores, se limita a reintentar los controles vigentes.
+- Retries no vuelven a enviar las imágenes.
+- Horarios provienen de `horarios` filtrando sede + activo + producto; no se duplican como una segunda fuente.
+- Precios, inscripción y Maps utilizan autoridades/configuración existentes cuando corresponda.
+- Monteverde y Palapas nunca mezclan horarios, plan o inscripción.
+- La sede seleccionada para regulares llega al Flow y no se vuelve a preguntar dentro del Flow.
+- Cancelar el Flow regular vuelve al bloque de la sede elegida sin perder producto/contexto.
+- Flow obsoleto, inconsistente o con datos fuera de rango falla cerrado y deriva a humano.
+- El registro regular no cobra automáticamente.
+- Los guards 12–65 aplican también al registro intensivo existente.
+- Los recursos visuales aprobados se incorporan como assets; no se reinterpretan las fotografías.
+
+### Señales de regresión
+
+Considerar GP-002 roto si Meta cae al onboarding de nombre; un texto como “Palapas” avanza sin pulsar el botón; una duda lateral abre Brain; una imagen se repite en retry; un alumno conocido entra como prospecto; regulares permite nivel no verificable; el Flow vuelve a preguntar sede; >65 o <12 crea alumno; Brain 2B-A cambia una decisión Meta; o web/directo empieza a usar este funnel.
+
+### Cobertura automática relacionada
+
+- `tests/sharky-meta3-regression.php`
+- `tests/sharky-pr162-review-regression.php`
+- suite de commerce/WhatsApp Flow/registro/outbox existente
+- Quality completo del PR
 
 ---
 

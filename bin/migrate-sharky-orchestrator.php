@@ -62,6 +62,7 @@ $migrations=[
     $root.'/database/migrations/20260907_sharky_member_ops.sql',
     $root.'/database/migrations/20260907_sharky_member_payments.sql',
     $root.'/database/migrations/20260909_professor_coteaching.sql',
+    $root.'/database/migrations/20260913_sharky_age_policy.sql',
 ];
 
 try{

@@ -6,6 +6,7 @@ require_once __DIR__.'/telefono.php';
 require_once __DIR__.'/passwords.php';
 require_once __DIR__.'/reglas-acceso.php';
 require_once __DIR__.'/intensivos-estado.php';
+require_once __DIR__.'/sharky-age-policy.php';
 
 final class HacheSharkyBusinessException extends RuntimeException
 {
@@ -178,7 +179,7 @@ function hache_sharky_business_register_intensive(PDO $pdo, array $action, ?stri
         throw new HacheSharkyBusinessException('Faltan datos para completar el registro.', 'MISSING_DATA');
     }
     if (mb_strlen($name) < 4 || mb_strlen($name) > 180) throw new HacheSharkyBusinessException('El nombre completo no es válido.', 'INVALID_NAME');
-    hache_sharky_business_validate_birthdate($birthdate, $minAge, $today);
+    $policy=hache_sharky_age_policy($pdo);$policy['min']=max((int)$policy['min'],$minAge);hache_sharky_age_policy_validate($birthdate,$policy,$today);
 
     $digits = preg_replace('/\D+/', '', $phoneRaw) ?: '';
     if (strlen($digits) === 13 && str_starts_with($digits, '521')) $digits = '52'.substr($digits, 3);

@@ -65,14 +65,18 @@ try{
     hache_sharky_learning_apply_additive_migration($pdo);
     $business=hache_sharky_business_values($pdo);
     $minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);
+    $maxAge=hache_sharky_config_int($business,'sharky_edad_maxima',65,1,120);
     $threshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
-    $processor=static function(array $event) use($pdo,$business,$minAge,$threshold): bool {
+    $processor=static function(array $event) use($pdo,$business,$minAge,$maxAge,$threshold): bool {
         $groupId=trim((string)($event['group_id']??''));
         if($groupId!==''&&!hache_sharky_groups_enabled($pdo)){
             $messageId=trim((string)($event['id']??''));
             if($messageId==='')return false;
             hache_sharky_metric_increment('messages_skipped_group');
             return hache_sharky_orchestrator_mark_processed($pdo,$messageId);
+        }
+        if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){
+            return hache_sharky_regular_enrollment_process($pdo,$event,$business,$minAge,$maxAge);
         }
         $event=hache_sharky_language_prepare_event($pdo,$event);
         if(hache_sharky_commerce_event_candidate($event)){

@@ -196,6 +196,7 @@ $events=array_merge(
     hache_sharky_whatsapp_extract($payload),
     $memberEvidenceEvents,
     hache_sharky_commerce_flow_extract_events($payload),
+    hache_sharky_regular_flow_extract_events($payload),
     hache_sharky_whatsapp_birthdate_flow_extract_events($payload,hache_sharky_lab_today()),
     hache_sharky_draft_extract_audio_events($payload),
     $paymentProofEvents
@@ -224,7 +225,7 @@ foreach($events as $event){
 
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);
 
-$business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$escalationThreshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
+$business=hache_sharky_business_values($pdo);$minAge=hache_sharky_config_int($business,'sharky_edad_minima',12,1,99);$maxAge=hache_sharky_config_int($business,'sharky_edad_maxima',65,1,120);$escalationThreshold=hache_sharky_config_int($business,'sharky_escalado_intentos',2,1,5);
 
 // A manual echo wins over every automatic send in the same webhook. Persist/process
 // echoes first, then normal messages. Payment-proof media stays evidence-only;
@@ -239,6 +240,10 @@ usort($processing,static function(array $a,array $b):int{
 foreach($processing as $event){
     if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
     $identityBefore=sharky_lab_identity_before($pdo,$event);
+    if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){
+        hache_sharky_regular_enrollment_process($pdo,$event,$business,$minAge,$maxAge);
+        continue;
+    }
     if(hache_sharky_commerce_event_candidate($event)){
         hache_sharky_commerce_process_event($pdo,$event,$business,$minAge);
         sharky_lab_notify_registration_transition($pdo,$event,$identityBefore);
@@ -264,4 +269,5 @@ hache_sharky_whatsapp_birthdate_flow_prime($payload,static fn(string $name):stri
 // Commerce v2 carries display-only fixes. Provision it separately so already-
 // published v1 resources are never silently reused after a JSON correction.
 hache_sharky_commerce_flow_v2_prime_throttled($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
+hache_sharky_regular_flow_prime($payload,static fn(string $name):string=>hache_sharky_lab_secret($name));
 exit;

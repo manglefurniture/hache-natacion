@@ -17,7 +17,7 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
     $normalize=static fn(string $value):string=>hache_sharky_orchestrator_normalize($value);
     $programFrom=static function(string $value) use($normalize): ?string {
         $t=$normalize($value);
-        if(preg_match('/\b(?:curso\s+)?intensivo\b/u',$t)===1)return 'intensive';
+        if(preg_match('/\b(?:curso\s+)?intensivo\b|\b(?:aprende|aprender)\s+a\s+nadar\b/u',$t)===1)return 'intensive';
         if(preg_match('/\bclases?\s+regulares?\b|\bcurso\s+regular\b/u',$t)===1)return 'regular';
         return null;
     };
@@ -36,10 +36,9 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
         $interest=$explicitInterest??$programFrom($combined);
         $isMetaAd=$sourceType==='ad'||trim((string)($ref['ctwa_clid']??''))!=='';
         if($isMetaAd){
-            // Regla operativa vigente 2026-09: el único anuncio Meta activo es de
-            // intensivos. Solo funciona como fallback cuando el usuario no expresó
-            // un interés distinto en su mensaje actual.
-            $interest??='intensive';
+            // La campaña identifica el canal de entrada, pero Sharky 3.0 obliga a
+            // una selección explícita Aprende a nadar / Clases regulares antes de
+            // fijar el producto. `interest` queda solo como atribución/contexto.
             return ['source'=>'meta_ad','interest'=>$interest];
         }
         if($sourceType!==''||trim((string)($ref['source_url']??''))!==''){
@@ -76,9 +75,11 @@ function hache_sharky_entry_apply(array $state,string $userText=''): array
 
 /**
  * Bootstrap exclusivo para el primer turno REAL de un número que WhatsApp ya
- * clasificó como prospecto no identificado. La campaña se conserva como contexto,
- * pero el prospecto empieza siempre por el bloque mínimo de identificación:
- * nombre -> para quién son las clases -> edad -> nivel.
+ * clasificó como prospecto no identificado.
+ *
+ * Meta Ads entra al funnel Sharky 3.0 cerrado. Web, referral no publicitario y
+ * WhatsApp directo conservan el onboarding vigente hasta que tengan su propio
+ * diseño aprobado.
  */
 function hache_sharky_entry_guided_first_prospect(array $state,string $userText='',int $now=0): array
 {
@@ -91,12 +92,22 @@ function hache_sharky_entry_guided_first_prospect(array $state,string $userText=
     foreach(['program','sede_clave','swim_level'] as $key)if(!empty($commercial[$key]))return $state;
 
     $state=hache_sharky_entry_apply($state,$userText);
+    $now=$now>0?$now:time();
+    if(($state['commercial_context']['entry_source']??'')==='meta_ad'){
+        return hache_sharky_orchestrator_flow(
+            $state,
+            'meta_ad_onboarding',
+            'program',
+            ['entry_bootstrap'=>true],
+            $now
+        );
+    }
     return hache_sharky_orchestrator_flow(
         $state,
         'prospect_onboarding',
         'name',
         ['entry_bootstrap'=>true],
-        $now>0?$now:time()
+        $now
     );
 }
 
@@ -110,6 +121,8 @@ function hache_sharky_entry_intro(array $state,string $userText=''): string
     if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding'){
         return 'Hola, soy Sharky, asistente IA de Hache Natación.';
     }
+    // Sharky 3.0 renderiza su propio saludo determinístico desde el estado Meta.
+    if(is_array($flow)&&($flow['name']??'')==='meta_ad_onboarding')return '';
     // Un alumno ya identificado no necesita el bloque comercial de captación.
     if(($state['identity']['kind']??'unknown')==='student')return $legacyBase;
     if($entry['source']==='meta_ad'&&$entry['interest']==='intensive'){
