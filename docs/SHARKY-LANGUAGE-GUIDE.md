@@ -32,6 +32,8 @@ No se deben aceptar como nombre confirmado respuestas con dominio/URL, correo, n
 
 El primer mensaje del usuario que abre la conversación no se interpreta como nombre. Sharky primero formula explícitamente la pregunta.
 
+Antes de consumir texto libre como respuesta al dato pendiente, Sharky distingue entre **respuesta al paso actual** y **duda lateral informativa**. Un saludo seguido de una consulta —por ejemplo, “Buen día, ubicación por favor” o “Hola, precio por favor”— no es un nombre. La duda se responde sin perder el estado y después se vuelve a mostrar la pregunta pendiente. Esta interpretación conversacional nunca autoriza a Brain a completar por su cuenta identidad, edad, nivel, formación, producto o sede.
+
 ### ¿Las clases son para ti?
 
 En `prospect_onboarding → participant`, además de los botones **Sí / No**, pueden entenderse equivalentes claros como:
