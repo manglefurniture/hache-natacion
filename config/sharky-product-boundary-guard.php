@@ -76,7 +76,10 @@ function hache_sharky_product_boundary_regular_pending_background(array $state):
 {
     $c=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
     $background=(string)($c['background']??'');
-    if($background==='formal')return false;
+    // `advanced` is a distinct, explicit eligibility signal from the guided
+    // onboarding. It must not be rewritten as `formal`, because the prospect did
+    // not necessarily say they have taken formal classes.
+    if(in_array($background,['formal','advanced'],true))return false;
     if(in_array($background,['self_taught','no_formal'],true))return false;
     return true;
 }
@@ -140,7 +143,7 @@ function hache_sharky_product_boundary_sanitize_state(array $state,string $userT
     $c=&$state['commercial_context'];
     $currentNoFormal=$userText!==''&&hache_sharky_product_boundary_no_formal_signal($userText);
     if($currentNoFormal)$c['background']='no_formal';
-    if(($c['swim_level']??null)==='swims'&&($c['background']??null)==='formal'){
+    if(($c['swim_level']??null)==='swims'&&in_array(($c['background']??null),['formal','advanced'],true)){
         $c['recommended_program']='regular';
         $c['program']='regular';
         foreach(['course_id','fecha_inicio','course_price','date_preference'] as $key)unset($c[$key]);
