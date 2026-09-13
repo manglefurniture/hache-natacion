@@ -77,8 +77,39 @@ function hache_sharky_groups_count_messages(array $payload): int
     return $count;
 }
 
+/**
+ * Meta may return a quick reply from carousel/template cards as messages[].type=button
+ * with button.payload/button.text. Sharky's generic adapter expects the equivalent
+ * interactive.button_reply shape, so normalize it at the shared pre-persistence
+ * payload boundary. Messages without a stable payload remain untouched/fail-closed.
+ */
+function hache_sharky_whatsapp_button_reply_compat(array $payload): array
+{
+    foreach(($payload['entry']??[]) as $entryIndex=>$entry){
+        if(!is_array($entry))continue;
+        foreach(($entry['changes']??[]) as $changeIndex=>$change){
+            if(!is_array($change))continue;
+            $value=$change['value']??null;if(!is_array($value)||!is_array($value['messages']??null))continue;
+            foreach($value['messages'] as $messageIndex=>$message){
+                if(!is_array($message)||(string)($message['type']??'')!=='button')continue;
+                $button=$message['button']??null;if(!is_array($button))continue;
+                $id=trim((string)($button['payload']??''));
+                if($id==='')continue;
+                $title=mb_substr(trim((string)($button['text']??'')),0,700);
+                $path=&$payload['entry'][$entryIndex]['changes'][$changeIndex]['value']['messages'][$messageIndex];
+                $path['type']='interactive';
+                $path['interactive']=['type'=>'button_reply','button_reply'=>['id'=>$id,'title'=>$title]];
+                unset($path['button']);
+                unset($path);
+            }
+        }
+    }
+    return $payload;
+}
+
 function hache_sharky_groups_filter_payload(array $payload,bool $enabled): array
 {
+    $payload=hache_sharky_whatsapp_button_reply_compat($payload);
     if($enabled)return $payload;
     foreach(($payload['entry']??[]) as $entryIndex=>$entry){
         if(!is_array($entry))continue;
