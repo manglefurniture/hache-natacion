@@ -76,9 +76,9 @@ function hache_sharky_entry_apply(array $state,string $userText=''): array
 
 /**
  * Bootstrap exclusivo para el primer turno REAL de un número que WhatsApp ya
- * clasificó como prospecto no identificado. No confirma una campaña ni un simple
- * interés informativo como programa elegido; solo conserva preferred_program si
- * el usuario hizo una elección explícita en su propio texto.
+ * clasificó como prospecto no identificado. La campaña se conserva como contexto,
+ * pero el prospecto empieza siempre por el bloque mínimo de identificación:
+ * nombre -> para quién son las clases -> edad -> nivel.
  */
 function hache_sharky_entry_guided_first_prospect(array $state,string $userText='',int $now=0): array
 {
@@ -91,16 +91,23 @@ function hache_sharky_entry_guided_first_prospect(array $state,string $userText=
     foreach(['program','sede_clave','swim_level'] as $key)if(!empty($commercial[$key]))return $state;
 
     $state=hache_sharky_entry_apply($state,$userText);
-    $explicitProgram=hache_sharky_orchestrator_program_choice($userText);
-    $data=['entry_bootstrap'=>true];
-    if(in_array($explicitProgram,['intensive','regular'],true))$data['preferred_program']=$explicitProgram;
-    return hache_sharky_orchestrator_flow($state,'qualify_prospect','swim',$data,$now>0?$now:time());
+    return hache_sharky_orchestrator_flow(
+        $state,
+        'prospect_onboarding',
+        'name',
+        ['entry_bootstrap'=>true],
+        $now>0?$now:time()
+    );
 }
 
 function hache_sharky_entry_intro(array $state,string $userText=''): string
 {
     $entry=hache_sharky_entry_context($state,$userText);
-    $base='Soy Sharky 🦈, el asistente IA de Hache Natación.';
+    $base='Hola, soy Sharky, asistente IA de Hache Natación.';
+    $flow=is_array($state['flow']??null)?$state['flow']:null;
+    // En el primer turno del onboarding la apertura debe ser neutral: todavía no
+    // vendemos ni adelantamos el producto aunque la campaña sugiera un interés.
+    if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding'&&($flow['step']??'')==='name')return $base;
     // Un alumno ya identificado no necesita el bloque comercial de captación.
     if(($state['identity']['kind']??'unknown')==='student')return $base;
     if($entry['source']==='meta_ad'&&$entry['interest']==='intensive'){
