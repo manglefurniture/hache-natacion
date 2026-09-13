@@ -2,59 +2,114 @@
 
 Esta guía documenta expresiones reales de WhatsApp que Sharky puede traducir a una intención canónica antes de entrar a las reglas comerciales.
 
-No es un diccionario general, no corrige todo el español y no sustituye Brain. Su objetivo es cubrir frases frecuentes, mexicanismos/coloquialismos y faltas comunes cuando el significado es inequívoco.
+No es un diccionario general, no corrige todo el español y no sustituye Brain. Su objetivo es cubrir frases frecuentes, coloquialismos y faltas comunes cuando el significado es inequívoco.
 
 ## Principio
 
 **Lenguaje flexible → intención canónica → reglas determinísticas.**
 
-La capa lingüística puede entender cómo escribe la gente. No puede decidir por sí sola producto, precio, sede, elegibilidad, inscripción ni pago.
+La capa lingüística puede entender cómo escribe la gente. No puede decidir por sí sola identidad, producto, precio, sede, elegibilidad, inscripción ni pago.
+
+## Onboarding inicial
+
+El onboarding de un prospecto nuevo sigue estos pasos estructurados:
+
+**nombre → para quién son las clases → edad → nivel → formación solo si Intermedio**.
+
+El texto libre puede equivaler a un botón únicamente cuando el estado actual hace la intención inequívoca. Si no, Sharky conserva el paso y vuelve a preguntar de forma suave.
+
+### Nombre
+
+En el paso `prospect_onboarding → name`, se aceptan formas simples como:
+
+- Roberto;
+- Roberto Pérez;
+- me llamo Roberto;
+- mi nombre es Roberto;
+- soy Roberto.
+
+No se deben aceptar como nombre confirmado respuestas con dominio/URL, correo, números, emojis o contenido que claramente no sea un nombre de persona.
+
+El primer mensaje del usuario que abre la conversación no se interpreta como nombre. Sharky primero formula explícitamente la pregunta.
+
+### ¿Las clases son para ti?
+
+En `prospect_onboarding → participant`, además de los botones **Sí / No**, pueden entenderse equivalentes claros como:
+
+**Sí**:
+
+- sí;
+- claro;
+- correcto;
+- para mí;
+- son para mí;
+- yo.
+
+**No**:
+
+- no;
+- no son para mí;
+- es para otra persona;
+- para otra persona.
+
+Un `sí` o `no` fuera de este paso no debe adquirir esta semántica automáticamente.
+
+### Edad
+
+En `prospect_onboarding → age`, una edad numérica inequívoca se canonicaliza al entero correspondiente. Si no se puede obtener una edad válida, no se avanza.
 
 ## Nivel de natación
 
-Cuando Sharky está preguntando si la persona sabe nadar, estas expresiones pueden equivaler a **Desde cero**:
+La pregunta canónica presenta botones **Principiante / Intermedio / Avanzado**.
 
+En `prospect_onboarding → level`, estas expresiones pueden equivaler a **Principiante**:
+
+- principiante;
+- básico / básica;
+- desde cero;
 - de cero / de ceros;
-- desde cero / desde ceros;
 - en cero / en ceros;
-- cero;
 - nada de nada;
 - no sé nadar;
 - no ce nadar;
-- no sé nada de nadar;
 - nunca he nadado;
 - no sé flotar;
-- quiero aprender a nadar;
-- quiero aprender a nadar y flotar.
+- quiero aprender a nadar.
 
-Estas expresiones pueden equivaler a **Ya sé nadar**, pero todavía requieren preguntar por formación formal:
+Pueden equivaler a **Intermedio** cuando la persona lo expresa de forma inequívoca:
 
-- nado un poco;
-- nado perrito;
-- me defiendo;
-- me defiendo en el agua;
-- me mantengo a flote;
-- sé flotar;
-- ya sé nadar.
+- intermedio / intermedia;
+- nivel intermedio.
 
-## Formación previa
+Pueden equivaler a **Avanzado**:
 
-Cuando Sharky ya confirmó que la persona sabe nadar:
+- avanzado / avanzada;
+- nivel avanzado.
 
-**Por mi cuenta / sin formación formal** puede expresarse como:
+Expresiones abiertas como “nado un poco”, “me defiendo” o “más o menos” no deben promover automáticamente a Avanzado ni resolver por sí solas una clasificación dudosa. Si el paso exige una de las tres categorías y la respuesta no es inequívoca, Sharky conserva el paso y vuelve a mostrar la pregunta/controles.
 
+## Formación previa de Intermedio
+
+La pregunta de formación previa se hace **solo después de que el nivel quedó Intermedio**.
+
+En `prospect_onboarding → intermediate_background`:
+
+**No ha tomado clases** puede expresarse como:
+
+- no;
+- nunca;
+- nunca he tomado clases;
+- no he tomado clases;
 - aprendí solo / sola;
 - por mi cuenta;
 - nadie me enseñó;
 - sin profesor;
 - sin entrenador;
-- nunca he tomado clases;
-- no he tomado clases;
-- `nunca`, solo cuando es la respuesta directa a la pregunta de si ha tomado clases formales;
 - autodidacta.
 
-**He tomado clases** puede expresarse como:
+**Sí ha tomado clases** puede expresarse como:
 
+- sí;
 - sí he tomado clases;
 - tomé clases;
 - fui a clases;
@@ -62,26 +117,40 @@ Cuando Sharky ya confirmó que la persona sabe nadar:
 - con entrenador;
 - clases formales.
 
-La palabra aislada `nunca` no se canonicaliza globalmente. Solo es inequívoca como **sin formación formal** cuando el estado estructurado confirma que Sharky está en el paso de antecedentes de formación.
+La palabra aislada `nunca` no se canonicaliza globalmente. Solo es inequívoca como ausencia de formación cuando el estado confirma que Sharky está haciendo esa pregunta.
 
-## Confirmación de la sede propuesta
+**Avanzado no entra a este paso.** Seleccionar Avanzado permite clases regulares directamente, pero no autoriza a Sharky a afirmar que la persona tuvo formación formal.
 
-Cuando el estado estructurado está exactamente en `qualify_prospect → sede` y la propuesta pendiente es **Colegio Monteverde**, una afirmación corta e inequívoca puede canonicalizarse como selección de Monteverde.
+## Información de producto
 
-Ejemplos válidos en ese contexto:
+Cuando el producto ya quedó resuelto, el botón de información es la ruta preferente para desplegar el detalle. Frases libres como “ver información”, “dame información” o equivalentes pueden tratarse como intención informativa únicamente si el producto activo ya está inequívocamente resuelto; no deben utilizarse para cambiar de producto.
 
-- sí;
-- sí me funciona;
-- me funciona;
-- está bien;
-- ok;
-- vale.
+## Selección de sede
 
-Esta interpretación es estrictamente contextual. Un `sí` aislado fuera de esa pregunta pendiente **no selecciona sede**, y una negativa o una elección explícita de Palapas se conserva para que la resuelva el flujo determinístico existente.
+En `prospect_onboarding → sede` existen tres intenciones canónicas:
 
-## Horarios y sede alternativa
+- `sede:monteverde` → Monteverde;
+- `sede:palapas` → Palapas;
+- `sede:both` → mostrar ambas ubicaciones, sin confirmar todavía una sede.
 
-Si ya existe un producto y una sede confirmados y el usuario pregunta por **más horarios** sin nombrar otra sede, Sharky puede interpretar la pregunta como una búsqueda informativa de alternativas en la otra sede, sin cambiar automáticamente la sede activa.
+Equivalentes textuales claros de **Ambas ubicaciones**:
+
+- ambas;
+- ambas ubicaciones;
+- las dos;
+- las dos ubicaciones;
+- ambas sedes;
+- las dos sedes.
+
+Después de mostrar ambas, Sharky vuelve a pedir una elección entre Monteverde y Palapas. En ese momento “ambas” ya no debe avanzar: se necesita una sede concreta.
+
+Una mención inequívoca de “Monteverde” o “Palapas” puede equivaler al botón correspondiente cuando el paso activo es sede.
+
+## Después de sede
+
+Con producto y sede confirmados, plan/horario/fecha y demás opciones deben resolverse contra el catálogo real. Los botones/listas son la interfaz preferente, pero un texto libre inequívoco que coincida con una opción vigente puede canonicalizarse a esa misma selección.
+
+Si el usuario pregunta por **más horarios** sin nombrar otra sede, Sharky puede consultar alternativas verificadas sin cambiar automáticamente la sede activa.
 
 Ejemplos:
 
@@ -93,11 +162,20 @@ Ejemplos:
 
 Si el turno anterior dejó claro un periodo —por ejemplo mañana/matutino—, la consulta alternativa conserva ese periodo.
 
-Ejemplo de intención canónica:
+La respuesta debe usar únicamente horarios verificados del backend. Consultar otra sede **no cambia la sede seleccionada** hasta que el usuario la acepte de forma explícita.
 
-`¿No tienes más horario?` después de consultar la mañana en Colegio Monteverde → `¿Qué horarios de la mañana tiene la otra sede?`
+## Recuperación suave
 
-La respuesta debe usar únicamente horarios verificados del backend. Consultar la otra sede **no cambia la sede seleccionada** hasta que el usuario la acepte de forma explícita.
+Si una respuesta no puede clasificarse con seguridad dentro de un paso controlado, la salida preferida es:
+
+**“Una disculpa, no entendí…” + reformulación de la pregunta activa.**
+
+Reglas:
+
+- no avanzar;
+- no borrar datos confirmados;
+- no inferir una opción por parecido léxico;
+- volver a mostrar botones cuando ese paso los tenga.
 
 ## Cómo crecer esta guía
 

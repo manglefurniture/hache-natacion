@@ -16,89 +16,95 @@ Antes de modificar Brain, onboarding, memoria comercial, flows de inscripción, 
 
 ---
 
-## GP-001 — Meta → principiante → recomendación intensivo → inscripción → pago
+## GP-001 — Prospecto nuevo → perfil mínimo → producto correcto → sede → catálogo guiado
 
-**Estado:** patrón positivo activo  
-**Origen:** conversación real observada el 10 de septiembre de 2026  
-**Privacidad:** caso anonimizado; no guardar nombre, teléfono, fecha de nacimiento ni capturas del prospecto en esta bitácora.
+**Estado:** patrón positivo activo, actualizado al onboarding aprobado el 12 de septiembre de 2026  
+**Origen:** evolución de conversaciones reales observadas en septiembre de 2026  
+**Privacidad:** casos anonimizados; no guardar nombre, teléfono, fecha de nacimiento ni capturas del prospecto en esta bitácora.
 
 ### Contexto
 
-Un prospecto entra desde un anuncio de Meta relacionado con aprender a nadar. Sharky identifica el origen y se presenta de forma transparente como asistente IA. El prospecto indica que empieza desde cero.
+Un prospecto nuevo puede entrar desde Meta, web o WhatsApp directo. La fuente sirve como contexto, pero el primer objetivo ya no es vender ni inferir el producto desde el anuncio: Sharky primero obtiene una identidad mínima limpia y después resuelve el producto de forma determinística.
 
-### Recorrido que funcionó
+### Recorrido que se debe preservar
 
-1. Sharky usa el anuncio como contexto, sin asumir que ya conoce todas las necesidades del prospecto.
-2. Pregunta por el nivel real de natación.
-3. Al confirmar que empieza desde cero, lleva el prospecto al curso intensivo como producto automático elegible de Hache Natación y explica brevemente el motivo.
-4. El prospecto elige sede.
-5. Sharky ofrece horarios disponibles mediante opciones controladas.
-6. El prospecto elige horario.
-7. Sharky ofrece fechas de inicio válidas.
-8. El prospecto elige fecha.
-9. Sharky ofrece iniciar inscripción.
-10. La inscripción pasa al flow determinístico protegido.
-11. El formulario recopila los datos necesarios y presenta una confirmación antes de ejecutar el alta.
-12. Una vez confirmada la inscripción, Sharky pasa al flow de forma de pago.
-13. El backend conserva la autoridad sobre inscripción y pago; Brain no inventa ni ejecuta operaciones sensibles.
+1. Sharky usa la ventana normal de debounce y se presenta una sola vez: **“Hola, soy Sharky, asistente IA de Hache Natación.”**
+2. Pide el nombre del contacto antes de vender. Ese nombre confirmado sustituye al `profile_name` extraño como autoridad para identificar al prospecto.
+3. Pregunta si las clases son para quien escribe mediante botones **Sí / No**.
+4. Si son para otra persona, conserva separados contacto y alumno y pide el nombre del alumno.
+5. Pregunta la edad de la persona que tomará las clases.
+6. Pide nivel con tres botones: **Principiante / Intermedio / Avanzado**.
+7. Principiante → curso intensivo.
+8. Intermedio → pregunta si ya ha tomado clases; No → intensivo, Sí → regulares.
+9. Avanzado → regulares directamente, sin afirmar ni preguntar que haya tomado clases formales.
+10. Sharky presenta una oferta breve del producto y un botón para ver la información.
+11. Al abrir información muestra precio/planes/duración vigentes y después ofrece **Monteverde / Palapas / Ambas ubicaciones**.
+12. Si elige Ambas, muestra las dos ubicaciones y vuelve a pedir una selección explícita entre Monteverde y Palapas.
+13. Con la sede confirmada, Sharky vuelve al catálogo estructurado existente para plan, horario, fecha y demás decisiones verificables.
+14. El flow protegido de inscripción/pago conserva sus guards y confirmaciones; Brain no lo suplanta.
 
 ### Invariantes — NO ROMPER
 
-- Brain puede comprender, recomendar y mantener el hilo conversacional.
-- **Elegibilidad dura:** quien empieza desde cero, no sabe nadar, aprendió por su cuenta o nunca ha tomado clases formales de natación no es elegible para venta automática de clases regulares. Para Sharky, el único producto automático en ese perfil es el curso intensivo. Una excepción a regulares solo puede autorizarla una persona del equipo.
-- Si alguien dice “sé nadar un poco” o equivalente pero todavía no sabemos si ha tomado clases formales, Sharky debe confirmar ese antecedente antes de ofrecer o comparar clases regulares. Nadar un poco no equivale a formación formal.
-- **Curso intensivo y clases regulares son productos distintos.** El intensivo dura 3 semanas y se toma de lunes a viernes; los planes semanales/mensuales pertenecen a clases regulares.
-- Cuando el intensivo ya es el programa activo, referencias genéricas como “las clases”, “precio”, “horarios”, “ubicación”, “cuándo empieza” o “el curso” siguen refiriéndose al intensivo; no pueden saltar a regulares por una palabra ambigua.
-- Una preferencia de frecuencia como “2 veces por semana”, “3 veces por semana” o “5 veces por semana” no puede convertir silenciosamente el intensivo en un plan regular. Para un perfil sin formación formal, esa frecuencia no habilita regulares: se mantiene intensivo y cualquier excepción requiere evaluación humana.
-- “Ambas”, “las dos”, “los dos” o “de las dos” no son por sí solos una selección de producto; deben resolverse contra el contexto inmediato y nunca cambiar de intensivo a regulares sin una intención inequívoca y elegible.
-- Si el prospecto ya sabe nadar y confirma que ha tomado clases formales, el producto automático es clases regulares; Sharky no abre una elección entre intensivo y regulares. Si aprendió por su cuenta o no ha tomado clases formales, el producto automático sigue siendo el curso intensivo.
-- Si una declaración nueva contradice el swim_level ya confirmado, Sharky no reemplaza silenciosamente ese dato: congela el avance comercial y pide una aclaración explícita antes de volver a determinar producto.
-- La preferencia posterior del cliente se respeta dentro de las reglas de elegibilidad; una preferencia no autoriza a Sharky a saltarse una valoración humana requerida.
-- La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo. Si aún no hay sede, Sharky propone primero Colegio Monteverde; si el prospecto la rechaza o pide Palapas Protudec, acepta Palapas y continúa sin insistir de nuevo con Monteverde.
-- En consultas de horarios, palabras aisladas como “ambos”, “las dos” o “los dos” se resuelven contra el contexto inmediato y **no significan automáticamente ambas sedes**. Solo una mención explícita de ambas sedes, de los dos nombres de sede o un alcance multi-sede inequívoco habilita una respuesta con Monteverde y Palapas. Un seguimiento sobre mañana/tarde/noche conserva la sede activa salvo que antes se haya establecido explícitamente ese alcance multi-sede.
-- Los horarios se validan **por programa y por sede**; nunca se forma una unión de horarios de Monteverde y Palapas para luego presentarla como si aplicara a ambas.
-- Referencia operativa actual del intensivo: Colegio Monteverde tiene 08:00–09:00, 19:00–20:00 y 20:00–21:00; Palapas Protudec tiene 07:00–08:00, 08:00–09:00, 09:00–10:00 y 20:00–21:00. En Palapas esos cuatro horarios también están habilitados para clases regulares. Si la configuración administrativa cambia, el backend vuelve a ser la autoridad y las regresiones deben actualizarse de forma explícita.
-- Horario y fecha se eligen usando disponibilidad real del backend y siempre dentro del programa activo.
-- El modelo no puede ampliar, mezclar ni inventar horarios fuera del catálogo verificado del backend; si la disponibilidad no puede verificarse, se falla cerrado.
-- Una vez que empieza un flow protegido de inscripción o pago, Brain no reescribe ni suplanta ese flow.
-- Debe existir confirmación explícita antes de ejecutar el alta.
-- Tras una inscripción correcta, el recorrido puede continuar hacia la forma de pago sin reiniciar la conversación.
-- Pausas de varios minutos entre mensajes no deben hacer perder el contexto.
 - La presentación de Sharky como IA ocurre una sola vez salvo que el usuario pregunte expresamente quién es.
+- El primer mensaje es neutral aunque el referral provenga de un anuncio de intensivo o regulares.
+- El mensaje de entrada del prospecto no se interpreta como si fuera la respuesta a la pregunta de nombre.
+- El nombre confirmado durante onboarding es la autoridad conversacional del contacto. Emojis, dominios o nombres extraños del perfil de WhatsApp no deben prevalecer sobre él.
+- Contacto y alumno son entidades distintas cuando las clases son para otra persona.
+- Si Sharky no entiende una de las preguntas iniciales, conserva el paso y responde de forma suave: “Una disculpa, no entendí…” + la pregunta correspondiente.
+- **Principiante → intensivo** sin ofrecer regulares automáticamente.
+- **Intermedio + no ha tomado clases → intensivo**.
+- **Intermedio + sí ha tomado clases → regulares**.
+- **Avanzado → regulares directo**. El marcador interno de avanzado no debe convertirse en una afirmación falsa de formación formal.
+- Curso intensivo y clases regulares son productos distintos. Una frecuencia semanal o la palabra genérica “clases” no cambia el producto por sí sola.
+- El intensivo dura 3 semanas, de lunes a viernes, y su precio general se toma de configuración mientras no exista un curso concreto con precio propio.
+- Los precios y cuotas de regulares se toman de las autoridades vigentes; el onboarding no debe duplicar una fuente de verdad independiente.
+- El selector inicial de sede ofrece Monteverde, Palapas y Ambas. En este recorrido ya no existe una obligación de proponer Monteverde primero.
+- “Ambas ubicaciones” es una solicitud de información/comparación, no una sede confirmada. Después de mostrar ambas, se exige selección explícita.
+- La sede elegida se conserva en contexto y no se vuelve a preguntar sin motivo.
+- Después de confirmar sede, las opciones de plan/horario/fecha salen del catálogo/backend. El modelo no puede ampliar, mezclar ni inventar disponibilidad.
+- Si el usuario escribe texto libre equivalente a una opción existente y es inequívoco, puede canonicalizarse a la misma intención que el botón.
+- Si el texto es ambiguo, Sharky no abre una ruta improvisada: conserva el paso y vuelve a presentar la pregunta/controles.
+- Una declaración nueva que contradiga nivel o elegibilidad confirmados no reemplaza silenciosamente el estado; se aclara antes de continuar.
+- Una vez que empieza un flow protegido de inscripción o pago, Brain no reescribe ni suplanta ese flow.
+- Debe existir confirmación explícita antes de ejecutar una mutación sensible.
+- Pausas normales entre mensajes no deben hacer perder el contexto confirmado.
+- Si la persona indica que ya es alumno, el onboarding de prospecto se abandona y se mantiene el handoff humano vigente para alumnos.
 
 ### Qué sí puede mejorar sin romper GP-001
 
 - Hacer mensajes más cortos.
-- Reducir confirmaciones redundantes.
-- Mejorar el tono y la naturalidad.
-- Elegir mejor cuándo mostrar botones/listas.
-- Evitar preguntas que no aportan al siguiente paso.
+- Mejorar tono y naturalidad sin alterar la semántica de los pasos.
+- Mejorar canonicalización de respuestas equivalentes.
+- Mejorar la presentación visual de botones/listas respetando sus IDs y autoridades.
+- Añadir contexto útil después de que el dato estructurado correspondiente ya esté confirmado.
 
 ### Señales de regresión
 
 Considerar GP-001 roto si una adecuación provoca cualquiera de estos comportamientos:
 
-- volver a preguntar nivel, sede, horario o fecha ya confirmados;
-- perder el hilo después de una pausa normal;
-- ofrecer clases regulares automáticamente a alguien que empieza desde cero o nunca ha tomado clases formales;
-- interpretar “nado un poco” como permiso suficiente para vender regulares sin confirmar formación formal;
-- cambiar de intensivo a regulares porque el usuario dijo de forma genérica “clases”, “precio” u otra referencia ambigua;
-- presentar 2/3/5 clases por semana como si fueran modalidades del curso intensivo;
-- interpretar “de las dos” como una orden para cambiar de producto;
-- interpretar una palabra ambigua como “ambos” como ambas sedes sin apoyo del contexto;
-- responder una comparación explícita de sedes con el catálogo de una sola sede;
-- mezclar horarios regulares de Monteverde dentro de una respuesta de intensivo o copiar horarios de una sede a la otra;
-- perder un alcance de ambas sedes que sí hubiera sido establecido explícitamente en una pregunta de seguimiento sobre mañana/tarde/noche;
-- ofrecer horarios del otro producto, horarios inventados o horarios no verificables;
+- abrir sin “Hola” o dejar de identificar a Sharky como IA;
+- vender un producto antes de pedir la identidad mínima del prospecto;
+- interpretar el primer “Hola, quiero información” como nombre;
+- conservar como nombre definitivo algo como un dominio, emoji o alias extraño cuando el prospecto ya dio su nombre;
+- mezclar nombre del contacto con nombre del alumno cuando son personas distintas;
+- avanzar de pregunta aunque la respuesta no se entendió;
+- volver a preguntar datos ya confirmados sin motivo;
+- ofrecer regulares a un Principiante;
+- enviar un Intermedio a regulares sin confirmar si ya tomó clases;
+- pedir formación previa adicional a un Avanzado antes de ofrecer regulares;
+- afirmar que un Avanzado tomó clases formales sin que lo haya dicho;
+- saltar directamente a sede sin mostrar la información básica del producto;
+- imponer Monteverde como primera propuesta dentro de este onboarding;
+- tratar “Ambas ubicaciones” como una sede confirmada;
+- dejar la conversación completamente abierta después de sede y perder el estado de plan/horario/fecha;
+- inventar horarios, fechas, precios o cupos fuera de sus autoridades;
 - convertir una respuesta conversacional de Brain en una operación sensible directa;
-- reiniciar el onboarding al entrar al flow de inscripción;
-- terminar una inscripción y no poder continuar al pago;
-- obligar a usar botones cuando el texto libre ya expresa claramente la selección;
-- impedir una derivación humana cuando el prospecto solicita una excepción a las reglas de elegibilidad.
+- obligar a reiniciar el onboarding al entrar al flow de inscripción;
+- impedir una derivación humana cuando el usuario ya es alumno o requiere una excepción.
 
 ### Cobertura automática relacionada
 
-La protección técnica de este recorrido se reparte actualmente entre las regresiones de Brain conversacional, frontera y elegibilidad de producto, alcance de horarios, WhatsApp adapter, commerce flows, enrollment-after-reserve, follow-up y pagos. Las futuras adecuaciones deben conservar esas pruebas verdes y añadir cobertura específica cuando aparezca un nuevo borde real.
+La protección técnica principal de este recorrido vive en `tests/sharky-guided-first-prospect-regression.php`, junto con las regresiones de frontera/elegibilidad de producto, alcance de horarios, WhatsApp adapter, commerce flows, inscripción, follow-up y pagos. Futuras adecuaciones deben conservar esas pruebas verdes y añadir cobertura específica cuando aparezca un nuevo borde real.
 
 ---
 
