@@ -32,7 +32,9 @@ function hache_sharky_prospect_onboarding_name(string $text): ?string
     $normalized=hache_sharky_orchestrator_normalize($name);
     // No persistir como nombre frases conversacionales comunes. El usuario puede
     // responderlas al no entender la pregunta; en ese caso debemos reintentar.
-    if(preg_match('/^(?:hola|buenas?|gracias|no\s+entendi|no\s+entiendo|no\s+se|quiero|quisiera|necesito|busco|me\s+interesa|dame|mandame|informacion)\b/u',$normalized)===1)return null;
+    if(preg_match('/^(?:hola|buen\s+dia|buenos\s+dias|buenas\s+tardes|buenas\s+noches|buenas?|gracias|no\s+entendi|no\s+entiendo|no\s+se|quiero|quisiera|necesito|busco|me\s+interesa|dame|mandame|informacion)\b/u',$normalized)===1)return null;
+    if(function_exists('hache_sharky_whatsapp_venue_help_request')&&hache_sharky_whatsapp_venue_help_request($name))return null;
+    if(function_exists('hache_sharky_whatsapp_batch_question_like')&&hache_sharky_whatsapp_batch_question_like($name))return null;
     $parts=array_values(array_filter(preg_split('/\s+/u',$name)?:[],static fn(string $part):bool=>$part!==''));
     if(count($parts)<1||count($parts)>6)return null;
     return mb_convert_case($name,MB_CASE_TITLE,'UTF-8');
@@ -75,6 +77,128 @@ function hache_sharky_prospect_onboarding_contact_name(array $state): string
 {
     $name=trim((string)($state['commercial_context']['prospect_name']??''));
     return $name!==''?$name:'Perfecto';
+}
+
+function hache_sharky_prospect_onboarding_input_matches_step(array $state,array $event): bool
+{
+    if(!hache_sharky_prospect_onboarding_active($state))return false;
+    $flow=$state['flow'];
+    $step=(string)($flow['step']??'');
+    $data=is_array($flow['data']??null)?$flow['data']:[];
+    $text=trim((string)($event['text']??''));
+    $id=strtolower(trim((string)($event['interactive_id']??'')));
+    if($step==='name'||$step==='student_name')return hache_sharky_prospect_onboarding_name($text)!==null;
+    if($step==='participant')return hache_sharky_prospect_onboarding_yes_no($text,$id,'participant')!==null;
+    if($step==='age')return function_exists('hache_sharky_whatsapp_declared_age')&&hache_sharky_whatsapp_declared_age($text)!==null;
+    if($step==='level')return hache_sharky_prospect_onboarding_level($text,$id)!==null;
+    if($step==='intermediate_background')return hache_sharky_prospect_onboarding_yes_no($text,$id,'background')!==null;
+    if($step==='product_info'){
+        $program=(string)($data['program']??($state['commercial_context']['program']??''));
+        return $id===($program==='regular'?'onboarding:info:regular':'onboarding:info:intensive');
+    }
+    if($step==='sede'){
+        if(hache_sharky_prospect_onboarding_both_venues($text,$id))return true;
+        $sede=function_exists('hache_sharky_whatsapp_detect_venue_preference')
+            ?hache_sharky_whatsapp_detect_venue_preference($text,$id):null;
+        return in_array($sede,['MONTEVERDE','PALAPAS'],true);
+    }
+    return false;
+}
+
+function hache_sharky_prospect_onboarding_side_question(array $state,array $event): bool
+{
+    if(!hache_sharky_prospect_onboarding_active($state))return false;
+    if(trim((string)($event['interactive_id']??''))!=='')return false;
+    $text=trim((string)($event['text']??''));
+    if($text===''||hache_sharky_prospect_onboarding_input_matches_step($state,$event))return false;
+    $intent=hache_sharky_orchestrator_contextual_intent($state,$text,'');
+    if(in_array($intent,['human','student_claim','cancel'],true))return false;
+
+    $probe=hache_sharky_orchestrator_normalize($text);
+    $probe=preg_replace('/^(?:(?:hola|buen\s+dia|buenos\s+dias|buenas\s+tardes|buenas\s+noches|buenas)\b[\s,;:!.-]*)+/u','',$probe)??$probe;
+    if(function_exists('hache_sharky_whatsapp_venue_help_request')&&hache_sharky_whatsapp_venue_help_request($probe))return true;
+    if(function_exists('hache_sharky_whatsapp_batch_question_like')&&hache_sharky_whatsapp_batch_question_like($probe))return true;
+    return str_contains($text,'?')||str_contains($text,'¿');
+}
+
+function hache_sharky_prospect_onboarding_resume_decision(array $state): array
+{
+    $flow=is_array($state['flow']??null)?$state['flow']:[];
+    $step=(string)($flow['step']??'');
+    $data=is_array($flow['data']??null)?$flow['data']:[];
+    if($step==='name')return hache_sharky_orchestrator_decision('prospect_name_prompt','Antes de seguir, ¿me puedes decir tu nombre, por favor?');
+    if($step==='participant')return hache_sharky_orchestrator_decision('prospect_participant_prompt','Para seguir, ¿las clases son para ti?',['type'=>'buttons','buttons'=>[
+        hache_sharky_orchestrator_button('onboarding:self:yes','Sí'),
+        hache_sharky_orchestrator_button('onboarding:self:no','No'),
+    ]]);
+    if($step==='student_name')return hache_sharky_orchestrator_decision('prospect_student_name_prompt','Para seguir, ¿cómo se llama la persona que tomaría las clases?');
+    if($step==='age'){
+        $self=($state['commercial_context']['participant_relation']??'self')==='self';
+        $participant=trim((string)($state['commercial_context']['participant_name']??''));
+        $question=$self?'¿Qué edad tienes?':($participant!==''?'¿Qué edad tiene '.$participant.'?':'¿Qué edad tiene la persona que tomaría las clases?');
+        return hache_sharky_orchestrator_decision('prospect_age_prompt','Para seguir, '.$question);
+    }
+    if($step==='level')return hache_sharky_orchestrator_decision('prospect_level_prompt','Para seguir, escoge el nivel que mejor te representa:',hache_sharky_prospect_onboarding_level_ui());
+    if($step==='intermediate_background')return hache_sharky_orchestrator_decision('prospect_intermediate_background_prompt','Para seguir, ¿ya has tomado clases de natación antes?',['type'=>'buttons','buttons'=>[
+        hache_sharky_orchestrator_button('onboarding:background:yes','Sí'),
+        hache_sharky_orchestrator_button('onboarding:background:no','No'),
+    ]]);
+    if($step==='product_info'){
+        $program=(string)($data['program']??($state['commercial_context']['program']??''));
+        $expected=$program==='regular'?'onboarding:info:regular':'onboarding:info:intensive';
+        return hache_sharky_orchestrator_decision('prospect_product_info_prompt','Para continuar, toca el botón para ver la información.',['type'=>'buttons','buttons'=>[
+            hache_sharky_orchestrator_button($expected,'Ver información'),
+        ]]);
+    }
+    if($step==='sede'){
+        $includeBoth=($data['both_shown']??false)!==true;
+        return hache_sharky_orchestrator_decision('prospect_sede_prompt','Para seguir, elige la sede con la que prefieres continuar:',hache_sharky_prospect_onboarding_venue_ui($includeBoth));
+    }
+    return hache_sharky_orchestrator_decision('prospect_onboarding_prompt','Cuando quieras, seguimos con el paso que tienes pendiente.');
+}
+
+function hache_sharky_prospect_onboarding_side_question_response(PDO $pdo,array $state,array $event,?callable $conversationAnswer=null,array $extraContext=[]): ?array
+{
+    if(!hache_sharky_prospect_onboarding_side_question($state,$event))return null;
+    $text=trim((string)($event['text']??''));
+    $answer='';
+    if(function_exists('hache_sharky_whatsapp_nado_libre_request')&&hache_sharky_whatsapp_nado_libre_request($text)){
+        $answer=hache_sharky_whatsapp_nado_libre_message();
+    }elseif(function_exists('hache_sharky_whatsapp_weather_cancellation_request')&&hache_sharky_whatsapp_weather_cancellation_request($text)){
+        $answer=hache_sharky_whatsapp_weather_cancellation_message();
+    }elseif(function_exists('hache_sharky_whatsapp_venue_help_request')&&hache_sharky_whatsapp_venue_help_request($text)){
+        $answer=hache_sharky_whatsapp_venue_help_message($pdo);
+        $answer=preg_replace('/\n\nRevisa cuál te queda mejor y elige abajo con cuál prefieres seguir\.\s*$/u','',$answer)??$answer;
+    }else{
+        if($conversationAnswer===null&&function_exists('hache_sharky_lab_answer'))$conversationAnswer='hache_sharky_lab_answer';
+        if(is_callable($conversationAnswer)){
+            $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
+            $context=$extraContext;
+            if(function_exists('hache_sharky_whatsapp_context')){
+                try{$context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);}
+                catch(Throwable $ignored){}
+            }
+            $instruction=function_exists('hache_sharky_whatsapp_style_instruction')
+                ?hache_sharky_whatsapp_style_instruction(['kind'=>'side_question'],$state):'';
+            $instruction.=' El usuario está dentro del onboarding inicial de prospectos. Interpreta este turno como una duda lateral informativa, no como respuesta al dato pendiente. Responde solo la duda con información verificada disponible. Si depende de nivel, producto o sede aún no confirmados, dilo brevemente sin inferirlos ni inventar. No cambies el paso ni hagas otra pregunta: el sistema volverá a mostrar la pregunta pendiente.';
+            $answer=(string)$conversationAnswer($text,$instruction,$state,$context);
+            if(function_exists('hache_sharky_whatsapp_clean_answer'))$answer=hache_sharky_whatsapp_clean_answer($answer);
+            if(function_exists('hache_sharky_whatsapp_enforce_confirmed_context'))$answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state);
+            if(function_exists('hache_sharky_whatsapp_enforce_no_reintroduction'))$answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$state,$text);
+        }
+        if($answer===''||(function_exists('hache_sharky_whatsapp_answer_looks_incomplete')&&hache_sharky_whatsapp_answer_looks_incomplete($answer))){
+            $answer='Te ayudo con esa duda. Si depende del nivel, producto o sede, te mostraré la información correcta en cuanto terminemos estos datos.';
+        }
+    }
+    $resume=hache_sharky_prospect_onboarding_resume_decision($state);
+    $message=rtrim($answer);
+    $prompt=trim((string)($resume['message']??''));
+    if($prompt!=='')$message.="\n\n".$prompt;
+    return [$state,hache_sharky_orchestrator_decision(
+        'prospect_onboarding_side_question',
+        $message,
+        is_array($resume['ui']??null)?$resume['ui']:[]
+    )];
 }
 
 function hache_sharky_prospect_onboarding_refresh_contact(PDO $pdo,array $state,string $contact): void
@@ -221,6 +345,11 @@ function hache_sharky_prospect_onboarding_handle(PDO $pdo,array $state,array $ev
     if($intent==='cancel'){
         $state=hache_sharky_orchestrator_clear_flow($state);
         return [$state,hache_sharky_orchestrator_decision('flow_cancelled','Listo, cancelé este proceso. Podemos seguir conversando normalmente.')];
+    }
+
+    if($step!=='name'||($data['entry_bootstrap']??false)!==true){
+        $sideQuestion=hache_sharky_prospect_onboarding_side_question_response($pdo,$state,$event,null,$extraContext);
+        if(is_array($sideQuestion))return $sideQuestion;
     }
 
     if($step==='name'){
