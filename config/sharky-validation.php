@@ -25,6 +25,7 @@ function hache_sharky_config_value_valid(string $key, string $value): bool
     if (in_array($key, ['sharky_pago_institucion','sharky_pago_beneficiario'], true)) return $value !== '' && mb_strlen($value) <= 100;
     if ($key === 'sharky_audio_habilitado') return in_array($value, ['0', '1'], true);
     if ($key === 'sharky_edad_minima') return ctype_digit($value) && (int)$value >= 1 && (int)$value <= 99;
+    if ($key === 'sharky_edad_maxima') return ctype_digit($value) && (int)$value >= 1 && (int)$value <= 120;
     if (in_array($key, [
         'sharky_precio_intensivo',
         'sharky_precio_regular_3',
