@@ -51,6 +51,7 @@ Un prospecto nuevo puede entrar desde Meta, web o WhatsApp directo. La fuente si
 - El nombre confirmado durante onboarding es la autoridad conversacional del contacto. Emojis, dominios o nombres extraños del perfil de WhatsApp no deben prevalecer sobre él.
 - Contacto y alumno son entidades distintas cuando las clases son para otra persona.
 - Si Sharky no entiende una de las preguntas iniciales, conserva el paso y responde de forma suave: “Una disculpa, no entendí…” + la pregunta correspondiente.
+- Una duda lateral informativa durante una pregunta inicial se responde sin consumirla como dato ni perder el paso; después Sharky vuelve a mostrar la pregunta/controles pendientes.
 - **Principiante → intensivo** sin ofrecer regulares automáticamente.
 - **Intermedio + no ha tomado clases → intensivo**.
 - **Intermedio + sí ha tomado clases → regulares**.
