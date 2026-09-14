@@ -11,6 +11,26 @@ require_once __DIR__.'/../config/sharky-followup.php';
 const HACHE_SHARKY_LEARN_BACKFILL_WINDOW_SECONDS = 86400;
 const HACHE_SHARKY_LEARN_BACKFILL_FLAG = '--execute-approved-20260914-learn';
 
+function hache_sharky_learn_reengagement_live_row_exists(PDO $pdo,string $contact): bool
+{
+    try{
+        $st=$pdo->prepare(
+            "SELECT payload_ciphertext,payload_iv,payload_tag FROM sharky_outbox "
+            ."WHERE contact_hash=:c AND status='PENDING' ORDER BY created_at DESC,id DESC LIMIT 12"
+        );
+        $st->execute([':c'=>hache_sharky_orchestrator_contact_hash($contact)]);
+        foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+            $payload=hache_sharky_outbox_decrypt($row);if(!is_array($payload))continue;
+            $meta=$payload['_sharky_followup']??null;if(!is_array($meta)||(int)($meta['stage']??0)!==3)continue;
+            if((string)($payload['template']['name']??'')===HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE)return true;
+        }
+        return false;
+    }catch(Throwable $e){
+        error_log('[sharky-learn-backfill] live row lookup failed');
+        return true;
+    }
+}
+
 /**
  * One-shot migration for the product decision approved on 2026-09-14:
  * - retire pending rows that still use the previous generic 48 h template;
@@ -30,6 +50,7 @@ function hache_sharky_learn_reengagement_backfill_once(?PDO $pdo=null,?int $now=
         'mode'=>'learn-reengagement-approved-20260914',
         'window_hours'=>24,
         'old_pending_template_cancelled'=>0,
+        'legacy_state_requeued'=>0,
         'receipt_rows_scanned'=>0,
         'contacts_seen'=>0,
         'learn_candidates'=>0,
@@ -147,8 +168,13 @@ function hache_sharky_learn_reengagement_backfill_once(?PDO $pdo=null,?int $now=
         }
         $existing=hache_sharky_followup_state($state);
         if((int)($existing['next_stage']??0)===3&&str_starts_with((string)($existing['status']??''),'reengagement')){
-            $stats['excluded']['already_scheduled']++;
-            continue;
+            if(hache_sharky_learn_reengagement_live_row_exists($pdo,$contact)){
+                $stats['excluded']['already_scheduled']++;
+                continue;
+            }
+            // A legacy row may have been cancelled above while its durable state
+            // still says stage 3 is armed. Requeue with the new template/token.
+            $stats['legacy_state_requeued']++;
         }
         $meta=hache_sharky_followup_arm_meta($state,$contact,'learn-backfill-20260914',3);
         if(!is_array($meta)){$stats['excluded']['queue_failed']++;continue;}
