@@ -30,7 +30,7 @@ function safe_side_meta(PDO $pdo,array $state,string $question): array
 
 $pdo=new PDO('sqlite::memory:');
 $pdo->exec('CREATE TABLE configuracion (clave TEXT PRIMARY KEY, valor TEXT NOT NULL)');
-$pdo->exec("INSERT INTO configuracion(clave,valor) VALUES ('sharky_precio_intensivo','1350'),('sharky_maps_monteverde','https://maps.example/mv'),('sharky_maps_palapas','https://maps.example/pal')");
+$pdo->exec("INSERT INTO configuracion(clave,valor) VALUES ('sharky_precio_intensivo','1350'),('sharky_maps_monteverde','https://maps.app.goo.gl/test-mv'),('sharky_maps_palapas','https://maps.app.goo.gl/test-pal')");
 $pdo->exec('CREATE TABLE sedes (id INTEGER PRIMARY KEY, clave TEXT, nombre TEXT, activo INTEGER)');
 $pdo->exec("INSERT INTO sedes VALUES (1,'MONTEVERDE','Colegio Monteverde',1),(2,'PALAPAS','Palapas Protudec',1)");
 $pdo->exec('CREATE TABLE horarios (id INTEGER PRIMARY KEY, sede_id INTEGER, hora_inicio TEXT, hora_fin TEXT, activo INTEGER, regular INTEGER, intensivo INTEGER)');
@@ -56,7 +56,7 @@ safe_side_ok(str_contains($price['message'],'$1,350 MXN')&&!str_contains($price[
 safe_side_ok(str_contains($price['message'],'No es mensualidad'),'The real monthly-price regression must be answered directly.');
 
 $location=safe_side_meta($pdo,safe_side_meta_state('venue',['program'=>'intensive'],$now+4),'¿Dónde está Palapas?');
-safe_side_ok(str_contains($location['message'],'https://maps.example/pal'),'Location must use the configured authority.');
+safe_side_ok(str_contains($location['message'],'https://maps.app.goo.gl/test-pal'),'Location must use the configured authority.');
 safe_side_ok(array_column($location['ui']['buttons']??[],'id')===['meta:venue:monteverde','meta:venue:palapas'],'Asking about Palapas must not select it.');
 
 $schedule=safe_side_meta($pdo,safe_side_meta_state('venue_detail',['program'=>'regular','sede_clave'=>'MONTEVERDE'],$now+5),'¿Qué horarios tienen?');
