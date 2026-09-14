@@ -63,7 +63,7 @@ Los tres canales comparten el mismo state machine, pero **la fuente real se cons
 
 1. Sharky se identifica explícitamente como asistente IA y comunica el rango de edad vigente.
 2. Muestra un carrusel horizontal con **Aprende a nadar / Clases regulares**, cada tarjeta con su imagen y quick reply.
-3. Texto libre en un paso cerrado no avanza: se conserva el paso y se repiten únicamente los controles, sin repetir imágenes.
+3. Texto libre en un paso cerrado no avanza. Una duda lateral informativa se responde con datos confirmados y después se repone exactamente el mismo control; una supuesta selección escrita solo repite los controles, sin repetir imágenes.
 4. **Aprende a nadar** muestra información completa del intensivo y después el carrusel **Monteverde / Palapas**.
 5. **Clases regulares** pregunta si ya tomó clases mediante **Sí, continuar / No, curso básico**.
 6. **No, curso básico** entra directamente al bloque del intensivo.
@@ -80,6 +80,9 @@ Los tres canales comparten el mismo state machine, pero **la fuente real se cons
 - `entry_source` conserva `meta_ad`, `web` o `direct`; compartir flujo no borra atribución.
 - Un prefill web o mensaje directo no se convierte por sí solo en producto/sede confirmado.
 - Brain no interpreta texto para avanzar ni reescribe producto, sede, plan o inscripción dentro del state machine.
+- La respuesta lateral segura funciona sin Brain conversacional, no abre 2B-A y falla sin inventar cuando falta una autoridad.
+- Contestar una duda no modifica producto, sede, nivel, turno, horario ni intención; una consulta comparativa sobre otra sede tampoco cambia la sede activa.
+- La capa informativa no ejecuta inscripciones, pagos, cancelaciones, reposiciones ni cambios de datos.
 - Las políticas laterales antiguas tampoco pueden adelantarse al funnel, incluso después de transcribir una nota de voz.
 - Solicitar explícitamente una persona o declarar que ya es alumno sí puede derivar a humano.
 - Retries no vuelven a enviar imágenes.
@@ -103,7 +106,7 @@ Considerar GP-002 roto si:
 - web/directo vuelve al onboarding de nombre;
 - se pierde o falsea la fuente de entrada;
 - texto libre como “Palapas” avanza sin tocar el control vigente;
-- una duda lateral abre Brain;
+- una duda lateral abre Brain, se limita a repetir el mensaje anterior sin contestar o pierde el cursor pendiente;
 - un audio abre una ruta lateral;
 - una imagen se repite en retry;
 - las tarjetas dejan de formar un carrusel;
@@ -121,6 +124,7 @@ Considerar GP-002 roto si:
 - `tests/sharky-pr162-review-regression.php`
 - `tests/sharky-guided-first-prospect-regression.php`
 - `tests/sharky-language-guide-regression.php`
+- `tests/sharky-safe-side-question-regression.php`
 - suites de commerce/WhatsApp Flow/registro/outbox
 - Quality completo del PR
 

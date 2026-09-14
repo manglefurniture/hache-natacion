@@ -169,6 +169,8 @@ Mientras `hache_sharky_meta_active(state)` sea verdadero:
 - texto libre no se convierte en producto/sede por inferencia;
 - una duda lateral informativa sí puede usar interpretación semántica limitada para contestar, pero esa respuesta no modifica estado ni decisiones y siempre repone el control vigente.
 
+La interpretación lateral es determinística y no llama a Brain conversacional ni a 2B-A. Solo cubre categorías informativas explícitas y datos confirmados por configuración, catálogo, estado o estas reglas. Si falta producto/sede u otra autoridad, la respuesta lo indica sin inventar. Solicitudes operativas o sensibles permanecen fuera de esta capa.
+
 Brain sigue existiendo para recorridos donde esté habilitado, pero no es autoridad de captación en Meta/web/direct.
 
 ## 12. Recursos visuales aprobados
