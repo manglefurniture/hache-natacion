@@ -218,6 +218,9 @@ Las salidas laterales permitidas dentro del funnel son explícitas y estrechas:
 - solicitud clara de hablar con una persona;
 - declaración de que ya es alumno;
 - guard de seguridad/edad/datos que requiera humano.
+- pregunta lateral informativa sobre precio, duración, ubicación, horarios, requisitos o diferencias de producto, respondida por una capa determinística con datos confirmados.
+
+La respuesta lateral informativa no depende de Brain conversacional ni de 2B-A. No consume el control pendiente, no modifica producto, sede, nivel, horario, turno o intención, no ejecuta operaciones y repone exactamente los controles del cursor vigente. Si falta una autoridad necesaria, responde brevemente sin inventar y conserva el mismo paso. Una solicitud de inscripción, pago, cancelación, reposición o cambio de datos nunca se ejecuta desde esta capa.
 
 ## 16. Takeover, pausa y reactivación
 
