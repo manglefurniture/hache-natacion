@@ -121,8 +121,12 @@ function hache_sharky_entry_intro(array $state,string $userText=''): string
     if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding'){
         return 'Hola, soy Sharky, asistente IA de Hache Natación.';
     }
-    // Sharky 3.0 renderiza su propio saludo determinístico desde el estado Meta.
-    if(is_array($flow)&&($flow['name']??'')==='meta_ad_onboarding')return '';
+    // El boundary de WhatsApp elimina cualquier presentación escrita en el payload
+    // antes de aplicar una única presentación determinística. Meta debe devolverla
+    // aquí para que el saludo obligatorio no desaparezca del primer carrusel.
+    if(is_array($flow)&&($flow['name']??'')==='meta_ad_onboarding'){
+        return 'Hola, soy Sharky, asistente IA de Hache Natación.';
+    }
     // Un alumno ya identificado no necesita el bloque comercial de captación.
     if(($state['identity']['kind']??'unknown')==='student')return $legacyBase;
     if($entry['source']==='meta_ad'&&$entry['interest']==='intensive'){

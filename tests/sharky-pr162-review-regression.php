@@ -55,7 +55,7 @@ pr162_review_ok(($metaGuided['commercial_context']['entry_source']??null)==='met
 pr162_review_ok(($metaGuided['commercial_context']['entry_interest']??null)==='intensive','Current Meta ad must retain intensive attribution.');
 pr162_review_ok(empty($metaGuided['commercial_context']['program']),'Meta referral interest must not become canonical program by itself.');
 pr162_review_ok(($metaGuided['flow']['name']??null)==='meta_ad_onboarding'&&($metaGuided['flow']['step']??null)==='program','Meta Ads must enter the dedicated Sharky 3.0 program selector.');
-pr162_review_ok(hache_sharky_entry_intro($metaGuided,'Hola')==='','Meta 3.0 renders its own deterministic IA disclosure instead of the legacy presentation.');
+pr162_review_ok(hache_sharky_entry_intro($metaGuided,'Hola')==='Hola, soy Sharky, asistente IA de Hache Natación.','Meta 3.0 must restore its deterministic IA disclosure at the WhatsApp presentation boundary.');
 
 $handled=hache_sharky_meta_handle($pdo,$metaGuided,['from'=>'529981112233','text'=>'Hola','interactive_id'=>''],$now+1,['contact'=>'529981112233']);
 pr162_review_ok(is_array($handled),'Meta 3.0 bootstrap must produce a deterministic response.');
