@@ -43,6 +43,8 @@ $now=1789400000;
 $product=safe_side_meta($pdo,safe_side_meta_state('program',[],$now),'¿Cuánto cuesta?');
 safe_side_ok(str_contains($product['message'],'depende del producto'),'A price question before product selection must fail safely without inventing a price.');
 safe_side_ok(array_column($product['ui']['buttons']??[],'id')===['meta:program:learn','meta:program:regular'],'Product controls must remain pending.');
+$namedProduct=safe_side_meta($pdo,safe_side_meta_state('program',[],$now),'¿Cuánto cuesta el intensivo?');
+safe_side_ok(str_contains($namedProduct['message'],'$1,350 MXN'),'A product named in an informational question must select the answer authority without selecting the product.');
 
 $level=safe_side_meta($pdo,safe_side_meta_state('regular_background',[],$now+1),'¿Necesito saber nadar?');
 safe_side_ok(str_contains($level['message'],'No necesitas saber nadar'),'A requirement question during level/background selection must be answered first.');
@@ -92,5 +94,8 @@ safe_side_ok(hache_sharky_safe_side_answer($pdo,safe_side_meta_state('program',[
 $source=(string)file_get_contents(__DIR__.'/../config/sharky-safe-side-question.php');
 safe_side_ok(!str_contains($source,'hache_sharky_lab_answer')&&!str_contains($source,'answer_user')&&!str_contains($source,'continue_discovery'),'The safe layer must not depend on Brain or open-conversation actions.');
 safe_side_ok(!preg_match('/(?:fallback|\?\?)\s*[^\n;]*1200/u',$source),'The safe layer must not contain a hardcoded price fallback.');
+$adapter=(string)file_get_contents(__DIR__.'/../config/sharky-whatsapp-adapter.php');
+safe_side_ok(str_contains($adapter,'🔒 Tu paso pendiente sigue guardado.'),'Legacy prospect side answers must preserve the functional emoji contract.');
 
 echo "SHARKY_SAFE_SIDE_QUESTION_OK\n";
+
