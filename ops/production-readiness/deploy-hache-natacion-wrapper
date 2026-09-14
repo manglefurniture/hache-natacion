@@ -107,6 +107,9 @@ reactivate_brain_conversational_once() { run_php_guarded "$REPO/bin/reactivate-b
 run_sharky_reengagement_backfill_dry_run() { run_php_guarded "$REPO/bin/sharky-reengagement-backfill-dry-run.php" --dry-run; }
 run_sharky_reengagement_backfill_send_once() { run_php_guarded "$REPO/bin/sharky-reengagement-backfill-send-once.php" --execute-approved-20260911; }
 run_sharky_reengagement_backfill_status_once() { run_php_guarded "$REPO/bin/sharky-reengagement-backfill-status-once.php" --status-approved-20260911; }
+run_sharky_learn_template_provision() { run_php_guarded "$REPO/bin/sharky-learn-template-provision.php" --ensure-approved-20260914; }
+run_sharky_learn_template_status() { run_php_guarded "$REPO/bin/sharky-learn-template-provision.php" --status; }
+run_sharky_learn_reengagement_backfill_once() { run_php_guarded "$REPO/bin/sharky-learn-reengagement-backfill-once.php" --execute-approved-20260914-learn; }
 run_sharky_learning_pending() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --pending 10; }
 run_sharky_learning_summary() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --summary; }
 run_sharky_learning_verdict() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --verdict; }
@@ -122,6 +125,9 @@ main() {
     sharky-backfill-dry-run) [[ "$#" -eq 1 ]] || fail "sharky-backfill-dry-run no acepta argumentos adicionales."; run_sharky_reengagement_backfill_dry_run ;;
     sharky-backfill-send-once) [[ "$#" -eq 1 ]] || fail "sharky-backfill-send-once no acepta argumentos adicionales."; run_sharky_reengagement_backfill_send_once ;;
     sharky-backfill-status-once) [[ "$#" -eq 1 ]] || fail "sharky-backfill-status-once no acepta argumentos adicionales."; run_sharky_reengagement_backfill_status_once ;;
+    sharky-learn-template-provision) [[ "$#" -eq 1 ]] || fail "sharky-learn-template-provision no acepta argumentos adicionales."; run_sharky_learn_template_provision ;;
+    sharky-learn-template-status) [[ "$#" -eq 1 ]] || fail "sharky-learn-template-status no acepta argumentos adicionales."; run_sharky_learn_template_status ;;
+    sharky-learn-backfill-once) [[ "$#" -eq 1 ]] || fail "sharky-learn-backfill-once no acepta argumentos adicionales."; run_sharky_learn_reengagement_backfill_once ;;
     sharky-learning-pending) [[ "$#" -eq 1 ]] || fail "sharky-learning-pending no acepta argumentos."; run_sharky_learning_pending ;;
     sharky-learning-summary) [[ "$#" -eq 1 ]] || fail "sharky-learning-summary no acepta argumentos."; run_sharky_learning_summary ;;
     sharky-learning-verdict) [[ "$#" -eq 1 ]] || fail "sharky-learning-verdict no acepta argumentos; recibe JSON por stdin."; run_sharky_learning_verdict ;;
