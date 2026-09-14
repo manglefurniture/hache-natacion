@@ -2,13 +2,17 @@
 
 declare(strict_types=1);
 
-require_once __DIR__.'/sharky-runtime.php';
-
 function hache_sharky_safe_side_normalize(string $text): string
 {
     if(function_exists('hache_sharky_orchestrator_normalize'))return hache_sharky_orchestrator_normalize($text);
     $text=mb_strtolower(trim($text),'UTF-8');
     return strtr($text,['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
+}
+
+function hache_sharky_safe_side_business_values(PDO $pdo): array
+{
+    if(!function_exists('hache_sharky_business_values'))require_once __DIR__.'/sharky-runtime.php';
+    return function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];
 }
 
 function hache_sharky_safe_side_sensitive_request(string $text): bool
@@ -71,7 +75,7 @@ function hache_sharky_safe_side_answer(PDO $pdo,array $state,string $text): ?str
 
     if(preg_match('/\b(?:precio|precios|costo|costos|cuesta|cuestan|cuanto|mensual|mensualidad|al mes)\b/u',$t)===1){
         if($program==='intensive'){
-            $business=hache_sharky_business_values($pdo);$price=$business['sharky_precio_intensivo']??null;
+            $business=hache_sharky_safe_side_business_values($pdo);$price=$business['sharky_precio_intensivo']??null;
             if(!is_numeric($price))return '💬 No tengo un precio confirmado disponible en este momento; prefiero no inventarlo.';
             return '💰 El curso intensivo cuesta $'.number_format((float)$price,0,'.',',').' MXN por las 3 semanas completas, de lunes a viernes. No es mensualidad y no lleva inscripción.';
         }
@@ -90,7 +94,7 @@ function hache_sharky_safe_side_answer(PDO $pdo,array $state,string $text): ?str
 
     if(preg_match('/\b(?:ubicacion|ubicaciones|direccion|direcciones|donde|maps|mapa|como llego|como llegar)\b/u',$t)===1){
         if($sede==='')return '📍 Tenemos Colegio Monteverde y Palapas Protudec en Cancún. Elige la sede y te mostraré su ubicación confirmada sin cambiar ninguna otra selección.';
-        $business=hache_sharky_business_values($pdo);$key=$sede==='MONTEVERDE'?'sharky_maps_monteverde':'sharky_maps_palapas';$url=trim((string)($business[$key]??''));
+        $business=hache_sharky_safe_side_business_values($pdo);$key=$sede==='MONTEVERDE'?'sharky_maps_monteverde':'sharky_maps_palapas';$url=trim((string)($business[$key]??''));
         if($url===''||filter_var($url,FILTER_VALIDATE_URL)===false)return '💬 No tengo una ubicación confirmada disponible para esa sede en este momento; prefiero no inventarla.';
         return '📍 '.($sede==='MONTEVERDE'?'Colegio Monteverde':'Palapas Protudec').":\n".$url;
     }
