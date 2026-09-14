@@ -21,8 +21,13 @@ function hache_sharky_safe_side_sensitive_request(string $text): bool
     return preg_match('/\b(?:inscribir|inscribeme|inscribirme|registrar|registrame|registrarme|cobra(?:me|r)?|paga(?:me|r)?|cancelame|cancelar|repone(?:r|me)?|cambia(?:r|me)?\s+(?:mi\s+)?(?:dato|datos|producto|sede|horario|turno))\b/u',$t)===1;
 }
 
-function hache_sharky_safe_side_program(array $state): string
+function hache_sharky_safe_side_program(array $state,string $text=''): string
 {
+    $t=hache_sharky_safe_side_normalize($text);
+    $intensive=preg_match('/\b(?:intensivo|curso\s+intensivo|aprende\s+a\s+nadar)\b/u',$t)===1;
+    $regular=preg_match('/\b(?:regular|clases\s+regulares)\b/u',$t)===1;
+    if($intensive&&!$regular)return 'intensive';
+    if($regular&&!$intensive)return 'regular';
     $program=(string)($state['commercial_context']['program']??'');
     return in_array($program,['intensive','regular'],true)?$program:'';
 }
@@ -71,9 +76,9 @@ function hache_sharky_safe_side_regular_prices(PDO $pdo,string $sede): array
 function hache_sharky_safe_side_answer(PDO $pdo,array $state,string $text): ?string
 {
     $text=trim($text);if($text===''||hache_sharky_safe_side_sensitive_request($text))return null;
-    $t=hache_sharky_safe_side_normalize($text);$program=hache_sharky_safe_side_program($state);$sede=hache_sharky_safe_side_venue($state,$text);
+    $t=hache_sharky_safe_side_normalize($text);$program=hache_sharky_safe_side_program($state,$text);$sede=hache_sharky_safe_side_venue($state,$text);
 
-    if(preg_match('/\b(?:precio|precios|costo|costos|cuesta|cuestan|cuanto|mensual|mensualidad|al mes)\b/u',$t)===1){
+    if(preg_match('/\b(?:precio|precios|costo|costos|cuesta|cuestan|cuanto\s+(?:cuesta|sale|vale)|mensual|mensualidad|al mes)\b/u',$t)===1){
         if($program==='intensive'){
             $business=hache_sharky_safe_side_business_values($pdo);$price=$business['sharky_precio_intensivo']??null;
             if(!is_numeric($price))return '💬 No tengo un precio confirmado disponible en este momento; prefiero no inventarlo.';
@@ -117,3 +122,4 @@ function hache_sharky_safe_side_answer(PDO $pdo,array $state,string $text): ?str
 
     return '💬 No tengo información confirmada suficiente para responder esa duda sin adivinar. Tu selección pendiente se conserva.';
 }
+
