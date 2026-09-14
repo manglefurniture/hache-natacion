@@ -171,7 +171,7 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
         $action=strtolower(trim((string)($data['user_action']??'')));
         if($action==='cancel'){
             $sede=strtoupper((string)($flow['data']['sede_clave']??($state['commercial_context']['sede_clave']??'')));
-            if(($state['commercial_context']['entry_source']??'')==='meta_ad'&&($state['commercial_context']['program']??'')==='regular'&&in_array($sede,['MONTEVERDE','PALAPAS'],true)&&defined('HACHE_SHARKY_META_FLOW')&&function_exists('hache_sharky_meta_venue_detail')){
+            if(function_exists('hache_sharky_meta_supported_source')&&hache_sharky_meta_supported_source($state)&&($state['commercial_context']['program']??'')==='regular'&&in_array($sede,['MONTEVERDE','PALAPAS'],true)&&defined('HACHE_SHARKY_META_FLOW')&&function_exists('hache_sharky_meta_venue_detail')){
                 $state['commercial_context']['sede_clave']=$sede;$state['commercial_context']['meta_step']='venue_detail';$state=hache_sharky_orchestrator_flow($state,HACHE_SHARKY_META_FLOW,'venue_detail',['sede_clave'=>$sede],time());
                 $decision=hache_sharky_meta_venue_detail($pdo,$state,$sede);
             }else{
