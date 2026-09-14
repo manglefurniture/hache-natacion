@@ -154,13 +154,11 @@ function hache_sharky_language_prepare_event(PDO $pdo,array $event): array
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){return $event;}
     if(($state['identity']['kind']??'unknown')!=='prospect')return $event;
 
-    // Sharky 3.0 Meta is a closed state machine. Tag typed replies as a
-    // deterministic non-button input before legacy side-question/age shortcuts
-    // run. The Meta handler can still recognize explicit human/student requests,
-    // but all other free text simply repeats the buttons for the current step.
-    if(function_exists('hache_sharky_meta_active')
-        &&($state['commercial_context']['entry_source']??'')==='meta_ad'
-        &&hache_sharky_meta_active($state)){
+    // Sharky 3.0 is a closed state machine for new Meta/web/direct prospects.
+    // Tag typed replies before legacy side-question/age shortcuts run. The closed
+    // handler can still recognize explicit human/student requests, but all other
+    // free text simply repeats the controls for the current step.
+    if(function_exists('hache_sharky_meta_active')&&hache_sharky_meta_active($state)){
         $event['_language_original_text']=$text;
         $event['interactive_id']='meta:free_text';
         return $event;
