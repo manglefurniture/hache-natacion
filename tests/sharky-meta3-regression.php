@@ -66,7 +66,7 @@ meta3_expect(str_contains($outbox,'hache_sharky_outbox_sequence_predecessor_stat
 meta3_expect(str_contains($outbox,"['INVALID','MISSING','DEAD','CANCELLED']"),'Broken visual sequence predecessors must fail closed instead of sending controls out of order.');
 
 meta3_expect(str_contains($worker,'$metaResultLocked')&&str_contains($worker,'if(!$metaResultLocked)')&&str_contains($worker,'hache_sharky_brain_2ba_apply'),'Brain 2B-A must remain available globally but be bypassed for deterministic capture results.');
-meta3_expect(str_contains($worker,'$metaDeterministic=is_array($brainBeforeState)')&&str_contains($worker,'hache_sharky_meta_active($brainBeforeState)')&&!str_contains($worker,"&&($brainBeforeState['commercial_context']['entry_source']??'')==='meta_ad'"),'Pre-turn deterministic lock must protect Meta, web and direct equally.');
+meta3_expect(str_contains($worker,'$metaDeterministic=is_array($brainBeforeState)')&&str_contains($worker,'hache_sharky_meta_active($brainBeforeState)')&&!str_contains($worker,"&&(\$brainBeforeState['commercial_context']['entry_source']??'')==='meta_ad'"),'Pre-turn deterministic lock must protect Meta, web and direct equally.');
 meta3_expect(str_contains($worker,'if(!$metaDeterministic&&$text!=='),'Legacy free-text early handoff policy must not preempt closed Meta/web/direct steps.');
 
 // Prospect messages use the agreed functional emoji style: natural, useful and not decorative overload.
