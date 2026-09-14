@@ -93,13 +93,21 @@ function hache_sharky_learn_template_discover_waba(string $token,string $phoneId
     return '';
 }
 
-function hache_sharky_learn_template_body(array $template): string
+function hache_sharky_learn_template_component_text(array $template,string $type): string
 {
+    $type=strtoupper(trim($type));
     foreach(($template['components']??[]) as $component){
-        if(!is_array($component)||strtoupper((string)($component['type']??''))!=='BODY')continue;
+        if(!is_array($component)||strtoupper((string)($component['type']??''))!==$type)continue;
         return trim((string)($component['text']??''));
     }
     return '';
+}
+
+function hache_sharky_learn_template_components_exact(array $template): bool
+{
+    return hash_equals(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_HEADER,hache_sharky_learn_template_component_text($template,'HEADER'))
+        &&hash_equals(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY,hache_sharky_learn_template_component_text($template,'BODY'))
+        &&hash_equals(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_FOOTER,hache_sharky_learn_template_component_text($template,'FOOTER'));
 }
 
 /** @return array<string,mixed>|null */
@@ -130,23 +138,27 @@ function hache_sharky_learn_template_run(bool $ensure): array
 
     $existing=hache_sharky_learn_template_find($waba,$token,$version);
     if(is_array($existing)){
-        $exact=hash_equals(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY,hache_sharky_learn_template_body($existing));
-        if(!$exact)throw new RuntimeException('Ya existe la plantilla con el mismo nombre pero con un BODY distinto; no se modifica automáticamente');
+        $exact=hache_sharky_learn_template_components_exact($existing);
+        if(!$exact)throw new RuntimeException('Ya existe la plantilla con el mismo nombre pero sus componentes no coinciden con la versión aprobada; no se modifica automáticamente');
         return [
             'ok'=>true,'action'=>'existing','name'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE,
             'language'=>'es_MX','category'=>(string)($existing['category']??''),'status'=>(string)($existing['status']??'UNKNOWN'),
-            'body_exact'=>true,
+            'components_exact'=>true,
         ];
     }
     if(!$ensure)return [
-        'ok'=>true,'action'=>'absent','name'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE,'language'=>'es_MX','status'=>'ABSENT','body_exact'=>false,
+        'ok'=>true,'action'=>'absent','name'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE,'language'=>'es_MX','status'=>'ABSENT','components_exact'=>false,
     ];
 
     $create=hache_sharky_learn_template_graph('POST','/'.$waba.'/message_templates',$token,$version,[],[
         'name'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE,
         'language'=>'es_MX',
         'category'=>'MARKETING',
-        'components'=>[['type'=>'BODY','text'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY]],
+        'components'=>[
+            ['type'=>'HEADER','format'=>'TEXT','text'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_HEADER],
+            ['type'=>'BODY','text'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY],
+            ['type'=>'FOOTER','text'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_FOOTER],
+        ],
     ]);
     if($create['status']<200||$create['status']>=300){
         throw new RuntimeException('Meta rechazó la creación de la plantilla: '.($create['error']!==''?$create['error']:'HTTP '.$create['status']));
@@ -155,7 +167,7 @@ function hache_sharky_learn_template_run(bool $ensure): array
     return [
         'ok'=>true,'action'=>'created','name'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE,'language'=>'es_MX',
         'category'=>(string)($created['category']??'MARKETING'),'status'=>(string)($created['status']??$create['json']['status']??'PENDING'),
-        'body_exact'=>is_array($created)&&hash_equals(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY,hache_sharky_learn_template_body($created)),
+        'components_exact'=>is_array($created)&&hache_sharky_learn_template_components_exact($created),
     ];
 }
 
