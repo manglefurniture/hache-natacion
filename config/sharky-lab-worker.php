@@ -231,8 +231,9 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
         hache_sharky_metric_increment('brain_diag_error');
         error_log('[sharky-brain-shadow] unable to load pre-turn state');
     }
+    // Closed Sharky 3.0 capture is deterministic regardless of whether the
+    // prospect came from Meta Ads, the website, or WhatsApp direct.
     $metaDeterministic=is_array($brainBeforeState)
-        &&($brainBeforeState['commercial_context']['entry_source']??'')==='meta_ad'
         &&function_exists('hache_sharky_meta_active')
         &&hache_sharky_meta_active($brainBeforeState);
 
@@ -307,7 +308,7 @@ function hache_sharky_lab_process_event(PDO $pdo,array $event,array $business,?i
 
     if(is_array($brainBeforeState)&&is_array($result['state']??null)){
         // Keep the read-only diagnostic shadow, but never let Brain 2B-A rewrite
-        // a Sharky 3.0 Meta state-machine decision. Other channels stay unchanged.
+        // a closed Sharky 3.0 capture decision. Other channels stay unchanged.
         hache_sharky_brain_shadow_observe($brainBeforeState,$result['state'],$event,$result,$groupId==='');
         $metaResultLocked=$metaDeterministic||(string)($result['code']??'')==='META_AD_ONBOARDING';
         if(!$metaResultLocked){
