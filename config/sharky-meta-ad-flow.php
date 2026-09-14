@@ -110,7 +110,7 @@ function hache_sharky_meta_intensive_info(PDO $pdo,bool $images=true): array
     $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];
     $price=is_numeric($business['sharky_precio_intensivo']??null)?(int)$business['sharky_precio_intensivo']:1200;
     $money=number_format($price,0,'.',',');
-    $message="🏊‍♂️ Curso básico para aprender a nadar\n\n"
+    $message="Curso básico para aprender a nadar\n\n"
         ."📅 Duración: 3 semanas, de lunes a viernes, todos los días.\n"
         ."💰 Precio total (todo el curso): $".$money." MXN.\n"
         ."• Dirigido a: personas que empiezan desde cero o nunca han tomado clases de natación.\n"
@@ -140,7 +140,7 @@ function hache_sharky_meta_regular_price_line(PDO $pdo,int $sessions): string
 
 function hache_sharky_meta_regular_info(PDO $pdo,bool $images=true): array
 {
-    $message="🏊‍♂️ Clases regulares de natación\n\n"
+    $message="Clases regulares de natación\n\n"
         ."💰 Modalidad y mensualidades:\n"
         .hache_sharky_meta_regular_price_line($pdo,3)."\n"
         .hache_sharky_meta_regular_price_line($pdo,5)."\n"
