@@ -1,189 +1,145 @@
 # SHARKY — CORE RULES
 
-> **Documento normativo de Sharky.** Este archivo define el esqueleto comercial, conversacional y de seguridad que debe revisarse **antes de modificar cualquier comportamiento de Sharky**.
+> **Documento normativo de Sharky.** Define el esqueleto comercial, conversacional y de seguridad que debe revisarse antes de modificar cualquier comportamiento de Sharky.
 >
-> Si un cambio propuesto contradice una regla de este documento, introduce ambigüedad sobre ella o no puede demostrar que la conserva, **el cambio no se hace** hasta aclarar la contradicción.
+> Si un cambio contradice una regla de este documento, introduce ambigüedad sobre ella o no puede demostrar que la conserva, **el cambio no se hace** hasta aclarar la contradicción.
 
-Última actualización: 2026-09-13
+Última actualización: 2026-09-13.
 
 ## 1. Propósito
 
-Este documento existe para evitar regresiones por pérdida de contexto entre conversaciones, agentes, PRs o cambios futuros.
+Este documento evita regresiones por pérdida de contexto entre conversaciones, PRs o cambios futuros. Las reglas fundamentales no pueden quedar únicamente en prompts: cuando sean verificables deben existir también en estado/código/guards y en regresiones.
 
-No intenta documentar cada función ni cada detalle técnico. Define las reglas que **no pueden reinterpretarse libremente** porque determinan cómo inicia Sharky, qué puede vender, a quién, en qué orden y bajo qué condiciones.
+Cualquier PR que cambie conversación, clasificación, memoria comercial, registro, pagos, sede, producto, nivel, acciones reales o Brain debe comprobar este archivo.
 
-Cualquier PR que cambie conversación, clasificación, memoria comercial, seguimiento, registro, pagos, sede, producto, nivel, acciones reales o comportamiento del Brain debe comprobar explícitamente este archivo antes de mergear.
+## 2. Alcance actual de Sharky 3.0
 
-### 1.1 Alcance durante la transición a Sharky 3.0
+Para un **prospecto nuevo/no alumno**, las fuentes siguientes comparten el funnel determinístico de captación Sharky 3.0:
 
-Las reglas de onboarding por perfil de este documento siguen siendo la autoridad para **web, WhatsApp directo y referrals no publicitarios**.
+- `meta_ad` — publicidad Meta;
+- `web` — enlace/prefill oficial desde hnATACION.com;
+- `direct` — WhatsApp directo sin referral/prefill web.
 
-Para un **prospecto nuevo/no alumno proveniente de publicidad Meta** (`entry_source = meta_ad`), `docs/SHARKY-3-META-FLOW.md` sustituye únicamente el recorrido de captación que contradiga estas secciones: entrada por selector **Aprende a nadar / Clases regulares**, pasos cerrados por controles, rango 12–65 y exclusión de Brain de las decisiones del state machine Meta.
+La fuente real se conserva para atribución y analítica. Compartir el mismo state machine **no convierte web/directo en Meta**.
 
-El resto de las invariantes núcleo continúa vigente también en Meta: seguridad e integridad de datos, identidad de alumnos, autoridades de backend, guards transaccionales, pagos y fail-closed. Un alumno existente que llegue desde un anuncio sigue siendo alumno y pasa a takeover humano. Ninguna regla específica de Meta se aplica automáticamente a web o WhatsApp directo.
+El identificador interno histórico `meta_ad_onboarding` y el archivo `docs/SHARKY-3-META-FLOW.md` se conservan por compatibilidad, pero su alcance normativo ya incluye Meta, web y directo.
 
-## 2. Jerarquía general
+Los **referrals no publicitarios** conservan temporalmente el onboarding anterior por perfil como fallback controlado.
+
+Un alumno conocido nunca se degrada a prospecto por entrar desde anuncio, web o WhatsApp directo: conserva su identidad y pasa al manejo de alumno/takeover correspondiente.
+
+## 3. Jerarquía general
 
 Cuando dos comportamientos compitan, se aplica este orden:
 
-1. **Seguridad e integridad de datos.** No ejecutar acciones reales sin intención y confirmación válidas.
-2. **Identidad mínima del prospecto.** Antes de vender, Sharky identifica a quién atiende y quién tomará las clases.
-3. **Elegibilidad comercial.** El perfil real del alumno determina qué producto puede vender Sharky.
-4. **Producto canónico.** Una vez resuelto el perfil, Sharky asigna el producto correspondiente; no abre opciones incompatibles.
-5. **Sede.** Se confirma explícitamente después de presentar la información básica del producto.
-6. **Horario, plan, fecha y demás detalles.** Solo después de producto y sede.
-7. **Contexto confirmado más reciente del usuario.** Las preferencias modificables se respetan siempre que no contradigan elegibilidad o seguridad.
-8. **Coherencia conversacional.** No repetir preguntas ya resueltas ni contradecir información confirmada.
-9. **Naturalidad.** Brain puede expresarse con libertad solo dentro de los límites anteriores.
+1. **Seguridad e integridad de datos.**
+2. **Identidad alumno/prospecto y fuente real.**
+3. **Estado del funnel determinístico vigente.**
+4. **Elección explícita del usuario mediante el control vigente.**
+5. **Elegibilidad comercial y guards del producto.**
+6. **Producto canónico.**
+7. **Sede confirmada.**
+8. **Horario, plan, fecha y demás datos verificados del backend.**
+9. **Contexto confirmado más reciente.**
+10. **Naturalidad conversacional**, solo donde el recorrido la permita.
 
 La naturalidad nunca puede saltarse una regla comercial, de elegibilidad o de seguridad.
 
-## 3. Identidad de Sharky
+## 4. Identidad de Sharky
 
 - Sharky es un **asistente con IA de Hache Natación**.
-- Nunca debe hacerse pasar por una persona.
-- El primer mensaje a un prospecto nuevo debe comenzar con una presentación neutral: **“Hola, soy Sharky, asistente IA de Hache Natación.”**
-- Puede conversar de forma natural, pero no inventar datos del negocio, cupos, horarios, precios, políticas, pagos, registros ni estados administrativos.
-- La conversación abierta no es autoridad para ejecutar una mutación real.
+- Nunca se hace pasar por una persona.
+- El primer mensaje de captación cerrada debe identificarlo claramente, por ejemplo: **“Hola, soy Sharky 🦈, asistente IA de Hache Natación.”**
+- La presentación ocurre una sola vez salvo que el usuario pregunte quién es.
+- No inventa datos del negocio, cupos, horarios, precios, políticas, pagos, registros ni estados administrativos.
+- La conversación abierta no es autoridad para ejecutar mutaciones.
 
-## 4. Onboarding obligatorio de prospectos nuevos
+## 5. Entrada y atribución
 
-Para web, WhatsApp directo y referrals no publicitarios, un número nuevo identificado como prospecto debe comenzar por un bloque corto y determinístico de identificación antes de entrar a la venta. Para `meta_ad`, aplica el recorrido específico definido en `docs/SHARKY-3-META-FLOW.md` conforme a §1.1.
+### 5.1 Meta Ads
 
-Orden obligatorio del onboarding por perfil:
+Referral/`ctwa_clid` determina `entry_source = meta_ad`. El interés de campaña puede conservarse como atribución, pero **no escoge producto por el usuario**.
 
-1. **Nombre del contacto.**
-2. **Confirmar si las clases son para quien escribe.**
-3. **Edad de la persona que tomará las clases.**
-4. **Nivel declarado:** Principiante, Intermedio o Avanzado.
-5. **Formación previa**, únicamente cuando el nivel declarado sea Intermedio.
-6. **Producto canónico.**
-7. **Información básica del producto.**
-8. **Sede.**
-9. **Horario / plan / fecha / demás detalles.**
-10. **Inscripción / pago**, cuando corresponda y con sus confirmaciones propias.
+### 5.2 Web
 
-### 4.1 Primer mensaje
+Los enlaces oficiales que abren WhatsApp usan prefills del tipo `Hola Hache Natación, quiero...`. Esa firma se clasifica como `entry_source = web` aunque el texto mencione inscripción, orientación o una sede.
 
-En el onboarding por perfil, el primer mensaje debe ser neutral y no vender todavía, incluso si existe contexto de entrada de un producto concreto.
+El prefill no preselecciona producto ni sede.
 
-Estructura:
+### 5.3 WhatsApp directo
 
-**“Hola, soy Sharky, asistente IA de Hache Natación. Necesito un par de datos tuyos para conocernos mejor. Por favor, ¿me puedes decir tu nombre?”**
+Un prospecto nuevo sin referral publicitario ni firma web queda `entry_source = direct`.
 
-La fuente o contexto se conserva, pero no puede convertirse por sí sola en producto confirmado.
+Lo que escriba en el primer turno tampoco sustituye los controles del funnel.
 
-El primer turno de texto usa la ventana normal de debounce de WhatsApp; actualmente **2.8 segundos**.
+### 5.4 Referral no publicitario
 
-### 4.2 Nombre confirmado y contacto
+`entry_source = referral` conserva por ahora el onboarding por perfil anterior. Este fallback no puede invadir Meta/web/direct.
 
-El nombre escrito por el prospecto durante este paso es la autoridad de nombre para la conversación y para normalizar el contacto del prospecto.
+## 6. Funnel determinístico común — Meta/web/direct
 
-- No usar como identidad definitiva un `profile_name` de WhatsApp con emojis, dominios, nombres comerciales o contenido extraño cuando ya existe un nombre confirmado por la persona.
-- El nombre confirmado debe quedar en estado estructurado.
-- Si la respuesta no parece un nombre válido, Sharky no avanza y pide el dato de nuevo de forma suave.
+Orden obligatorio:
 
-### 4.3 ¿Las clases son para ti?
+1. presentación de Sharky como IA + edad vigente;
+2. carrusel **Aprende a nadar / Clases regulares**;
+3. si Aprende a nadar → información completa de intensivo;
+4. si Clases regulares → confirmar si ya tomó clases;
+5. si No → intensivo; si Sí → información de regulares;
+6. carrusel **Colegio Monteverde / Palapas Protudec**;
+7. información autoritativa de la sede/producto;
+8. **Inscribirme / Ver otra sede**;
+9. Flow protegido correspondiente;
+10. pago/takeover según reglas del producto.
 
-Después del nombre:
+Producto, sede, plan o inscripción **no se deciden por texto libre o Brain** mientras este state machine esté activo.
 
-**“Bueno, {Nombre}, ¿las clases son para ti?”**
+## 7. Selector de producto
 
-Usar botones **Sí / No**.
+El primer bloque visual usa un carrusel nativo con dos tarjetas:
 
-- **Sí:** el contacto y el alumno son la misma persona; preguntar su edad.
-- **No:** conservar el nombre del contacto, pedir el nombre de la persona que tomará las clases y después su edad.
+- `meta:program:learn` — **Aprende a nadar**;
+- `meta:program:regular` — **Clases regulares**.
 
-Contacto y alumno no deben mezclarse en estado.
+El usuario debe tocar el control. El texto libre no avanza el paso.
 
-### 4.4 Edad
+Si escribe en vez de tocar:
 
-La edad corresponde siempre a la persona que tomará las clases.
+- conservar el mismo paso;
+- no interpretar la frase como selección;
+- repetir solo los controles vigentes;
+- no repetir las imágenes.
 
-La política de edad mínima vigente sigue siendo una autoridad independiente. Si la edad queda fuera del rango permitido, se aplica el guard correspondiente y no se continúa la venta automática.
+## 8. Aprende a nadar → curso intensivo
 
-### 4.5 Nivel
+La ruta **Aprende a nadar** es el curso básico/intensivo.
 
-Después de edad, Sharky presenta:
+Debe mostrar, desde autoridades vigentes:
 
-**“Escoge el nivel que mejor te representa:”**
+- duración: 3 semanas;
+- clases: lunes a viernes;
+- precio general desde `sharky_precio_intensivo`, salvo precio propio de un curso concreto seleccionado;
+- no lleva inscripción;
+- requisitos de traje de baño, gorro y goggles;
+- confirmación de lugar conforme al pago vigente.
 
-con tres botones:
+La palabra genérica “clases” o una frecuencia semanal nunca cambia por sí sola este producto.
 
-- **Principiante**
-- **Intermedio**
-- **Avanzado**
+## 9. Clases regulares — elegibilidad
 
-Si las clases son para otra persona, la redacción puede adaptarse para referirse a esa persona sin cambiar la semántica del paso.
+Antes de ofrecer planes, preguntar mediante controles:
 
-### 4.6 Recuperación suave
+**“¿Ya has tomado clases de natación anteriormente, en alguna escuela?”**
 
-Durante este bloque inicial, si una respuesta no puede clasificarse con seguridad:
+- **Sí, continuar** → regulares.
+- **No, curso básico** → intensivo directamente, sin regresar al menú inicial.
 
-- no avanzar de paso;
-- no inventar una respuesta;
-- no repetir de forma seca;
-- usar una recuperación como **“Una disculpa, no entendí tu respuesta…”** y volver a formular la misma pregunta;
-- mantener los botones cuando el paso los tenga.
+El Flow regular valida perfil intermedio/avanzado. Sharky no concede excepciones de elegibilidad por conversación.
 
-## 5. Nivel — autoridad principal de producto
+Los planes/inscripciones se obtienen del backend/configuración vigente; no se crea una segunda fuente de verdad.
 
-El nivel declarado es un dato base y tiene prioridad sobre una preferencia previa o ambigua de producto.
+## 10. Matriz histórica de nivel → producto
 
-### 5.1 Principiante
-
-Si el usuario selecciona **Principiante** o existe una señal inequívoca equivalente:
-
-- `swim_level = beginner`;
-- producto automático: **curso intensivo básico**.
-
-Sharky **no puede vender clases regulares** automáticamente a este perfil.
-
-Una selección previa de clases regulares, un plan regular o una frecuencia semanal anterior debe descartarse si contradice este nivel.
-
-### 5.2 Intermedio
-
-Si selecciona **Intermedio**, Sharky todavía no asigna producto. Debe preguntar:
-
-**“{Nombre}, ¿ya has tomado clases de natación antes?”**
-
-con botones **Sí / No**.
-
-- **Sí:** `background = formal` y producto **clases regulares**.
-- **No:** `background = no_formal` y producto **curso intensivo básico**.
-
-Esta es la única categoría del onboarding inicial que requiere esa comprobación adicional.
-
-### 5.3 Avanzado
-
-Si selecciona **Avanzado**:
-
-- `swim_level = swims`;
-- se registra una señal estructurada equivalente a `background = advanced` únicamente para representar la elegibilidad declarada;
-- producto automático: **clases regulares**;
-- **no** se pregunta si ha tomado clases antes.
-
-`background = advanced` no significa ni debe redactarse como “tomó clases formales”. Es una autoridad distinta derivada únicamente del nivel avanzado declarado.
-
-## 6. Formación previa — autoridad específica de Intermedio
-
-La comprobación de formación previa se utiliza en el onboarding inicial para el nivel **Intermedio**.
-
-### 6.1 Intermedio + sí ha tomado clases
-
-Producto automático y canónico: **clases regulares**.
-
-Sharky no debe abrir una elección entre intensivo y regulares en ese perfil.
-
-### 6.2 Intermedio + no ha tomado clases
-
-Producto automático y canónico: **curso intensivo básico**.
-
-Esto cubre a quien se percibe como intermedio pero nunca ha recibido clases de natación.
-
-Si fuera del onboarding aparece una declaración inequívoca de aprendizaje autodidacta o ausencia de formación y contradice el estado vigente, deben aplicarse los guards de elegibilidad/conflicto; Brain no decide una excepción por sí solo.
-
-## 7. Matriz canónica nivel → producto
+Esta matriz sigue siendo autoridad para el fallback por perfil y para guards que necesiten resolver elegibilidad:
 
 | Nivel / formación | Producto automático |
 | --- | --- |
@@ -192,368 +148,213 @@ Si fuera del onboarding aparece una declaración inequívoca de aprendizaje auto
 | Intermedio + sí ha tomado clases | **Clases regulares** |
 | Avanzado | **Clases regulares** |
 
-Una frecuencia como “2, 3 o 5 veces por semana” **no es un producto** y nunca puede convertir por sí sola un intensivo en clases regulares.
+`background = advanced` representa elegibilidad declarada de nivel avanzado; no significa “tomó clases formales”.
 
-La palabra “clases” usada de forma genérica tampoco significa automáticamente clases regulares.
+Una contradicción real de nivel se aclara; no se sobrescribe silenciosamente.
 
-## 8. Contradicciones de nivel — detener, no adivinar
+## 11. Selección de sede
 
-El nivel tiene tratamiento especial porque modifica la elegibilidad del producto.
+Después de la información del producto se muestra un carrusel horizontal con:
 
-Si aparece una contradicción real —por ejemplo primero Principiante y después una declaración inequívoca de que ya nada a nivel avanzado— Sharky debe:
+- `meta:venue:monteverde` — Colegio Monteverde;
+- `meta:venue:palapas` — Palapas Protudec.
 
-1. detener el avance comercial;
-2. invalidar temporalmente nivel y producto dependiente que hayan quedado en conflicto;
-3. conservar contexto independiente válido;
-4. pedir una aclaración explícita del nivel;
-5. volver a determinar el producto solo después de esa aclaración.
+Cada tarjeta usa su fotografía aprobada y su quick reply.
 
-Sharky **no debe escoger silenciosamente una de las dos declaraciones**.
+Reglas:
 
-## 9. Producto activo y límites
+- texto libre no selecciona sede;
+- retry no repite imágenes;
+- la sede elegida queda estructurada;
+- **Ver otra sede** cambia únicamente sede y dependencias de sede, conservando producto;
+- no inventar problemas de cupo.
 
-`curso intensivo` y `clases regulares` son productos distintos.
+## 12. Autoridad de horarios, planes, fecha y precio
 
-Una vez que el producto canónico está determinado:
+Después de producto+sede:
 
-- una mención genérica como “las clases”, “precio”, “horarios”, “ubicación”, “cuándo empieza” o “el curso” se interpreta dentro del producto activo;
-- una frecuencia semanal no cambia el producto;
-- una consulta lateral sobre otro producto no cambia por sí sola el producto activo;
-- una preferencia del usuario solo puede aplicarse si sigue siendo compatible con la regla de elegibilidad.
+- horarios provienen de `horarios` filtrando sede + activo + producto;
+- intensivo y regular no mezclan horarios;
+- planes regulares provienen de planes activos de la sede;
+- inscripción usa `sharky_inscripcion_monteverde` / `sharky_inscripcion_palapas`;
+- Maps usa las autoridades configuradas;
+- un curso intensivo concreto seleccionado con `course_price` prevalece sobre el precio general.
 
-Si el prospecto no es elegible automáticamente para clases regulares, Sharky no puede autorizar una excepción por conversación. Esa excepción requiere intervención humana.
+No hardcodear una segunda fuente estable cuando ya existe backend/configuración.
 
-## 10. Información del producto y sede
+## 13. Edad
 
-Después de resolver el producto, Sharky no salta directamente a horarios ni a una sede predeterminada. Primero presenta una oferta breve y un control para ampliar la información.
+La política central usa:
 
-### 10.1 Intensivo
+- `sharky_edad_minima`;
+- `sharky_edad_maxima`.
 
-Oferta breve:
+Actualmente se comunica 12–65 años. Saludo, Flow y registro deben derivar de la misma autoridad.
 
-**“{Nombre}, para tu nivel tenemos un curso básico e intensivo:”**
-
-Botón de información. Al abrirlo se muestran, usando las autoridades vigentes:
-
-- **Curso básico para aprender a nadar**;
-- costo general vigente mientras no exista un curso concreto seleccionado;
-- duración: **3 semanas**;
-- clases: **lunes a viernes**.
-
-Después se muestran tres opciones de sede:
-
-- **Ubicación Monteverde**;
-- **Ubicación Palapas**;
-- **Ambas ubicaciones**.
-
-### 10.2 Clases regulares
-
-Oferta breve:
-
-**“{Nombre}, para tu nivel tenemos clases regulares:”**
-
-Botón de información. Al abrirlo se muestran los planes y cuotas vigentes desde configuración/backend. Valores vigentes al 2026-09-12:
-
-- 3 clases por semana: **$1,000/mes**;
-- 5 clases por semana: **$1,200/mes**;
-- inscripción Monteverde: **$500**;
-- inscripción Palapas: **$400**.
-
-Después se muestran las mismas tres opciones de sede.
-
-### 10.3 Elección de sede
-
-En este onboarding inicial **no existe una propuesta automática “Monteverde primero”**. La persona elige explícitamente.
-
-- Si selecciona **Monteverde**, la sede confirmada queda `MONTEVERDE` y continúa el catálogo de esa sede.
-- Si selecciona **Palapas**, queda `PALAPAS` y continúa el catálogo de esa sede.
-- Si selecciona **Ambas ubicaciones**, Sharky muestra la información de las dos y vuelve a presentar solamente los botones **Monteverde / Palapas** para obtener una selección explícita.
-- Una selección posterior inequívoca puede cambiar la sede y debe invalidar únicamente las dependencias de la sede anterior.
-- Consultar otra sede de forma informativa no cambia la sede activa sin aceptación explícita.
-
-No inventar problemas de cupo. Mientras no exista una regla de capacidad implementada, el cupo no debe bloquear ni alterar esta lógica.
-
-## 11. Orden resumido obligatorio
-
-El flujo base del onboarding por perfil queda así:
-
-**nombre → para quién son las clases → edad → nivel → formación solo si Intermedio → producto → información del producto → sede → horario / plan / fecha → inscripción / pago**.
-
-Ejemplos:
-
-- **Principiante** → Intensivo → información → elegir sede.
-- **Intermedio + no ha tomado clases** → Intensivo → información → elegir sede.
-- **Intermedio + sí ha tomado clases** → Regulares → información → elegir sede.
-- **Avanzado** → Regulares directo → información → elegir sede.
-
-Este orden es parte del esqueleto del onboarding por perfil y no debe modificarse por mejoras conversacionales sin actualizar este documento y sus regresiones. El funnel Meta conserva su orden propio según §1.1.
-
-## 12. Precio del curso intensivo
-
-Cuando Sharky muestra la información del **curso intensivo**, debe dejar claro de forma breve:
-
-- duración: **3 semanas**;
-- frecuencia: **lunes a viernes**;
-- precio obtenido de la autoridad comercial vigente.
-
-Jerarquía de precio:
-
-1. si ya existe un **curso intensivo concreto seleccionado** y el backend tiene `course_price`, **ese precio prevalece**;
-2. si todavía no hay un curso concreto seleccionado, usar el precio general vigente de configuración (`sharky_precio_intensivo`), actualmente **$1,200 MXN**.
-
-El precio no debe hardcodearse fuera de sus autoridades de backend/configuración.
-
-## 13. Memoria y contexto
-
-- No volver a preguntar datos confirmados que sigan siendo válidos.
-- Nombre del contacto y nombre del alumno deben conservarse como datos distintos cuando correspondan.
-- La sede elegida debe conservarse mientras siga siendo válida.
-- Producto, sede, horario y otras preferencias modificables pueden cambiar cuando el usuario lo expresa claramente, pero nunca pueden saltarse elegibilidad.
-- El **nivel** no se sobrescribe silenciosamente cuando existe contradicción: se aclara.
-- Una preferencia de producto capturada antes de calificar nivel no prevalece sobre la matriz nivel → producto.
-- El contexto conversacional ayuda a entender; **no sustituye las autoridades del backend** para precios, registros, pagos, estados o acciones reales.
+Fuera de rango no existe alta automática y se deriva a humano.
 
 ## 14. Estado estructurado manda sobre texto libre
 
-La conversación natural sirve para interpretar lo que quiere el usuario; no debe convertirse en una fuente paralela de verdad que contradiga el estado confirmado.
+- Fuente, identidad, producto, sede, horario y demás contexto confirmado se conservan mientras sigan siendo válidos.
+- Un prefill, una palabra aislada o una inferencia no borran ni reemplazan contexto confirmado.
+- En el funnel Sharky 3.0, texto libre **no sustituye controles**.
+- Un botón obsoleto no puede saltarse estado/guards.
+- Si texto y estado parecen entrar en conflicto, aplica la regla específica de conflicto; no se reescribe estado por intuición del modelo.
 
-- Identidad, edad, nivel, formación cuando aplique, producto, sede y demás contexto estructurado confirmado deben conservarse mientras sigan siendo válidos.
-- Brain no debe volver a preguntar un dato ya confirmado solo porque la redacción del turno actual sea ambigua.
-- Un dato estructurado solo se cambia por una señal explícita y válida, una contradicción real o una regla legítima de expiración/revalidación.
-- Una frase ambigua, una palabra aislada o una inferencia del modelo no deben borrar contexto confirmado.
-- Si texto libre y estado estructurado parecen entrar en conflicto, se aplica la regla específica de conflicto; no se reescribe el estado por intuición del modelo.
-- Una capa lingüística puede canonicalizar expresiones coloquiales, variantes y faltas frecuentes cuando la intención sea inequívoca, pero **no crea una autoridad comercial nueva**.
-- Fuera de pasos cerrados Meta, dentro de una pregunta determinística una respuesta textual inequívoca puede equivaler al botón correspondiente.
-- En pasos cerrados de Sharky 3.0 Meta, el texto libre no sustituye los controles vigentes salvo handoff humano/alumno explícitamente permitido por la especificación.
-- La interpretación lingüística debe ser contextual y estrecha. No se debe convertir una frase ambigua en una selección de nivel, producto, sede o acción sensible solo por parecido léxico.
+## 15. Brain y políticas laterales
 
-## 15. Brain conversa; las reglas de negocio no dependen de Brain
+Mientras `hache_sharky_meta_active(state)` sea verdadero para Meta/web/direct:
 
-Brain es una capa de comprensión y redacción para los recorridos donde está habilitado. Puede hacer la conversación más natural, entender variantes lingüísticas y formular respuestas útiles, pero **no es la autoridad final de las reglas fundamentales del negocio**. En Sharky 3.0 Meta, Brain no participa en las decisiones del state machine.
+- Brain no interpreta selecciones del funnel;
+- Brain 2B-A no reescribe decisiones;
+- texto libre no se convierte en producto/sede/plan;
+- las políticas laterales antiguas no se adelantan al state machine;
+- una nota de voz transcrita conserva el mismo lock determinístico.
 
-Brain no decide por sí solo:
+Brain sigue disponible fuera de estos recorridos donde corresponda, pero nunca es autoridad única para reglas fundamentales.
 
-- identidad estructurada confirmada;
-- elegibilidad de producto;
-- la matriz nivel → producto;
-- precios o disponibilidad autoritativa;
-- pagos, inscripción, registros o mutaciones;
-- autorizaciones, confirmaciones o excepciones comerciales.
+Las salidas laterales permitidas dentro del funnel son explícitas y estrechas:
 
-Esas decisiones deben quedar respaldadas por estado, guards, flows, configuración o ejecutores determinísticos según corresponda.
+- solicitud clara de hablar con una persona;
+- declaración de que ya es alumno;
+- guard de seguridad/edad/datos que requiera humano.
 
-### Regla fundamental: no dejar una regla estable solo en un prompt
+## 16. Takeover, pausa y reactivación
 
-Una regla comercial esencial **no puede existir únicamente como instrucción textual dentro de un prompt**.
+La intervención humana no destruye contexto comercial válido.
 
-Si una regla es estable y fundamental debe, cuando sea técnicamente verificable:
+Al reactivar Sharky:
 
-1. estar documentada en este archivo;
-2. estar representada en estado/código determinista, guard o autoridad equivalente;
-3. tener una regresión que demuestre que no se rompe.
+- no reiniciar sin necesidad;
+- no volver a preguntar datos válidos;
+- revalidar solo por tiempo, contradicción, cambio administrativo o seguridad;
+- dejar claro cuándo vuelve el asistente IA.
 
-## 16. Takeover, pausa y reactivación — no perder contexto válido
+Un alumno declarado abandona el funnel de prospecto.
 
-La intervención humana no debe destruir el contexto comercial útil ya confirmado.
+## 17. Flows de inscripción
 
-Cuando una persona del equipo toma la conversación y posteriormente Sharky se reactiva:
+### Intensivo
 
-- no reiniciar la conversación desde cero sin necesidad;
-- no volver a preguntar nombre, alumno, edad, nivel, producto, sede u otros datos que sigan siendo válidos;
-- no borrar memoria comercial válida únicamente por el cambio de control humano/IA;
-- revalidar solo aquello que por tiempo, contradicción, cambio administrativo o seguridad realmente deba revalidarse;
-- mantener siempre claro para el usuario cuándo vuelve a interactuar con el asistente con IA.
+Reutiliza el Flow y ejecutores existentes de inscripción/pago. Mantiene intención, confirmación y revalidación antes de mutaciones.
 
-Si durante el onboarding la persona indica que **ya es alumno**, el flujo de prospecto se abandona y se conserva el handoff vigente para alumnos.
+### Regulares
 
-## 17. Botones y controles — guía estructurada con texto como respaldo
+El Flow recibe sede fija y opciones verificadas de perfil/plan/horario. El registro es protegido e idempotente. Al terminar, takeover humano coordina el pago; no existe cobro automático en este recorrido.
 
-Los botones, listas y controles interactivos reducen ambigüedad y evitan huecos de estado. En el onboarding por perfil tienen un papel deliberadamente mayor.
+Cancelar el Flow regular vuelve al bloque de sede sin perder producto/contexto.
 
-- **Nombre:** texto libre validado.
-- **¿Las clases son para ti?:** botones Sí / No; texto inequívoco equivalente puede aceptarse.
-- **Edad:** texto/número validado.
-- **Nivel:** botones Principiante / Intermedio / Avanzado; texto inequívoco equivalente puede aceptarse.
-- **Intermedio / formación previa:** botones Sí / No.
-- **Información de producto:** botón explícito antes de desplegar detalle.
-- **Sede:** botones Monteverde / Palapas / Ambas ubicaciones.
-- **Después de sede:** volver al catálogo estructurado existente de botones/listas para plan, horario, fecha y demás decisiones cuando haya opciones canónicas.
+## 18. Emojis y tono en prospectos
 
-El texto libre sigue siendo un respaldo útil en los recorridos que lo permiten: si expresa inequívocamente una opción existente, puede canonicalizarse a esa opción. Si no se entiende con seguridad, Sharky conserva el paso y vuelve a mostrar la pregunta/controles; no improvisa una ruta abierta. En Sharky 3.0 Meta rige la regla más estricta de §1.1: los pasos cerrados solo avanzan con sus controles.
+Regla estable ya existente y ahora aplicada también a los mensajes determinísticos:
 
-Un botón obsoleto o fuera de contexto no puede saltarse guards, elegibilidad ni estado actual.
+- orientación comercial para prospectos: **2 a 5 emojis funcionales y naturales por respuesta**;
+- ejemplos útiles: 🏊‍♂️, 📍, 💰, 🕒, ✅, ✍️, 📅, 🎒, 👇;
+- se usan para marcar información/acción, no para decorar cada línea;
+- evitar superar cinco por saturación;
+- alumnos registrados mantienen el criterio más contenido de 1 a 3 cuando aporten claridad.
 
-## 18. Seguimientos automáticos
+El saludo puede usar 🦈 para reforzar la identidad de Sharky sin ocultar que es IA.
 
-Los recordatorios automáticos existen para recuperar conversaciones abandonadas, no para presionar a una persona que ya indicó que tomará tiempo para decidir.
+## 19. Seguimientos automáticos
 
-### Seguimiento normal
+La cadena normal puede contemplar 15 minutos, 90 minutos y reenganche posterior según configuración vigente.
 
-La cadena actual contempla:
+Si el prospecto expresa claramente que va a pensarlo, analizarlo, consultarlo o hablarlo con alguien, se cierra la cadena automática originada por ese turno. Una solicitud informativa no debe confundirse con deliberación.
 
-- primer seguimiento: 15 minutos;
-- segundo seguimiento: 90 minutos;
-- reenganche posterior: 48 horas, sujeto a sus validaciones propias.
+## 20. Acciones reales — fail closed
 
-### Regla de deliberación / consulta
-
-Si el prospecto expresa claramente que va a **pensarlo, analizarlo, estudiarlo, considerarlo, revisarlo, hablarlo, platicarlo, consultarlo o comentarlo con alguien**, se debe cerrar la cadena automática de seguimiento.
-
-Ejemplos:
-
-- “Perfecto, lo platico con mi esposa”.
-- “Lo voy a pensar mejor”.
-- “Lo consulto con mi esposa”.
-- “Voy a platicarlo con mi familia”.
-- “Déjame hablarlo con mi pareja”.
-- “Te aviso más tarde”.
-
-En esos casos:
-
-- Sharky puede responder de forma natural en ese momento;
-- **no se arma el recordatorio de 15 minutos**;
-- **no se arma el de 90 minutos**;
-- no continúa la cadena posterior originada por ese turno.
-
-Una pregunta o una solicitud informativa como “déjame ver los horarios” no debe confundirse automáticamente con una decisión de aplazar.
-
-## 19. Acciones reales — fail closed
-
-Para cualquier mutación real —registro, pago, cambio administrativo, inscripción u otra acción que afecte datos— deben mantenerse estas invariantes:
+Para registro, pago o cualquier mutación:
 
 - intención explícita y suficientemente reciente;
 - confirmación final cuando corresponda;
-- revalidación contra datos actuales del backend antes de ejecutar;
-- si aparece contexto nuevo que contradice la confirmación anterior, esa confirmación deja de ser válida;
-- si una autoridad necesaria no está disponible, **no ejecutar** la acción.
+- revalidación contra datos actuales del backend;
+- si nueva información contradice la confirmación anterior, esta deja de ser válida;
+- si falta una autoridad necesaria, no ejecutar.
 
-Ante duda, Sharky debe fallar cerrado antes que realizar una mutación incorrecta.
+Ante duda, Sharky falla cerrado.
 
-## 20. Implementación que actualmente materializa estas reglas
+## 21. Implementación relacionada
 
-Las reglas de onboarding, nivel, producto, sede e interpretación están reflejadas, entre otros puntos, en:
+Las reglas se materializan, entre otros puntos, en:
 
 - `config/sharky-entry-guidance.php`;
-- `config/sharky-prospect-onboarding.php`;
 - `config/sharky-meta-ad-flow.php`;
 - `config/sharky-whatsapp-adapter.php`;
 - `config/sharky-whatsapp-batching.php`;
 - `config/sharky-language-guide.php`;
+- `config/sharky-lab-worker.php`;
 - `config/sharky-product-boundary-guard.php`;
 - `config/sharky-commercial-memory.php`;
 - `config/sharky-post-pr72.php`;
 - `docs/SHARKY-3-META-FLOW.md`;
-- `docs/SHARKY-LANGUAGE-GUIDE.md`;
 - `docs/SHARKY-POSITIVE-PATTERNS.md`;
 - `tests/sharky-meta3-regression.php`;
 - `tests/sharky-guided-first-prospect-regression.php`;
-- `tests/sharky-qualification-priority-regression.php`;
-- `tests/sharky-language-guide-regression.php`.
+- `tests/sharky-pr162-review-regression.php`;
+- suites de WhatsApp, Flow, outbox, registro y pagos.
 
-Las regresiones deben cubrir como mínimo el recorrido al que correspondan:
+## 22. Regresiones mínimas
 
-- primer mensaje neutral + pregunta de nombre en web/directo;
-- selector cerrado de producto y retry sin imagen en Meta;
-- uso del debounce normal de 2.8 s en el onboarding por perfil;
-- nombre confirmado separado del `profile_name` inicial y del alumno cuando aplique;
-- recuperación suave sin avanzar ante respuesta incomprensible en web/directo;
-- Principiante → intensivo;
-- Intermedio + no tomó clases → intensivo;
-- Intermedio + sí tomó clases → regulares;
-- Avanzado → regulares directo sin inventar formación formal;
-- información de intensivo con precio/configuración vigentes;
-- información de regulares con planes e inscripciones vigentes;
-- selector de sede correspondiente al recorrido;
-- después de sede → catálogo/Flow estructurado y opciones verificadas del backend;
-- contradicción real de nivel → pausa y aclaración cuando ese perfil aplique;
-- reparación de estado obsoleto que contradiga la matriz canónica;
-- texto inequívoco equivalente a controles solo donde el recorrido lo permita;
-- Brain no modifica decisiones de `meta_ad` y sigue disponible para los canales que conservan el flujo vigente;
-- consulta de alternativas → datos verificados sin cambio silencioso de sede.
+Deben cubrir:
 
-## 21. No romper lo que ya funciona
+- Meta/web/direct → mismo selector cerrado;
+- fuente real preservada;
+- prefill/mensaje inicial no preselecciona producto/sede;
+- primer mensaje identifica a Sharky como IA;
+- carrusel producto y carrusel sede conservan imagen + quick reply correcto;
+- texto libre no avanza;
+- retry no repite imagen;
+- Brain/políticas laterales no invaden el funnel, incluso tras audio;
+- Aprende a nadar → intensivo;
+- Regulares + No → intensivo;
+- Regulares + Sí → regular;
+- precio/horarios/sede desde autoridades vigentes;
+- cambio de sede no cambia producto;
+- edad fuera de rango falla cerrado;
+- flows protegidos mantienen sus guards;
+- emoji comercial se mantiene en 2–5 funcionales;
+- referral no publicitario conserva el fallback por perfil hasta nueva decisión explícita.
 
-Una corrección pequeña debe ser **localizada, reversible y cubierta por regresión**.
+## 23. Flujo de trabajo del repositorio
 
-Antes de mergear un cambio de Sharky:
+Para Hache Natación:
 
-1. identificar exactamente qué regla o edge case se quiere corregir;
-2. comprobar qué comportamientos existentes toca directa e indirectamente;
-3. añadir o actualizar una prueba que reproduzca el caso real;
-4. ejecutar la suite completa relevante;
-5. revisar comentarios automáticos del PR y corregir hallazgos válidos;
-6. no mergear mientras Quality no esté verde.
+**rama → cambios → pruebas → PR → revisión automática → Quality verde → merge a `main` → auto-deploy → verificación de producción**.
 
-No se deben hacer mejoras laterales sin una razón explícita.
+No editar código versionado directamente en el VPS. El VPS se usa para deploy, diagnóstico, logs, servicios e inspección/verificación operativa.
 
-## 22. Flujo de trabajo del repositorio
+No llamar manualmente Codex/Inge salvo instrucción explícita. Revisar sus comentarios/checks automáticos si aparecen.
 
-Para Hache Natación el flujo normal es:
+## 24. Regla documental obligatoria
 
-**rama → cambios → pruebas → PR → revisión automática → Quality verde → merge a `main` → auto-deploy**.
+Si un cambio introduce, elimina o modifica una regla estable de Sharky, este archivo y los patrones/documentación afectados se actualizan en el mismo PR.
 
-No usar el acceso directo al VPS para sustituir este flujo de cambios de código. El acceso directo queda reservado para operaciones que realmente lo requieran, como determinadas migraciones o diagnósticos operativos.
+## 25. Checklist obligatorio
 
-No llamar manualmente al agente de revisión/Codex salvo que una tarea o revisión concreta lo requiera explícitamente. Revisar también los comentarios automáticos que aparezcan en el PR.
+Antes de mergear un cambio de captación responder **sí** a lo aplicable:
 
-## 23. Regla documental obligatoria
-
-Si un cambio introduce, elimina o modifica una **regla estable de comportamiento de Sharky**, este archivo debe actualizarse en el mismo PR o en un PR documental inmediatamente asociado.
-
-Cambios que requieren actualización incluyen:
-
-- apertura e identificación inicial del prospecto;
-- orden del onboarding;
-- criterios de nivel y formación previa;
-- matriz nivel → producto;
-- tratamiento especial de Avanzado;
-- elección y cambio de sede;
-- tratamiento de contradicciones;
-- canonicalización lingüística que pueda afectar decisiones estructuradas;
-- relación Brain ↔ autoridades determinísticas;
-- persistencia de contexto en takeover/reactivación;
-- política de botones y controles;
-- jerarquía de precios;
-- seguimiento automático;
-- memoria/conflictos;
-- confirmaciones y mutaciones;
-- nuevas prohibiciones o autoridades de negocio.
-
-Un ajuste puramente interno que no altere comportamiento observable no necesita añadir una nueva regla aquí.
-
-## 24. Checklist obligatorio para futuros cambios
-
-Antes de aprobar un cambio de Sharky, responder **sí** a todo lo siguiente según el recorrido afectado:
-
-- [ ] ¿Web/directo conserva nombre → para quién → edad → nivel y Meta conserva su selector cerrado aprobado?
-- [ ] ¿El primer mensaje identifica claramente a Sharky como IA según el recorrido?
-- [ ] ¿El nombre confirmado prevalece sobre un `profile_name` extraño para identificar al prospecto cuando el onboarding por perfil lo solicita?
-- [ ] ¿Contacto y alumno se mantienen separados cuando las clases son para otra persona?
-- [ ] ¿Una respuesta no entendida conserva el mismo paso conforme a las reglas del recorrido?
-- [ ] ¿Principiante sigue siendo intensivo únicamente donde se califica por nivel?
-- [ ] ¿Intermedio pregunta si ya tomó clases antes de resolver producto en el onboarding por perfil?
-- [ ] ¿Intermedio sin clases previas sigue siendo intensivo?
-- [ ] ¿Intermedio con clases previas va a regulares?
-- [ ] ¿Avanzado va a regulares sin inventar que tomó clases formales?
-- [ ] ¿La información básica del producto aparece antes de elegir sede?
-- [ ] ¿La sede se elige explícitamente usando los controles previstos por el recorrido?
-- [ ] ¿Después de sede se reutilizan opciones estructuradas verificadas del catálogo/Flow?
-- [ ] ¿Una contradicción real de nivel detiene el flujo y exige aclaración cuando aplica?
-- [ ] ¿Una frecuencia semanal o la palabra “clases” evita cambiar silenciosamente de producto?
-- [ ] ¿Las variantes de texto solo se canonicalizan cuando el recorrido lo permite y la intención es inequívoca?
-- [ ] ¿El precio de un curso concreto seleccionado prevalece sobre el precio general cuando aplica?
-- [ ] ¿El estado estructurado confirmado prevalece sobre inferencias ambiguas de texto libre?
-- [ ] ¿Brain sigue sin convertirse en autoridad única y queda fuera de las decisiones del funnel Meta?
-- [ ] ¿Ninguna regla fundamental nueva quedó implementada únicamente en un prompt?
-- [ ] ¿Takeover/reactivación conserva contexto válido y evita reinicios innecesarios?
-- [ ] ¿Usa datos comerciales vigentes y no inventados?
-- [ ] ¿Respeta las reglas de seguimiento y deliberación?
-- [ ] ¿No ejecuta acciones reales sin autoridad y confirmación suficientes?
-- [ ] ¿No pisa un comportamiento previamente correcto?
-- [ ] ¿Existe una regresión que cubra el cambio cuando aplica?
+- [ ] ¿Meta, web y directo comparten el selector cerrado sin perder su fuente real?
+- [ ] ¿Un referral no publicitario conserva el fallback vigente?
+- [ ] ¿El primer mensaje identifica claramente a Sharky como IA?
+- [ ] ¿El texto inicial/prefill no preselecciona producto ni sede?
+- [ ] ¿Texto libre mantiene el paso cerrado y los controles vigentes?
+- [ ] ¿Carruseles conservan imagen + quick reply correctos?
+- [ ] ¿Retries evitan repetir imágenes?
+- [ ] ¿Aprende a nadar continúa únicamente por intensivo?
+- [ ] ¿Regulares valida clases previas antes de continuar?
+- [ ] ¿Producto y sede se conservan sin mezclarse?
+- [ ] ¿Horarios/planes/precios provienen de autoridades verificadas?
+- [ ] ¿Brain y políticas laterales quedan fuera de las decisiones del funnel?
+- [ ] ¿Audio conserva el lock determinístico?
+- [ ] ¿Alumno conocido no entra como prospecto?
+- [ ] ¿Takeover/reactivación conserva contexto válido?
+- [ ] ¿Edad y mutaciones fallan cerrado cuando corresponde?
+- [ ] ¿Mensajes de prospectos usan 2–5 emojis funcionales sin saturar?
+- [ ] ¿Existe regresión del comportamiento nuevo?
 - [ ] ¿Quality está completamente verde?
-- [ ] ¿Los comentarios automáticos relevantes del PR quedaron atendidos?
-- [ ] ¿Este documento sigue reflejando la realidad después del cambio?
+- [ ] ¿Comentarios automáticos relevantes quedaron atendidos?
+- [ ] ¿Este documento refleja la realidad después del cambio?
 
 Si alguna respuesta es **no** o **no sabemos**, el cambio no está listo para merge.
 
@@ -561,4 +362,4 @@ Si alguna respuesta es **no** o **no sabemos**, el cambio no está listo para me
 
 ## Regla de oro
 
-> **Primero se identifica correctamente el canal y la identidad. En web/directo se conserva el onboarding por perfil; en Meta Ads se usa el selector cerrado de Sharky 3.0. Después cada recorrido aplica sus reglas determinísticas, las autoridades verificadas del backend y sus guards transaccionales. Brain puede entender y conversar donde corresponda, pero las reglas fundamentales quedan protegidas por estado, código y pruebas.**
+> **Primero se identifica correctamente identidad y fuente. Los prospectos nuevos de Meta Ads, web y WhatsApp directo usan el mismo funnel Sharky 3.0 cerrado, conservando atribución. El usuario decide mediante controles; backend y guards mandan sobre datos/acciones; Brain no invade el state machine. Los referrals no publicitarios conservan temporalmente el fallback por perfil.**

@@ -22,19 +22,39 @@ guided_first_ok(str_contains($webhook,'hache_sharky_entry_guided_first_prospect(
 
 $fresh=hache_sharky_orchestrator_state(null,$now);
 $fresh['identity']=array_replace($fresh['identity'],['kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched']);
-$guided=hache_sharky_entry_guided_first_prospect($fresh,'¡Hola! Quiero información',$now);
-guided_first_ok(($guided['flow']['name']??null)==='prospect_onboarding'&&($guided['flow']['step']??null)==='name','A clean unmatched prospect must start in the profile-first name step.');
-guided_first_ok(($guided['flow']['data']['entry_bootstrap']??false)===true,'The first inbound message must be marked as bootstrap, not treated as the answer to the name question.');
-guided_first_ok(($guided['commercial_context']['entry_interest']??null)===null,'A generic first message must not manufacture a product choice.');
 
-guided_first_ok(HACHE_SHARKY_BATCH_WINDOW_MS===2800,'The WhatsApp text debounce must remain 2.8 seconds.');
+// Direct WhatsApp now joins the same closed Sharky 3.0 selector as Meta/web.
+$directGuided=hache_sharky_entry_guided_first_prospect($fresh,'¡Hola! Quiero información',$now);
+guided_first_ok(($directGuided['flow']['name']??null)===HACHE_SHARKY_META_FLOW&&($directGuided['flow']['step']??null)==='program','A clean unmatched direct prospect must start in the closed product selector.');
+guided_first_ok(($directGuided['flow']['data']['entry_bootstrap']??false)===true,'The first inbound direct message must be marked as bootstrap, not treated as a product answer.');
+guided_first_ok(($directGuided['commercial_context']['entry_source']??null)==='direct','Direct prospect source attribution must remain direct.');
+guided_first_ok(($directGuided['commercial_context']['entry_interest']??null)===null,'A generic first direct message must not manufacture a product choice.');
+
+guided_first_ok(HACHE_SHARKY_BATCH_WINDOW_MS===2800,'The WhatsApp text debounce constant must remain 2.8 seconds for routes that use batching.');
+$directFirstEvent=['from'=>'529981112233','type'=>'text','text'=>'¡Hola! Quiero más información','interactive_id'=>'','group_id'=>''];
+guided_first_ok(hache_sharky_whatsapp_first_prospect_welcome_turn($directGuided,$directFirstEvent),'Closed direct onboarding must use the immediate visual welcome path.');
+$directHandled=hache_sharky_meta_handle($pdo,$directGuided,$directFirstEvent,$now+1,['contact'=>'529981112233']);
+guided_first_ok(is_array($directHandled),'Closed direct bootstrap must produce a deterministic welcome.');
+[$directState,$directDecision]=$directHandled;
+guided_first_ok(($directDecision['kind']??null)==='meta_program_prompt','Direct welcome must open the common product selector.');
+guided_first_ok(guided_first_button_ids($directDecision)===['meta:program:learn','meta:program:regular'],'Direct welcome must expose the two approved product controls only.');
+guided_first_ok(hache_sharky_entry_intro($directState,$directFirstEvent['text'])==='Hola, soy Sharky 🦈, asistente IA de Hache Natación.','Closed direct presentation must identify Sharky as AI with the agreed natural emoji.');
+
+// Non-ad referrals keep the legacy profile-first flow as a controlled fallback.
+$legacyFresh=$fresh;
+$legacyFresh['referral']['latest']=['source_type'=>'post','source_url'=>'https://example.com/referencia','headline'=>'Referencia orgánica'];
+$guided=hache_sharky_entry_guided_first_prospect($legacyFresh,'¡Hola! Quiero información',$now);
+guided_first_ok(($guided['flow']['name']??null)==='prospect_onboarding'&&($guided['flow']['step']??null)==='name','A non-ad referral must keep the profile-first name step.');
+guided_first_ok(($guided['flow']['data']['entry_bootstrap']??false)===true,'The first legacy referral message must be marked as bootstrap, not treated as the answer to the name question.');
+guided_first_ok(($guided['commercial_context']['entry_source']??null)==='referral','Legacy fallback must preserve referral source attribution.');
+
 $firstEvent=['from'=>'529981112233','type'=>'text','text'=>'¡Hola! Quiero más información','interactive_id'=>'','group_id'=>''];
-guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($guided,$firstEvent),'Profile-first onboarding must use the normal debounce instead of the legacy immediate welcome path.');
+guided_first_ok(!hache_sharky_whatsapp_first_prospect_welcome_turn($guided,$firstEvent),'Legacy referral onboarding must keep the normal debounce instead of the immediate visual welcome path.');
 
 [$askNameState,$askNameDecision]=hache_sharky_prospect_onboarding_handle($pdo,$guided,$firstEvent,$now+1,12);
-guided_first_ok(($askNameState['flow']['step']??null)==='name'&&($askNameState['flow']['data']['entry_bootstrap']??true)===false,'The first inbound turn must only open the name question and remain in the name step.');
-guided_first_ok(($askNameDecision['message']??'')==='Necesito un par de datos tuyos para conocernos mejor. Por favor, ¿me puedes decir tu nombre?','The first onboarding body must ask only for the prospect name.');
-guided_first_ok(hache_sharky_entry_intro($askNameState,$firstEvent['text'])==='Hola, soy Sharky, asistente IA de Hache Natación.','The first presentation must be a neutral greeting and explicit AI disclosure.');
+guided_first_ok(($askNameState['flow']['step']??null)==='name'&&($askNameState['flow']['data']['entry_bootstrap']??true)===false,'The first legacy inbound turn must only open the name question and remain in the name step.');
+guided_first_ok(($askNameDecision['message']??'')==='Necesito un par de datos tuyos para conocernos mejor. Por favor, ¿me puedes decir tu nombre?','The legacy onboarding body must ask only for the prospect name.');
+guided_first_ok(hache_sharky_entry_intro($askNameState,$firstEvent['text'])==='Hola, soy Sharky, asistente IA de Hache Natación.','Legacy fallback presentation must remain neutral and explicit about AI.');
 
 [$badNameState,$badNameDecision]=hache_sharky_prospect_onboarding_handle($pdo,$askNameState,['from'=>'529981112233','text'=>'pelusita.com 😺','interactive_id'=>''],$now+2,12);
 guided_first_ok(($badNameState['flow']['step']??null)==='name'&&str_starts_with((string)($badNameDecision['message']??''),'Una disculpa'),'An invalid/dirty profile-style name must stay on the name step with a soft retry.');

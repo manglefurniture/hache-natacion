@@ -1,253 +1,209 @@
-# Sharky 3.0 — flujo determinístico para prospectos desde publicidad Meta
+# Sharky 3.0 — flujo determinístico de captación
 
-Estado: **diseño aprobado para implementación; PR sin merge hasta validación final**.
+Estado: **flujo vigente para prospectos nuevos desde Meta Ads, web y WhatsApp directo**.
 
-Fecha de definición: 2026-09-13.
+Fecha de definición original: 2026-09-13.  
+Ampliación a web/directo: 2026-09-13.
+
+> El nombre del archivo y el identificador interno `meta_ad_onboarding` se conservan por compatibilidad con conversaciones y pruebas existentes. No significan que el flujo siga siendo exclusivo de Meta.
 
 ## 1. Alcance
 
-Esta versión aplica únicamente a conversaciones de WhatsApp que cumplen simultáneamente:
+El recorrido se aplica cuando:
 
 - el contacto no está identificado como alumno actual;
-- la fuente de entrada es un anuncio de Meta (Facebook/Instagram), detectado por el referral/`ctwa_clid` existente;
-- la conversación es de captación comercial.
+- la conversación es de captación comercial;
+- `entry_source` es uno de: `meta_ad`, `web` o `direct`.
 
-No se reutiliza automáticamente este recorrido para:
+La fuente real **se conserva** para atribución y analítica. Compartir el state machine no convierte una entrada web/directa en Meta.
 
-- prospectos que llegan desde la página web;
-- personas que escriben directamente al WhatsApp sin referral de publicidad;
-- alumnos actuales.
+Por ahora, un referral no publicitario (`entry_source = referral`) conserva el onboarding anterior por perfil como fallback controlado. Un alumno conocido nunca se degrada a prospecto: pasa a takeover humano aunque haya llegado desde anuncio, web o WhatsApp directo.
 
-Los flujos de **web** y **WhatsApp directo** se definirán por separado. Un alumno conocido que pulse un anuncio sigue siendo alumno y pasa a atención humana; el anuncio nunca degrada su identidad a prospecto.
+## 2. Principio operativo
 
-## 2. Principio de Sharky 3.0
-
-La captación desde Meta deja de depender de Brain para interpretar libremente el texto. Es un recorrido determinístico y guiado por controles de WhatsApp.
+La captación inicial deja de depender de Brain para interpretar libremente el texto. Es un recorrido determinístico guiado por controles nativos de WhatsApp.
 
 Reglas:
 
 1. Sharky se identifica siempre como asistente IA.
-2. Las decisiones comerciales del flujo se realizan con botones/Flow, no por inferencia de texto libre.
-3. Si el usuario escribe cuando el paso espera un botón, el texto no consume ni cambia el paso.
-4. Sharky responde de forma amable y vuelve a mostrar **solo los botones vigentes**.
-5. Las imágenes se muestran únicamente la primera vez que se abre el bloque visual correspondiente; un reintento muestra texto + botones, sin repetir la imagen.
-6. Solicitar una persona, declarar que ya es alumno o quedar fuera del rango de edad produce **takeover humano**.
-7. Tras varios intentos inválidos se usa la autoridad existente `sharky_escalado_intentos` para ofrecer/activar atención humana; no se abre conversación libre para adivinar intención.
-8. Precios, horarios, inscripciones, Maps y demás datos comerciales salen de backend/configuración; no se duplican como una nueva fuente de verdad.
+2. Producto, sede y decisiones del funnel se realizan con botones/Flow.
+3. El texto libre no consume ni cambia un paso cerrado.
+4. Si la persona escribe en vez de usar el control vigente, Sharky conserva el paso y repite únicamente los controles, sin repetir imágenes.
+5. Solicitar explícitamente una persona o declarar que ya es alumno sí produce takeover humano.
+6. Brain no decide producto, sede, plan, inscripción ni excepciones dentro de este state machine.
+7. Precios, horarios, inscripciones, Maps y demás datos comerciales salen de backend/configuración; no se crean fuentes paralelas.
+8. Los mensajes comerciales para prospectos usan **2 a 5 emojis funcionales y naturales por respuesta**, por ejemplo 🏊‍♂️, 📍, 💰, 🕒, ✅, ✍️, 📅, 🎒 o 👇. Los emojis ayudan a escanear el mensaje; no deben decorar cada línea ni saturar el texto.
 
-## 3. Entrada desde publicidad
+## 3. Detección de fuente
+
+### Meta Ads
+
+Se detecta mediante referral/`ctwa_clid`. Se conserva `entry_source = meta_ad` y cualquier `entry_interest` únicamente como contexto/atribución.
+
+### Web
+
+Los enlaces oficiales de hnATACION.com que abren WhatsApp usan prefills del tipo `Hola Hache Natación, quiero...`. Esa firma se clasifica como `entry_source = web`, incluso cuando el texto habla de inscripción, orientación o una sede y no incluye una selección canónica de producto.
+
+El texto del enlace **no preselecciona** producto ni sede.
+
+### WhatsApp directo
+
+Un número nuevo sin referral publicitario ni firma web se clasifica como `entry_source = direct`.
+
+La frase inicial del usuario tampoco preselecciona producto o sede: el usuario confirma mediante los controles del funnel.
+
+## 4. Entrada común
 
 Primer bloque visual, una sola vez:
 
-**Hola, soy Sharky, asistente IA de Hache Natación.**
+**Hola, soy Sharky 🦈, asistente IA de Hache Natación.**
 
-**Importante: nuestras clases están dirigidas únicamente a personas de 12 a 65 años.**
+Sharky informa el rango vigente de edad y pregunta qué busca.
 
-**¿Qué opción buscas?**
+El mensaje se presenta como un **carrusel nativo de WhatsApp** con dos tarjetas:
 
-Botones:
+1. **Aprende a nadar** — imagen aprobada + quick reply `meta:program:learn`.
+2. **Clases regulares** — imagen aprobada + quick reply `meta:program:regular`.
 
-- **Aprende a nadar**
-- **Clases regulares**
+La campaña, el prefill web o el texto inicial pueden conservar interés para atribución, pero nunca sustituyen el toque del botón.
 
-Descripción conceptual:
+Si el usuario escribe en lugar de usar el carrusel:
 
-- Aprende a nadar → curso básico de 3 semanas.
-- Clases regulares → niveles intermedio y avanzado.
+> 🏊‍♂️ Para orientarte mejor, elige una de estas dos opciones 👇
 
-Si el usuario escribe en vez de tocar un botón:
+Solo se repiten los controles vigentes, sin volver a enviar las fotografías.
 
-> Para orientarte mejor, elige una de estas opciones 👇
+## 5. Ruta Aprende a nadar
 
-Se vuelven a mostrar únicamente los botones, sin repetir la fotografía.
+Al seleccionar **Aprende a nadar**, Sharky muestra la información del curso intensivo usando las autoridades vigentes:
 
-## 4. Ruta 1 — Aprende a nadar
+- duración: 3 semanas;
+- clases de lunes a viernes;
+- precio general desde `sharky_precio_intensivo`, salvo que exista un curso concreto con precio propio;
+- dirigido a quien empieza desde cero o nunca ha tomado clases;
+- no lleva inscripción;
+- requisitos de traje de baño, gorro y goggles.
 
-Al seleccionar **Aprende a nadar**, Sharky muestra:
+El mensaje usa emojis funcionales para separar duración, precio, requisitos y siguiente acción, respetando el rango de 2–5.
 
-**Curso básico para aprender a nadar**
+Después abre el carrusel de sedes.
 
-- **Duración:** 3 semanas.
-- **Clases:** de lunes a viernes, todos los días.
-- **Precio total (todo el curso):** valor vigente de `sharky_precio_intensivo` (actualmente $1,200 MXN), salvo que exista un curso concreto con precio propio.
-- **Dirigido a:** personas que empiezan desde cero o nunca han tomado clases de natación.
-- **Tu lugar queda confirmado una vez realizado el pago.**
+## 6. Ruta Clases regulares
 
-**No es mensualidad:** el precio cubre las 3 semanas completas del curso. **Para este curso no se paga inscripción; únicamente el costo del curso.**
-
-**Para tomar las clases necesitas:**
-
-- traje de baño cómodo para moverte en el agua;
-- no debe ser de algodón ni mezclilla;
-- gorro de natación;
-- goggles para natación.
-
-### 4.1 Selección de sede
-
-Después de la información del producto se abre un bloque visual de sedes, una sola vez, con Monteverde y Palapas.
-
-Botones:
-
-- **Monteverde**
-- **Palapas**
-
-Si el usuario escribe en vez de escoger, Sharky responde de forma amable y repite solamente los dos botones, sin volver a enviar las fotografías.
-
-### 4.2 Información de la sede elegida
-
-Orden obligatorio:
-
-1. nombre de la sede;
-2. ubicación escrita;
-3. enlace oficial de Google Maps;
-4. referencia breve para llegar;
-5. horarios activos divididos en **MATUTINOS** y **VESPERTINOS**;
-6. frase fija **“Iniciamos el próximo lunes.”**;
-7. controles de continuación.
-
-Las horas se consultan desde `horarios` filtrando `sede + activo + intensivo`; no se hardcodean en este flujo.
-
-#### Monteverde — referencia para llegar
-
-> La alberca se encuentra al final del estacionamiento del colegio. No necesitas entrar a la escuela; solo ingresa al estacionamiento por Av. Bonampak. Puedes utilizar el estacionamiento durante tu clase.
-
-Google Maps: autoridad `sharky_maps_monteverde`.
-
-#### Palapas — referencia para llegar
-
-> Entra por calle Alcatraces, viniendo desde Av. Cobá, por la zona del IMSS. Estamos aproximadamente a 100 metros del Parque de las Palapas.
-
-Google Maps: autoridad `sharky_maps_palapas`.
-
-Controles:
-
-- **Inscribirme** → reutiliza el Flow existente de inscripción al intensivo y su proceso de pago.
-- **Ver otra sede** → muestra directamente la información de la otra sede sin reiniciar el recorrido ni repetir la información general del curso.
-
-## 5. Ruta 2 — Clases regulares
-
-Al seleccionar **Clases regulares**, antes de mostrar planes se valida la formación previa con una sola pregunta:
+Antes de mostrar planes se valida una sola condición:
 
 **¿Ya has tomado clases de natación anteriormente, en alguna escuela?**
 
-Botones:
-
-- **Sí, continuar** → continúa a clases regulares.
-- **No, curso básico** → lleva directamente a la información definida en la Ruta 1, sin volver al menú inicial.
-
-El texto libre no responde esta pregunta: solo los controles vigentes hacen avanzar el estado.
-
-### 5.1 Información de clases regulares
-
-**Clases regulares de natación**
-
-- **Modalidad:** clases continuas por mensualidad.
-- **Plan 3x (3 clases por semana):** valor vigente de `sharky_precio_regular_3` (actualmente $1,000 MXN al mes).
-- **Plan 5x (5 clases por semana):** valor vigente de `sharky_precio_regular_5` (actualmente $1,200 MXN al mes).
-- **Dirigido a:** personas que ya han tomado clases de natación y tienen nivel intermedio o avanzado.
-- **Estos planes llevan un pago de inscripción, cuyo costo depende de la sede que elijas.**
-
-**Para tomar las clases necesitas:**
-
-- traje de baño cómodo para moverte en el agua;
-- no debe ser de algodón ni mezclilla;
-- gorro de natación;
-- goggles para natación.
-
-Después se usa el mismo selector visual de **Monteverde / Palapas**.
-
-### 5.2 Sede para regulares
-
-El bloque de sede conserva el mismo orden de ubicación, Maps, referencia y horarios, pero usa los horarios con `regular=1` y añade la inscripción correspondiente:
-
-- Monteverde → `sharky_inscripcion_monteverde` (actualmente $500 MXN).
-- Palapas → `sharky_inscripcion_palapas` (actualmente $400 MXN).
-
-No se repiten aquí los precios mensuales ni los requisitos ya mostrados.
-
 Controles:
 
-- **Inscribirme** → abre un nuevo WhatsApp Flow específico para clases regulares.
-- **Ver otra sede** → muestra la otra sede sin reiniciar.
+- `meta:regular:yes` — **Sí, continuar**.
+- `meta:regular:no` — **No, curso básico**.
 
-## 6. Flow de inscripción de clases regulares
+`No, curso básico` entra directamente a la información completa del intensivo, sin regresar al menú inicial.
 
-El Flow nuevo será corto y recibirá la sede ya confirmada para no volver a preguntarla.
+`Sí, continuar` muestra:
 
-Datos mínimos:
+- modalidad por mensualidad;
+- planes 3x/5x desde las autoridades activas;
+- perfil intermedio/avanzado;
+- inscripción dependiente de la sede;
+- requisitos para tomar las clases.
 
-- nombre completo;
-- fecha de nacimiento / edad validada entre 12 y 65 años;
-- plan 3x o 5x;
-- horario activo de la sede elegida;
-- confirmación de que corresponde a nivel intermedio/avanzado.
+Después usa el mismo carrusel de sedes.
 
-Al completar el formulario:
+## 7. Carrusel de sedes
 
-- se conserva la información estructurada para la inscripción;
-- no se inicia cobro automático todavía;
-- Sharky hace **takeover humano** para que el equipo ajuste y cierre el pago.
+Monteverde y Palapas se muestran como **un único carrusel horizontal**, cada tarjeta con su fotografía aprobada y su propio quick reply:
 
-Hasta definir el contrato transaccional final de regulares, el Flow no debe inventar mensualidades, descuentos, cupos ni estados administrativos.
+- `meta:venue:monteverde` — Colegio Monteverde;
+- `meta:venue:palapas` — Palapas Protudec.
 
-## 7. Edad
+Texto libre no selecciona sede. Un retry muestra únicamente los controles vigentes y no repite fotografías.
 
-Autoridad comercial nueva:
+## 8. Información de la sede
 
-- mínima: 12 años (`sharky_edad_minima`);
-- máxima: 65 años (debe centralizarse como `sharky_edad_maxima`).
+Después de la selección se muestra:
 
-El rango se informa desde el primer mensaje. La validación efectiva debe repetirse en el Flow de inscripción. Si el dato confirmado queda fuera de rango, Sharky no continúa el alta automática y activa takeover humano.
+1. 📍 nombre y ubicación;
+2. enlace oficial de Google Maps;
+3. referencia breve para llegar;
+4. 🕒 horarios activos de mañana y tarde/noche para **esa sede + ese producto**;
+5. en intensivo, 📅 “Iniciamos el próximo lunes”;
+6. controles **Inscribirme / Ver otra sede**.
 
-## 8. Brain
+En regulares se incluyen mensualidades/inscripción de la sede desde backend/configuración. Monteverde y Palapas nunca mezclan horarios, cuotas o plan.
 
-El experimento Brain se retira del recorrido comercial vivo de esta versión.
+**Ver otra sede** cambia únicamente la sede y conserva el producto.
 
-- Brain no interpreta las selecciones de este funnel.
-- Brain no responde preguntas laterales dentro de pasos cerrados.
-- Brain no puede convertir texto libre en producto, sede, plan o inscripción.
-- El deploy no debe reactivarlo automáticamente.
-- El código histórico puede permanecer temporalmente como referencia/rollback mientras no exista un camino que lo active en producción.
+## 9. Inscripción
 
-## 9. Datos existentes que se reutilizan
+### Intensivo
 
-No crear fuentes paralelas para información ya existente:
+`meta:register:intensive` reutiliza el Flow, guards, registro y pago existentes. La edad se vuelve a validar antes de cualquier alta real.
 
-- referral Meta y `ctwa_clid`;
-- identidad alumno/prospecto;
-- `sharky_precio_intensivo`;
-- `sharky_precio_regular_3`;
-- `sharky_precio_regular_5`;
-- `sharky_inscripcion_monteverde`;
-- `sharky_inscripcion_palapas`;
-- `sharky_maps_monteverde`;
-- `sharky_maps_palapas`;
-- tabla `horarios`, diferenciando `intensivo` y `regular`;
-- Flow/ejecutores existentes de intensivo;
-- takeover humano e inbox;
-- atribución first-touch/latest-touch.
+### Regulares
 
-## 10. Recursos visuales pendientes
+`meta:register:regular` abre el Flow específico con sede ya confirmada. Solicita los datos necesarios, perfil intermedio/avanzado, plan y horario activos. El registro se ejecuta de forma protegida y termina en takeover humano para coordinar el pago; no cobra automáticamente.
 
-Antes de considerar el PR listo para merge se necesitan los recursos finales:
+Cancelar el Flow regular vuelve al bloque de la sede elegida sin perder producto/contexto.
 
-1. imagen inicial del selector **Aprende a nadar / Clases regulares**;
-2. fotografía de **Monteverde**;
-3. fotografía de **Palapas**.
+## 10. Edad
 
-Las fotografías deben conservarse como imágenes reales; no necesitan regeneración. Para el selector de sedes se puede preparar un único recurso visual con ambas fotografías si eso permite mantener un solo mensaje interactivo nativo con dos botones.
+La autoridad central es:
 
-## 11. Criterios de no regresión
+- mínima: `sharky_edad_minima`;
+- máxima: `sharky_edad_maxima`.
 
-- Un alumno conocido jamás entra en este funnel aunque llegue desde un anuncio.
-- Un referral Meta se conserva para atribución.
-- Web y WhatsApp directo no heredan este funnel hasta que sus versiones sean definidas.
-- Escribir texto durante un paso cerrado nunca hace avanzar el estado.
-- Reintentar un paso no vuelve a enviar su imagen.
-- `No, curso básico` nunca deja activo el producto regular.
-- Horarios de intensivo y regular no se mezclan.
-- Cambiar de sede invalida únicamente dependencias de la sede anterior.
-- Edad fuera de 12–65 termina en takeover.
-- Intensivo conserva sus guards de inscripción/pago.
-- Regulares terminan en takeover después del Flow hasta que el cierre de pago sea definido.
-- Ningún dato comercial estable depende de un prompt de IA.
+Actualmente el rango comunicado es 12–65 años. El valor mostrado en el saludo y los límites de los Flow deben derivarse de la misma política central.
+
+Fuera de rango no existe alta automática y se deriva a humano.
+
+## 11. Brain y llamadas de IA
+
+Mientras `hache_sharky_meta_active(state)` sea verdadero:
+
+- las políticas laterales antiguas no pueden adelantarse al state machine;
+- Brain 2B-A no reescribe la decisión;
+- una nota de voz transcrita tampoco debe abrir rutas laterales;
+- texto libre no se convierte en producto/sede por inferencia.
+
+Brain sigue existiendo para recorridos donde esté habilitado, pero no es autoridad de captación en Meta/web/direct.
+
+## 12. Recursos visuales aprobados
+
+- `public/assets/Aprende a nadar en tres semanas.png`
+- `public/assets/Clases regulares de natación nocturna.png`
+- `public/assets/Sede Monteverde.png`
+- `public/assets/SEDE Palapas PROTUDEC.png`
+
+Las fotografías se usan tal como fueron aprobadas; no se reinterpretan.
+
+## 13. No regresión
+
+Considerar el flujo roto si ocurre cualquiera de estos casos:
+
+- Meta, web o directo cae al onboarding de nombre por perfil;
+- la fuente real deja de conservarse como `meta_ad`, `web` o `direct`;
+- el texto del anuncio/web/directo preselecciona producto o sede;
+- texto libre avanza un paso cerrado;
+- una duda lateral activa Brain o un handoff antiguo no autorizado;
+- una nota de voz evita el lock determinístico;
+- un retry repite imágenes;
+- las dos opciones visuales dejan de formar un carrusel;
+- un quick reply no llega con su ID canónico;
+- horarios o precios mezclan sede/producto;
+- un alumno conocido entra como prospecto;
+- edad fuera de rango crea un alumno;
+- regulares cobra automáticamente;
+- una respuesta comercial de prospecto rompe la política de 2–5 emojis funcionales.
+
+## 14. Cobertura
+
+Cobertura principal:
+
+- `tests/sharky-meta3-regression.php`;
+- `tests/sharky-pr162-review-regression.php`;
+- `tests/sharky-guided-first-prospect-regression.php`;
+- `tests/sharky-language-guide-regression.php`;
+- suites de WhatsApp adapter, outbox, commerce flows, inscripción y pagos;
+- Quality completo del PR.

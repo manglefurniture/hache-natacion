@@ -2,17 +2,34 @@
 
 Esta guía documenta expresiones reales de WhatsApp que Sharky puede traducir a una intención canónica antes de entrar a las reglas comerciales.
 
-No es un diccionario general, no corrige todo el español y no sustituye Brain. Su objetivo es cubrir frases frecuentes, coloquialismos y faltas comunes cuando el significado es inequívoco.
+No es un diccionario general, no corrige todo el español y no sustituye las autoridades determinísticas. Su objetivo es cubrir frases frecuentes, coloquialismos y faltas comunes cuando el significado sea inequívoco.
 
 ## Principio
 
 **Lenguaje flexible → intención canónica → reglas determinísticas.**
 
-La capa lingüística puede entender cómo escribe la gente. No puede decidir por sí sola identidad, producto, precio, sede, elegibilidad, inscripción ni pago.
+La capa lingüística puede entender cómo escribe la gente. No decide por sí sola identidad, producto, precio, sede, elegibilidad, inscripción ni pago.
 
-## Onboarding inicial
+## Sharky 3.0 — Meta, web y WhatsApp directo
 
-El onboarding de un prospecto nuevo sigue estos pasos estructurados:
+Para prospectos nuevos con `entry_source = meta_ad`, `web` o `direct`, el onboarding vigente es un state machine **cerrado**.
+
+Mientras `hache_sharky_meta_active(state)` sea verdadero:
+
+- texto libre no sustituye un botón/quick reply;
+- no se canonicaliza “Palapas”, “regulares”, “aprende a nadar”, “sí”, “no” u otra frase como selección del paso;
+- la frase se conserva únicamente como texto original para diagnóstico cuando corresponda;
+- el paso actual se mantiene y se repiten los controles vigentes sin repetir imágenes;
+- una solicitud explícita de humano o la declaración de ser alumno sí puede usar el handoff permitido;
+- Brain y las rutas laterales antiguas no reciben autoridad sobre el paso.
+
+Esta regla estricta también protege notas de voz una vez transcritas mediante el lock del worker.
+
+## Fallback por perfil — referrals no publicitarios
+
+El onboarding anterior por perfil se conserva temporalmente para `entry_source = referral` no publicitario. Solo dentro de ese fallback siguen aplicando las canonicalizaciones descritas en las secciones siguientes.
+
+Recorrido histórico:
 
 **nombre → para quién son las clases → edad → nivel → formación solo si Intermedio**.
 
@@ -20,7 +37,7 @@ El texto libre puede equivaler a un botón únicamente cuando el estado actual h
 
 ### Nombre
 
-En el paso `prospect_onboarding → name`, se aceptan formas simples como:
+En `prospect_onboarding → name`, se aceptan formas simples como:
 
 - Roberto;
 - Roberto Pérez;
@@ -28,49 +45,36 @@ En el paso `prospect_onboarding → name`, se aceptan formas simples como:
 - mi nombre es Roberto;
 - soy Roberto.
 
-No se deben aceptar como nombre confirmado respuestas con dominio/URL, correo, números, emojis o contenido que claramente no sea un nombre de persona.
+No se aceptan como nombre confirmado respuestas con dominio/URL, correo, números, emojis o contenido que claramente no sea un nombre de persona.
 
-El primer mensaje del usuario que abre la conversación no se interpreta como nombre. Sharky primero formula explícitamente la pregunta.
+El primer mensaje que abre la conversación no se interpreta como nombre. Sharky formula explícitamente la pregunta.
 
-Antes de consumir texto libre como respuesta al dato pendiente, Sharky distingue entre **respuesta al paso actual** y **duda lateral informativa**. Un saludo seguido de una consulta —por ejemplo, “Buen día, ubicación por favor” o “Hola, precio por favor”— no es un nombre. La duda se responde sin perder el estado y después se vuelve a mostrar la pregunta pendiente. Esta interpretación conversacional nunca autoriza a Brain a completar por su cuenta identidad, edad, nivel, formación, producto o sede.
+Antes de consumir texto libre como dato pendiente, Sharky distingue entre **respuesta al paso actual** y **duda lateral informativa**. Esta interpretación nunca autoriza a Brain a completar identidad, edad, nivel, formación, producto o sede por su cuenta.
 
 ### ¿Las clases son para ti?
 
-En `prospect_onboarding → participant`, además de los botones **Sí / No**, pueden entenderse equivalentes claros como:
+En `prospect_onboarding → participant`, además de los botones Sí / No, pueden entenderse equivalentes claros.
 
-**Sí**:
+**Sí:** sí, claro, correcto, para mí, son para mí, yo.
 
-- sí;
-- claro;
-- correcto;
-- para mí;
-- son para mí;
-- yo.
+**No:** no, no son para mí, es para otra persona, para otra persona.
 
-**No**:
-
-- no;
-- no son para mí;
-- es para otra persona;
-- para otra persona.
-
-Un `sí` o `no` fuera de este paso no debe adquirir esta semántica automáticamente.
+Un sí/no fuera de este paso no adquiere esta semántica automáticamente.
 
 ### Edad
 
 En `prospect_onboarding → age`, una edad numérica inequívoca se canonicaliza al entero correspondiente. Si no se puede obtener una edad válida, no se avanza.
 
-## Nivel de natación
+## Nivel de natación del fallback
 
-La pregunta canónica presenta botones **Principiante / Intermedio / Avanzado**.
+En `prospect_onboarding → level`:
 
-En `prospect_onboarding → level`, estas expresiones pueden equivaler a **Principiante**:
+**Principiante** puede incluir:
 
 - principiante;
 - básico / básica;
 - desde cero;
 - de cero / de ceros;
-- en cero / en ceros;
 - nada de nada;
 - no sé nadar;
 - no ce nadar;
@@ -78,25 +82,17 @@ En `prospect_onboarding → level`, estas expresiones pueden equivaler a **Princ
 - no sé flotar;
 - quiero aprender a nadar.
 
-Pueden equivaler a **Intermedio** cuando la persona lo expresa de forma inequívoca:
+**Intermedio:** intermedio / intermedia / nivel intermedio.
 
-- intermedio / intermedia;
-- nivel intermedio.
+**Avanzado:** avanzado / avanzada / nivel avanzado.
 
-Pueden equivaler a **Avanzado**:
-
-- avanzado / avanzada;
-- nivel avanzado.
-
-Expresiones abiertas como “nado un poco”, “me defiendo” o “más o menos” no deben promover automáticamente a Avanzado ni resolver por sí solas una clasificación dudosa. Si el paso exige una de las tres categorías y la respuesta no es inequívoca, Sharky conserva el paso y vuelve a mostrar la pregunta/controles.
+Frases abiertas como “nado un poco”, “me defiendo” o “más o menos” no deben promover automáticamente a Avanzado. Si la respuesta no es inequívoca, se conserva el paso.
 
 ## Formación previa de Intermedio
 
-La pregunta de formación previa se hace **solo después de que el nivel quedó Intermedio**.
+La pregunta se hace solo después de que el nivel quedó Intermedio.
 
-En `prospect_onboarding → intermediate_background`:
-
-**No ha tomado clases** puede expresarse como:
+**No ha tomado clases:**
 
 - no;
 - nunca;
@@ -109,7 +105,7 @@ En `prospect_onboarding → intermediate_background`:
 - sin entrenador;
 - autodidacta.
 
-**Sí ha tomado clases** puede expresarse como:
+**Sí ha tomado clases:**
 
 - sí;
 - sí he tomado clases;
@@ -119,74 +115,53 @@ En `prospect_onboarding → intermediate_background`:
 - con entrenador;
 - clases formales.
 
-La palabra aislada `nunca` no se canonicaliza globalmente. Solo es inequívoca como ausencia de formación cuando el estado confirma que Sharky está haciendo esa pregunta.
+La palabra aislada `nunca` no se canonicaliza globalmente. Solo vale como ausencia de formación cuando el estado confirma esa pregunta.
 
-**Avanzado no entra a este paso.** Seleccionar Avanzado permite clases regulares directamente, pero no autoriza a Sharky a afirmar que la persona tuvo formación formal.
+Avanzado no entra a este paso y no autoriza a afirmar formación formal.
 
-## Información de producto
+## Información de producto del fallback
 
-Cuando el producto ya quedó resuelto, el botón de información es la ruta preferente para desplegar el detalle. Frases libres como “ver información”, “dame información” o equivalentes pueden tratarse como intención informativa únicamente si el producto activo ya está inequívocamente resuelto; no deben utilizarse para cambiar de producto.
+Cuando el producto ya quedó resuelto, “ver información” o equivalentes pueden tratarse como intención informativa si el producto activo es inequívoco. No cambian producto.
 
-## Selección de sede
+## Selección de sede del fallback
 
-En `prospect_onboarding → sede` existen tres intenciones canónicas:
+En `prospect_onboarding → sede` existen:
 
-- `sede:monteverde` → Monteverde;
-- `sede:palapas` → Palapas;
-- `sede:both` → mostrar ambas ubicaciones, sin confirmar todavía una sede.
+- `sede:monteverde`;
+- `sede:palapas`;
+- `sede:both`.
 
-Equivalentes textuales claros de **Ambas ubicaciones**:
+Equivalentes claros de **Ambas ubicaciones**: ambas, las dos, ambas sedes, las dos sedes.
 
-- ambas;
-- ambas ubicaciones;
-- las dos;
-- las dos ubicaciones;
-- ambas sedes;
-- las dos sedes.
-
-Después de mostrar ambas, Sharky vuelve a pedir una elección entre Monteverde y Palapas. En ese momento “ambas” ya no debe avanzar: se necesita una sede concreta.
-
-Una mención inequívoca de “Monteverde” o “Palapas” puede equivaler al botón correspondiente cuando el paso activo es sede.
+Después de mostrar ambas se necesita una sede concreta. Una mención inequívoca de Monteverde/Palapas puede equivaler al botón únicamente en este fallback; **no en Sharky 3.0 cerrado**.
 
 ## Después de sede
 
-Con producto y sede confirmados, plan/horario/fecha y demás opciones deben resolverse contra el catálogo real. Los botones/listas son la interfaz preferente, pero un texto libre inequívoco que coincida con una opción vigente puede canonicalizarse a esa misma selección.
+Con producto y sede confirmados, plan/horario/fecha y demás opciones se resuelven contra catálogo real. Donde el recorrido lo permita, un texto libre inequívoco puede canonicalizarse a una opción vigente.
 
-Si el usuario pregunta por **más horarios** sin nombrar otra sede, Sharky puede consultar alternativas verificadas sin cambiar automáticamente la sede activa.
-
-Ejemplos:
-
-- ¿No tienes más horario?;
-- ¿Hay otro horario?;
-- ¿Tienen otros horarios?;
-- ¿Manejan más horarios?;
-- ¿Algún horario diferente?
-
-Si el turno anterior dejó claro un periodo —por ejemplo mañana/matutino—, la consulta alternativa conserva ese periodo.
-
-La respuesta debe usar únicamente horarios verificados del backend. Consultar otra sede **no cambia la sede seleccionada** hasta que el usuario la acepte de forma explícita.
+Preguntar por más horarios no cambia automáticamente la sede activa. Las alternativas deben provenir del backend y la sede solo cambia con aceptación explícita.
 
 ## Recuperación suave
 
-Si una respuesta no puede clasificarse con seguridad dentro de un paso controlado, la salida preferida es:
-
-**“Una disculpa, no entendí…” + reformulación de la pregunta activa.**
-
-Reglas:
+En el fallback por perfil, si una respuesta no puede clasificarse con seguridad:
 
 - no avanzar;
 - no borrar datos confirmados;
-- no inferir una opción por parecido léxico;
-- volver a mostrar botones cuando ese paso los tenga.
+- no inferir por parecido léxico;
+- usar “Una disculpa, no entendí…” y reformular;
+- volver a mostrar botones cuando el paso los tenga.
+
+En Sharky 3.0 Meta/web/directo, la recuperación es más estricta: mantener el paso y repetir controles vigentes, sin intentar resolver el contenido libre.
 
 ## Cómo crecer esta guía
 
-Cuando aparezca una expresión nueva en una conversación real:
+Cuando aparezca una expresión nueva:
 
 1. anonimizar el caso;
-2. comprobar que la intención sea inequívoca;
-3. añadir la variante a la capa lingüística solo si no introduce falsos positivos razonables;
-4. añadir una regresión automática;
-5. no convertir una excepción ambigua en regla general.
+2. comprobar si el recorrido permite texto libre en ese paso;
+3. si el paso es cerrado Sharky 3.0, no crear una canonicalización que sustituya el control;
+4. si el recorrido permite texto, comprobar que la intención sea inequívoca;
+5. añadir regresión automática;
+6. no convertir una excepción ambigua en regla general.
 
-El objetivo es que Sharky entienda mejor cómo habla la gente sin hacer más débiles las reglas de negocio.
+El objetivo es entender mejor cómo habla la gente sin debilitar las reglas de negocio.
