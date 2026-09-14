@@ -48,6 +48,8 @@ jobs:
         run: php tests/sharky-brain-reactivation-regression.php
       - name: Sharky 3.0 Meta funnel regression
         run: php tests/sharky-meta3-regression.php
+      - name: Sharky safe side-question regression
+        run: php tests/sharky-safe-side-question-regression.php
       - name: Sharky Brain numeric context regression
         run: php tests/sharky-brain-numeric-context-regression.php
       - name: Sharky contact book regression
