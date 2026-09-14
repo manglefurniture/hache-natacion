@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-regular-enrollment.php';
+require_once __DIR__.'/sharky-safe-side-question.php';
 
 /**
  * Sharky 3.0 — funnel determinístico común para prospectos nuevos provenientes
@@ -258,49 +259,11 @@ function hache_sharky_meta_resume_decision(array $state): array
     return hache_sharky_orchestrator_decision('meta_resume','👇 Cuando quieras, continúa con la opción pendiente.');
 }
 
-function hache_sharky_meta_side_question_fallback(PDO $pdo,array $state,string $text): string
-{
-    $t=hache_sharky_orchestrator_normalize($text);$program=(string)($state['commercial_context']['program']??'');$sede=(string)($state['commercial_context']['sede_clave']??'');
-    if(preg_match('/\b(?:diferencia|diferencias|uno y otro|intensivo.*regular|regular.*intensivo)\b/u',$t)===1){
-        $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$price=is_numeric($business['sharky_precio_intensivo']??null)?(int)$business['sharky_precio_intensivo']:1200;
-        return '🏊‍♂️ El curso intensivo es para aprender desde cero o reforzar base: dura 3 semanas, de lunes a viernes, cuesta $'.number_format($price,0,'.',',').' MXN y no lleva inscripción. 📅 Las clases regulares son para quienes ya tienen formación previa; funcionan por mensualidad y el precio/inscripción depende de la sede y el plan.';
-    }
-    if(preg_match('/\b(?:cancun|sedes|otra sede|otras sedes|ubicacion|ubicaciones|donde)\b/u',$t)===1){
-        if($sede==='MONTEVERDE')return '📍 Colegio Monteverde está en Av. Bonampak, Cancún. La alberca está al final del estacionamiento del colegio.';
-        if($sede==='PALAPAS')return '📍 Palapas Protudec está en Calle Alcatraces, Centro, Cancún, aproximadamente a 100 metros del Parque de las Palapas.';
-        return '📍 Sí, estamos en Cancún. Tenemos dos sedes: Colegio Monteverde, sobre Av. Bonampak, y Palapas Protudec, en Calle Alcatraces, Centro.';
-    }
-    if(preg_match('/\b(?:gorro|gorra|goggles|lentes|traje|equipo|equipamiento|necesito|requisito|requisitos)\b/u',$t)===1){
-        $extra=$program==='intensive'?' El curso intensivo no lleva inscripción.':'';
-        return '🎒 Para nadar necesitas traje de baño cómodo que no sea de algodón ni mezclilla, gorro de natación y goggles.'.$extra;
-    }
-    if(preg_match('/\b(?:mensual|mensualidad|precio|costo|cuanto)\b/u',$t)===1&&$program==='intensive'){
-        $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$price=is_numeric($business['sharky_precio_intensivo']??null)?(int)$business['sharky_precio_intensivo']:1200;
-        return '💰 El curso intensivo no es mensualidad: son $'.number_format($price,0,'.',',').' MXN por las 3 semanas completas, de lunes a viernes, y no lleva inscripción.';
-    }
-    if(preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1){
-        if($program===''||!in_array($sede,['MONTEVERDE','PALAPAS'],true))return '🕒 Los horarios dependen del producto y de la sede. En cuanto elijas esas opciones te muestro únicamente los horarios vigentes que correspondan.';
-        $hours=hache_sharky_meta_schedules($pdo,$sede,$program);$all=array_values(array_unique(array_merge($hours['morning']??[],$hours['evening']??[])));
-        if($all)return '🕒 Los horarios vigentes para lo que elegiste son: '.implode(', ',$all).'.';
-    }
-    return '';
-}
-
 function hache_sharky_meta_safe_side_question(PDO $pdo,array $state,array $event,array $extraContext=[]): ?array
 {
     if(!hache_sharky_meta_side_question_like($event))return null;
-    $text=trim((string)($event['text']??''));$answer=hache_sharky_meta_side_question_fallback($pdo,$state,$text);
-    if($answer===''&&function_exists('hache_sharky_lab_answer')){
-        $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';$context=$extraContext;
-        if(function_exists('hache_sharky_whatsapp_context')){try{$context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);}catch(Throwable $ignored){}}
-        $facts=[];$intensive=hache_sharky_meta_intensive_info($pdo,false);$regular=hache_sharky_meta_regular_info($pdo,false);
-        if(trim((string)($intensive['message']??''))!=='')$facts[]='INTENSIVO: '.trim((string)$intensive['message']);
-        if(trim((string)($regular['message']??''))!=='')$facts[]='REGULARES: '.trim((string)$regular['message']);
-        $sede=(string)($state['commercial_context']['sede_clave']??'');if(in_array($sede,['MONTEVERDE','PALAPAS'],true)){$detail=hache_sharky_meta_venue_detail($pdo,$state,$sede);$facts[]='SEDE CONFIRMADA: '.trim((string)($detail['message']??''));}
-        $instruction="MODO LATERAL SEGURO SHARKY 3.0: responde únicamente la duda informativa del usuario con datos confirmados. No interpretes la frase como selección del funnel, no cambies producto, sede, plan, horario ni estado, y no ejecutes acciones. No hagas otra pregunta; el backend repondrá el control pendiente. Si falta un dato para responder con certeza, dilo brevemente. Mantén respuesta móvil y directa, con 1 a 3 emojis funcionales.\n\nFUENTES AUTORITATIVAS DEL TURNO:\n".implode("\n\n",$facts);
-        try{$answer=(string)hache_sharky_lab_answer($text,$instruction,$state,$context);if(function_exists('hache_sharky_whatsapp_clean_answer'))$answer=hache_sharky_whatsapp_clean_answer($answer);if(function_exists('hache_sharky_whatsapp_enforce_confirmed_context'))$answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state,$text);if(function_exists('hache_sharky_whatsapp_enforce_no_reintroduction'))$answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$state,$text);}catch(Throwable $e){error_log('[sharky-meta] safe side-question model failed');$answer='';}
-    }
-    if(trim($answer)==='')$answer='💬 Puedo ayudarte con esa duda, pero prefiero no adivinar un dato que todavía no está confirmado.';
+    $text=trim((string)($event['text']??''));$answer=hache_sharky_safe_side_answer($pdo,$state,$text);
+    if($answer===null)return null;
     $resume=hache_sharky_meta_resume_decision($state);$message=rtrim($answer);$prompt=trim((string)($resume['message']??''));if($prompt!=='')$message.="\n\n".$prompt;
     return [$state,hache_sharky_orchestrator_decision('meta_side_question',$message,is_array($resume['ui']??null)?$resume['ui']:[])];
 }
