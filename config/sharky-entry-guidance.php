@@ -7,8 +7,8 @@ require_once __DIR__.'/sharky-start-authority.php';
 
 /**
  * Contexto de entrada. Fuente, interés de entrada y selección confirmada son
- * conceptos distintos: una campaña orienta el saludo, pero nunca sustituye una
- * elección explícita del usuario.
+ * conceptos distintos: una campaña o prefill orientan atribución, pero nunca
+ * sustituyen una elección explícita del usuario.
  *
  * @return array{source:string,interest:?string}
  */
@@ -23,7 +23,8 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
     };
 
     // Lo que el usuario escribe en el turno actual siempre tiene prioridad sobre
-    // la inferencia de campaña. El referral conserva la fuente, no el control del funnel.
+    // la inferencia de campaña. La fuente se conserva para atribución, no para
+    // escoger producto dentro del funnel determinístico.
     $explicitInterest=$programFrom($userText);
 
     $ref=is_array($state['referral']['latest']??null)?$state['referral']['latest']
@@ -36,9 +37,6 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
         $interest=$explicitInterest??$programFrom($combined);
         $isMetaAd=$sourceType==='ad'||trim((string)($ref['ctwa_clid']??''))!=='';
         if($isMetaAd){
-            // La campaña identifica el canal de entrada, pero Sharky 3.0 obliga a
-            // una selección explícita Aprende a nadar / Clases regulares antes de
-            // fijar el producto. `interest` queda solo como atribución/contexto.
             return ['source'=>'meta_ad','interest'=>$interest];
         }
         if($sourceType!==''||trim((string)($ref['source_url']??''))!==''){
@@ -48,9 +46,13 @@ function hache_sharky_entry_context(array $state,string $userText=''): array
 
     $t=$normalize($userText);
     $interest=$explicitInterest;
+    // Los enlaces de WhatsApp de la web usan prefills que empiezan con
+    // “Hola Hache Natación…” y pueden decir información, inscribirme,
+    // orientación o una sede. Esa firma conserva la atribución web aunque no
+    // venga acompañada por referral de Meta.
     $looksLikeWebPrefill=preg_match('/\bhola\s+hache\s+natacion\b/u',$t)===1
-        &&preg_match('/\b(?:quiero|busco|necesito)\s+informacion\b/u',$t)===1;
-    if($looksLikeWebPrefill&&$interest!==null)return ['source'=>'web','interest'=>$interest];
+        &&preg_match('/\b(?:quiero|busco|necesito|quisiera|me\s+interesa)\b/u',$t)===1;
+    if($looksLikeWebPrefill)return ['source'=>'web','interest'=>$interest];
     return ['source'=>'direct','interest'=>$interest];
 }
 
@@ -61,9 +63,8 @@ function hache_sharky_entry_apply(array $state,string $userText=''): array
     $state['commercial_context']['entry_source']=$entry['source'];
     $state['commercial_context']['entry_interest']=$entry['interest'];
 
-    // Fuente/campaña e interés sirven para contextualizar y recomendar. Solo una
-    // elección explícita del usuario puede alimentar preferred_program, porque el
-    // adaptador interpreta ese campo como autorización para continuar con ese programa.
+    // Fuente e interés sirven para atribución/contexto. Solo una elección
+    // explícita del usuario puede convertirse en producto confirmado.
     $explicitProgram=hache_sharky_orchestrator_program_choice($userText);
     $flow=is_array($state['flow']??null)?$state['flow']:null;
     if(is_array($flow)&&($flow['name']??'')==='qualify_prospect'&&in_array($explicitProgram,['intensive','regular'],true)){
@@ -73,13 +74,18 @@ function hache_sharky_entry_apply(array $state,string $userText=''): array
     return $state;
 }
 
+function hache_sharky_entry_uses_deterministic_prospect_flow(string $source): bool
+{
+    return in_array($source,['meta_ad','web','direct'],true);
+}
+
 /**
  * Bootstrap exclusivo para el primer turno REAL de un número que WhatsApp ya
  * clasificó como prospecto no identificado.
  *
- * Meta Ads entra al funnel Sharky 3.0 cerrado. Web, referral no publicitario y
- * WhatsApp directo conservan el onboarding vigente hasta que tengan su propio
- * diseño aprobado.
+ * Meta Ads, web y WhatsApp directo comparten el funnel Sharky 3.0 cerrado.
+ * Referral no publicitario conserva temporalmente el onboarding por perfil
+ * mientras no exista una decisión explícita que lo sustituya.
  */
 function hache_sharky_entry_guided_first_prospect(array $state,string $userText='',int $now=0): array
 {
@@ -93,7 +99,7 @@ function hache_sharky_entry_guided_first_prospect(array $state,string $userText=
 
     $state=hache_sharky_entry_apply($state,$userText);
     $now=$now>0?$now:time();
-    if(($state['commercial_context']['entry_source']??'')==='meta_ad'){
+    if(hache_sharky_entry_uses_deterministic_prospect_flow((string)($state['commercial_context']['entry_source']??''))){
         return hache_sharky_orchestrator_flow(
             $state,
             'meta_ad_onboarding',
@@ -116,16 +122,16 @@ function hache_sharky_entry_intro(array $state,string $userText=''): string
     $entry=hache_sharky_entry_context($state,$userText);
     $legacyBase='Soy Sharky 🦈, el asistente IA de Hache Natación.';
     $flow=is_array($state['flow']??null)?$state['flow']:null;
-    // El saludo neutral nuevo pertenece exclusivamente al onboarding inicial.
-    // Los recorridos ya existentes conservan su presentación para evitar regresiones.
+    // Referral no publicitario que todavía use onboarding por perfil conserva
+    // su presentación neutral histórica.
     if(is_array($flow)&&($flow['name']??'')==='prospect_onboarding'){
         return 'Hola, soy Sharky, asistente IA de Hache Natación.';
     }
-    // El boundary de WhatsApp elimina cualquier presentación escrita en el payload
-    // antes de aplicar una única presentación determinística. Meta debe devolverla
-    // aquí para que el saludo obligatorio no desaparezca del primer carrusel.
+    // El boundary de WhatsApp elimina cualquier presentación escrita en el
+    // payload antes de aplicar una sola presentación determinística. El flujo
+    // cerrado común debe reponerla para Meta, web y directo.
     if(is_array($flow)&&($flow['name']??'')==='meta_ad_onboarding'){
-        return 'Hola, soy Sharky, asistente IA de Hache Natación.';
+        return 'Hola, soy Sharky 🦈, asistente IA de Hache Natación.';
     }
     // Un alumno ya identificado no necesita el bloque comercial de captación.
     if(($state['identity']['kind']??'unknown')==='student')return $legacyBase;
