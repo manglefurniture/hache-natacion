@@ -13,8 +13,9 @@ require_once __DIR__.'/sharky-regular-enrollment.php';
  * atribución y analítica.
  *
  * Este flujo no usa Brain ni interpretación de texto libre para avanzar pasos.
- * Los únicos atajos permitidos son solicitud explícita de humano/alumno, que
- * terminan en takeover.
+ * El texto libre sí puede recibir una respuesta lateral informativa segura sin
+ * mutar producto/sede/plan ni mover el cursor; después se reponen los controles.
+ * Solicitudes explícitas de humano/alumno terminan en takeover.
  */
 
 const HACHE_SHARKY_META_FLOW='meta_ad_onboarding';
@@ -233,6 +234,77 @@ function hache_sharky_meta_regular_form(PDO $pdo,array $state,int $now,array $ex
     return [$state,hache_sharky_orchestrator_decision('regular_enrollment_form','✍️ Completa tus datos para continuar. ✅',['type'=>'raw_payload','payload'=>$payload])];
 }
 
+function hache_sharky_meta_side_question_like(array $event): bool
+{
+    if(strtolower(trim((string)($event['interactive_id']??'')))!=='meta:free_text')return false;
+    $text=trim((string)($event['text']??''));if($text==='')return false;
+    if(function_exists('hache_sharky_whatsapp_batch_question_like'))return hache_sharky_whatsapp_batch_question_like($text);
+    return str_contains($text,'?')||str_contains($text,'¿');
+}
+
+function hache_sharky_meta_resume_decision(array $state): array
+{
+    $flow=is_array($state['flow']??null)?$state['flow']:[];$step=(string)($flow['step']??($state['commercial_context']['meta_step']??''));
+    if($step==='program')return hache_sharky_meta_program_retry();
+    if($step==='regular_background')return hache_sharky_meta_regular_background_prompt();
+    if($step==='venue')return hache_sharky_meta_venue_retry($state);
+    if($step==='venue_detail'){
+        $program=(string)($state['commercial_context']['program']??'');
+        $registerId=$program==='regular'?'meta:register:regular':'meta:register:intensive';
+        return hache_sharky_orchestrator_decision('meta_venue_detail_resume','📍 Si quieres continuar, elige una opción 👇',['type'=>'buttons','buttons'=>[
+            hache_sharky_meta_button($registerId,'Inscribirme'),hache_sharky_meta_button('meta:venue:other','Ver otra sede')
+        ]]);
+    }
+    return hache_sharky_orchestrator_decision('meta_resume','👇 Cuando quieras, continúa con la opción pendiente.');
+}
+
+function hache_sharky_meta_side_question_fallback(PDO $pdo,array $state,string $text): string
+{
+    $t=hache_sharky_orchestrator_normalize($text);$program=(string)($state['commercial_context']['program']??'');$sede=(string)($state['commercial_context']['sede_clave']??'');
+    if(preg_match('/\b(?:diferencia|diferencias|uno y otro|intensivo.*regular|regular.*intensivo)\b/u',$t)===1){
+        $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$price=is_numeric($business['sharky_precio_intensivo']??null)?(int)$business['sharky_precio_intensivo']:1200;
+        return '🏊‍♂️ El curso intensivo es para aprender desde cero o reforzar base: dura 3 semanas, de lunes a viernes, cuesta $'.number_format($price,0,'.',',').' MXN y no lleva inscripción. 📅 Las clases regulares son para quienes ya tienen formación previa; funcionan por mensualidad y el precio/inscripción depende de la sede y el plan.';
+    }
+    if(preg_match('/\b(?:cancun|sedes|otra sede|otras sedes|ubicacion|ubicaciones|donde)\b/u',$t)===1){
+        if($sede==='MONTEVERDE')return '📍 Colegio Monteverde está en Av. Bonampak, Cancún. La alberca está al final del estacionamiento del colegio.';
+        if($sede==='PALAPAS')return '📍 Palapas Protudec está en Calle Alcatraces, Centro, Cancún, aproximadamente a 100 metros del Parque de las Palapas.';
+        return '📍 Sí, estamos en Cancún. Tenemos dos sedes: Colegio Monteverde, sobre Av. Bonampak, y Palapas Protudec, en Calle Alcatraces, Centro.';
+    }
+    if(preg_match('/\b(?:gorro|gorra|goggles|lentes|traje|equipo|equipamiento|necesito|requisito|requisitos)\b/u',$t)===1){
+        $extra=$program==='intensive'?' El curso intensivo no lleva inscripción.':'';
+        return '🎒 Para nadar necesitas traje de baño cómodo que no sea de algodón ni mezclilla, gorro de natación y goggles.'.$extra;
+    }
+    if(preg_match('/\b(?:mensual|mensualidad|precio|costo|cuanto)\b/u',$t)===1&&$program==='intensive'){
+        $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$price=is_numeric($business['sharky_precio_intensivo']??null)?(int)$business['sharky_precio_intensivo']:1200;
+        return '💰 El curso intensivo no es mensualidad: son $'.number_format($price,0,'.',',').' MXN por las 3 semanas completas, de lunes a viernes, y no lleva inscripción.';
+    }
+    if(preg_match('/\b(?:horario|horarios|hora|horas)\b/u',$t)===1){
+        if($program===''||!in_array($sede,['MONTEVERDE','PALAPAS'],true))return '🕒 Los horarios dependen del producto y de la sede. En cuanto elijas esas opciones te muestro únicamente los horarios vigentes que correspondan.';
+        $hours=hache_sharky_meta_schedules($pdo,$sede,$program);$all=array_values(array_unique(array_merge($hours['morning']??[],$hours['evening']??[])));
+        if($all)return '🕒 Los horarios vigentes para lo que elegiste son: '.implode(', ',$all).'.';
+    }
+    return '';
+}
+
+function hache_sharky_meta_safe_side_question(PDO $pdo,array $state,array $event,array $extraContext=[]): ?array
+{
+    if(!hache_sharky_meta_side_question_like($event))return null;
+    $text=trim((string)($event['text']??''));$answer=hache_sharky_meta_side_question_fallback($pdo,$state,$text);
+    if($answer===''&&function_exists('hache_sharky_lab_answer')){
+        $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';$context=$extraContext;
+        if(function_exists('hache_sharky_whatsapp_context')){try{$context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);}catch(Throwable $ignored){}}
+        $facts=[];$intensive=hache_sharky_meta_intensive_info($pdo,false);$regular=hache_sharky_meta_regular_info($pdo,false);
+        if(trim((string)($intensive['message']??''))!=='')$facts[]='INTENSIVO: '.trim((string)$intensive['message']);
+        if(trim((string)($regular['message']??''))!=='')$facts[]='REGULARES: '.trim((string)$regular['message']);
+        $sede=(string)($state['commercial_context']['sede_clave']??'');if(in_array($sede,['MONTEVERDE','PALAPAS'],true)){$detail=hache_sharky_meta_venue_detail($pdo,$state,$sede);$facts[]='SEDE CONFIRMADA: '.trim((string)($detail['message']??''));}
+        $instruction="MODO LATERAL SEGURO SHARKY 3.0: responde únicamente la duda informativa del usuario con datos confirmados. No interpretes la frase como selección del funnel, no cambies producto, sede, plan, horario ni estado, y no ejecutes acciones. No hagas otra pregunta; el backend repondrá el control pendiente. Si falta un dato para responder con certeza, dilo brevemente. Mantén respuesta móvil y directa, con 1 a 3 emojis funcionales.\n\nFUENTES AUTORITATIVAS DEL TURNO:\n".implode("\n\n",$facts);
+        try{$answer=(string)hache_sharky_lab_answer($text,$instruction,$state,$context);if(function_exists('hache_sharky_whatsapp_clean_answer'))$answer=hache_sharky_whatsapp_clean_answer($answer);if(function_exists('hache_sharky_whatsapp_enforce_confirmed_context'))$answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state,$text);if(function_exists('hache_sharky_whatsapp_enforce_no_reintroduction'))$answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$state,$text);}catch(Throwable $e){error_log('[sharky-meta] safe side-question model failed');$answer='';}
+    }
+    if(trim($answer)==='')$answer='💬 Puedo ayudarte con esa duda, pero prefiero no adivinar un dato que todavía no está confirmado.';
+    $resume=hache_sharky_meta_resume_decision($state);$message=rtrim($answer);$prompt=trim((string)($resume['message']??''));if($prompt!=='')$message.="\n\n".$prompt;
+    return [$state,hache_sharky_orchestrator_decision('meta_side_question',$message,is_array($resume['ui']??null)?$resume['ui']:[])];
+}
+
 function hache_sharky_meta_human_takeover(array $state,string $message='👤 Te dejo con una persona del equipo de Hache Natación para que continúe contigo por este mismo chat. 💬'): array
 {
     unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('human_takeover',$message,[],['type'=>'human_takeover'])];
@@ -245,6 +317,7 @@ function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,ar
     $text=trim((string)($event['text']??''));$id=strtolower(trim((string)($event['interactive_id']??'')));$intent=hache_sharky_orchestrator_contextual_intent($state,$text,$id);
     if($id==='action:human'||$intent==='human')return hache_sharky_meta_human_takeover($state);if($intent==='student_claim')return hache_sharky_meta_human_takeover($state,'👤 Como indicas que ya eres alumno, te dejo directamente con una persona del equipo para revisar tu expediente por este mismo chat. 💬');
     $flow=$state['flow'];$step=(string)($flow['step']??'');$data=is_array($flow['data']??null)?$flow['data']:[];
+    $side=hache_sharky_meta_safe_side_question($pdo,$state,$event,$extraContext);if(is_array($side))return $side;
     if($step==='program'){
         if(($data['entry_bootstrap']??false)===true){$data['entry_bootstrap']=false;$state=hache_sharky_meta_flow($state,'program',$data,$now);return [$state,hache_sharky_meta_welcome($pdo,true)];}
         if($id==='meta:program:learn'){$state['commercial_context']['program']='intensive';$state['commercial_context']['recommended_program']='intensive';unset($state['commercial_context']['background']);$state=hache_sharky_meta_flow($state,'venue',['program'=>'intensive'],$now);return [$state,hache_sharky_meta_intensive_info($pdo,true)];}
