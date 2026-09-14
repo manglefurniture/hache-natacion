@@ -10,8 +10,10 @@ const HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_GRACE_SECONDS = 86400;
 const HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_RETENTION_SECONDS = 345600;
 // Historical template kept only for dated diagnostics/backfill compatibility.
 const HACHE_SHARKY_FOLLOWUP_RESUME_TEMPLATE = 'hache_retomar_inscripcion';
-const HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE = 'hache_seguimiento_aprender_nadar';
-const HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY = 'Hola, hace unos días nos escribiste porque querías aprender a nadar y nos quedamos pendientes de tu respuesta. ¿Podemos ayudarte en algo más?';
+const HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE = 'hache_retomar_aprende_a_nadar';
+const HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_HEADER = '¡Espero estés teniendo un lindo día!';
+const HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY = "Hace unos días nos escribiste porque querías *aprender a nadar* 🏊 y nos quedamos pendientes de tu respuesta.\n\n¿Podemos ayudarte en algo más?";
+const HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_FOOTER = '¡Vamos a nadar!';
 const HACHE_SHARKY_FOLLOWUP_TIMEZONE = 'America/Cancun';
 const HACHE_SHARKY_FOLLOWUP_START_HOUR = 8;
 const HACHE_SHARKY_FOLLOWUP_END_HOUR = 22;
