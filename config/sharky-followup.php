@@ -214,21 +214,21 @@ function hache_sharky_followup_completed_recently(array $followup,int $now): boo
 }
 
 /**
- * Returns the most recent explicit program quick-reply recorded in the durable
- * encrypted inbox. This is authoritative for whether the prospect actually
- * touched Aprende a nadar vs. merely reached intensive through another route.
+ * Returns an explicit program quick-reply only when it belongs to the current
+ * user turn. Old selector receipts from a previous journey must never become
+ * evidence for a later intensive route.
  */
-function hache_sharky_followup_latest_program_choice(PDO $pdo,string $contact,int $limit=24): ?array
+function hache_sharky_followup_latest_program_choice(PDO $pdo,string $contact,int $notBefore,int $limit=24): ?array
 {
-    if(!function_exists('hache_sharky_inbox_decrypt'))return null;
+    if(!function_exists('hache_sharky_inbox_decrypt')||$notBefore<=0)return null;
     $limit=max(2,min(100,$limit));
     try{
         $st=$pdo->prepare(
             'SELECT payload_ciphertext,payload_iv,payload_tag,UNIX_TIMESTAMP(received_at) received_ts '
-            .'FROM sharky_message_receipts WHERE contact_hash=:c AND payload_ciphertext IS NOT NULL '
+            .'FROM sharky_message_receipts WHERE contact_hash=:c AND payload_ciphertext IS NOT NULL AND received_at>=FROM_UNIXTIME(:n) '
             .'ORDER BY received_at DESC,message_id DESC LIMIT '.$limit
         );
-        $st->execute([':c'=>hache_sharky_orchestrator_contact_hash($contact)]);
+        $st->execute([':c'=>hache_sharky_orchestrator_contact_hash($contact),':n'=>$notBefore]);
         foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
             $event=hache_sharky_inbox_decrypt($row);if(!is_array($event))continue;
             $id=strtolower(trim((string)($event['interactive_id']??'')));
@@ -243,13 +243,19 @@ function hache_sharky_followup_latest_program_choice(PDO $pdo,string $contact,in
 
 function hache_sharky_followup_refresh_program_choice(PDO $pdo,string $contact,array $state): array
 {
-    $latest=hache_sharky_followup_latest_program_choice($pdo,$contact);
-    if(!is_array($latest))return $state;
+    $last=hache_sharky_orchestrator_normalize((string)($state['last_user_text']??''));
+    $expected=$last==='aprende a nadar'?'learn':($last==='clases regulares'?'regular':'');
+    if($expected==='')return $state;
+    $userTurnAt=(int)($state['updated_at']??0);if($userTurnAt<=0)return $state;
+    // received_at is the server arrival time; a two-minute skew allowance keeps
+    // this tied to the turn being answered without reaching into old journeys.
+    $latest=hache_sharky_followup_latest_program_choice($pdo,$contact,max(1,$userTurnAt-120));
+    if(!is_array($latest)||($latest['choice']??'')!==$expected)return $state;
     $selectedAt=(int)($latest['selected_at']??0);
     $currentAt=(int)($state['commercial_context']['program_button_choice_at']??0);
     if($selectedAt>0&&$selectedAt<$currentAt)return $state;
     if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
-    $state['commercial_context']['program_button_choice']=(string)$latest['choice'];
+    $state['commercial_context']['program_button_choice']=$expected;
     if($selectedAt>0)$state['commercial_context']['program_button_choice_at']=$selectedAt;
     return $state;
 }
