@@ -13,13 +13,18 @@ No basta con que el producto resuelto sea `intensive`. En particular, una person
 
 Los prospectos cuya última elección explícita sea `meta:program:regular` no reciben seguimiento automático de 48 h mientras esta decisión siga vigente.
 
-## Plantilla
+## Plantilla Meta
 
-La plantilla nueva es:
+La plantilla creada manualmente en Meta para esta regla es:
 
-- nombre: `hache_seguimiento_aprender_nadar`;
+- nombre: `hache_retomar_aprende_a_nadar`;
 - idioma: `es_MX`;
-- texto aprobado: **“Hola, hace unos días nos escribiste porque querías aprender a nadar y nos quedamos pendientes de tu respuesta. ¿Podemos ayudarte en algo más?”**
+- categoría: `MARKETING`;
+- encabezado: **“¡Espero estés teniendo un lindo día!”**;
+- cuerpo: **“Hace unos días nos escribiste porque querías *aprender a nadar* 🏊 y nos quedamos pendientes de tu respuesta.\n\n¿Podemos ayudarte en algo más?”**;
+- pie: **“¡Vamos a nadar!”**.
+
+El código debe usar exactamente ese nombre y verificar los tres componentes para no enviar una variante distinta. La plantilla no debe ponerse en producción hasta que Meta la marque como **APPROVED**.
 
 La plantilla anterior `hache_retomar_inscripcion` queda retirada del envío automático de 48 h. Puede conservarse en código histórico/diagnósticos que no envíen mensajes.
 
@@ -75,3 +80,4 @@ El backfill es idempotente por token/dedupe y se ejecuta una sola vez mediante e
 - Una respuesta posterior invalida el token anterior.
 - Registro/inscripción siempre tiene prioridad sobre reengagement.
 - La plantilla anterior no vuelve a salir desde la etapa automática de 48 h.
+- No hacer merge/deploy de esta regla hasta confirmar que `hache_retomar_aprende_a_nadar` está **APPROVED** en Meta.
