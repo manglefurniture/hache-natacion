@@ -28,11 +28,12 @@ Reglas:
 1. Sharky se identifica siempre como asistente IA.
 2. Producto, sede y decisiones del funnel se realizan con botones/Flow.
 3. El texto libre no consume ni cambia un paso cerrado.
-4. Si la persona escribe en vez de usar el control vigente, Sharky conserva el paso y repite únicamente los controles, sin repetir imágenes.
-5. Solicitar explícitamente una persona o declarar que ya es alumno sí produce takeover humano.
-6. Brain no decide producto, sede, plan, inscripción ni excepciones dentro de este state machine.
-7. Precios, horarios, inscripciones, Maps y demás datos comerciales salen de backend/configuración; no se crean fuentes paralelas.
-8. Los mensajes comerciales para prospectos usan **2 a 5 emojis funcionales y naturales por respuesta**, por ejemplo 🏊‍♂️, 📍, 💰, 🕒, ✅, ✍️, 📅, 🎒 o 👇. Los emojis ayudan a escanear el mensaje; no deben decorar cada línea ni saturar el texto.
+4. Si el texto libre es una **duda lateral informativa**, Sharky responde de forma segura con datos verificados y después repone el control pendiente sin mover el cursor.
+5. Si la persona escribe una supuesta selección en vez de usar el control vigente, Sharky conserva el paso y repite únicamente los controles, sin repetir imágenes.
+6. Solicitar explícitamente una persona o declarar que ya es alumno sí produce takeover humano.
+7. Brain no decide producto, sede, plan, inscripción ni excepciones dentro de este state machine.
+8. Precios, horarios, inscripciones, Maps y demás datos comerciales salen de backend/configuración; no se crean fuentes paralelas.
+9. Los mensajes comerciales para prospectos usan **2 a 5 emojis funcionales y naturales por respuesta**, por ejemplo 🏊‍♂️, 📍, 💰, 🕒, ✅, ✍️, 📅, 🎒 o 👇. Los emojis ayudan a escanear el mensaje; no deben decorar cada línea ni saturar el texto.
 
 ## 3. Detección de fuente
 
@@ -165,7 +166,8 @@ Mientras `hache_sharky_meta_active(state)` sea verdadero:
 - las políticas laterales antiguas no pueden adelantarse al state machine;
 - Brain 2B-A no reescribe la decisión;
 - una nota de voz transcrita tampoco debe abrir rutas laterales;
-- texto libre no se convierte en producto/sede por inferencia.
+- texto libre no se convierte en producto/sede por inferencia;
+- una duda lateral informativa sí puede usar interpretación semántica limitada para contestar, pero esa respuesta no modifica estado ni decisiones y siempre repone el control vigente.
 
 Brain sigue existiendo para recorridos donde esté habilitado, pero no es autoridad de captación en Meta/web/direct.
 
@@ -186,7 +188,7 @@ Considerar el flujo roto si ocurre cualquiera de estos casos:
 - la fuente real deja de conservarse como `meta_ad`, `web` o `direct`;
 - el texto del anuncio/web/directo preselecciona producto o sede;
 - texto libre avanza un paso cerrado;
-- una duda lateral activa Brain o un handoff antiguo no autorizado;
+- una duda lateral avanza, cambia producto/sede/plan/horario o pierde el control pendiente;
 - una nota de voz evita el lock determinístico;
 - un retry repite imágenes;
 - las dos opciones visuales dejan de formar un carrusel;
