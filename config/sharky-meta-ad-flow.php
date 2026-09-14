@@ -5,12 +5,16 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-regular-enrollment.php';
 
 /**
- * Sharky 3.0 — funnel determinístico exclusivo para prospectos provenientes
- * de anuncios Meta (Facebook/Instagram -> WhatsApp).
+ * Sharky 3.0 — funnel determinístico común para prospectos nuevos provenientes
+ * de Meta Ads, enlaces de la web y WhatsApp directo.
+ *
+ * El nombre interno `meta_ad_onboarding` se conserva por compatibilidad con
+ * conversaciones ya abiertas. La fuente real permanece en `entry_source` para
+ * atribución y analítica.
  *
  * Este flujo no usa Brain ni interpretación de texto libre para avanzar pasos.
  * Los únicos atajos permitidos son solicitud explícita de humano/alumno, que
- * terminan en takeover. Web y WhatsApp directo conservan el flujo vigente.
+ * terminan en takeover.
  */
 
 const HACHE_SHARKY_META_FLOW='meta_ad_onboarding';
@@ -19,14 +23,18 @@ const HACHE_SHARKY_META_IMAGE_REGULAR='https://hnatacion.com/assets/Clases%20reg
 const HACHE_SHARKY_META_IMAGE_MONTEVERDE='https://hnatacion.com/assets/Sede%20Monteverde.png';
 const HACHE_SHARKY_META_IMAGE_PALAPAS='https://hnatacion.com/assets/SEDE%20Palapas%20PROTUDEC.png';
 
+function hache_sharky_meta_supported_source(array $state): bool
+{
+    return in_array((string)($state['commercial_context']['entry_source']??''),['meta_ad','web','direct'],true);
+}
+
 function hache_sharky_meta_active(array $state): bool
 {
+    if(($state['identity']['kind']??'unknown')!=='prospect'||!hache_sharky_meta_supported_source($state))return false;
     $flow=$state['flow']??null;
     if(is_array($flow))return ($flow['name']??'')===HACHE_SHARKY_META_FLOW;
     $step=(string)($state['commercial_context']['meta_step']??'');
-    return ($state['identity']['kind']??'unknown')==='prospect'
-        &&($state['commercial_context']['entry_source']??'')==='meta_ad'
-        &&in_array($step,['program','regular_background','venue','venue_detail'],true);
+    return in_array($step,['program','regular_background','venue','venue_detail'],true);
 }
 
 function hache_sharky_meta_flow(array $state,string $step,array $data,int $now): array
@@ -86,12 +94,12 @@ function hache_sharky_meta_welcome(PDO $pdo,bool $images=true): array
 
 function hache_sharky_meta_program_retry(): array
 {
-    return hache_sharky_orchestrator_decision('meta_program_prompt','Para orientarte mejor, elige una de estas dos opciones 👇',hache_sharky_meta_program_ui(false));
+    return hache_sharky_orchestrator_decision('meta_program_prompt','🏊‍♂️ Para orientarte mejor, elige una de estas dos opciones 👇',hache_sharky_meta_program_ui(false));
 }
 
 function hache_sharky_meta_regular_background_prompt(): array
 {
-    return hache_sharky_orchestrator_decision('meta_regular_background_prompt','¿Ya has tomado clases de natación anteriormente, en alguna escuela?',['type'=>'buttons','buttons'=>[
+    return hache_sharky_orchestrator_decision('meta_regular_background_prompt','🏊‍♂️ Antes de continuar, ¿ya has tomado clases de natación anteriormente, en alguna escuela? 👇',['type'=>'buttons','buttons'=>[
         hache_sharky_meta_button('meta:regular:yes','Sí, continuar'),
         hache_sharky_meta_button('meta:regular:no','No, curso básico'),
     ]]);
@@ -102,19 +110,18 @@ function hache_sharky_meta_intensive_info(PDO $pdo,bool $images=true): array
     $business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];
     $price=is_numeric($business['sharky_precio_intensivo']??null)?(int)$business['sharky_precio_intensivo']:1200;
     $money=number_format($price,0,'.',',');
-    $message="Curso básico para aprender a nadar\n\n"
-        ."• Duración: 3 semanas\n"
-        ."• Clases: de lunes a viernes, todos los días\n"
-        ."• Precio total (todo el curso): $".$money." MXN\n"
-        ."• Dirigido a: personas que empiezan desde cero o nunca han tomado clases de natación\n"
+    $message="🏊‍♂️ Curso básico para aprender a nadar\n\n"
+        ."📅 Duración: 3 semanas, de lunes a viernes, todos los días.\n"
+        ."💰 Precio total (todo el curso): $".$money." MXN.\n"
+        ."• Dirigido a: personas que empiezan desde cero o nunca han tomado clases de natación.\n"
         ."• Tu lugar queda confirmado una vez realizado el pago.\n\n"
         ."No es mensualidad: los $".$money." cubren las 3 semanas completas del curso. Para este curso no se paga inscripción; únicamente el costo del curso.\n\n"
-        ."Para tomar las clases necesitas:\n"
+        ."🎒 Para tomar las clases necesitas:\n"
         ."• traje de baño cómodo para moverte en el agua;\n"
         ."• no debe ser de algodón ni mezclilla;\n"
         ."• gorro de natación;\n"
         ."• goggles para natación.\n\n"
-        ."Elige la sede con la que prefieres continuar 👇";
+        ."📍 Elige la sede con la que prefieres continuar 👇";
     return hache_sharky_orchestrator_decision('meta_intensive_info',$message,hache_sharky_meta_venue_ui($images));
 }
 
@@ -133,25 +140,25 @@ function hache_sharky_meta_regular_price_line(PDO $pdo,int $sessions): string
 
 function hache_sharky_meta_regular_info(PDO $pdo,bool $images=true): array
 {
-    $message="Clases regulares de natación\n\n"
-        ."• Modalidad: clases continuas por mensualidad.\n"
+    $message="🏊‍♂️ Clases regulares de natación\n\n"
+        ."💰 Modalidad y mensualidades:\n"
         .hache_sharky_meta_regular_price_line($pdo,3)."\n"
         .hache_sharky_meta_regular_price_line($pdo,5)."\n"
-        ."• Dirigido a: personas que ya han tomado clases de natación y tienen nivel intermedio o avanzado.\n"
+        ."✅ Dirigido a: personas que ya han tomado clases de natación y tienen nivel intermedio o avanzado.\n"
         ."• Estos planes llevan un pago de inscripción, cuyo costo depende de la sede que elijas.\n\n"
-        ."Para tomar las clases necesitas:\n"
+        ."🎒 Para tomar las clases necesitas:\n"
         ."• traje de baño cómodo para moverte en el agua;\n"
         ."• no debe ser de algodón ni mezclilla;\n"
         ."• gorro de natación;\n"
         ."• goggles para natación.\n\n"
-        ."Elige la sede con la que prefieres continuar 👇";
+        ."📍 Elige la sede con la que prefieres continuar 👇";
     return hache_sharky_orchestrator_decision('meta_regular_info',$message,hache_sharky_meta_venue_ui($images));
 }
 
 function hache_sharky_meta_venue_retry(array $state): array
 {
     $program=(string)($state['commercial_context']['program']??'');
-    return hache_sharky_orchestrator_decision('meta_venue_prompt','Para continuar con '.($program==='regular'?'las clases regulares':'el curso').', elige una sede 👇',hache_sharky_meta_venue_ui(false));
+    return hache_sharky_orchestrator_decision('meta_venue_prompt','📍 Para continuar con '.($program==='regular'?'las clases regulares':'el curso').', elige una sede 👇',hache_sharky_meta_venue_ui(false));
 }
 
 function hache_sharky_meta_schedule_label(string $start,string $end): string
@@ -192,13 +199,13 @@ function hache_sharky_meta_venue_detail(PDO $pdo,array $state,string $sede): arr
     $maps=trim((string)($business[$isMonteverde?'sharky_maps_monteverde':'sharky_maps_palapas']??''));if($maps==='')$maps=$isMonteverde?'https://maps.app.goo.gl/Ld75bhLforGm2Tk68':'https://maps.app.goo.gl/L7aEf9phtXtciUj78';
     $reference=$isMonteverde?'La alberca está al final del estacionamiento del colegio. No necesitas entrar a la escuela; solo ingresa al estacionamiento por Av. Bonampak. Puedes utilizar el estacionamiento durante tu clase.':'Entra por calle Alcatraces, viniendo desde Av. Cobá, por la zona del IMSS. Estamos aproximadamente a 100 metros del Parque de las Palapas.';
     $hours=hache_sharky_meta_schedules($pdo,$sede,$program);$morning=$hours['morning']?implode("\n",array_map(static fn(string $h):string=>'• '.$h,$hours['morning'])):'• Sin horarios activos en este momento';$evening=$hours['evening']?implode("\n",array_map(static fn(string $h):string=>'• '.$h,$hours['evening'])):'• Sin horarios activos en este momento';
-    $message=$name."\n\n";
+    $message='📍 '.$name."\n\n";
     if($program==='regular'){
-        $plans=hache_sharky_meta_regular_plan_lines($pdo,$sede);if($plans)$message.="Mensualidades:\n".implode("\n",$plans)."\n\n";
-        $fee=hache_sharky_meta_business_int($pdo,$isMonteverde?'sharky_inscripcion_monteverde':'sharky_inscripcion_palapas',$isMonteverde?500:400);$message.='Inscripción: $'.number_format($fee,0,'.',',')." MXN.\n\n";
+        $plans=hache_sharky_meta_regular_plan_lines($pdo,$sede);if($plans)$message.="💰 Mensualidades:\n".implode("\n",$plans)."\n\n";
+        $fee=hache_sharky_meta_business_int($pdo,$isMonteverde?'sharky_inscripcion_monteverde':'sharky_inscripcion_palapas',$isMonteverde?500:400);$message.='✍️ Inscripción: $'.number_format($fee,0,'.',',')." MXN.\n\n";
     }
-    $message.="Ubicación: ".$location."\n".$maps."\n\nReferencia para llegar:\n".$reference."\n\nMATUTINOS:\n".$morning."\n\nVESPERTINOS:\n".$evening;
-    if($program==='intensive')$message.="\n\nIniciamos el próximo lunes.";
+    $message.="Ubicación: ".$location."\n".$maps."\n\nReferencia para llegar:\n".$reference."\n\n🕒 MATUTINOS:\n".$morning."\n\n🌙 VESPERTINOS:\n".$evening;
+    if($program==='intensive')$message.="\n\n📅 Iniciamos el próximo lunes.";
     $registerId=$program==='regular'?'meta:register:regular':'meta:register:intensive';
     return hache_sharky_orchestrator_decision('meta_venue_detail',$message,['type'=>'buttons','buttons'=>[hache_sharky_meta_button($registerId,'Inscribirme'),hache_sharky_meta_button('meta:venue:other','Ver otra sede')]]);
 }
@@ -220,23 +227,23 @@ function hache_sharky_meta_regular_form(PDO $pdo,array $state,int $now,array $ex
 {
     $sede=(string)($state['commercial_context']['sede_clave']??'');$business=function_exists('hache_sharky_business_values')?hache_sharky_business_values($pdo):[];$policy=hache_sharky_age_policy($pdo,$business);$minAge=(int)$policy['min'];$maxAge=(int)$policy['max'];
     $data=hache_sharky_meta_regular_flow_data($pdo,$sede,$minAge,$maxAge,(string)($extraContext['today']??''));$flowId=hache_sharky_regular_flow_cached_id();
-    if(!is_array($data)||$flowId===null){unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('regular_enrollment_unavailable','No pude abrir el formulario de inscripción de forma segura. Te dejo con una persona del equipo para continuar sin hacerte repetir información.',[],['type'=>'human_takeover'])];}
+    if(!is_array($data)||$flowId===null){unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('regular_enrollment_unavailable','⚠️ No pude abrir el formulario de inscripción de forma segura. 👤 Te dejo con una persona del equipo para continuar sin hacerte repetir información.',[],['type'=>'human_takeover'])];}
     unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_flow($state,'register_regular','form',['sede_clave'=>$sede],$now);
-    $payload=hache_sharky_commerce_flow_payload((string)($extraContext['contact']??''),'Completa tus datos para inscribirte a clases regulares. La sede ya queda fija en '.$data['venue_label'].'.',$flowId,'REGULAR_ENROLLMENT','Completar inscripción',$data);
-    return [$state,hache_sharky_orchestrator_decision('regular_enrollment_form','Completa tus datos para continuar.',['type'=>'raw_payload','payload'=>$payload])];
+    $payload=hache_sharky_commerce_flow_payload((string)($extraContext['contact']??''),'✍️ Completa tus datos para inscribirte a clases regulares. ✅ La sede ya queda fija en '.$data['venue_label'].'.',$flowId,'REGULAR_ENROLLMENT','Completar inscripción',$data);
+    return [$state,hache_sharky_orchestrator_decision('regular_enrollment_form','✍️ Completa tus datos para continuar. ✅',['type'=>'raw_payload','payload'=>$payload])];
 }
 
-function hache_sharky_meta_human_takeover(array $state,string $message='Te dejo con una persona del equipo de Hache Natación para que continúe contigo por este mismo chat.'): array
+function hache_sharky_meta_human_takeover(array $state,string $message='👤 Te dejo con una persona del equipo de Hache Natación para que continúe contigo por este mismo chat. 💬'): array
 {
     unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('human_takeover',$message,[],['type'=>'human_takeover'])];
 }
 
 function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,array $extraContext=[]): ?array
 {
-    if(!hache_sharky_meta_active($state))return null;if(($state['identity']['kind']??'unknown')!=='prospect')return null;if(($state['commercial_context']['entry_source']??'')!=='meta_ad')return null;if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+    if(!hache_sharky_meta_active($state))return null;if(($state['identity']['kind']??'unknown')!=='prospect')return null;if(!hache_sharky_meta_supported_source($state))return null;if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
     $state=hache_sharky_meta_restore_expired($state,$now);
     $text=trim((string)($event['text']??''));$id=strtolower(trim((string)($event['interactive_id']??'')));$intent=hache_sharky_orchestrator_contextual_intent($state,$text,$id);
-    if($id==='action:human'||$intent==='human')return hache_sharky_meta_human_takeover($state);if($intent==='student_claim')return hache_sharky_meta_human_takeover($state,'Como indicas que ya eres alumno, te dejo directamente con una persona del equipo para revisar tu expediente por este mismo chat.');
+    if($id==='action:human'||$intent==='human')return hache_sharky_meta_human_takeover($state);if($intent==='student_claim')return hache_sharky_meta_human_takeover($state,'👤 Como indicas que ya eres alumno, te dejo directamente con una persona del equipo para revisar tu expediente por este mismo chat. 💬');
     $flow=$state['flow'];$step=(string)($flow['step']??'');$data=is_array($flow['data']??null)?$flow['data']:[];
     if($step==='program'){
         if(($data['entry_bootstrap']??false)===true){$data['entry_bootstrap']=false;$state=hache_sharky_meta_flow($state,'program',$data,$now);return [$state,hache_sharky_meta_welcome($pdo,true)];}
@@ -259,7 +266,7 @@ function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,ar
         if($id==='meta:register:regular'&&($state['commercial_context']['program']??'')==='regular'){$extraContext['contact']=(string)($event['from']??'');return hache_sharky_meta_regular_form($pdo,$state,$now,$extraContext);}
         return [$state,hache_sharky_meta_venue_detail($pdo,$state,$current)];
     }
-    return hache_sharky_meta_human_takeover($state,'No pude recuperar este paso del proceso. Te dejo con una persona del equipo para continuar sin hacerte repetir información.');
+    return hache_sharky_meta_human_takeover($state,'⚠️ No pude recuperar este paso del proceso. 👤 Te dejo con una persona del equipo para continuar sin hacerte repetir información.');
 }
 
 function hache_sharky_meta_carousel_card(array $button,string $image,int $index): ?array
