@@ -1214,6 +1214,7 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         if(hache_sharky_whatsapp_is_side_question($state,$event)){
             $answer=hache_sharky_safe_side_answer($pdo,$state,(string)($event['text']??''));
             if($answer===null)$answer='💬 No puedo ejecutar esa solicitud desde una respuesta informativa. Conservé el paso pendiente para continuar de forma segura.';
+            $answer.="\n\n🔒 Tu paso pendiente sigue guardado.";
             $answer=hache_sharky_whatsapp_clean_answer($answer);
             $answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state);
             $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$state,(string)($event['text']??''));
@@ -1283,3 +1284,4 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision,$conversation,$verificationUrl),'action_result'=>$actionResult];
     }finally{hache_sharky_orchestrator_unlock($lock);}
 }
+
