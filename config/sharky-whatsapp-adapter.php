@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-orchestrator-db.php';
 require_once __DIR__.'/sharky-commercial-memory.php';
+require_once __DIR__.'/sharky-safe-side-question.php';
 
 function hache_sharky_whatsapp_extract(array $payload): array
 {
@@ -1211,8 +1212,10 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         $state=hache_sharky_whatsapp_reroute_qualification_identity_claim($state,$event);
 
         if(hache_sharky_whatsapp_is_side_question($state,$event)){
-            $instruction=hache_sharky_whatsapp_style_instruction(['kind'=>'side_question'],$state).' El usuario está dentro de un proceso controlado: responde solo la duda actual, no pierdas ni cambies ese proceso y no vuelvas a pedir datos ya capturados.';
-            $answer=hache_sharky_whatsapp_clean_answer((string)$conversationAnswer((string)($event['text']??''),$instruction,$state,$context));
+            $answer=hache_sharky_safe_side_answer($pdo,$state,(string)($event['text']??''));
+            if($answer===null)$answer='💬 No puedo ejecutar esa solicitud desde una respuesta informativa. Conservé el paso pendiente para continuar de forma segura.';
+            $answer.="\n\n🔒 Tu paso pendiente sigue guardado.";
+            $answer=hache_sharky_whatsapp_clean_answer($answer);
             $answer=hache_sharky_whatsapp_enforce_confirmed_context($answer,$state);
             $answer=hache_sharky_whatsapp_enforce_no_reintroduction($answer,$state,(string)($event['text']??''));
             if(hache_sharky_whatsapp_answer_looks_incomplete($answer))$answer=hache_sharky_whatsapp_incomplete_recovery($state);
@@ -1281,3 +1284,4 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         return ['skip'=>false,'state'=>$state,'decision'=>$decision,'payload'=>hache_sharky_whatsapp_render($contact,$decision,$conversation,$verificationUrl),'action_result'=>$actionResult];
     }finally{hache_sharky_orchestrator_unlock($lock);}
 }
+

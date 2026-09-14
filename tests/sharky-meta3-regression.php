@@ -41,6 +41,8 @@ meta3_expect(str_contains($language,"\$event['interactive_id']='meta:free_text'"
 meta3_expect(str_contains($meta,'meta:regular:no')&&str_contains($meta,"recommended_program']='intensive'"),'Regular background No must route directly to intensive.');
 meta3_expect(str_contains($meta,'meta:venue:other')&&str_contains($meta,"commercial_context']['program'"),'Venue reselection must preserve the selected program in commercial context.');
 meta3_expect(str_contains($meta,'hache_sharky_meta_restore_expired')&&str_contains($meta,"commercial_context']['meta_step'"),'Expired closed state must recover its deterministic step instead of falling into legacy routing.');
+meta3_expect(str_contains($meta,'hache_sharky_safe_side_answer')&&!str_contains($meta,'hache_sharky_lab_answer'),'Closed side questions must use the deterministic safe layer without opening Brain.');
+meta3_expect(str_contains($core,'pregunta lateral informativa')&&str_contains($patterns,'respuesta lateral segura'),'The stable safe-side-question contract must be documented in Core and GP-002.');
 
 meta3_expect(str_contains($meta,'HACHE_SHARKY_META_IMAGE_LEARN')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_REGULAR')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_MONTEVERDE')&&str_contains($meta,'HACHE_SHARKY_META_IMAGE_PALAPAS'),'All four approved visual asset routes must be wired.');
 meta3_expect(!str_contains($meta,'/assets/sharky/meta-aprende-a-nadar.jpg')&&!str_contains($meta,'/assets/sharky/sede-palapas.jpg'),'Visual routes must not reference the rejected invalid JPG blobs.');

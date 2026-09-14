@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-regular-enrollment.php';
+require_once __DIR__.'/sharky-safe-side-question.php';
 
 /**
  * Sharky 3.0 — funnel determinístico común para prospectos nuevos provenientes
@@ -13,8 +14,9 @@ require_once __DIR__.'/sharky-regular-enrollment.php';
  * atribución y analítica.
  *
  * Este flujo no usa Brain ni interpretación de texto libre para avanzar pasos.
- * Los únicos atajos permitidos son solicitud explícita de humano/alumno, que
- * terminan en takeover.
+ * El texto libre sí puede recibir una respuesta lateral informativa segura sin
+ * mutar producto/sede/plan ni mover el cursor; después se reponen los controles.
+ * Solicitudes explícitas de humano/alumno terminan en takeover.
  */
 
 const HACHE_SHARKY_META_FLOW='meta_ad_onboarding';
@@ -233,6 +235,39 @@ function hache_sharky_meta_regular_form(PDO $pdo,array $state,int $now,array $ex
     return [$state,hache_sharky_orchestrator_decision('regular_enrollment_form','✍️ Completa tus datos para continuar. ✅',['type'=>'raw_payload','payload'=>$payload])];
 }
 
+function hache_sharky_meta_side_question_like(array $event): bool
+{
+    if(strtolower(trim((string)($event['interactive_id']??'')))!=='meta:free_text')return false;
+    $text=trim((string)($event['text']??''));if($text==='')return false;
+    if(function_exists('hache_sharky_whatsapp_batch_question_like'))return hache_sharky_whatsapp_batch_question_like($text);
+    return str_contains($text,'?')||str_contains($text,'¿');
+}
+
+function hache_sharky_meta_resume_decision(array $state): array
+{
+    $flow=is_array($state['flow']??null)?$state['flow']:[];$step=(string)($flow['step']??($state['commercial_context']['meta_step']??''));
+    if($step==='program')return hache_sharky_meta_program_retry();
+    if($step==='regular_background')return hache_sharky_meta_regular_background_prompt();
+    if($step==='venue')return hache_sharky_meta_venue_retry($state);
+    if($step==='venue_detail'){
+        $program=(string)($state['commercial_context']['program']??'');
+        $registerId=$program==='regular'?'meta:register:regular':'meta:register:intensive';
+        return hache_sharky_orchestrator_decision('meta_venue_detail_resume','📍 Si quieres continuar, elige una opción 👇',['type'=>'buttons','buttons'=>[
+            hache_sharky_meta_button($registerId,'Inscribirme'),hache_sharky_meta_button('meta:venue:other','Ver otra sede')
+        ]]);
+    }
+    return hache_sharky_orchestrator_decision('meta_resume','👇 Cuando quieras, continúa con la opción pendiente.');
+}
+
+function hache_sharky_meta_safe_side_question(PDO $pdo,array $state,array $event,array $extraContext=[]): ?array
+{
+    if(!hache_sharky_meta_side_question_like($event))return null;
+    $text=trim((string)($event['text']??''));$answer=hache_sharky_safe_side_answer($pdo,$state,$text);
+    if($answer===null)return null;
+    $resume=hache_sharky_meta_resume_decision($state);$message=rtrim($answer);$prompt=trim((string)($resume['message']??''));if($prompt!=='')$message.="\n\n".$prompt;
+    return [$state,hache_sharky_orchestrator_decision('meta_side_question',$message,is_array($resume['ui']??null)?$resume['ui']:[])];
+}
+
 function hache_sharky_meta_human_takeover(array $state,string $message='👤 Te dejo con una persona del equipo de Hache Natación para que continúe contigo por este mismo chat. 💬'): array
 {
     unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('human_takeover',$message,[],['type'=>'human_takeover'])];
@@ -245,6 +280,7 @@ function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,ar
     $text=trim((string)($event['text']??''));$id=strtolower(trim((string)($event['interactive_id']??'')));$intent=hache_sharky_orchestrator_contextual_intent($state,$text,$id);
     if($id==='action:human'||$intent==='human')return hache_sharky_meta_human_takeover($state);if($intent==='student_claim')return hache_sharky_meta_human_takeover($state,'👤 Como indicas que ya eres alumno, te dejo directamente con una persona del equipo para revisar tu expediente por este mismo chat. 💬');
     $flow=$state['flow'];$step=(string)($flow['step']??'');$data=is_array($flow['data']??null)?$flow['data']:[];
+    $side=hache_sharky_meta_safe_side_question($pdo,$state,$event,$extraContext);if(is_array($side))return $side;
     if($step==='program'){
         if(($data['entry_bootstrap']??false)===true){$data['entry_bootstrap']=false;$state=hache_sharky_meta_flow($state,'program',$data,$now);return [$state,hache_sharky_meta_welcome($pdo,true)];}
         if($id==='meta:program:learn'){$state['commercial_context']['program']='intensive';$state['commercial_context']['recommended_program']='intensive';unset($state['commercial_context']['background']);$state=hache_sharky_meta_flow($state,'venue',['program'=>'intensive'],$now);return [$state,hache_sharky_meta_intensive_info($pdo,true)];}

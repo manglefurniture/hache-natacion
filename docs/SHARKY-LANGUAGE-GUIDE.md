@@ -153,6 +153,14 @@ En el fallback por perfil, si una respuesta no puede clasificarse con seguridad:
 
 En Sharky 3.0 Meta/web/directo, la recuperación es más estricta: mantener el paso y repetir controles vigentes, sin intentar resolver el contenido libre.
 
+## Preguntas laterales informativas seguras
+
+En un paso cerrado, una pregunta sobre precio, duración, ubicación, horarios, requisitos o diferencias puede contestarse antes de reponer el mismo control. Esta clasificación solo abre una respuesta informativa determinística: nunca equivale a escoger producto, sede, nivel, turno u horario.
+
+Expresiones observadas y anonimizadas como “¿es mensual?”, “¿dónde está?”, “¿qué otra ubicación tienen?” o “¿qué horarios manejan?” conservan el cursor pendiente. Una mención de otra sede dentro de una pregunta sirve solo para responder esa consulta; no cambia la sede activa.
+
+Si la frase pide ejecutar una inscripción, pago, cancelación, reposición o cambio de datos, no pertenece a esta capa. Si la duda es ambigua o falta información confirmada, Sharky lo dice brevemente y vuelve al mismo control sin inferir.
+
 ## Cómo crecer esta guía
 
 Cuando aparezca una expresión nueva:
