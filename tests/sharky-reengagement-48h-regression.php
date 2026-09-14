@@ -16,9 +16,11 @@ $ts=static fn(string $local):int=>(new DateTimeImmutable($local,$tz))->getTimest
 reengagement_ok(HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_DELAY_SECONDS===172800,'El seguimiento comercial debe quedar exactamente a 48 horas.');
 reengagement_ok(HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_GRACE_SECONDS===86400,'La ventana de gracia debe conservar 24 horas adicionales.');
 reengagement_ok(HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_RETENTION_SECONDS>=HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_DELAY_SECONDS+HACHE_SHARKY_FOLLOWUP_REENGAGEMENT_GRACE_SECONDS,'La retención del estado debe cubrir las 48h y toda la gracia.');
-reengagement_ok(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE==='hache_seguimiento_aprender_nadar','El seguimiento nuevo debe usar una plantilla específica para Aprende a nadar.');
+reengagement_ok(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE==='hache_retomar_aprende_a_nadar','El seguimiento nuevo debe usar exactamente el nombre creado en Meta.');
 reengagement_ok(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE!==HACHE_SHARKY_FOLLOWUP_RESUME_TEMPLATE,'La plantilla vieja no puede seguir siendo la plantilla del seguimiento de 48h.');
-reengagement_ok(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY==='Hola, hace unos días nos escribiste porque querías aprender a nadar y nos quedamos pendientes de tu respuesta. ¿Podemos ayudarte en algo más?','El texto aprobado debe quedar congelado para la plantilla nueva.');
+reengagement_ok(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_HEADER==='¡Espero estés teniendo un lindo día!','El encabezado aprobado en Meta debe quedar congelado.');
+reengagement_ok(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_BODY==="Hace unos días nos escribiste porque querías *aprender a nadar* 🏊 y nos quedamos pendientes de tu respuesta.\n\n¿Podemos ayudarte en algo más?",'El cuerpo aprobado en Meta debe quedar congelado.');
+reengagement_ok(HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_FOOTER==='¡Vamos a nadar!','El pie aprobado en Meta debe quedar congelado.');
 
 $learn=hache_sharky_orchestrator_state(null,$ts('2026-09-14 10:00:00'));
 $learn['identity']=array_replace($learn['identity'],['kind'=>'prospect','verified'=>true,'source'=>'self_declared']);
@@ -72,6 +74,7 @@ reengagement_ok($lateDue===$ts('2026-09-17 08:00:00'),'Si las 48h caen de noche,
 $source=file_get_contents(__DIR__.'/../config/sharky-followup.php')?:'';
 $dbSource=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:'';
 $backfillSource=file_get_contents(__DIR__.'/../bin/sharky-learn-reengagement-backfill-once.php')?:'';
+$templateSource=file_get_contents(__DIR__.'/../bin/sharky-learn-template-provision.php')?:'';
 reengagement_ok(str_contains($source,'hache_sharky_followup_latest_program_choice'),'La marca explícita debe recuperarse desde el inbox cifrado, no inferirse solo por producto intensivo.');
 reengagement_ok(str_contains($source,"['meta:program:learn','meta:program:regular']"),'La autoridad de marca debe distinguir los dos quick replies canónicos.');
 reengagement_ok(str_contains($source,'received_at>=FROM_UNIXTIME(:n)'),'La evidencia del selector debe limitarse temporalmente al turno actual.');
@@ -92,5 +95,7 @@ reengagement_ok(str_contains($backfillSource,"REPLACED_BY_LEARN_REENGAGEMENT_202
 reengagement_ok(str_contains($backfillSource,'hache_sharky_learn_reengagement_live_row_exists'),'Un estado reengagement_armed solo puede considerarse ya programado si existe una fila PENDING de la plantilla nueva.');
 reengagement_ok(str_contains($backfillSource,"legacy_state_requeued"),'Si se cancela una fila legacy y queda estado armado, el backfill debe reencolar la plantilla nueva.');
 reengagement_ok(str_contains($backfillSource,"aggregate_counts_only"),'El backfill no debe imprimir PII.');
+reengagement_ok(str_contains($templateSource,'HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_HEADER')&&str_contains($templateSource,'HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_FOOTER'),'El verificador Meta debe comprobar encabezado y pie además del cuerpo.');
+reengagement_ok(str_contains($templateSource,"['type'=>'HEADER','format'=>'TEXT'")&&str_contains($templateSource,"['type'=>'FOOTER','text'=>HACHE_SHARKY_FOLLOWUP_LEARN_TEMPLATE_FOOTER]"),'Si el provisionador crea la plantilla, debe replicar los tres componentes aprobados en Meta.');
 
 echo "SHARKY_REENGAGEMENT_48H_OK\n";
