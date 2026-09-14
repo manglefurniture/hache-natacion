@@ -74,6 +74,8 @@ $dbSource=file_get_contents(__DIR__.'/../config/sharky-orchestrator-db.php')?:''
 $backfillSource=file_get_contents(__DIR__.'/../bin/sharky-learn-reengagement-backfill-once.php')?:'';
 reengagement_ok(str_contains($source,'hache_sharky_followup_latest_program_choice'),'La marca explícita debe recuperarse desde el inbox cifrado, no inferirse solo por producto intensivo.');
 reengagement_ok(str_contains($source,"['meta:program:learn','meta:program:regular']"),'La autoridad de marca debe distinguir los dos quick replies canónicos.');
+reengagement_ok(str_contains($source,'received_at>=FROM_UNIXTIME(:n)'),'La evidencia del selector debe limitarse temporalmente al turno actual.');
+reengagement_ok(str_contains($source,"\$expected=\$last==='aprende a nadar'?'learn'"),'Solo la respuesta actual del selector canónico puede refrescar la marca de producto.');
 reengagement_ok(str_contains($source,"\$startStage===3"),'Aprende a nadar debe poder armar directamente la etapa 3 aunque todavía no exista sede.');
 reengagement_ok(str_contains($source,'$stage===3?hache_sharky_followup_learn_reengagement_eligible'),'La revalidación tardía debe exigir la marca Aprende a nadar.');
 reengagement_ok(str_contains($source,"'completed_two_sent'"),'La secuencia de clases regulares debe terminar después de la segunda etapa sin crear una etapa 3.');
@@ -87,6 +89,8 @@ reengagement_ok(str_contains($source,"PENDING_INBOUND"),'El seguimiento tardío 
 reengagement_ok(str_contains($backfillSource,'HACHE_SHARKY_LEARN_BACKFILL_WINDOW_SECONDS = 86400'),'El backfill aprobado debe limitarse a las últimas 24 horas.');
 reengagement_ok(str_contains($backfillSource,"meta:program:learn")&&str_contains($backfillSource,"meta:program:regular"),'El backfill debe conservar solo a quienes tengan Aprende a nadar como última elección explícita.');
 reengagement_ok(str_contains($backfillSource,"REPLACED_BY_LEARN_REENGAGEMENT_20260914"),'El corte debe cancelar filas pendientes de la plantilla genérica anterior.');
+reengagement_ok(str_contains($backfillSource,'hache_sharky_learn_reengagement_live_row_exists'),'Un estado reengagement_armed solo puede considerarse ya programado si existe una fila PENDING de la plantilla nueva.');
+reengagement_ok(str_contains($backfillSource,"legacy_state_requeued"),'Si se cancela una fila legacy y queda estado armado, el backfill debe reencolar la plantilla nueva.');
 reengagement_ok(str_contains($backfillSource,"aggregate_counts_only"),'El backfill no debe imprimir PII.');
 
 echo "SHARKY_REENGAGEMENT_48H_OK\n";
