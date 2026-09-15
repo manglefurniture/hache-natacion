@@ -4,7 +4,7 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Estado del roadmap:** definido documentalmente; las nueve fases están **Pendientes**.  
+**Estado del roadmap:** Fase 1 en revisión; las fases 2–9 permanecen **Pendientes**.
 **Autorización de esta tarea:** crear este MD. Ninguna implementación funcional, migración ni operación de producción está autorizada por este documento.
 
 ## 1. Propósito
@@ -155,7 +155,7 @@ Un mismo hecho no debe producir duplicados al recargar. Una nueva mensualidad o 
 
 **Criterio de terminado.** Los tipos habilitados tienen fuente y regla verificables, enlace al detalle y estados persistentes de gestión; recargas no duplican casos; atención identifica al responsable cuando corresponde; resolución conserva evidencia e historia; se prueban un pago posterior, una invalidación, una nueva obligación y el aislamiento por sede. Tipos diferidos quedan registrados y la fase completa no se declara verificada mientras falte alcance comprometido sin decisión documentada.
 
-**Estado:** Pendiente. Existe una base parcial de alertas/obligaciones; no se implementa el centro en esta tarea.
+**Estado:** En revisión. Se preparó el incremento inicial con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. El [PR #254](https://github.com/manglefurniture/hache-natacion/pull/254) está abierto en borrador; Quality ya ejecutó correctamente las regresiones PHP/estáticas y `delivery-status-mariadb`. La migración versionada se incorpora al flujo de release y el incremento queda listo para revisión, sin despliegue.
 
 ### FASE 2 — Finanzas internas
 
@@ -423,6 +423,7 @@ No se reabren decisiones de aprendizaje, captación o Brain. Si una futura tarea
 | D-08 | 2026-09-15 | Indicadores con fuente, unidad, sede y periodo explícitos. | Resolver por decisión las diferencias de activos y periodos; no corregirlas de forma tácita. |
 | D-09 | 2026-09-15 | Todas las fases comienzan Pendientes. | Elaborar el documento no equivale a analizar, implementar o desplegar una fase. |
 | D-10 | 2026-09-15 | Entrega documental mediante rama/PR sin merge: Core Rules §23 describe auto-deploy al integrar a `main` y el solicitante prohíbe desplegar. | Esta tarea termina en el MD revisable; no fusionar ni activar despliegues para completarla. |
+| D-11 | 2026-09-15 | Para F1 se habilitan únicamente tres causas ya verificables: mensualidad regular sin cobertura del período vigente, inscripción regular sin cobertura y reposición regular `DISPONIBLE`. `pendientes_gestion` es necesaria porque `historial` y `auditoria_eventos` no pueden conservar por sí solos estado, origen estable y atención de un asunto transversal. | La tabla guarda solo identidad/origen, estado y trazabilidad; ADMIN gestiona y ADMIN/VERIFICADOR consultan dentro de su sede. La causa se revalida antes de una resolución manual; si un pago o uso de reposición la deja de aplicar, la vista la presenta como resuelta por fuente sin escribir en ella. |
 
 ### 11.2 Decisiones pendientes antes del incremento afectado
 
@@ -450,12 +451,13 @@ Toda decisión nueva añadirá fecha, responsable real, motivo, fuentes, fases a
 | --- | --- | --- | --- |
 | 2026-09-15 | Revisión dirigida de fuentes de GitHub y aclaración de «Charquí MD». | Commit de referencia y rutas de la sección 5; Core Rules confirmado por el solicitante. Sin acceso a producción. | Base existente y limitaciones documentadas. |
 | 2026-09-15 | Definición de las nueve fases, dependencias, criterios y registros. | Este archivo. | Roadmap documental completo; ninguna fase implementada. |
+| 2026-09-15 | Implementación de F1 en la rama `feature/centro-pendientes-fase-1`. | `api/pendientes.php`, `config/centro-pendientes.php`, migración aditiva y vista administrativa. Sin acceso a producción. | Regresiones estáticas y JavaScript aprobadas; queda pendiente ejecutar PHP e integración. PR en borrador pendiente de crear. |
 
 ### 12.2 Estado de las fases
 
 | Fase | Estado | Base que se reutiliza | Próximo paso cuando se autorice trabajo funcional |
 | --- | --- | --- | --- |
-| F1 Centro de pendientes | Pendiente | Alertas y obligaciones | Resolver P-01 y delimitar primeros tipos con evidencia. |
+| F1 Centro de pendientes | En revisión | Alertas, obligaciones, reglas de acceso y reposiciones regulares | Revisar el PR #254 en borrador; mantener visibles los tipos diferidos hasta sus fases dependientes. |
 | F2 Finanzas | Pendiente | Pagos, abonos, reglas, reportes y cierres | Resolver P-02 para la primera vista financiera. |
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |

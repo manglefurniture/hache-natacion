@@ -1,5 +1,5 @@
 (async function(){
-const pages=new Set(['/dashboard.php','/alertas.php','/alumnos.php','/agregar-alumno.php','/pagos.php','/resumen-financiero.php','/reportes.php','/finanzas.php','/intensivos.php','/intensivo-detalle.php','/sesiones.php','/ausencias.php','/horarios.php']);
+const pages=new Set(['/dashboard.php','/pendientes.php','/alertas.php','/alumnos.php','/agregar-alumno.php','/pagos.php','/resumen-financiero.php','/reportes.php','/finanzas.php','/intensivos.php','/intensivo-detalle.php','/sesiones.php','/ausencias.php','/horarios.php']);
 if(!pages.has(location.pathname))return;
 if(new URLSearchParams(location.search).get('embedded')==='1')return;
 let session={};try{const r=await fetch('/api/sesion.php',{credentials:'same-origin',cache:'no-store'}),d=await r.json();session=d.usuario||{};}catch(e){}
