@@ -84,7 +84,7 @@ language_ok(hache_sharky_language_prepare_text($commercial,'¿Hay más horarios 
 $worker=(string)file_get_contents(__DIR__.'/../bin/sharky-inbox-dispatch.php');
 language_ok(str_contains($worker,"require_once __DIR__.'/../config/sharky-language-guide.php';"),'Durable inbox recovery must load the language normalization layer.');
 $preparePos=strpos($worker,'$event=hache_sharky_language_prepare_event($pdo,$event);');
-$processPos=strpos($worker,'hache_sharky_lab_process_event($pdo,$event',$preparePos===false?0:$preparePos);
-language_ok($preparePos!==false&&$processPos!==false&&$preparePos<$processPos,'Recovered inbox events must be normalized before the shared Sharky processor.');
+$processPos=strpos($worker,'hache_sharky_human_process_event($pdo,$event',$preparePos===false?0:$preparePos);
+language_ok($preparePos!==false&&$processPos!==false&&$preparePos<$processPos,'Recovered inbox events must be normalized before the supervised Sharky processor.');
 
 fwrite(STDOUT,"SHARKY_LANGUAGE_GUIDE_OK\n");
