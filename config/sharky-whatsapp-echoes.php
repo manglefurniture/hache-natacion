@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__.'/sharky-human-intervention.php';
+require_once __DIR__.'/sharky-human-grace-runtime.php';
 
 function hache_sharky_whatsapp_echo_resume_requested(array $echo): bool
 {
