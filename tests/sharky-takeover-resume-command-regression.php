@@ -72,9 +72,9 @@ resume_command_ok(!str_contains($humanWorker,'Hola, ya estoy de vuelta. ¿Contin
 $pdo=new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
 $pdo->exec('CREATE TABLE configuracion (clave TEXT PRIMARY KEY, valor TEXT NOT NULL)');
-$pdo->exec("INSERT INTO configuracion(clave,valor) VALUES ('sharky_maps_monteverde','https://maps.example/mv'),('sharky_maps_palapas','https://maps.example/pal')");
+$pdo->exec("INSERT INTO configuracion(clave,valor) VALUES ('sharky_maps_monteverde','https://maps.app.goo.gl/Ld75bhLforGm2Tk68'),('sharky_maps_palapas','https://maps.app.goo.gl/L7aEf9phtXtciUj78')");
 $locations=hache_sharky_safe_side_answer($pdo,['commercial_context'=>[]],'¿Me pasas las ubicaciones?');
-resume_command_ok(is_string($locations)&&str_contains($locations,'https://maps.example/mv')&&str_contains($locations,'https://maps.example/pal'),'Plural location intent must return both verified location authorities.');
+resume_command_ok(is_string($locations)&&str_contains($locations,'https://maps.app.goo.gl/Ld75bhLforGm2Tk68')&&str_contains($locations,'https://maps.app.goo.gl/L7aEf9phtXtciUj78'),'Plural location intent must return both verified location authorities.');
 
 $spec=file_get_contents(__DIR__.'/../docs/SHARKY-HUMAN-INTERVENTION-SPEC.md')?:'';
 resume_command_ok(str_contains($spec,'`manual_grace`')&&str_contains($spec,'Sharky duerme')&&str_contains($spec,'Sharky despierta'),'The implementation must remain aligned with the approved product specification.');
