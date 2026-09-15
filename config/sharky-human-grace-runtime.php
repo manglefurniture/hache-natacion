@@ -5,6 +5,43 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-human-intervention.php';
 
 /**
+ * Pick the newest durable customer receipt for the current manual-grace turn.
+ * Rows are expected in durable inbox order; equal/unknown timestamps therefore
+ * prefer the later row instead of moving the turn backwards.
+ */
+function hache_sharky_human_latest_customer_row(array $rows,int $startedAtMs=0): ?array
+{
+    $latest=null;$latestMs=-1;
+    foreach($rows as $row){
+        $event=is_array($row['event']??null)?$row['event']:[];
+        $id=trim((string)($row['message_id']??''));if($id==='')continue;
+        $eventMs=max(0,(int)($event['timestamp_ms']??0));
+        if($startedAtMs>0&&$eventMs>0&&$eventMs+5000<$startedAtMs)continue;
+        if($latest===null||$eventMs>=$latestMs){$latest=['message_id'=>$id,'event'=>$event,'timestamp_ms'=>$eventMs];$latestMs=$eventMs;}
+    }
+    return $latest;
+}
+
+function hache_sharky_human_latest_pending_customer_event(PDO $pdo,string $contact): ?array
+{
+    $state=hache_sharky_human_grace_read($contact);$startedAtMs=is_array($state)?max(0,(int)($state['started_at']??0))*1000:0;
+    return hache_sharky_human_latest_customer_row(hache_sharky_human_pending_customer_events($pdo,$contact),$startedAtMs);
+}
+
+function hache_sharky_human_affirmative_turn(string $text): bool
+{
+    $parts=preg_split('/\R+/u',trim($text))?:[];$seenAffirmative=false;
+    foreach($parts as $part){
+        $part=trim((string)$part);if($part==='')continue;
+        if(!$seenAffirmative){if(!hache_sharky_human_affirmative($part))return false;$seenAffirmative=true;continue;}
+        $t=hache_sharky_safe_side_normalize($part);$t=preg_replace('/^[¿?¡!.,;:\s]+|[¿?¡!.,;:\s]+$/u','',$t)??$t;
+        if(preg_match('/^(?:gracias|muchas gracias|mil gracias|ok|okay|vale|listo|lista|perfecto|perfecta)$/u',trim($t))===1)continue;
+        return false;
+    }
+    return $seenAffirmative;
+}
+
+/**
  * Wait only for the exceptional manual-grace path. The webhook has already
  * acknowledged Meta before this runs, so the customer request is not held open.
  * A durable inbox lease lets the normal inbox worker recover if this process dies.
@@ -25,9 +62,18 @@ function hache_sharky_human_grace_wait(PDO $pdo,string $contact,string $eventId,
         $state=hache_sharky_human_grace_read($contact);
         if(!is_array($state))return ['active'=>false,'ready'=>true,'handled'=>false,'human_event_id'=>'','due_at'=>0];
         if(!hash_equals($humanId,(string)($state['human_event_id']??'')))return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
-        if((string)($state['latest_customer_event_id']??'')!==$eventId)return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>(int)($state['due_at']??0)];
+        if((string)($state['latest_customer_event_id']??'')!==$eventId){$newDue=(int)($state['due_at']??0);if($newDue>0)hache_sharky_human_inbox_defer_until($pdo,$eventId,$newDue);return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$newDue];}
         $dueAt=(int)($state['due_at']??0);$remaining=$dueAt-time();
         if($remaining<=0){
+            // Close the race where a newer customer webhook is already durable
+            // but its post-ACK process has not yet advanced manual_grace state.
+            $latest=hache_sharky_human_latest_pending_customer_event($pdo,$contact);
+            $latestId=trim((string)($latest['message_id']??''));
+            if($latestId!==''&&$latestId!==$eventId){
+                $latestTurn=hache_sharky_human_grace_customer_turn($contact,$latestId,null,(int)($latest['timestamp_ms']??0));
+                $newDue=(int)($latestTurn['due_at']??$dueAt);if($newDue>0)hache_sharky_human_inbox_defer_until($pdo,$eventId,$newDue);
+                return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$newDue];
+            }
             if(hache_sharky_human_inbox_release_lease($pdo,$eventId))return ['active'=>true,'ready'=>true,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
             if(hache_sharky_human_inbox_processed($pdo,$eventId))return ['active'=>true,'ready'=>false,'handled'=>true,'human_event_id'=>$humanId,'due_at'=>$dueAt];
             return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
