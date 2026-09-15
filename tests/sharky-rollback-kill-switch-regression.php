@@ -39,7 +39,7 @@ rollback_expect($lastFlag!==false&&$lastFlag>$renewPos,'Outbox must revalidate t
 
 $loopPos=strpos($webhook,'foreach($processing as $event){');
 $webFlag=$loopPos===false?false:strpos($webhook,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'",$loopPos);
-$processPos=$loopPos===false?false:strpos($webhook,'hache_sharky_lab_process_event($pdo,$event',$loopPos);
+$processPos=$loopPos===false?false:strpos($webhook,'hache_sharky_human_process_event($pdo,$event',$loopPos);
 rollback_expect($loopPos!==false&&$webFlag!==false&&$processPos!==false&&$loopPos<$webFlag&&$webFlag<$processPos,'In-flight webhook batches must stop before the next event when rollback flips the flag.');
 rollback_expect(str_contains($webhook,"if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky_outbox_dispatch"),'Webhook final outbox pass must remain gated after event processing.');
 

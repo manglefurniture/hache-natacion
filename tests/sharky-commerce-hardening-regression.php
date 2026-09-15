@@ -175,8 +175,9 @@ commerce_hard_expect(str_contains($runtime,"return trim((string)(\$event['intera
 $worker=file_get_contents(__DIR__.'/../bin/sharky-inbox-dispatch.php')?:'';
 $candidatePos=strpos($worker,'hache_sharky_commerce_event_candidate($event)');
 $commercePos=strpos($worker,'hache_sharky_commerce_process_event($pdo,$event',$candidatePos===false?0:$candidatePos);
-$normalPos=strpos($worker,'hache_sharky_lab_process_event($pdo,$event',$candidatePos===false?0:$candidatePos);
-commerce_hard_expect($candidatePos!==false&&$commercePos!==false&&$normalPos!==false&&$candidatePos<$commercePos&&$commercePos<$normalPos,'Recovered commerce events must re-enter the commerce lane before normal Sharky processing.');
+$memberPos=strpos($worker,'hache_sharky_member_route_event($pdo,$event',$candidatePos===false?0:$candidatePos);
+$normalPos=strpos($worker,'hache_sharky_human_process_event($pdo,$event',$candidatePos===false?0:$candidatePos);
+commerce_hard_expect($candidatePos!==false&&$commercePos!==false&&$memberPos!==false&&$normalPos!==false&&$candidatePos<$commercePos&&$commercePos<$memberPos&&$memberPos<$normalPos,'Recovered commerce events must re-enter the commerce lane before member routing and the human-aware general entrypoint.');
 
 $groups=file_get_contents(__DIR__.'/../config/sharky-groups.php')?:'';
 $finalStart=strpos($groups,'function hache_sharky_groups_finalize_outbound');

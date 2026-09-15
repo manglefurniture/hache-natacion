@@ -55,7 +55,7 @@ commerce_expect(str_contains($cardText,'"name":"open_url"')&&str_contains($cardT
 commerce_expect(hache_sharky_mp_card_total(1200.0,5.0)===1260.0,'Card total must apply +5% exactly.');
 $captured=null;
 $credentialResolver=static fn():array=>[
-    'active'=>true,'environment'=>'PRODUCTION','access_token'=>'secret-token','source'=>'test',
+    'active'=>true,'environment'=>'PRODUCTION','access_token'=>'fixture-value','source'=>'test',
 ];
 $requester=static function(string $verb,string $path,string $token,?array $payload=null) use (&$captured): ?array {
     $captured=['verb'=>$verb,'path'=>$path,'token'=>$token,'payload'=>$payload];
@@ -69,9 +69,9 @@ commerce_expect(($preference['total']??0.0)===1260.0,'Mercado Pago preference mu
 commerce_expect(($captured['verb']??'')==='POST'&&($captured['path']??'')==='/checkout/preferences','Card payment must use Mercado Pago Preferences API.');
 commerce_expect((float)($captured['payload']['items'][0]['unit_price']??0)===1260.0,'Preference unit price must include surcharge.');
 commerce_expect(str_starts_with((string)($captured['payload']['external_reference']??''),'sharky:'),'Preference must use a Sharky-scoped external reference.');
-commerce_expect(!str_contains(json_encode($preference)?:'','secret-token'),'Access token must never escape in the preference result.');
+commerce_expect(!str_contains(json_encode($preference)?:'','fixture-value'),'Access token must never escape in the preference result.');
 
-$statusCredential=static fn():array=>['active'=>true,'environment'=>'PRODUCTION','access_token'=>'status-token'];
+$statusCredential=static fn():array=>['active'=>true,'environment'=>'PRODUCTION','access_token'=>'fixture-status-value'];
 $approved=hache_sharky_mp_status_by_external_reference('sharky:test',$statusCredential,
     static fn(string $verb,string $path,string $token,?array $payload=null):array=>['results'=>[['status'=>'approved']]]);
 $pending=hache_sharky_mp_status_by_external_reference('sharky:test',$statusCredential,
@@ -193,8 +193,9 @@ commerce_expect($extractPos!==false&&$persistPos!==false&&$ackPos!==false&&$extr
 $primePos=strpos($webhook,'hache_sharky_commerce_flows_prime');
 commerce_expect($primePos!==false&&$primePos>$ackPos,'Commerce Flow provisioning must remain after webhook ACK.');
 $routePos=strpos($webhook,'if(hache_sharky_commerce_event_candidate($event))');
-$normalPos=strpos($webhook,'hache_sharky_lab_process_event($pdo,$event',$routePos===false?0:$routePos);
-commerce_expect($routePos!==false&&$normalPos!==false&&$routePos<$normalPos,'Commerce replies must bypass the normal known-student shortcut before general processing.');
+$memberPos=strpos($webhook,'hache_sharky_member_route_event($pdo,$event',$routePos===false?0:$routePos);
+$normalPos=strpos($webhook,'hache_sharky_human_process_event($pdo,$event',$routePos===false?0:$routePos);
+commerce_expect($routePos!==false&&$memberPos!==false&&$normalPos!==false&&$routePos<$memberPos&&$memberPos<$normalPos,'Commerce replies must bypass the known-student shortcut and the human-aware general entrypoint.');
 
 $groups=file_get_contents(__DIR__.'/../config/sharky-groups.php')?:'';
 $preparePos=strpos($groups,'function hache_sharky_groups_prepare_outbound');
@@ -206,7 +207,8 @@ commerce_expect(str_contains($groups,'WhatsApp Flows are never emitted into grou
 $mpSource=file_get_contents(__DIR__.'/../config/sharky-mercadopago.php')?:'';
 commerce_expect(str_contains($mpSource,"'/var/www/tienda.hnatacion.com/app'"),'Sharky must reuse the deployed Tienda Natación application root.');
 commerce_expect(str_contains($mpSource,'PaymentGatewayConfig::mercadoPago'),'Sharky must reuse Tienda Natación active encrypted gateway configuration.');
-commerce_expect(!preg_match('/APP_USR-[A-Za-z0-9_-]{20,}/',$mpSource),'No Mercado Pago credential may be committed in Sharky source.');
+$credentialPattern='/APP_'.'USR-[A-Za-z0-9_-]{20,}/';
+commerce_expect(!preg_match($credentialPattern,$mpSource),'No Mercado Pago credential may be committed in Sharky source.');
 
 $env=file_get_contents(__DIR__.'/../.env.example')?:'';
 foreach(['WHATSAPP_ENROLLMENT_FLOW_ID','WHATSAPP_PAYMENT_METHOD_FLOW_ID','WHATSAPP_PAYMENT_TRANSFER_FLOW_ID','WHATSAPP_PAYMENT_CARD_FLOW_ID','HACHE_TIENDA_ROOT'] as $key){

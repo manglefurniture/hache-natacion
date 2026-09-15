@@ -49,12 +49,15 @@ $helper=file_get_contents(__DIR__.'/../config/sharky-draft-parity.php')?:'';
 expect_draft_parity(str_contains($helper,'UPDATE sharky_referrals SET alumno_id=:a'),'La conversión debe vincular la atribución previa con el alumno creado.');
 expect_draft_parity(str_contains($helper,'hache_sharky_human_request'),'La política de handoff no debe duplicarse en regex dentro del Draft.');
 
-// El endpoint HTTP quedó deliberadamente delgado: la paridad de runtime vive en
-// sharky-lab-worker.php, que es usado tanto por el webhook como por el recovery CLI.
+// El endpoint HTTP quedó deliberadamente delgado. La entrada compartida actual es
+// sharky-human-worker.php, que envuelve al worker base y conserva la misma paridad
+// para webhook y recovery CLI mientras añade la supervisión humana.
 $lab=file_get_contents(__DIR__.'/../public/api/whatsapp-orchestrator-lab.php')?:'';
+$humanWorker=file_get_contents(__DIR__.'/../config/sharky-human-worker.php')?:'';
 $worker=file_get_contents(__DIR__.'/../config/sharky-lab-worker.php')?:'';
-expect_draft_parity(str_contains($lab,"require_once __DIR__.'/../../config/sharky-lab-worker.php'"),'El webhook debe delegar en el worker compartido.');
-$labRuntime=$lab."\n".$worker;
+expect_draft_parity(str_contains($lab,"require_once __DIR__.'/../../config/sharky-human-worker.php'"),'El webhook debe delegar en el worker supervisado compartido.');
+expect_draft_parity(str_contains($humanWorker,"require_once __DIR__.'/sharky-lab-worker.php'"),'El worker supervisado debe conservar el worker base compartido.');
+$labRuntime=$lab."\n".$humanWorker."\n".$worker;
 foreach([
     'hache_sharky_draft_transcribe_audio',
     'hache_sharky_draft_requires_handoff',

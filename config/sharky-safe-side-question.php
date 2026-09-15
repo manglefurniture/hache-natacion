@@ -98,6 +98,12 @@ function hache_sharky_safe_side_answer(PDO $pdo,array $state,string $text): ?str
     }
 
     if(preg_match('/\b(?:ubicacion|ubicaciones|direccion|direcciones|donde|maps|mapa|como llego|como llegar)\b/u',$t)===1){
+        $both=$sede===''&&preg_match('/\b(?:ubicaciones|direcciones|ambas|las\s+dos|los\s+dos|todas)\b/u',$t)===1;
+        if($both){
+            $business=hache_sharky_safe_side_business_values($pdo);$mv=trim((string)($business['sharky_maps_monteverde']??''));$pal=trim((string)($business['sharky_maps_palapas']??''));
+            if(filter_var($mv,FILTER_VALIDATE_URL)!==false&&filter_var($pal,FILTER_VALIDATE_URL)!==false)return "📍 Estas son nuestras dos ubicaciones en Cancún:\n\n• Colegio Monteverde:\n".$mv."\n\n• Palapas Protudec:\n".$pal;
+            return '💬 No tengo ambas ubicaciones confirmadas disponibles en este momento; prefiero no inventarlas.';
+        }
         if($sede==='')return '📍 Tenemos Colegio Monteverde y Palapas Protudec en Cancún. Elige la sede y te mostraré su ubicación confirmada sin cambiar ninguna otra selección.';
         $business=hache_sharky_safe_side_business_values($pdo);$key=$sede==='MONTEVERDE'?'sharky_maps_monteverde':'sharky_maps_palapas';$url=trim((string)($business[$key]??''));
         if($url===''||filter_var($url,FILTER_VALIDATE_URL)===false)return '💬 No tengo una ubicación confirmada disponible para esa sede en este momento; prefiero no inventarla.';
@@ -122,4 +128,3 @@ function hache_sharky_safe_side_answer(PDO $pdo,array $state,string $text): ?str
 
     return '💬 No tengo información confirmada suficiente para responder esa duda sin adivinar. Tu selección pendiente se conserva.';
 }
-
