@@ -155,7 +155,7 @@ Un mismo hecho no debe producir duplicados al recargar. Una nueva mensualidad o 
 
 **Criterio de terminado.** Los tipos habilitados tienen fuente y regla verificables, enlace al detalle y estados persistentes de gestión; recargas no duplican casos; atención identifica al responsable cuando corresponde; resolución conserva evidencia e historia; se prueban un pago posterior, una invalidación, una nueva obligación y el aislamiento por sede. Tipos diferidos quedan registrados y la fase completa no se declara verificada mientras falte alcance comprometido sin decisión documentada.
 
-**Estado:** En revisión. Se preparó el incremento inicial con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. Las regresiones PHP/estáticas y el check `delivery-status-mariadb` de CI pasaron; el incremento queda listo para revisión en PR, sin despliegue.
+**Estado:** En revisión. Se preparó el incremento inicial con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. El [PR #254](https://github.com/manglefurniture/hache-natacion/pull/254) está abierto en borrador; Quality ya ejecutó correctamente las regresiones PHP/estáticas y `delivery-status-mariadb`. La migración versionada se incorpora al flujo de release y el incremento queda listo para revisión, sin despliegue.
 
 ### FASE 2 — Finanzas internas
 
@@ -457,7 +457,7 @@ Toda decisión nueva añadirá fecha, responsable real, motivo, fuentes, fases a
 
 | Fase | Estado | Base que se reutiliza | Próximo paso cuando se autorice trabajo funcional |
 | --- | --- | --- | --- |
-| F1 Centro de pendientes | En revisión | Alertas, obligaciones, reglas de acceso y reposiciones regulares | Revisar el PR en borrador; mantener visibles los tipos diferidos hasta sus fases dependientes. |
+| F1 Centro de pendientes | En revisión | Alertas, obligaciones, reglas de acceso y reposiciones regulares | Revisar el PR #254 en borrador; mantener visibles los tipos diferidos hasta sus fases dependientes. |
 | F2 Finanzas | Pendiente | Pagos, abonos, reglas, reportes y cierres | Resolver P-02 para la primera vista financiera. |
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |

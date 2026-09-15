@@ -204,6 +204,10 @@ apply_release_migrations() {
   if [[ -f "$professor_coteaching" ]]; then
     php "$professor_coteaching"
   fi
+  local centro_pendientes="$REPO/bin/migrate-centro-pendientes.php"
+  if [[ -f "$centro_pendientes" ]]; then
+    php "$centro_pendientes"
+  fi
 }
 
 deploy_sha() {

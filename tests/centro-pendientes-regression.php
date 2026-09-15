@@ -75,4 +75,14 @@ pendientes_ok(!preg_match('/\b(?:INSERT|UPDATE|DELETE)\b/i', $getBranch), 'Recar
 pendientes_ok(str_contains($api, "auth_require(['ADMIN','VERIFICADOR'])"), 'La consulta debe conservar los roles administrativos existentes');
 pendientes_ok(str_contains($api, '($me[\'rol\'] ?? \'\') !== \'ADMIN\''), 'La gestión no debe ampliar permisos de VERIFICADOR');
 
+// La migración debe entrar al release antes de publicar el SHA aprobado; el
+// runner queda como única ruta versionada e idempotente para el esquema.
+$runner = file_get_contents(__DIR__.'/../bin/migrate-centro-pendientes.php');
+$deploy = file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion');
+pendientes_ok(is_string($runner) && str_contains($runner, 'CENTRO_PENDIENTES_MIGRATION_OK'), 'La migración debe tener un runner CLI versionado');
+pendientes_ok(is_string($deploy) && str_contains($deploy, 'bin/migrate-centro-pendientes.php'), 'El deploy debe ejecutar la migración del Centro de pendientes');
+$migrationCall = is_string($deploy) ? strpos($deploy, 'php "$centro_pendientes"') : false;
+$publishedSha = is_string($deploy) ? strpos($deploy, 'publish_deployed_sha "$deployed"') : false;
+pendientes_ok($migrationCall !== false && $publishedSha !== false && $migrationCall < $publishedSha, 'La migración debe completar antes de publicar el SHA desplegado');
+
 fwrite(STDOUT, "CENTRO_PENDIENTES_REGRESSION_OK\n");
