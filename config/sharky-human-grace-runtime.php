@@ -45,11 +45,28 @@ function hache_sharky_human_grace_text_turn(PDO $pdo,string $contact,string $cur
         $event=is_array($row['event']??null)?$row['event']:[];
         if((string)($event['type']??'text')!=='text'||trim((string)($event['interactive_id']??''))!=='')continue;
         $text=trim((string)($event['text']??''));$id=trim((string)($row['message_id']??''));
-        if($text===' '||$text===''||$id==='')continue;
+        if($text===''||$id==='')continue;
         $parts[]=$text;$ids[]=$id;
     }
     if(!$parts){$parts=[trim($fallbackText)];$ids=[$currentEventId];}
     $parts=array_values(array_filter($parts,static fn(string $v):bool=>$v!==''));
     $ids=array_values(array_unique(array_filter($ids,static fn(string $v):bool=>$v!=='')));
     return ['text'=>mb_substr(implode("\n",$parts),0,1400),'ids'=>$ids?:[$currentEventId]];
+}
+
+/**
+ * A manual echo may share a webhook batch with a later customer message. Absorb
+ * only customer receipts that are not newer than the human echo, so echo-first
+ * processing never discards a reply that arrived after the operator wrote.
+ */
+function hache_sharky_human_absorb_before_echo(PDO $pdo,string $contact,array $echo): int
+{
+    $echoMs=max(0,(int)($echo['timestamp_ms']??0));$absorbed=0;
+    foreach(hache_sharky_human_pending_customer_events($pdo,$contact) as $row){
+        $event=is_array($row['event']??null)?$row['event']:[];$eventMs=max(0,(int)($event['timestamp_ms']??0));
+        if($echoMs>0&&$eventMs>0&&$eventMs>$echoMs)continue;
+        $id=trim((string)($row['message_id']??''));if($id===''||!hache_sharky_orchestrator_mark_processed($pdo,$id))continue;
+        $absorbed++;
+    }
+    return $absorbed;
 }
