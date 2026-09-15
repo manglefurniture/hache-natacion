@@ -40,6 +40,16 @@ pendientes_ok($atencion['estado'] === 'ATENDIDO', 'Atender debe guardar el estad
 pendientes_ok($atencion['atendido_por'] === 'admin-1' && $atencion['atendido_por_nombre'] === 'admin', 'Atender debe conservar al responsable');
 pendientes_ok($atencion['atendido_at'] === '2026-09-15 10:30:00', 'Atender debe conservar la fecha');
 
+// La acción ATENDER solo corresponde a una causa activa cuyo estado efectivo
+// sigue siendo PENDIENTE. ATENDIDO y RESUELTO no pueden ofrecerla otra vez.
+$vista = file_get_contents(__DIR__.'/../public/pendientes.php');
+$condicionAtender = "puedeGestionar&&x.causa_activa&&s==='PENDIENTE'";
+pendientes_ok(is_string($vista) && str_contains($vista, "if({$condicionAtender})acciones.push"), 'La vista debe condicionar ATENDER al estado efectivo PENDIENTE');
+$puedeMostrarAtender = static fn (string $estadoEfectivo, bool $causaActiva, bool $puedeGestionar): bool => $puedeGestionar && $causaActiva && $estadoEfectivo === 'PENDIENTE';
+pendientes_ok($puedeMostrarAtender('PENDIENTE', true, true), 'Un caso PENDIENTE con causa activa puede mostrar la acción ATENDER');
+pendientes_ok(!$puedeMostrarAtender('ATENDIDO', true, true), 'Un caso ATENDIDO no puede volver a mostrar la acción ATENDER');
+pendientes_ok(!$puedeMostrarAtender('RESUELTO', false, true), 'Un caso RESUELTO no puede mostrar la acción ATENDER');
+
 // Una resolución solo es coherente cuando la fuente confirma que ya no aplica.
 pendientes_ok(!centro_pendientes_puede_resolver(true), 'No puede resolverse mientras la causa original siga vigente');
 pendientes_ok(centro_pendientes_puede_resolver(false), 'Puede resolverse cuando la fuente deja de aplicar');
