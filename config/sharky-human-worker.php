@@ -90,7 +90,7 @@ function hache_sharky_human_process_event(PDO $pdo,array $event,array $business,
     if($contact===''||$eventId===''||hache_sharky_takeover_active($contact))return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
     if(!is_array(hache_sharky_human_grace_read($contact)))return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
 
-    $wait=hache_sharky_human_grace_wait($pdo,$contact,$eventId);
+    $wait=hache_sharky_human_grace_wait($pdo,$contact,$eventId,(int)($event['timestamp_ms']??0));
     if(($wait['handled']??false)===true)return true;
     if(($wait['active']??false)!==true)return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
     if(($wait['ready']??false)!==true)return false;

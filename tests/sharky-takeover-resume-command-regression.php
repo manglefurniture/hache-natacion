@@ -59,18 +59,44 @@ resume_command_ok(str_contains($humanWorker,'hache_sharky_human_grace_mark'),'An
 resume_command_ok(str_contains($humanWorker,'hache_sharky_human_cancel_automatic_outbox'),'Human intervention must fence stale automatic outbound replies.');
 resume_command_ok(str_contains($humanWorker,"status='CANCELLED'")&&str_contains($humanWorker,"['_sharky_allow_takeover']"),'Automatic PENDING rows must be cancellable without cancelling protected takeover delivery.');
 resume_command_ok(str_contains($humanWorker,'hache_sharky_human_grace_wait'),'Customer replies after a human intervention must enter the grace timer.');
+resume_command_ok(str_contains($humanWorker,"(int)(\$event['timestamp_ms']??0)"),'Grace recovery must preserve the original customer timestamp.');
 resume_command_ok(str_contains($humanWorker,"\$event['interactive_id']='meta:free_text'"),'A safe human question followed by a short confirmation must reuse the closed-funnel side-question lane.');
 resume_command_ok(str_contains($graceRuntime,'hache_sharky_human_inbox_defer_until'),'Grace must leave a durable inbox recovery boundary before waiting.');
+resume_command_ok(str_contains($graceRuntime,'hache_sharky_human_inbox_release_lease'),'Expired grace must release its receipt before normal processing claims it.');
 resume_command_ok(str_contains($graceRuntime,'hache_sharky_human_inbox_processed'),'A human intervention during the wait must stop the waiting Sharky turn.');
 resume_command_ok(str_contains($graceRuntime,'hache_sharky_human_absorb_before_echo'),'Same-webhook races must not swallow a customer reply newer than the human echo.');
-resume_command_ok(str_contains($intervention,"'latest_customer_event_id'")&&str_contains($intervention,'HACHE_SHARKY_HUMAN_GRACE_SECONDS'),'A genuinely newer customer message must move the 30-second deadline.');
+resume_command_ok(str_contains($intervention,"'latest_customer_event_id'")&&str_contains($intervention,"'seen_customer_event_ids'")&&str_contains($intervention,'HACHE_SHARKY_HUMAN_GRACE_SECONDS'),'A genuinely newer customer message must move the 30-second deadline without replay rewind.');
+resume_command_ok(str_contains($intervention,'SELECT 1 FROM sharky_message_receipts WHERE message_id=:m AND processed_at IS NULL LIMIT 1'),'Deferring the same durable receipt twice must remain idempotently valid.');
 resume_command_ok(str_contains($echoSource,"'operator_command'=>\$command??''")&&str_contains($echoSource,"'text'=>\$command===null"),'Operator commands must stay out of transcript text while remaining recoverable.');
 resume_command_ok(str_contains($webhook,"require_once __DIR__.'/../../config/sharky-human-worker.php'")&&str_contains($webhook,'hache_sharky_human_process_event'),'The live webhook must use the supervised worker.');
 resume_command_ok(str_contains($inboxWorker,"require_once __DIR__.'/../config/sharky-human-worker.php'")&&str_contains($inboxWorker,'hache_sharky_human_process_event'),'Durable inbox recovery must use the same supervised worker.');
 resume_command_ok(!str_contains($humanWorker,'Hola, ya estoy de vuelta. ¿Continuamos?'),'Wake must be an internal control action, not an automatic customer-facing acknowledgement.');
 
+$graceContact='529980009999';
+$tz=new DateTimeZone('America/Cancun');
+$base=(new DateTimeImmutable('today',$tz))->setTime(12,0)->getTimestamp();
+hache_sharky_human_grace_clear($graceContact);
+resume_command_ok(hache_sharky_human_grace_mark($graceContact,'human-1',$base),'A manual reply must persist grace state.');
+$first=hache_sharky_human_grace_customer_turn($graceContact,'customer-1',$base+1,($base+1)*1000);
+$second=hache_sharky_human_grace_customer_turn($graceContact,'customer-2',$base+10,($base+10)*1000);
+$third=hache_sharky_human_grace_customer_turn($graceContact,'customer-3',$base+20,($base+20)*1000);
+$retryFirst=hache_sharky_human_grace_customer_turn($graceContact,'customer-1',$base+80,($base+1)*1000);
+$graceState=hache_sharky_human_grace_read($graceContact,$base+80);
+resume_command_ok(($first['due_at']??0)===$base+31&&($second['due_at']??0)===$base+40&&($third['due_at']??0)===$base+50,'Each genuinely newer customer message must reset the 30-second deadline from its original timestamp.');
+resume_command_ok(($retryFirst['latest']??true)===false&&($retryFirst['due_at']??0)===$base+50,'Recovery of an older receipt must not move the latest pointer or restart the timer.');
+resume_command_ok(is_array($graceState)&&($graceState['latest_customer_event_id']??'')==='customer-3'&&count((array)($graceState['seen_customer_event_ids']??[]))===3,'Grace state must remember seen customer receipts and keep the true latest message.');
+hache_sharky_human_grace_clear($graceContact);
+
 $pdo=new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
+$pdo->sqliteCreateFunction('FROM_UNIXTIME',static fn($value):string=>gmdate('Y-m-d H:i:s',(int)$value),1);
+$pdo->exec('CREATE TABLE sharky_message_receipts (message_id TEXT PRIMARY KEY, processed_at TEXT NULL, lease_until TEXT NULL)');
+$pdo->exec("INSERT INTO sharky_message_receipts(message_id,processed_at,lease_until) VALUES ('receipt-1',NULL,NULL)");
+resume_command_ok(hache_sharky_human_inbox_defer_until($pdo,'receipt-1',$base+30),'A grace receipt must accept its deadline lease.');
+resume_command_ok(hache_sharky_human_inbox_defer_until($pdo,'receipt-1',$base+30),'Reapplying the same deadline must remain successful.');
+resume_command_ok(hache_sharky_human_inbox_release_lease($pdo,'receipt-1'),'An expired grace receipt must be claimable immediately.');
+resume_command_ok($pdo->query("SELECT lease_until IS NULL FROM sharky_message_receipts WHERE message_id='receipt-1'")->fetchColumn()==1,'Lease release must leave the receipt available for the base worker claim.');
+
 $pdo->exec('CREATE TABLE configuracion (clave TEXT PRIMARY KEY, valor TEXT NOT NULL)');
 $pdo->exec("INSERT INTO configuracion(clave,valor) VALUES ('sharky_maps_monteverde','https://maps.app.goo.gl/Ld75bhLforGm2Tk68'),('sharky_maps_palapas','https://maps.app.goo.gl/L7aEf9phtXtciUj78')");
 $locations=hache_sharky_safe_side_answer($pdo,['commercial_context'=>[]],'¿Me pasas las ubicaciones?');
