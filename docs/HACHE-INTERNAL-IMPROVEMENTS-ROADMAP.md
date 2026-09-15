@@ -4,7 +4,7 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Estado del roadmap:** Fase 1 en implementación; las fases 2–9 permanecen **Pendientes**.
+**Estado del roadmap:** Fase 1 en revisión; las fases 2–9 permanecen **Pendientes**.
 **Autorización de esta tarea:** crear este MD. Ninguna implementación funcional, migración ni operación de producción está autorizada por este documento.
 
 ## 1. Propósito
@@ -155,7 +155,7 @@ Un mismo hecho no debe producir duplicados al recargar. Una nueva mensualidad o 
 
 **Criterio de terminado.** Los tipos habilitados tienen fuente y regla verificables, enlace al detalle y estados persistentes de gestión; recargas no duplican casos; atención identifica al responsable cuando corresponde; resolución conserva evidencia e historia; se prueban un pago posterior, una invalidación, una nueva obligación y el aislamiento por sede. Tipos diferidos quedan registrados y la fase completa no se declara verificada mientras falte alcance comprometido sin decisión documentada.
 
-**Estado:** En implementación. Se preparó el incremento inicial con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. Falta ejecutar la regresión PHP nueva y las pruebas de integración con runtime disponible antes de pasar a revisión.
+**Estado:** En revisión. Se preparó el incremento inicial con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. Las regresiones PHP/estáticas y el check `delivery-status-mariadb` de CI pasaron; el incremento queda listo para revisión en PR, sin despliegue.
 
 ### FASE 2 — Finanzas internas
 
@@ -457,7 +457,7 @@ Toda decisión nueva añadirá fecha, responsable real, motivo, fuentes, fases a
 
 | Fase | Estado | Base que se reutiliza | Próximo paso cuando se autorice trabajo funcional |
 | --- | --- | --- | --- |
-| F1 Centro de pendientes | En implementación | Alertas, obligaciones, reglas de acceso y reposiciones regulares | Ejecutar pruebas PHP e integración del incremento inicial y abrir PR en borrador; mantener visibles los tipos diferidos hasta sus fases dependientes. |
+| F1 Centro de pendientes | En revisión | Alertas, obligaciones, reglas de acceso y reposiciones regulares | Revisar el PR en borrador; mantener visibles los tipos diferidos hasta sus fases dependientes. |
 | F2 Finanzas | Pendiente | Pagos, abonos, reglas, reportes y cierres | Resolver P-02 para la primera vista financiera. |
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
