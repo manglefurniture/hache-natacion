@@ -97,6 +97,8 @@ function hache_sharky_human_grace_mark(string $contact,string $humanEventId,?int
             'started_at'=>$now,
             'due_at'=>0,
             'latest_customer_event_id'=>'',
+            'latest_customer_timestamp_ms'=>0,
+            'seen_customer_event_ids'=>[],
             'updated_at'=>$now,
         ]);
     }finally{hache_sharky_human_grace_unlock($lock);}
@@ -110,22 +112,33 @@ function hache_sharky_human_grace_clear(string $contact): bool
 }
 
 /**
- * Register one customer turn after a human reply. Replays of the same durable
- * receipt never extend the window; a genuinely newer customer message does.
+ * Register one customer turn after a human reply. Replays of a durable receipt
+ * never extend the window or move the latest pointer backwards. A genuinely
+ * newer customer message moves the deadline from its original WhatsApp time.
  *
  * @return array{active:bool,due_at:int,latest:bool,human_event_id:string}
  */
-function hache_sharky_human_grace_customer_turn(string $contact,string $eventId,?int $now=null): array
+function hache_sharky_human_grace_customer_turn(string $contact,string $eventId,?int $now=null,int $eventTimestampMs=0): array
 {
-    $eventId=mb_substr(trim($eventId),0,191);$now??=time();if($eventId==='')return ['active'=>false,'due_at'=>0,'latest'=>false,'human_event_id'=>''];
+    $eventId=mb_substr(trim($eventId),0,191);$now??=time();$eventTimestampMs=max(0,$eventTimestampMs);
+    if($eventId==='')return ['active'=>false,'due_at'=>0,'latest'=>false,'human_event_id'=>''];
     $lock=hache_sharky_human_grace_lock($contact);if(!is_resource($lock))return ['active'=>false,'due_at'=>0,'latest'=>false,'human_event_id'=>''];
     try{
         $data=hache_sharky_human_grace_read_unlocked($contact,$now);if(!is_array($data))return ['active'=>false,'due_at'=>0,'latest'=>false,'human_event_id'=>''];
-        $latest=(string)($data['latest_customer_event_id']??'');
-        if($latest!==$eventId){
-            $data['latest_customer_event_id']=$eventId;
-            $data['due_at']=$now+HACHE_SHARKY_HUMAN_GRACE_SECONDS;
-            $data['updated_at']=$now;
+        $seen=[];foreach((array)($data['seen_customer_event_ids']??[]) as $seenId){$seenId=mb_substr(trim((string)$seenId),0,191);if($seenId!==''&&!in_array($seenId,$seen,true))$seen[]=$seenId;}
+        $alreadySeen=in_array($eventId,$seen,true);
+        if(!$alreadySeen){
+            $seen[]=$eventId;if(count($seen)>24)$seen=array_slice($seen,-24);$data['seen_customer_event_ids']=$seen;
+            $latest=(string)($data['latest_customer_event_id']??'');$latestTimestampMs=max(0,(int)($data['latest_customer_timestamp_ms']??0));
+            $isNewer=$latest===''||$latestTimestampMs<=0||$eventTimestampMs<=0||$eventTimestampMs>$latestTimestampMs||($eventTimestampMs===$latestTimestampMs&&$latest!==$eventId);
+            if($isNewer){
+                $eventAt=$eventTimestampMs>0?intdiv($eventTimestampMs,1000):$now;
+                if($eventAt<=0||$eventAt>$now+300)$eventAt=$now;
+                $data['latest_customer_event_id']=$eventId;
+                $data['latest_customer_timestamp_ms']=$eventTimestampMs;
+                $data['due_at']=$eventAt+HACHE_SHARKY_HUMAN_GRACE_SECONDS;
+                $data['updated_at']=$now;
+            }
             if(!hache_sharky_human_grace_write_unlocked($contact,$data))return ['active'=>false,'due_at'=>0,'latest'=>false,'human_event_id'=>''];
         }
         return ['active'=>true,'due_at'=>(int)($data['due_at']??0),'latest'=>(string)($data['latest_customer_event_id']??'')===$eventId,'human_event_id'=>(string)$data['human_event_id']];
@@ -148,8 +161,21 @@ function hache_sharky_human_inbox_defer_until(PDO $pdo,string $messageId,int $du
     $messageId=mb_substr(trim($messageId),0,191);if($messageId===''||$dueAt<=0)return false;
     try{
         $st=$pdo->prepare('UPDATE sharky_message_receipts SET lease_until=FROM_UNIXTIME(:d) WHERE message_id=:m AND processed_at IS NULL');
-        $st->execute([':d'=>$dueAt,':m'=>$messageId]);return $st->rowCount()===1;
+        $st->execute([':d'=>$dueAt,':m'=>$messageId]);if($st->rowCount()===1)return true;
+        $check=$pdo->prepare('SELECT 1 FROM sharky_message_receipts WHERE message_id=:m AND processed_at IS NULL LIMIT 1');
+        $check->execute([':m'=>$messageId]);return(bool)$check->fetchColumn();
     }catch(Throwable $e){error_log('[sharky-human] unable to defer grace receipt');return false;}
+}
+
+function hache_sharky_human_inbox_release_lease(PDO $pdo,string $messageId): bool
+{
+    $messageId=mb_substr(trim($messageId),0,191);if($messageId==='')return false;
+    try{
+        $st=$pdo->prepare('UPDATE sharky_message_receipts SET lease_until=NULL WHERE message_id=:m AND processed_at IS NULL');
+        $st->execute([':m'=>$messageId]);if($st->rowCount()===1)return true;
+        $check=$pdo->prepare('SELECT 1 FROM sharky_message_receipts WHERE message_id=:m AND processed_at IS NULL AND lease_until IS NULL LIMIT 1');
+        $check->execute([':m'=>$messageId]);return(bool)$check->fetchColumn();
+    }catch(Throwable $e){error_log('[sharky-human] unable to release grace receipt');return false;}
 }
 
 function hache_sharky_human_inbox_processed(PDO $pdo,string $messageId): bool
