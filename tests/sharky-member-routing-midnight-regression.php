@@ -41,12 +41,12 @@ sharky_midnight_expect(str_contains($router,'student-close'),'A pure gratitude t
 sharky_midnight_expect(str_contains($router,'student-pending'),'Pending registrations need their own conversational lane.');
 
 $webMember=strpos($webhook,'hache_sharky_member_route_event($pdo,$event,$business)');
-$webGeneric=strpos($webhook,'hache_sharky_lab_process_event($pdo,$event',$webMember===false?0:$webMember);
-sharky_midnight_expect($webMember!==false&&$webGeneric!==false&&$webMember<$webGeneric,'Realtime webhook must route members before the legacy/general Sharky pipeline.');
+$webGeneric=strpos($webhook,'hache_sharky_human_process_event($pdo,$event',$webMember===false?0:$webMember);
+sharky_midnight_expect($webMember!==false&&$webGeneric!==false&&$webMember<$webGeneric,'Realtime webhook must route members before the supervised general Sharky pipeline.');
 
 $workerMember=strpos($worker,'hache_sharky_member_route_event($pdo,$event,$business)');
-$workerGeneric=strpos($worker,'hache_sharky_lab_process_event($pdo,$event',$workerMember===false?0:$workerMember);
-sharky_midnight_expect($workerMember!==false&&$workerGeneric!==false&&$workerMember<$workerGeneric,'Inbox recovery must preserve the same member lane before generic processing.');
+$workerGeneric=strpos($worker,'hache_sharky_human_process_event($pdo,$event',$workerMember===false?0:$workerMember);
+sharky_midnight_expect($workerMember!==false&&$workerGeneric!==false&&$workerMember<$workerGeneric,'Inbox recovery must preserve the same member lane before supervised generic processing.');
 
 $maintenancePos=strpos($worker,'hache_sharky_takeover_midnight_tick()');
 $enabledPos=strpos($worker,'$enabled=static fn():bool');
