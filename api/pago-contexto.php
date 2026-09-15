@@ -68,7 +68,7 @@ try{
 
     $hoyIntensivo=intensivo_hoy_operativo()->format('Y-m-d');
     $intensivoSql="SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,
-        EXISTS(SELECT 1 FROM pagos pg WHERE pg.alumno_id=cia.alumno_id AND pg.intensivo_id=ci.id AND pg.tipo='INTENSIVO' AND pg.estado='VALIDO') AS pagado
+        COALESCE((SELECT SUM(pg.importe) FROM pagos pg WHERE pg.alumno_id=cia.alumno_id AND pg.intensivo_id=ci.id AND pg.tipo='INTENSIVO' AND pg.estado='VALIDO'),0) AS pagado_total
         FROM curso_intensivo_alumnos cia
         INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
         WHERE cia.alumno_id=:a AND ci.sede_id=:s";
@@ -84,7 +84,10 @@ try{
     $st=$pdo->prepare($intensivoSql);$st->execute($intensivoParams);$intensivo=$st->fetch()?:null;
     if($intensivo){
         $intensivo['estado']=intensivo_estado_por_fechas((string)$intensivo['fecha_inicio'],(string)$intensivo['fecha_fin']);
-        $intensivo['pagado']=(int)($intensivo['pagado']??0)===1;
+        $intensivo['pagado_total']=(float)($intensivo['pagado_total']??0);
+        $intensivo['saldo']=max(0.0,round((float)$intensivo['precio']-$intensivo['pagado_total'],2));
+        $intensivo['estado_pago']=$intensivo['saldo']<=0.009?'PAGADO':($intensivo['pagado_total']>0.009?'ANTICIPO':'PENDIENTE');
+        $intensivo['pagado']=$intensivo['saldo']<=0.009;
         $intensivo['historico']=(string)$intensivo['fecha_fin']<$hoyIntensivo;
     }
 
