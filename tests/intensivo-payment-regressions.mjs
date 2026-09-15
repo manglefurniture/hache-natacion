@@ -59,10 +59,16 @@ assert.ok(alumnosPage.includes("$intAnticipo?'Pagar saldo':'Pagar curso'"));
 
 // La ruta general de pagos conoce el curso específico, acepta ambos nombres de
 // parámetro históricos y, cuando hay selección explícita, valida exactamente ese
-// curso aunque ya haya terminado.
+// curso aunque ya haya terminado. El contexto usa la misma suma canónica de
+// abonos que el core: un primer pago parcial no puede marcar el curso como PAGADO.
+assert.match(paymentContext, /SUM\(pg\.importe\)/);
 assert.match(paymentContext, /pg\.alumno_id=cia\.alumno_id AND pg\.intensivo_id=ci\.id AND pg\.tipo='INTENSIVO' AND pg\.estado='VALIDO'/);
+assert.doesNotMatch(paymentContext, /EXISTS\(SELECT 1 FROM pagos pg[\s\S]*pg\.tipo='INTENSIVO'/);
 assert.ok(paymentContext.includes("$_GET['curso_intensivo_id']??($_GET['curso_id']??'')"));
-assert.ok(paymentContext.includes("$intensivo['pagado']=(int)($intensivo['pagado']??0)===1"));
+assert.ok(paymentContext.includes("$intensivo['pagado_total']=(float)($intensivo['pagado_total']??0)"));
+assert.ok(paymentContext.includes("$intensivo['saldo']=max(0.0,round((float)$intensivo['precio']-$intensivo['pagado_total'],2))"));
+assert.ok(paymentContext.includes("$intensivo['estado_pago']=$intensivo['saldo']<=0.009?'PAGADO':($intensivo['pagado_total']>0.009?'ANTICIPO':'PENDIENTE')"));
+assert.ok(paymentContext.includes("$intensivo['pagado']=$intensivo['saldo']<=0.009"));
 assert.ok(paymentContext.includes("$hoyIntensivo=intensivo_hoy_operativo()->format('Y-m-d')"));
 assert.ok(paymentContext.includes("if($cursoId!=='')"));
 assert.ok(paymentContext.includes('ci.id=:c'));
