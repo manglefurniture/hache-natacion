@@ -11,11 +11,12 @@ require_once __DIR__.'/sharky-human-intervention.php';
  *
  * @return array{active:bool,ready:bool,handled:bool,human_event_id:string,due_at:int}
  */
-function hache_sharky_human_grace_wait(PDO $pdo,string $contact,string $eventId): array
+function hache_sharky_human_grace_wait(PDO $pdo,string $contact,string $eventId,int $eventTimestampMs=0): array
 {
-    $turn=hache_sharky_human_grace_customer_turn($contact,$eventId);
+    $turn=hache_sharky_human_grace_customer_turn($contact,$eventId,null,$eventTimestampMs);
     if(($turn['active']??false)!==true)return ['active'=>false,'ready'=>true,'handled'=>false,'human_event_id'=>'','due_at'=>0];
     $dueAt=(int)($turn['due_at']??0);$humanId=(string)($turn['human_event_id']??'');
+    if(($turn['latest']??false)!==true)return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
     if($dueAt<=0||!hache_sharky_human_inbox_defer_until($pdo,$eventId,$dueAt))return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
 
     $started=microtime(true);
@@ -26,7 +27,11 @@ function hache_sharky_human_grace_wait(PDO $pdo,string $contact,string $eventId)
         if(!hash_equals($humanId,(string)($state['human_event_id']??'')))return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
         if((string)($state['latest_customer_event_id']??'')!==$eventId)return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>(int)($state['due_at']??0)];
         $dueAt=(int)($state['due_at']??0);$remaining=$dueAt-time();
-        if($remaining<=0)return ['active'=>true,'ready'=>true,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
+        if($remaining<=0){
+            if(hache_sharky_human_inbox_release_lease($pdo,$eventId))return ['active'=>true,'ready'=>true,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
+            if(hache_sharky_human_inbox_processed($pdo,$eventId))return ['active'=>true,'ready'=>false,'handled'=>true,'human_event_id'=>$humanId,'due_at'=>$dueAt];
+            return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
+        }
         if((microtime(true)-$started)>=HACHE_SHARKY_HUMAN_GRACE_MAX_WAIT_SECONDS)return ['active'=>true,'ready'=>false,'handled'=>false,'human_event_id'=>$humanId,'due_at'=>$dueAt];
         usleep((int)(min(1.0,max(0.1,(float)$remaining))*1000000));
     }
