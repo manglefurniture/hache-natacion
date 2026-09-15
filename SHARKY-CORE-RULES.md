@@ -4,7 +4,7 @@
 >
 > Si un cambio contradice una regla de este documento, introduce ambigüedad sobre ella o no puede demostrar que la conserva, **el cambio no se hace** hasta aclarar la contradicción.
 
-Última actualización: 2026-09-13.
+Última actualización: 2026-09-15.
 
 ## 1. Propósito
 
@@ -224,14 +224,32 @@ La respuesta lateral informativa no depende de Brain conversacional ni de 2B-A. 
 
 ## 16. Takeover, pausa y reactivación
 
-La intervención humana no destruye contexto comercial válido.
+La intervención humana no destruye contexto comercial válido y tiene tres estados funcionales por conversación:
+
+- `normal`: Sharky responde con el comportamiento vigente.
+- `manual_grace`: una respuesta humana ordinaria cancela salidas automáticas pendientes y abre una intervención puntual. Cuando el cliente responde, Sharky espera **30 segundos desde el último mensaje del cliente**. Si llega otra intervención humana durante esa ventana, la respuesta automática queda cancelada; si no llega, Sharky retoma usando también el turno humano inmediato como contexto permitido.
+- `manual_takeover`: Sharky queda silenciado para esa conversación hasta reactivación explícita o reinicio diario.
+
+Comandos operativos:
+
+- **`Sharky duerme`** activa `manual_takeover` exclusivo para esa conversación.
+- **`Sharky despierta`** libera ese takeover antes del reinicio diario.
+- `Sharky vuelve ahora` queda retirado y no reactiva Sharky.
+
+El takeover manual exclusivo creado durante un día se libera también mediante el mantenimiento diario ya existente, usando el calendario local de `America/Cancun`. Una respuesta humana ordinaria no debe convertirse por sí sola en takeover indefinido.
+
+Los comandos son control operativo y no deben contarse como contenido conversacional ni como evidencia de aprendizaje. Los mensajes humanos reales sí se conservan internamente como `HUMANO_HACHE`, separados de `USUARIO` y `SHARKY`.
 
 Al reactivar Sharky:
 
 - no reiniciar sin necesidad;
 - no volver a preguntar datos válidos;
 - revalidar solo por tiempo, contradicción, cambio administrativo o seguridad;
-- dejar claro cuándo vuelve el asistente IA.
+- conservar producto, sede, Flow y demás contexto válido;
+- una respuesta corta del cliente puede interpretarse contra la pregunta humana inmediatamente anterior solo cuando esa pregunta pertenece a una categoría informativa segura y no ejecuta mutaciones;
+- dentro del funnel cerrado, esa recuperación contextual reutiliza la capa lateral determinística y después repone el control pendiente.
+
+La intervención humana nunca autoriza por sí sola inscripciones, pagos, cancelaciones, reposiciones, cambios de datos ni excepciones de elegibilidad. Esas operaciones conservan sus guards y autoridades normales.
 
 Un alumno declarado abandona el funnel de prospecto.
 
@@ -285,14 +303,20 @@ Las reglas se materializan, entre otros puntos, en:
 - `config/sharky-meta-ad-flow.php`;
 - `config/sharky-whatsapp-adapter.php`;
 - `config/sharky-whatsapp-batching.php`;
+- `config/sharky-whatsapp-echoes.php`;
+- `config/sharky-human-intervention.php`;
+- `config/sharky-human-grace-runtime.php`;
+- `config/sharky-human-worker.php`;
 - `config/sharky-language-guide.php`;
 - `config/sharky-lab-worker.php`;
 - `config/sharky-product-boundary-guard.php`;
 - `config/sharky-commercial-memory.php`;
 - `config/sharky-post-pr72.php`;
 - `docs/SHARKY-3-META-FLOW.md`;
+- `docs/SHARKY-HUMAN-INTERVENTION-SPEC.md`;
 - `docs/SHARKY-POSITIVE-PATTERNS.md`;
 - `tests/sharky-meta3-regression.php`;
+- `tests/sharky-takeover-resume-command-regression.php`;
 - `tests/sharky-guided-first-prospect-regression.php`;
 - `tests/sharky-pr162-review-regression.php`;
 - suites de WhatsApp, Flow, outbox, registro y pagos.
@@ -317,7 +341,15 @@ Deben cubrir:
 - edad fuera de rango falla cerrado;
 - flows protegidos mantienen sus guards;
 - emoji comercial se mantiene en 2–5 funcionales;
-- referral no publicitario conserva el fallback por perfil hasta nueva decisión explícita.
+- referral no publicitario conserva el fallback por perfil hasta nueva decisión explícita;
+- respuesta humana ordinaria → `manual_grace`, no takeover indefinido;
+- cliente responde tras intervención humana → 30 segundos desde el último mensaje antes de retomar;
+- nueva intervención humana durante la gracia → cancela la salida automática pendiente;
+- `Sharky duerme` → takeover exclusivo;
+- `Sharky despierta` → libera solo esa conversación;
+- reinicio diario libera takeovers anteriores sin liberar uno creado después de medianoche ese mismo día;
+- comandos operativos no entran como texto conversacional/aprendizaje;
+- respuesta corta segura después de pregunta humana conserva contexto sin saltarse el funnel ni guards.
 
 ## 23. Flujo de trabajo del repositorio
 
@@ -352,6 +384,9 @@ Antes de mergear un cambio de captación responder **sí** a lo aplicable:
 - [ ] ¿Audio conserva el lock determinístico?
 - [ ] ¿Alumno conocido no entra como prospecto?
 - [ ] ¿Takeover/reactivación conserva contexto válido?
+- [ ] ¿Intervención humana puntual conserva la ventana de 30 s sin convertirse en takeover indefinido?
+- [ ] ¿`Sharky duerme` / `Sharky despierta` afectan únicamente la conversación correspondiente?
+- [ ] ¿Las respuestas automáticas pendientes quedan cercadas frente a una intervención humana?
 - [ ] ¿Edad y mutaciones fallan cerrado cuando corresponde?
 - [ ] ¿Mensajes de prospectos usan 2–5 emojis funcionales sin saturar?
 - [ ] ¿Existe regresión del comportamiento nuevo?

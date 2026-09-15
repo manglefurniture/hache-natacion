@@ -49,7 +49,7 @@ const inboxPos=lab.indexOf('hache_sharky_inbox_store');
 const ackPos=lab.indexOf('http_response_code(200)');
 expect(dbGuardPos>=0&&storeGuardPos>dbGuardPos&&inboxPos>storeGuardPos&&ackPos>inboxPos,'Si la BD/migración/inbox durable falla, el lab debe responder 503 antes del ACK 200 y no ejecutar acciones.');
 expect(lab.includes("'Database unavailable'")&&lab.includes("'Sharky migration incomplete'")&&lab.includes("'Unable to persist inbound event'"),'El fail-closed del lab debe distinguir fallas durables antes del ACK.');
-expect(lab.includes('hache_sharky_lab_process_event')&&lab.indexOf('hache_sharky_lab_process_event')>ackPos,'Las acciones solo pueden ejecutarse después de persistir y ACKear el evento durable.');
+expect(lab.includes('hache_sharky_human_process_event')&&lab.indexOf('hache_sharky_human_process_event')>ackPos,'Las acciones solo pueden ejecutarse después de persistir y ACKear el evento durable.');
 expect(lab.includes('hache_sharky_outbox_dispatch'),'El lab debe reintentar respuestas durables pendientes.');
 expect(!migration.includes('whatsapp VARCHAR'),'Persistencia del orquestador no debe almacenar teléfono crudo.');
 
