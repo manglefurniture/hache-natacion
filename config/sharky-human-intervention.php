@@ -18,6 +18,8 @@ function hache_sharky_human_operator_normalize(string $text): string
 
 function hache_sharky_human_operator_command(array $echo): ?string
 {
+    $declared=strtolower(trim((string)($echo['operator_command']??'')));
+    if(in_array($declared,['sleep','wake'],true))return $declared;
     $type=trim((string)($echo['type']??''));
     if($type!==''&&$type!=='text')return null;
     $text=hache_sharky_human_operator_normalize((string)($echo['text']??''));
