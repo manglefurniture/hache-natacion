@@ -55,7 +55,7 @@ $payload=[
 $echoes=hache_sharky_whatsapp_extract_echoes($payload);
 phrase_takeover_ok(count($echoes)===3,'All outbound human echoes must still be extracted.');
 phrase_takeover_ok(($echoes[0]['operator_command']??'')==='sleep','Profe Ariel outbound echo must carry sleep control metadata.');
-phrase_takeover_ok(($echoes[0]['text']??'')==='Hola, soy el profe Ariel. Te ayudo personalmente.','A mixed human/control message must remain available as HUMANO_HACHE context.');
+phrase_takeover_ok(($echoes[0]['text']??'')==='','A takeover trigger must stay out of transcript/learning text even when embedded in a larger human message.');
 phrase_takeover_ok(($echoes[1]['operator_command']??'')===''&&($echoes[1]['text']??'')==='Hola, ¿en qué te ayudo?','Ordinary human messages must keep the existing manual_grace path.');
 phrase_takeover_ok(($echoes[2]['operator_command']??'')==='sleep'&&($echoes[2]['text']??'')==='','A pure operational command must remain outside conversational text.');
 
