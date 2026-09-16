@@ -19,7 +19,11 @@ try{
  if(!$hash)out(['ok'=>false,'error'=>'La cuenta dejó de estar disponible'],409);
  if(!$bootstrap&&!password_verify($actual,$hash)){security_rate_limit_record('password-change',$rateKey,10,900);out(['ok'=>false,'error'=>'La contraseña actual no es correcta'],422);}
  if(password_verify($nueva,$hash))out(['ok'=>false,'error'=>'La nueva contraseña debe ser diferente de la actual'],422);
- $newHash=password_hash($nueva,PASSWORD_DEFAULT);$st=$pdo->prepare("UPDATE usuarios SET password_hash=:p,debe_cambiar_password=0 WHERE id=:id AND activo=1");$st->execute([':p'=>$newHash,':id'=>$me['id']]);if($st->rowCount()!==1)out(['ok'=>false,'error'=>'La cuenta dejó de estar disponible'],409);
- hache_portal_access_revoke_user($pdo,(string)$me['id']);
+ $newHash=password_hash($nueva,PASSWORD_DEFAULT);
+ $pdo->beginTransaction();
+ $st=$pdo->prepare("UPDATE usuarios SET password_hash=:p,debe_cambiar_password=0 WHERE id=:id AND activo=1");$st->execute([':p'=>$newHash,':id'=>$me['id']]);
+ if($st->rowCount()!==1){$pdo->rollBack();out(['ok'=>false,'error'=>'La cuenta dejó de estar disponible'],409);}
+ if(!hache_portal_access_revoke_user($pdo,(string)$me['id']))throw new RuntimeException('No se pudieron revocar los accesos pendientes del portal');
+ $pdo->commit();
  security_rate_limit_clear('password-change',$rateKey);session_regenerate_id(true);auth_refresh_password_flag(false);auth_refresh_password_fingerprint($newHash);auth_portal_bootstrap_clear();out(['ok'=>true,'redirect'=>$me['rol']==='ALUMNO'?'/mi-cuenta.php':'/dashboard.php']);
-}catch(Throwable $e){error_log('[cambiar-password] '.$e->getMessage());out(['ok'=>false,'error'=>'No se pudo cambiar la contraseña'],500);}
+}catch(Throwable $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('[cambiar-password] '.$e->getMessage());out(['ok'=>false,'error'=>'No se pudo cambiar la contraseña'],500);}
