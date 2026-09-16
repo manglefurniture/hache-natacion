@@ -42,12 +42,12 @@ function hache_sharky_whatsapp_echo_operator_command(array $echo): ?string
 
 function hache_sharky_whatsapp_echo_resume_requested(array $echo): bool
 {
-    return hache_sharky_whatsapp_echo_operator_command($echo)==='wake';
+    return hache_sharky_human_operator_command($echo)==='wake';
 }
 
 function hache_sharky_whatsapp_echo_sleep_requested(array $echo): bool
 {
-    return hache_sharky_whatsapp_echo_operator_command($echo)==='sleep';
+    return hache_sharky_human_operator_command($echo)==='sleep';
 }
 
 function hache_sharky_whatsapp_extract_echoes(array $payload): array
