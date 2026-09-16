@@ -24,7 +24,7 @@ function auth_login(array $user): void
     $role=strtoupper(trim((string)($user['rol']??'')));
     if(!in_array($role,['ADMIN','VERIFICADOR','ALUMNO'],true))throw new InvalidArgumentException('Rol de usuario inválido');
     session_regenerate_id(true);
-    unset($_SESSION['hache_csrf'],$_SESSION['hache_reconciliada']);
+    unset($_SESSION['hache_csrf'],$_SESSION['hache_reconciliada'],$_SESSION['hache_portal_bootstrap']);
     $sedeClave = !empty($user['sede_clave']) ? strtoupper((string)$user['sede_clave']) : null;
     $_SESSION['hache_usuario'] = [
         'id' => (string)$user['id'],
@@ -53,6 +53,30 @@ function auth_refresh_password_fingerprint(string $passwordHash): void
 {
     $_SESSION['hache_password_fingerprint']=hash('sha256',$passwordHash);
     if(isset($_SESSION['hache_usuario'])&&is_array($_SESSION['hache_usuario']))$_SESSION['hache_usuario']['auth_checked_at']=time();
+}
+
+function auth_portal_bootstrap_grant(string $userId,int $ttlSeconds=900): void
+{
+    $userId=trim($userId);
+    if($userId==='')throw new InvalidArgumentException('Usuario de acceso inválido');
+    $ttlSeconds=max(60,min(1800,$ttlSeconds));
+    $_SESSION['hache_portal_bootstrap']=['user_id'=>$userId,'expires_at'=>time()+$ttlSeconds];
+}
+
+function auth_portal_bootstrap_active(?string $userId=null): bool
+{
+    $grant=$_SESSION['hache_portal_bootstrap']??null;
+    if(!is_array($grant))return false;
+    $expiresAt=(int)($grant['expires_at']??0);
+    $grantedUser=trim((string)($grant['user_id']??''));
+    if($expiresAt<time()||$grantedUser===''){unset($_SESSION['hache_portal_bootstrap']);return false;}
+    if($userId!==null&&$grantedUser!==trim($userId))return false;
+    return true;
+}
+
+function auth_portal_bootstrap_clear(): void
+{
+    unset($_SESSION['hache_portal_bootstrap']);
 }
 
 function auth_csrf_token(): string
@@ -188,7 +212,7 @@ function auth_active_sede_clave(): string
         $own = strtoupper(trim((string)($u['sede_clave'] ?? '')));
         return in_array($own, ['MONTEVERDE','PALAPAS'], true) ? $own : 'MONTEVERDE';
     }
-    $active = strtoupper(trim((string)($u['sede_activa'] ?? 'MONTEVERDE')));
+    $active = strtoupper(trim((string)($u['sede_activa']??'MONTEVERDE')));
     return in_array($active, ['MONTEVERDE','PALAPAS'], true) ? $active : 'MONTEVERDE';
 }
 

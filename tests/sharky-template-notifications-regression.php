@@ -17,7 +17,7 @@ expect_template(is_string($helper)&&is_string($registrationNotifier)&&is_string(
 
 $templates=[
     'hache_pago_confirmado',
-    'hache_inscripcion_confirmada_mx',
+    'hache_registro_recibido_portal_mx',
     'hache_inicio_curso',
     'hache_clase_cancelada',
     'hache_reposicion_confirmada',
@@ -29,21 +29,26 @@ $templates=[
 foreach($templates as $template){
     expect_template(str_contains($helper,"'{$template}'"),"Falta registrar la plantilla {$template}");
 }
-expect_template(substr_count($helper,"_mx';")===2,'Solo inscripción confirmada e inscripciones abiertas deben usar el sufijo _mx');
+expect_template(substr_count($helper,"_mx';")===2,'Solo registro recibido e inscripciones abiertas deben usar el sufijo _mx');
 expect_template(str_contains($helper,"HACHE_SHARKY_TEMPLATE_LANGUAGE_MX = 'es_MX'"),'Las plantillas deben enviarse como Spanish (MEX)');
 expect_template(str_contains($helper,"'type'=>'template'"),'El payload debe usar el tipo template de WhatsApp');
-expect_template(str_contains($helper,"\$template['components']=[['type'=>'body','parameters'=>\$parameters]]"),'Las variables deben viajar como parámetros del cuerpo');
+expect_template(str_contains($helper,"'type'=>'body','parameters'=>\$parameters"),'Las variables deben viajar como parámetros del cuerpo');
+expect_template(str_contains($helper,"'sub_type'=>'url'"),'El registro debe soportar botón URL dinámico');
+expect_template(str_contains($helper,"'index'=>'0'"),'El acceso al portal debe usar el primer botón de la plantilla');
 expect_template(str_contains($helper,'hache_sharky_outbox_enqueue_raw'),'Las plantillas deben pasar por el outbox cifrado/idempotente');
 expect_template(str_contains($helper,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'"),'El envío debe respetar el kill switch de Sharky');
 
-expect_template(str_contains($helper,'function hache_sharky_notify_enrollment_confirmed'),'Debe existir el disparador de inscripción confirmada');
-expect_template(str_contains($helper,'HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED'),'La inscripción debe usar la plantilla canónica con sufijo _mx');
+expect_template(str_contains($helper,'function hache_sharky_notify_enrollment_confirmed'),'Debe existir el disparador de registro recibido');
+expect_template(str_contains($helper,"HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED = 'hache_registro_recibido_portal_mx'"),'El registro debe usar la plantilla aprobada de acceso al portal');
 expect_template(str_contains($helper,"\$explicit=hache_sharky_template_text((string)(\$detail['horario']??''),80)"),'El horario explícito del evento debe tener prioridad sobre el horario regular del alumno');
 expect_template(str_contains($helper,"\$courseStart=trim((string)(\$detail['curso_inicio']??''))"),'La inscripción intensiva debe usar la fecha del curso seleccionado');
 expect_template(str_contains($helper,"'enrollment-confirmed|student:'.\$studentId.'|event:'.hash('sha256',\$eventScope)"),'La deduplicación debe distinguir cada evento de inscripción');
 expect_template(str_contains($helper,"==='BAJA'"),'Una alta histórica/inactiva no debe recibir confirmación de inscripción');
 expect_template(str_contains($helper,'curso_intensivo_alumnos'),'La inscripción intensiva debe poder resolver el horario desde su relación de curso');
 expect_template(str_contains($helper,'hache_sharky_enrollment_date_text'),'La fecha de inicio debe convertirse a texto apto para la plantilla');
+expect_template(str_contains($helper,'hache_portal_access_issue($pdo,$studentId)'),'El registro debe emitir un acceso de portal de un solo uso');
+expect_template(str_contains($helper,"'PORTAL_ACCESS_UNAVAILABLE'"),'No debe enviarse un botón roto si el acceso seguro no puede emitirse');
+expect_template(str_contains($helper,"(string)\$portalAccess['token']"),'El botón URL dinámico debe recibir solo el token como sufijo');
 
 expect_template(str_contains($registrationNotifier,'function hache_notificar_nueva_inscripcion_whatsapp'),'El notificador canónico de altas debe integrar WhatsApp');
 expect_template(str_contains($registrationNotifier,'hache_sharky_notify_enrollment_confirmed($pdo,$alumno,$detalle)'),'El alta debe delegar la plantilla al helper idempotente');
@@ -52,6 +57,8 @@ expect_template(str_contains($publicRegistration,'hache_notificar_nueva_inscripc
 $publicCommitPos=strpos($publicRegistration,'$pdo->commit();');
 $publicNotifyPos=strpos($publicRegistration,'hache_notificar_nueva_inscripcion($alertaAlumno,$tipo,$alertaDetalle)');
 expect_template($publicCommitPos!==false&&$publicNotifyPos!==false&&$publicNotifyPos>$publicCommitPos,'La web solo debe disparar la confirmación después de guardar el registro');
+expect_template(str_contains($publicRegistration,'La confirmación y el acceso al portal se enviarán al número que registraste.'),'La web debe derivar el acceso al WhatsApp registrado');
+expect_template(!str_contains($publicRegistration,'Contraseña temporal:'),'La web no debe exponer la contraseña temporal después del registro');
 
 expect_template(str_contains($helper,"'payment-confirmed|folio:'.\$folio"),'La confirmación de pago debe deduplicarse por folio');
 expect_template(str_contains($helper,"a.nombre,a.whatsapp"),'La confirmación debe resolver nombre y WhatsApp desde el alumno registrado');

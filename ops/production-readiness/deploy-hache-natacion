@@ -208,6 +208,10 @@ apply_release_migrations() {
   if [[ -f "$centro_pendientes" ]]; then
     php "$centro_pendientes"
   fi
+  local portal_access="$REPO/bin/migrate-portal-access.php"
+  if [[ -f "$portal_access" ]]; then
+    php "$portal_access"
+  fi
 }
 
 deploy_sha() {

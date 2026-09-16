@@ -139,16 +139,9 @@ function hache_sharky_post72_registration_message(array $actionResult, array $bu
         $lines[] = 'Mantén pulsada la CLABE para copiarla.';
     }
 
-    $username = trim((string)($result['username'] ?? ''));
-    $temporaryPassword = trim((string)($result['temporary_password'] ?? ''));
-    if ($username !== '' && $temporaryPassword !== '') {
-        $lines[] = '';
-        $lines[] = '🔐 Acceso al portal Hache Natación';
-        $lines[] = '• Portal: https://hnatacion.com/index.php';
-        $lines[] = '• Usuario: '.$username;
-        $lines[] = '• Contraseña temporal: '.$temporaryPassword;
-        $lines[] = '• Cámbiala al iniciar sesión.';
-    }
+    $lines[] = '';
+    $lines[] = '🔐 Te enviaremos también el acceso seguro al portal por WhatsApp.';
+    $lines[] = 'Usa el botón “Abrir PORTAL” del mensaje de confirmación para crear tu contraseña.';
 
     return implode("\n", $lines);
 }
