@@ -40,7 +40,7 @@ pendientes_ok(centro_pendientes_parse_origen_intensivo('invalido') === null, 'Un
 $intensivoAlumno1 = centro_pendientes_identidad('SALDO_INTENSIVO_PENDIENTE', 'CURSO_INTENSIVO_ALUMNO', centro_pendientes_origen_intensivo('curso-1', 'alumno-1'), '2026-09-01', '2026-09-21');
 $intensivoAlumno2 = centro_pendientes_identidad('SALDO_INTENSIVO_PENDIENTE', 'CURSO_INTENSIVO_ALUMNO', centro_pendientes_origen_intensivo('curso-1', 'alumno-2'), '2026-09-01', '2026-09-21');
 pendientes_ok($intensivoAlumno1 !== $intensivoAlumno2, 'Dos alumnos del mismo intensivo deben conservar pendientes independientes');
-pendientes_ok(centro_pendientes_url('SALDO_INTENSIVO_PENDIENTE', 'alumno-1', 'curso-1') === '/pagos.php?alumno_id=alumno-1&curso_intensivo_id=curso-1', 'El saldo intensivo debe abrir el alumno y curso correctos en pagos');
+pendientes_ok(centro_pendientes_url('SALDO_INTENSIVO_PENDIENTE', 'alumno-1', 'curso-1') === '/pagos.php?alumno_id=alumno-1&tipo=INTENSIVO&curso_intensivo_id=curso-1', 'El saldo intensivo debe abrir directamente el tipo, alumno y curso correctos en pagos');
 
 // Atender no toca la causa y conserva responsable, fecha y nota.
 $causa = ['identidad'=>$septiembre, 'tipo'=>'MENSUALIDAD_REGULAR_SIN_COBERTURA', 'origen_id'=>'alumno-1'];
