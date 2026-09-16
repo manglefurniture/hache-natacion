@@ -66,17 +66,16 @@ function hache_sharky_whatsapp_extract_echoes(array $payload): array
                 $rawText=trim((string)($echo['text']['body']??''));
                 $type=trim((string)($echo['type']??($rawText!==''?'text':'')));
                 $timestamp=(string)($echo['timestamp']??'');$timestampMs=ctype_digit($timestamp)?((int)$timestamp*1000):0;
-                $exactCommand=hache_sharky_human_operator_command(['type'=>$type,'text'=>$rawText]);
-                $command=$exactCommand??hache_sharky_whatsapp_echo_operator_command(['type'=>$type,'text'=>$rawText]);
+                $command=hache_sharky_human_operator_command(['type'=>$type,'text'=>$rawText]);
+                if($command===null)$command=hache_sharky_whatsapp_echo_operator_command(['type'=>$type,'text'=>$rawText]);
                 $out[]=[
                     'id'=>$id,
                     'to'=>$to,
                     'phone_number_id'=>$phoneId,
                     'type'=>$type,
-                    // A pure command is control-plane only. If the trigger is
-                    // embedded in a real human message, preserve that message as
-                    // HUMANO_HACHE while carrying the control separately.
-                    'text'=>$exactCommand===null?mb_substr($rawText,0,700):'',
+                    // Takeover controls stay in the control plane and do not
+                    // become transcript/learning content.
+                    'text'=>$command===null?mb_substr($rawText,0,700):'',
                     'operator_command'=>$command??'',
                     'timestamp_ms'=>$timestampMs,
                 ];
