@@ -27,7 +27,7 @@ function portal_access_schema_ready(PDO $pdo): bool
         if(array_column($index->fetchAll(PDO::FETCH_ASSOC),'column_name')!==$columns)return false;
     }
 
-    $fk=$pdo->prepare("SELECT referenced_table_name,delete_rule FROM information_schema.key_column_usage k JOIN information_schema.referential_constraints r ON r.constraint_schema=k.constraint_schema AND r.constraint_name=k.constraint_name AND r.table_name=k.table_name WHERE k.table_schema=DATABASE() AND k.table_name='portal_access_tokens' AND k.constraint_name='fk_portal_access_user' LIMIT 1");
+    $fk=$pdo->prepare("SELECT k.referenced_table_name,r.delete_rule FROM information_schema.key_column_usage k JOIN information_schema.referential_constraints r ON r.constraint_schema=k.constraint_schema AND r.constraint_name=k.constraint_name AND r.table_name=k.table_name WHERE k.table_schema=DATABASE() AND k.table_name='portal_access_tokens' AND k.constraint_name='fk_portal_access_user' LIMIT 1");
     $fk->execute();$row=$fk->fetch(PDO::FETCH_ASSOC);
     return is_array($row)&&($row['referenced_table_name']??'')==='usuarios'&&($row['delete_rule']??'')==='CASCADE';
 }
