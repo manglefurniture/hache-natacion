@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const helper=fs.readFileSync(new URL('../config/periodos-financieros.php',import.meta.url),'utf8');
 const correctionRules=fs.readFileSync(new URL('../config/finanzas-correcciones.php',import.meta.url),'utf8');
@@ -57,6 +59,15 @@ assert.doesNotMatch(internal,/\b(?:INSERT|UPDATE|DELETE|REPLACE)\s+(?:INTO\s+)?(
 assert.match(correctionRules,/\$estado==='PENDIENTE'/);
 assert.match(correctionRules,/\$sinCobro && \$sinPagos/);
 assert.match(correctionRules,/\$continuidad \|\| \$intensivoSolapado/);
+const correctionRulesPath=fileURLToPath(new URL('../config/finanzas-correcciones.php',import.meta.url));
+const ruleProgram=`require ${JSON.stringify(correctionRulesPath)}; $cases=[
+ ['obligacion_estado'=>'PENDIENTE','importe_cobrado'=>null,'pagos_totales'=>0,'observacion'=>'Continuidad desde intensivo: prueba','intensivo_solapado'=>0],
+ ['obligacion_estado'=>'PENDIENTE','importe_cobrado'=>null,'pagos_totales'=>0,'observacion'=>'','intensivo_solapado'=>1],
+ ['obligacion_estado'=>'PENDIENTE','importe_cobrado'=>null,'pagos_totales'=>1,'observacion'=>'Continuidad desde intensivo: prueba','intensivo_solapado'=>1],
+ ['obligacion_estado'=>'PAGADA','importe_cobrado'=>'1200.00','pagos_totales'=>1,'observacion'=>'Continuidad desde intensivo: prueba','intensivo_solapado'=>1],
+ ['obligacion_estado'=>'PENDIENTE','importe_cobrado'=>null,'pagos_totales'=>0,'observacion'=>'Alta regular','intensivo_solapado'=>0],
+]; foreach($cases as $c) echo finanzas_mensualidad_corregible($c)?'1':'0';`;
+assert.equal(execFileSync('php',['-r',ruleProgram],{encoding:'utf8'}).trim(),'11000','solo casos pendientes, sin movimientos y con evidencia de intensivo deben ser corregibles');
 assert.match(correctionApi,/auth_require\(\['ADMIN'\]\)/);
 assert.match(correctionApi,/mb_strlen\(\$motivo\)<5/);
 assert.match(correctionApi,/SELECT id FROM pagos WHERE mensualidad_id=:id FOR UPDATE/);
