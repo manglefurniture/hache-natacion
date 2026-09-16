@@ -75,7 +75,7 @@ assert.match(correctionApi,/finanzas_mensualidad_corregible\(\$m\)/);
 assert.match(correctionApi,/hache_admin_history\([\s\S]*'MENSUALIDAD'[\s\S]*'MENSUALIDAD_CORREGIDA'/);
 assert.match(correctionApi,/DELETE FROM mensualidades WHERE id=:id[\s\S]*estado='PENDIENTE'[\s\S]*importe_cobrado IS NULL[\s\S]*NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=:pid\)/);
 assert.match(internal,/\(\$viewer\['rol'\]\?\?'\'\)==='ADMIN'&&finanzas_mensualidad_corregible\(\$r\)/);
-assert.match(internal,/COUNT\(p\.id\) pagos_totales/);
+assert.match(internal,/\(SELECT COUNT\(\*\) FROM pagos px WHERE px\.mensualidad_id=m\.id\) pagos_totales/);
 assert.match(internal,/intensivo_solapado/);
 
 assert.match(internalPage,/Saldo = obligación registrada/);
