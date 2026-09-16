@@ -23,10 +23,20 @@ function hache_sharky_inbox_encrypt(array $event): array
     return ['ciphertext'=>base64_encode($cipher),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag)];
 }
 
+function hache_sharky_inbox_arrival_us(): int
+{
+    static $last=0;
+    $now=(int)floor(microtime(true)*1000000);
+    if($now<=$last)$now=$last+1;
+    $last=$now;
+    return $now;
+}
+
 function hache_sharky_inbox_store(PDO $pdo,array $event): bool
 {
     if(!hache_sharky_orchestrator_store_ready($pdo))return false;
     $id=mb_substr(trim((string)($event['id']??'')),0,191);$contact=hache_sharky_inbox_contact($event);if($id===''||$contact==='')return false;
+    if(!isset($event['_inbox_arrival_us']))$event['_inbox_arrival_us']=hache_sharky_inbox_arrival_us();
     try{
         $sealed=hache_sharky_inbox_encrypt($event);$type=mb_substr((string)($event['kind']??$event['type']??'message'),0,30);$hash=hache_sharky_orchestrator_contact_hash($contact);
         $st=$pdo->prepare('INSERT IGNORE INTO sharky_message_receipts(message_id,contact_hash,message_type,payload_ciphertext,payload_iv,payload_tag,attempt_count) VALUES(:m,:c,:t,:p,:iv,:tag,0)');
