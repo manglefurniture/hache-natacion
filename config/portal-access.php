@@ -70,14 +70,16 @@ function hache_portal_access_consume(PDO $pdo,string $token): array|false
     }
 }
 
-function hache_portal_access_revoke_user(PDO $pdo,string $userId): void
+function hache_portal_access_revoke_user(PDO $pdo,string $userId): bool
 {
     $userId=trim($userId);
-    if($userId===''||!hache_portal_access_schema_ready($pdo))return;
+    if($userId===''||!hache_portal_access_schema_ready($pdo))return false;
     try {
         $st=$pdo->prepare("UPDATE portal_access_tokens SET consumed_at=COALESCE(consumed_at,NOW()) WHERE user_id=:u");
         $st->execute([':u'=>$userId]);
+        return true;
     } catch(Throwable $e) {
         error_log('[portal-access] No se pudieron revocar accesos de portal.');
+        return false;
     }
 }
