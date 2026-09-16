@@ -46,10 +46,10 @@ portal_expect(str_contains($template,"HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED
 portal_expect(str_contains($template,"'sub_type'=>'url'")&&str_contains($template,"'index'=>'0'"),'La plantilla debe alimentar el botón URL dinámico.');
 portal_expect(str_contains($template,'hache_portal_access_issue($pdo,$studentId)'),'Cada aviso WhatsApp debe emitir su acceso seguro.');
 portal_expect(str_contains($registration,'hache_portal_access_issue($pdo,$aid)'),'El registro web debe crear un acceso seguro independiente del envío por WhatsApp.');
-portal_expect(str_contains($registration,"$portalAccessUrl='/acceso.php?t='"),'El registro web debe ofrecer un fallback directo al portal.');
+portal_expect(str_contains($registration,"\$portalAccessUrl='/acceso.php?t='"),'El registro web debe ofrecer un fallback directo al portal.');
 portal_expect(str_contains($registration,'Abrir PORTAL'),'El fallback web debe ser accionable sin mostrar credenciales.');
 portal_expect(str_contains($registration,"header('Cache-Control: no-store"),'La página que contiene el fallback no debe cachearse.');
-portal_expect(str_contains($registration,'También enviaremos la confirmación y otro acceso seguro a tu WhatsApp.'),'WhatsApp se mantiene como segundo canal de acceso.');
+portal_expect(str_contains($registration,'La confirmación y el acceso al portal se enviarán al número que registraste.'),'WhatsApp se mantiene como segundo canal de acceso.');
 portal_expect(!str_contains($registration,'Contraseña temporal:'),'El registro web no debe mostrar credenciales.');
 portal_expect(str_contains($adminStudents,'hache_notificar_nueva_inscripcion($alumno,$tipoIngreso'),'Un alta manual de admin debe pasar por el mismo notificador canónico.');
 portal_expect(str_contains($deploy,'migrate-portal-access.php'),'El despliegue debe aplicar la migración antes de usar el flujo.');
