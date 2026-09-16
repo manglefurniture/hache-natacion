@@ -55,7 +55,7 @@ assert.match(internalPage,/ultima_fecha_pago/);
 assert.match(internalPage,/Último cobro/);
 assert.match(roadmap,/Decisión P-02 resuelta para el primer incremento/);
 assert.match(roadmap,/Fase 1 \*\*Implementada\*\*/);
-assert.match(roadmap,/Fase 2 \*\*En revisión\*\*/);
+assert.match(roadmap,/Fase 2 \*\*Desplegado\*\*/);
 assert.match(roadmap,/PR #261/);
 
 console.log('financial period regression checks: OK');
