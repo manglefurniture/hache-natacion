@@ -255,11 +255,11 @@ test('las altas y ediciones de alumnos serializan la identidad y revalidan Whats
   }
 });
 
-test('el registro público entrega la contraseña aleatoria una sola vez', () => {
+test('el registro público entrega el acceso por WhatsApp sin exponer credenciales', () => {
   const source = read('public/registro.php');
-  includes('public/registro.php', '$portalPassword=$temp');
-  includes('public/registro.php', 'la contraseña solo se muestra ahora');
-  assert.match(source, /Contraseña temporal:[\s\S]{0,100}\$portalPassword/);
+  includes('public/registro.php', 'La confirmación y el acceso al portal se enviarán al número que registraste.');
+  assert.doesNotMatch(source, /Contraseña temporal:/);
+  assert.doesNotMatch(source, /\$portalPassword\s*=\s*\$temp/);
 });
 
 test('la edición rápida de WhatsApp usa la misma exclusión de identidad', () => {
