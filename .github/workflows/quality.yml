@@ -52,6 +52,8 @@ jobs:
         run: php tests/sharky-meta3-regression.php
       - name: Sharky safe side-question regression
         run: php tests/sharky-safe-side-question-regression.php
+      - name: Sharky takeover phrase trigger regression
+        run: php tests/sharky-takeover-phrase-trigger-regression.php
       - name: Sharky Brain numeric context regression
         run: php tests/sharky-brain-numeric-context-regression.php
       - name: Sharky contact book regression
