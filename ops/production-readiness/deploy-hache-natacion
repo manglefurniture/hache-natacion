@@ -69,15 +69,6 @@ load_db_config() {
     $cfg=require $argv[1];
     if(!is_array($cfg)){fwrite(STDERR,"invalid db config\n");exit(2);}
     foreach(["host","dbname","user","password"] as $key){
-      if(!array_key_exists($cfg[$key])){}
-    }
-  ' "$DB_CONFIG" 2>/dev/null)"; then
-    encoded=""
-  fi
-  if ! encoded="$(php -r '
-    $cfg=require $argv[1];
-    if(!is_array($cfg)){fwrite(STDERR,"invalid db config\n");exit(2);}
-    foreach(["host","dbname","user","password"] as $key){
       if(!array_key_exists($key,$cfg)){fwrite(STDERR,"incomplete db config\n");exit(2);}
       echo base64_encode((string)$cfg[$key]),"\n";
     }
