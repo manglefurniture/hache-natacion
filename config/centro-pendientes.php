@@ -93,7 +93,7 @@ function centro_pendientes_url(string $tipo, string $alumnoId, ?string $cursoInt
         'MENSUALIDAD_REGULAR_SIN_COBERTURA', 'INSCRIPCION_REGULAR_SIN_COBERTURA'
             => '/pagos.php?alumno_id='.rawurlencode($alumnoId),
         'SALDO_INTENSIVO_PENDIENTE'
-            => '/pagos.php?alumno_id='.rawurlencode($alumnoId)
+            => '/pagos.php?alumno_id='.rawurlencode($alumnoId).'&tipo=INTENSIVO'
                 .($cursoIntensivoId !== null && $cursoIntensivoId !== '' ? '&curso_intensivo_id='.rawurlencode($cursoIntensivoId) : ''),
         'REPOSICION_REGULAR_DISPONIBLE' => '/ausencias.php?alerta=reposiciones',
         default => '/dashboard.php',
