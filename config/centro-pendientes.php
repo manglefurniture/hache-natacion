@@ -15,6 +15,7 @@ const CENTRO_PENDIENTES_TIPOS_HABILITADOS = [
     'MENSUALIDAD_REGULAR_SIN_COBERTURA',
     'INSCRIPCION_REGULAR_SIN_COBERTURA',
     'REPOSICION_REGULAR_DISPONIBLE',
+    'SALDO_INTENSIVO_PENDIENTE',
 ];
 
 function centro_pendientes_identidad(string $tipo, string $origenTipo, string $origenId, ?string $periodoInicio = null, ?string $periodoFin = null): string
@@ -26,6 +27,20 @@ function centro_pendientes_identidad(string $tipo, string $origenTipo, string $o
         $periodoInicio ?? '',
         $periodoFin ?? '',
     ]));
+}
+
+function centro_pendientes_origen_intensivo(string $cursoId, string $alumnoId): string
+{
+    return trim($cursoId).':'.trim($alumnoId);
+}
+
+function centro_pendientes_parse_origen_intensivo(string $origenId): ?array
+{
+    $partes = explode(':', trim($origenId), 2);
+    if (count($partes) !== 2 || $partes[0] === '' || $partes[1] === '') {
+        return null;
+    }
+    return ['curso_id'=>$partes[0], 'alumno_id'=>$partes[1]];
 }
 
 function centro_pendientes_mismo_alcance(array $pendiente, string $sedeId): bool
@@ -72,11 +87,14 @@ function centro_pendientes_indizar(array $pendientes): array
     return $porIdentidad;
 }
 
-function centro_pendientes_url(string $tipo, string $alumnoId): string
+function centro_pendientes_url(string $tipo, string $alumnoId, ?string $cursoIntensivoId = null): string
 {
     return match ($tipo) {
         'MENSUALIDAD_REGULAR_SIN_COBERTURA', 'INSCRIPCION_REGULAR_SIN_COBERTURA'
             => '/pagos.php?alumno_id='.rawurlencode($alumnoId),
+        'SALDO_INTENSIVO_PENDIENTE'
+            => '/pagos.php?alumno_id='.rawurlencode($alumnoId).'&tipo=INTENSIVO'
+                .($cursoIntensivoId !== null && $cursoIntensivoId !== '' ? '&curso_intensivo_id='.rawurlencode($cursoIntensivoId) : ''),
         'REPOSICION_REGULAR_DISPONIBLE' => '/ausencias.php?alerta=reposiciones',
         default => '/dashboard.php',
     };
@@ -88,6 +106,7 @@ function centro_pendientes_descripcion_tipo(string $tipo): string
         'MENSUALIDAD_REGULAR_SIN_COBERTURA' => 'Mensualidad regular sin cobertura',
         'INSCRIPCION_REGULAR_SIN_COBERTURA' => 'Inscripción regular sin cobertura',
         'REPOSICION_REGULAR_DISPONIBLE' => 'Reposición regular disponible',
+        'SALDO_INTENSIVO_PENDIENTE' => 'Saldo de intensivo pendiente',
         default => 'Pendiente administrativo',
     };
 }
@@ -165,6 +184,44 @@ function centro_pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sed
         }
     }
 
+    $intensivos = $pdo->prepare("SELECT ci.id curso_id,cia.alumno_id,a.nombre,ci.fecha_inicio,ci.fecha_fin,ci.precio,
+            COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0) pagado_valido
+        FROM curso_intensivo_alumnos cia
+        INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
+        INNER JOIN alumnos a ON a.id=cia.alumno_id
+        LEFT JOIN pagos p ON p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id AND p.tipo='INTENSIVO'
+        WHERE ci.sede_id=:sede
+          AND ci.estado IN ('PROGRAMADO','EN_CURSO','TERMINADO')
+        GROUP BY ci.id,cia.alumno_id,a.nombre,ci.fecha_inicio,ci.fecha_fin,ci.precio
+        HAVING COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0)+0.009<ci.precio
+        ORDER BY ci.fecha_inicio,a.nombre,ci.id,cia.alumno_id");
+    $intensivos->execute([':sede'=>$sedeId]);
+    foreach ($intensivos as $intensivo) {
+        $cursoId = (string)$intensivo['curso_id'];
+        $alumnoId = (string)$intensivo['alumno_id'];
+        $total = round((float)$intensivo['precio'], 2);
+        $pagado = round((float)$intensivo['pagado_valido'], 2);
+        $saldo = max(0.0, round($total - $pagado, 2));
+        centro_pendientes_agregar($pendientes, [
+            'tipo' => 'SALDO_INTENSIVO_PENDIENTE',
+            'origen_tipo' => 'CURSO_INTENSIVO_ALUMNO',
+            'origen_id' => centro_pendientes_origen_intensivo($cursoId, $alumnoId),
+            'alumno_id' => $alumnoId,
+            'alumno_nombre' => (string)$intensivo['nombre'],
+            'sede_id' => $sedeId,
+            'sede_nombre' => $sedeNombre,
+            'periodo_inicio' => (string)$intensivo['fecha_inicio'],
+            'periodo_fin' => (string)$intensivo['fecha_fin'],
+            'fecha_referencia' => (string)$intensivo['fecha_inicio'],
+            'importe_total' => $total,
+            'importe_pagado' => $pagado,
+            'saldo' => $saldo,
+            'explicacion' => 'Saldo pendiente de $'.number_format($saldo, 2, '.', ',').' MXN; pagos válidos acumulados $'.number_format($pagado, 2, '.', ',').' de $'.number_format($total, 2, '.', ',').' MXN.',
+            'href' => centro_pendientes_url('SALDO_INTENSIVO_PENDIENTE', $alumnoId, $cursoId),
+            'causa_activa' => true,
+        ]);
+    }
+
     $reposiciones = $pdo->prepare("SELECT rr.id,rr.alumno_id,rr.created_at,a.nombre
         FROM reposiciones_regulares rr
         INNER JOIN alumnos a ON a.id=rr.alumno_id
@@ -209,6 +266,23 @@ function centro_pendientes_causa_activa(PDO $pdo, array $pendiente, string $sede
             WHERE rr.id=:id AND rr.estado='DISPONIBLE' AND a.sede_id=:sede
             LIMIT 1");
         $st->execute([':id'=>$origenId, ':sede'=>$sedeId]);
+        return (bool)$st->fetchColumn();
+    }
+    if ($tipo === 'SALDO_INTENSIVO_PENDIENTE') {
+        $origen = centro_pendientes_parse_origen_intensivo($origenId);
+        if (!$origen || ((string)($pendiente['alumno_id'] ?? '') !== '' && (string)$pendiente['alumno_id'] !== $origen['alumno_id'])) {
+            return false;
+        }
+        $st = $pdo->prepare("SELECT 1
+            FROM curso_intensivo_alumnos cia
+            INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
+            LEFT JOIN pagos p ON p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id AND p.tipo='INTENSIVO'
+            WHERE ci.id=:curso AND cia.alumno_id=:alumno AND ci.sede_id=:sede
+              AND ci.estado IN ('PROGRAMADO','EN_CURSO','TERMINADO')
+            GROUP BY ci.id,cia.alumno_id,ci.precio
+            HAVING COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0)+0.009<ci.precio
+            LIMIT 1");
+        $st->execute([':curso'=>$origen['curso_id'], ':alumno'=>$origen['alumno_id'], ':sede'=>$sedeId]);
         return (bool)$st->fetchColumn();
     }
 

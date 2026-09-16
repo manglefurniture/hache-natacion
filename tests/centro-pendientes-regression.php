@@ -31,6 +31,17 @@ $sinDuplicados = centro_pendientes_indizar([
 ]);
 pendientes_ok(count($sinDuplicados) === 1, 'La misma causa consultada dos veces no debe duplicarse');
 
+// La obligación de intensivo pertenece al par alumno + curso. Dos alumnos del
+// mismo curso no pueden compartir identidad y el enlace conserva ambos datos.
+$origenIntensivo = centro_pendientes_origen_intensivo('curso-1', 'alumno-1');
+pendientes_ok($origenIntensivo === 'curso-1:alumno-1', 'El origen del saldo intensivo debe conservar curso y alumno');
+pendientes_ok(centro_pendientes_parse_origen_intensivo($origenIntensivo) === ['curso_id'=>'curso-1','alumno_id'=>'alumno-1'], 'El origen del saldo intensivo debe poder revalidarse');
+pendientes_ok(centro_pendientes_parse_origen_intensivo('invalido') === null, 'Un origen intensivo incompleto no debe revalidarse');
+$intensivoAlumno1 = centro_pendientes_identidad('SALDO_INTENSIVO_PENDIENTE', 'CURSO_INTENSIVO_ALUMNO', centro_pendientes_origen_intensivo('curso-1', 'alumno-1'), '2026-09-01', '2026-09-21');
+$intensivoAlumno2 = centro_pendientes_identidad('SALDO_INTENSIVO_PENDIENTE', 'CURSO_INTENSIVO_ALUMNO', centro_pendientes_origen_intensivo('curso-1', 'alumno-2'), '2026-09-01', '2026-09-21');
+pendientes_ok($intensivoAlumno1 !== $intensivoAlumno2, 'Dos alumnos del mismo intensivo deben conservar pendientes independientes');
+pendientes_ok(centro_pendientes_url('SALDO_INTENSIVO_PENDIENTE', 'alumno-1', 'curso-1') === '/pagos.php?alumno_id=alumno-1&tipo=INTENSIVO&curso_intensivo_id=curso-1', 'El saldo intensivo debe abrir directamente el tipo, alumno y curso correctos en pagos');
+
 // Atender no toca la causa y conserva responsable, fecha y nota.
 $causa = ['identidad'=>$septiembre, 'tipo'=>'MENSUALIDAD_REGULAR_SIN_COBERTURA', 'origen_id'=>'alumno-1'];
 $copiaCausa = $causa;
@@ -49,6 +60,7 @@ $puedeMostrarAtender = static fn (string $estadoEfectivo, bool $causaActiva, boo
 pendientes_ok($puedeMostrarAtender('PENDIENTE', true, true), 'Un caso PENDIENTE con causa activa puede mostrar la acción ATENDER');
 pendientes_ok(!$puedeMostrarAtender('ATENDIDO', true, true), 'Un caso ATENDIDO no puede volver a mostrar la acción ATENDER');
 pendientes_ok(!$puedeMostrarAtender('RESUELTO', true, true), 'Un caso RESUELTO no puede mostrar la acción ATENDER');
+pendientes_ok(is_string($vista) && !str_contains($vista, 'no incluye saldos de intensivos'), 'La vista no debe seguir declarando diferidos los saldos de intensivos');
 
 // Una resolución solo es coherente cuando la fuente confirma que ya no aplica.
 pendientes_ok(!centro_pendientes_puede_resolver(true), 'No puede resolverse mientras la causa original siga vigente');
@@ -61,19 +73,29 @@ pendientes_ok(centro_pendientes_estado_efectivo($atencion, false) === 'RESUELTO'
 pendientes_ok(centro_pendientes_estado_efectivo($atencion, true) === 'ATENDIDO', 'Una invalidación debe volver a hacer aplicable el asunto sin inventar pagos');
 pendientes_ok(centro_pendientes_estado_efectivo(['estado'=>'RESUELTO'], true) === 'PENDIENTE', 'Una causa reactivada tras una resolución previa debe volver a requerir atención');
 
-// Ningún pendiente puede escapar de su sede y los tipos que requieren otras
-// fases no pueden aparecer por accidente en esta primera versión.
+// Ningún pendiente puede escapar de su sede. F2 habilita ahora el saldo de
+// intensivo; los demás tipos diferidos siguen fuera hasta su fase correspondiente.
 pendientes_ok(centro_pendientes_mismo_alcance(['sede_id'=>'sede-monteverde'], 'sede-monteverde'), 'La sede propia debe poder consultar su pendiente');
 pendientes_ok(!centro_pendientes_mismo_alcance(['sede_id'=>'sede-monteverde'], 'sede-palapas'), 'La sede ajena no debe poder consultar ni gestionar el pendiente');
 pendientes_ok(CENTRO_PENDIENTES_TIPOS_HABILITADOS === [
     'MENSUALIDAD_REGULAR_SIN_COBERTURA',
     'INSCRIPCION_REGULAR_SIN_COBERTURA',
     'REPOSICION_REGULAR_DISPONIBLE',
-], 'Solo los tres tipos con regla existente deben quedar habilitados');
+    'SALDO_INTENSIVO_PENDIENTE',
+], 'Solo los cuatro tipos con regla disponible deben quedar habilitados');
+
+// La fuente de intensivos reutiliza la obligación registrada en el curso y solo
+// resta pagos VALIDOS del mismo alumno + curso, incluidos abonos múltiples.
+$fuentes = pendientes_function_source('centro_pendientes_fuentes_activas');
+pendientes_ok(str_contains($fuentes, "p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id AND p.tipo='INTENSIVO'"), 'El saldo intensivo debe aislar pagos por alumno + curso');
+pendientes_ok(str_contains($fuentes, "CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END"), 'Solo pagos VALIDOS pueden reducir el saldo intensivo');
+pendientes_ok(str_contains($fuentes, "+0.009<ci.precio"), 'El pendiente intensivo debe desaparecer al liquidar el precio registrado');
+$revalidacion = pendientes_function_source('centro_pendientes_causa_activa');
+pendientes_ok(str_contains($revalidacion, "SALDO_INTENSIVO_PENDIENTE"), 'La resolución debe revalidar también el saldo intensivo');
+pendientes_ok(str_contains($revalidacion, "CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END"), 'La revalidación intensiva debe ignorar pagos invalidados');
 
 // La carga de fuentes y la rama GET son de lectura: no crean ni modifican pagos,
 // asistencias, alumnos, inscripciones o reposiciones al abrir o recargar la vista.
-$fuentes = pendientes_function_source('centro_pendientes_fuentes_activas');
 pendientes_ok(!preg_match('/\b(?:INSERT|UPDATE|DELETE)\b/i', $fuentes), 'Consultar las fuentes de pendientes debe ser solo lectura');
 $api = file_get_contents(__DIR__.'/../api/pendientes.php');
 pendientes_ok(is_string($api), 'La API del centro de pendientes debe existir');
