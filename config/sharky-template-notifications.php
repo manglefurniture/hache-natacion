@@ -7,7 +7,7 @@ require_once __DIR__.'/portal-access.php';
 
 const HACHE_SHARKY_TEMPLATE_LANGUAGE_MX = 'es_MX';
 const HACHE_SHARKY_TEMPLATE_PAYMENT_CONFIRMED = 'hache_pago_confirmado';
-const HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED = 'hache_registro_recibido_mx';
+const HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED = 'hache_registro_recibido_portal_mx';
 const HACHE_SHARKY_TEMPLATE_COURSE_START = 'hache_inicio_curso';
 const HACHE_SHARKY_TEMPLATE_CLASS_CANCELLED = 'hache_clase_cancelada';
 const HACHE_SHARKY_TEMPLATE_MAKEUP_CONFIRMED = 'hache_reposicion_confirmada';
