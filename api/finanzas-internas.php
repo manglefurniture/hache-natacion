@@ -4,7 +4,8 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/periodos-financieros.php';
-auth_require(['ADMIN','VERIFICADOR']);
+require_once __DIR__.'/../config/finanzas-correcciones.php';
+$viewer=auth_require(['ADMIN','VERIFICADOR']);
 $config=require __DIR__.'/../config/database.php';
 
 function finanzas_out(array $data,int $status=200):never
@@ -67,6 +68,7 @@ function finanzas_normalizar_obligacion(array $r,string $tipo):array
         'pagos_invalidados'=>(int)$r['pagos_invalidados'],
         'ultima_fecha_pago'=>$r['ultima_fecha_pago']!==null?(string)$r['ultima_fecha_pago']:null,
         'metodos'=>$r['metodos']!==null&&$r['metodos']!==''?explode(',',(string)$r['metodos']):[],
+        'correccion_disponible'=>false,
     ];
 }
 
@@ -110,7 +112,9 @@ try{
                  CONCAT(LPAD(m.mes,2,'0'),'/',m.anio) referencia,
                  CONCAT(m.periodo_inicio,' → ',m.periodo_fin) periodo_obligacion,
                  m.periodo_inicio fecha_referencia,
-                 m.importe_a_cobrar total_obligacion,
+                 m.importe_a_cobrar total_obligacion,m.importe_cobrado,m.estado obligacion_estado,m.observacion,
+                 (SELECT COUNT(*) FROM pagos px WHERE px.mensualidad_id=m.id) pagos_totales,
+                 EXISTS(SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=m.alumno_id AND ci.sede_id=m.sede_id AND ci.fecha_inicio<=m.periodo_fin AND ci.fecha_fin>=m.periodo_inicio) intensivo_solapado,
                  COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0) pagado_valido,
                  COALESCE(SUM(p.estado='VALIDO'),0) pagos_validos,
                  COALESCE(SUM(p.estado='INVALIDADO'),0) pagos_invalidados,
@@ -120,9 +124,13 @@ try{
           INNER JOIN alumnos a ON a.id=m.alumno_id
           LEFT JOIN pagos p ON p.mensualidad_id=m.id AND p.tipo='MENSUALIDAD'
           WHERE m.sede_id=:s AND m.mes=:mes AND m.anio=:anio
-          GROUP BY m.id,m.alumno_id,a.nombre,m.mes,m.anio,m.periodo_inicio,m.periodo_fin,m.importe_a_cobrar";
+          GROUP BY m.id,m.alumno_id,a.nombre,m.mes,m.anio,m.periodo_inicio,m.periodo_fin,m.importe_a_cobrar,m.importe_cobrado,m.estado,m.observacion";
     $st=$pdo->prepare($sql);$st->execute([':s'=>$sede['id'],':mes'=>$mes,':anio'=>$anio]);
-    foreach($st->fetchAll() as $r)$obligaciones[]=finanzas_normalizar_obligacion($r,'MENSUALIDAD');
+    foreach($st->fetchAll() as $r){
+        $o=finanzas_normalizar_obligacion($r,'MENSUALIDAD');
+        $o['correccion_disponible']=($viewer['rol']??'')==='ADMIN'&&finanzas_mensualidad_corregible($r);
+        $obligaciones[]=$o;
+    }
 
     $sql="SELECT i.id obligacion_id,i.alumno_id,a.nombre alumno,
                  DATE_FORMAT(i.fecha,'%d/%m/%Y') referencia,
