@@ -45,7 +45,7 @@ portal_expect(str_contains($passwordPage,"Entraste desde el acceso seguro que en
 portal_expect(str_contains($template,"HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED = 'hache_registro_recibido_portal_mx'"),'Debe usarse la plantilla aprobada por Meta con URL dinámica.');
 portal_expect(str_contains($template,"'sub_type'=>'url'")&&str_contains($template,"'index'=>'0'"),'La plantilla debe alimentar el botón URL dinámico.');
 portal_expect(str_contains($template,'hache_portal_access_issue($pdo,$studentId)'),'Cada aviso WhatsApp debe emitir su acceso seguro.');
-portal_expect(str_contains($template,"(string)$portalAccess['token']"),'El botón dinámico debe recibir únicamente el token como sufijo de la URL aprobada.');
+portal_expect(str_contains($template,"(string)\$portalAccess['token']"),'El botón dinámico debe recibir únicamente el token como sufijo de la URL aprobada.');
 portal_expect(str_contains($registration,'hache_portal_access_issue($pdo,$aid)'),'El registro web debe crear un acceso seguro independiente del envío por WhatsApp.');
 portal_expect(str_contains($registration,"\$portalAccessUrl='/acceso.php?t='"),'El registro web debe ofrecer un fallback directo al portal.');
 portal_expect(str_contains($registration,'Abrir PORTAL'),'El fallback web debe ser accionable sin mostrar credenciales.');
