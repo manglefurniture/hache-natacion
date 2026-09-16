@@ -4,7 +4,7 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Última base comprobada para esta actualización:** `main`, commit `d096e8457f8da8c00eadf3ed5ee61a8f3cff6ed0`.  
+**Última base comprobada para esta actualización:** `main`, commit `c68c72270b369de5c6e4cdda829a1a6e9d1daa90`.  
 **Estado del roadmap:** Fase 1 **Implementada**; Fase 2 **En revisión**; fases 3–9 **Pendientes**.  
 **Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
@@ -77,7 +77,7 @@ Los enlaces siguientes son rutas relativas del repositorio. El esquema inicial e
 | Ajustes e historial financiero | Existente: edición de importe, método y fecha con motivo; la edición registra antes/después en `historial`. La invalidación conserva el pago y recalcula obligaciones relacionadas. | [editar-pago](../api/editar-pago.php), [invalidar-pago](../api/invalidar-pago.php). | No imponer que toda corrección deba borrar o reemplazar el pago: hay operaciones vigentes diferentes. |
 | Periodos, reparto y cierres | Existente: periodos financieros por sede, totales por concepto, reparto desde configuración de sede y cierres guardados. | [periodos-financieros](../config/periodos-financieros.php), [cierres-mensuales](../api/cierres-mensuales.php), [resumen-financiero](../api/resumen-financiero.php), [estándar de reportes](REPORTES.md). | La fase 2 completa y concilia la visión; no inventa otro motor contable ni porcentajes. |
 | Asistencia, ausencias y reposiciones | Existente: sesiones, marcas de asistencia, avisos de ausencia, reposiciones regulares y tratamiento de ausencias/reposiciones de intensivos. | [sesiones](../api/sesiones.php), [asistencia](../api/asistencia.php), [ausencias programadas](../api/ausencias-programadas.php), [modelo de asistencia](../database/migrations/20260816_attendance_model.sql). | Preservar estados, cierre de sesiones, elegibilidad y límites vigentes. Las reposiciones de ambos productos no tienen una representación idéntica. |
-| Pendientes y alertas | F1 implementó gestión persistente para las tres causas iniciales; alertas derivadas existentes continúan siendo fuentes separadas. | [pendientes](../api/pendientes.php), [centro de pendientes](../config/centro-pendientes.php), [alertas](../api/alertas.php), [obligaciones-alumnos](../api/obligaciones-alumnos.php). | F1 gestiona atención; F2/F4/F5 incorporan los tipos diferidos sin duplicar la cola. |
+| Pendientes y alertas | F1 implementó gestión persistente para tres causas iniciales; el incremento F2 en PR #262 incorpora saldo de intensivo pendiente reutilizando la misma cola. Las alertas derivadas existentes continúan siendo fuentes separadas. | [pendientes](../api/pendientes.php), [centro de pendientes](../config/centro-pendientes.php), [alertas](../api/alertas.php), [obligaciones-alumnos](../api/obligaciones-alumnos.php). | F1 gestiona atención; F2 aporta deuda; F4/F5 incorporan los tipos restantes sin duplicar la cola. |
 | Expediente | Parcial: ficha con datos, observaciones y acciones; API de timeline que combina pagos, intensivos, asistencia, avisos e historial. | [ficha-alumno](../public/ficha-alumno.php), [timeline-alumno](../api/timeline-alumno.php). | Ampliar la ficha y la línea de tiempo existentes. No se verificó un campo de nivel académico unificado en la API de alumnos ni un módulo separado de notas con versiones. |
 | Sharky / base para CRM | Existente: memoria comercial estructurada, atribución, estado conversacional, contactos con roles y referencias de alumno/profesor. Parcial respecto de un CRM interno. | [memoria comercial](../config/sharky-commercial-memory.php), [modelo de orquestador](../database/migrations/20260902_sharky_orchestrator.sql), [contactos](../database/migrations/20260908_sharky_contact_book.sql), [panel Sharky](../api/sharky-admin.php). | Contacto, identidad, estado conversacional y etapa comercial no son la misma cosa. No se acredita un pipeline CRM completo con los seis estados propuestos. |
 | Dashboard | Existente: indicadores por sede, fecha operativa, facturación por periodo, alumnos activos, pendientes, mensualidades, intensivos, avisos y reposiciones. | [dashboard](../api/dashboard.php), [tiempo operativo](../config/dashboard-tiempo.php). | La fase 6 mejora el dashboard vigente y define fuentes verificables para cada indicador nuevo. |
@@ -155,7 +155,7 @@ Un mismo hecho no debe producir duplicados al recargar. Una nueva mensualidad o 
 
 **Criterio de terminado.** Los tipos habilitados tienen fuente y regla verificables, enlace al detalle y estados persistentes de gestión; recargas no duplican casos; atención identifica al responsable cuando corresponde; resolución conserva evidencia e historia; se prueban un pago posterior, una invalidación, una nueva obligación y el aislamiento por sede. Tipos diferidos quedan registrados y la fase completa no se declara verificada mientras falte alcance comprometido sin decisión documentada.
 
-**Estado:** **Implementado.** El PR #254 fue integrado a `main` el 2026-09-15 e incorporó el primer incremento con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. El PR #257, también integrado, corrigió la interfaz para que “Marcar atendido” solo aparezca cuando el estado efectivo es `PENDIENTE` y la causa siga activa; `ATENDIDO` conserva su traza y `RESUELTO` no ofrece la acción. Quality pasó en ambos incrementos. La fase no se marca **Verificada** solo por integración: ese estado exige comprobación funcional de producción.
+**Estado:** **Implementado.** El PR #254 fue integrado a `main` el 2026-09-15 e incorporó el primer incremento con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. El incremento F2 del PR #262 incorpora saldo de intensivo pendiente usando la misma gestión, sin convertir F1 en autoridad financiera. Prospectos sin seguimiento siguen diferidos a F4; varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. El PR #257, también integrado, corrigió la interfaz para que “Marcar atendido” solo aparezca cuando el estado efectivo es `PENDIENTE` y la causa siga activa; `ATENDIDO` conserva su traza y `RESUELTO` no ofrece la acción. Quality pasó en ambos incrementos integrados. La fase no se marca **Verificada** solo por integración: ese estado exige comprobación funcional de producción.
 
 ### FASE 2 — Finanzas internas
 
@@ -186,7 +186,9 @@ Si se extienden reportes administrativos/financieros, respetar [REPORTES.md](REP
 7. La fase no generaliza multiabono a mensualidad ni inscripción.
 8. Porcentajes, socio y mínimos siguen viniendo de la configuración de sede; no se copian a otra autoridad.
 
-**Primer incremento en revisión.** El PR #261 incorpora una API estrictamente de lectura y una vista interna “Obligaciones y saldos”, integrada al centro financiero. Presenta resumen del periodo financiero, obligaciones cuantificables, pagos válidos, saldos, pagos invalidados como historia y comparación `actual vs cierre guardado`. No añade migración ni acciones de cobro. Quality #1399 completó con éxito sobre el primer HEAD revisado; cualquier commit posterior debe volver a pasar Quality antes de integración.
+**Primer incremento integrado.** El PR #261 incorporó una API estrictamente de lectura y una vista interna “Obligaciones y saldos”, integrada al centro financiero. Presenta resumen del periodo financiero, obligaciones cuantificables, pagos válidos, saldos, pagos invalidados como historia y comparación `actual vs cierre guardado`. No añade migración ni acciones de cobro. Quedó integrado en `main` como `c68c72270b369de5c6e4cdda829a1a6e9d1daa90`.
+
+**Segundo incremento en revisión.** El PR #262 lleva `SALDO_INTENSIVO_PENDIENTE` al Centro de pendientes. La obligación se identifica por alumno + curso, usa el precio registrado del curso y resta únicamente pagos `VALIDO`; conserva abonos parciales, incluye cursos programados, en curso y terminados, y deja de aplicar cuando el saldo se liquida. No cambia pagos, precios, acceso a clase, estados del alumno ni introduce migración.
 
 **Riesgos de compatibilidad.** Sumar el total del curso una vez por cada abono; duplicar mensualidad e importe del pago; trasladar ingresos históricos a la sede actual del alumno; alterar reparto por recalcular con parámetros actuales; presentar un anticipo como curso liquidado; tratar diferencias de calendario como errores de datos.
 
@@ -194,7 +196,7 @@ Si se extienden reportes administrativos/financieros, respetar [REPORTES.md](REP
 
 **Criterio de terminado.** Total, pagado y saldo se explican por registros concretos y coinciden con sus operaciones de origen; se verifican cero pagos, uno y varios abonos, liquidación, rechazo de sobrepago, edición e invalidación. Se comprueban periodos P1/P15 cuando corresponda, sedes, excepción de inscripción cubierta y comparación cierre/actual. Las vistas F1/F3/F6/F9 consumen la misma definición financiera aplicable y no suman dos veces el mismo dinero.
 
-**Estado:** **En revisión.** El primer incremento está en PR #261; la fase completa no se considera terminada por este incremento aislado.
+**Estado:** **En revisión.** El primer incremento está integrado mediante PR #261 y el segundo incremento está en PR #262. La fase completa no se considera terminada hasta validar funcionalmente la lectura financiera y cerrar las integraciones comprometidas.
 
 ### FASE 3 — Expediente 360° del alumno
 
@@ -438,6 +440,7 @@ Antes de modificar archivos relacionados con Sharky deben consultarse `AGENTS.md
 | D-12 | 2026-09-15 | PR #254 y corrección #257 integrados a `main`. | F1 pasa a **Implementado**; los tipos diferidos permanecen asignados a F2/F4/F5. |
 | D-13 | 2026-09-15 | Resolver P-02 separando obligación, periodo financiero y cobro; cierres históricos inmutables; saldo solo con obligación registrada; pagos válidos como reducción del saldo. | Define el primer incremento de F2 y evita recrear deuda con precios actuales o una contabilidad paralela. |
 | D-14 | 2026-09-15 | F2 empieza con una vista/API de solo lectura sin migración. | PR #261 agrega “Obligaciones y saldos” y comparación con cierre; no modifica pagos ni cierres. |
+| D-15 | 2026-09-16 | Reutilizar la definición financiera de F2 para incorporar `SALDO_INTENSIVO_PENDIENTE` a F1, con identidad alumno + curso y sin depender del estado administrativo del alumno. Un curso terminado no liquida por sí mismo la obligación. | PR #262 expone el saldo registrado en la cola existente; pagos `VALIDO` reducen la causa y la liquidación la resuelve sin modificar el pago desde F1. |
 
 ### 11.2 Decisiones pendientes antes del incremento afectado
 
@@ -466,14 +469,15 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | 2026-09-15 | Implementación del primer incremento de F1. | PR #254; `api/pendientes.php`, `config/centro-pendientes.php`, migración aditiva y vista administrativa. | Integrado a `main`; Quality exitoso. |
 | 2026-09-15 | Corrección de render de acción ATENDER. | PR #257; `public/pendientes.php` y regresión. | Integrado a `main`; `ATENDIDO`/`RESUELTO` ya no muestran “Marcar atendido”. |
 | 2026-09-15 | Análisis F2 y resolución P-02. | Revisión de periodos, cierres, obligaciones y abonos sobre `main` `d096e845...`. | Contrato financiero del primer incremento documentado. |
-| 2026-09-15 | Primer incremento F2: lectura unificada de obligaciones/saldos y comparación con cierre. | PR #261; API/vista de solo lectura; sin migración. | En revisión. Quality #1399 exitoso sobre HEAD `78ee778...`; debe repetirse tras cambios posteriores del PR. |
+| 2026-09-15 | Primer incremento F2: lectura unificada de obligaciones/saldos y comparación con cierre. | PR #261; API/vista de solo lectura; sin migración. | Integrado a `main` como `c68c722...`. |
+| 2026-09-16 | Segundo incremento F2: saldo de intensivo en Centro de pendientes. | PR #262; `config/centro-pendientes.php`, vista y regresión; sin migración ni cambios a pagos. | En revisión automática. |
 
 ### 12.2 Estado de las fases
 
 | Fase | Estado | Base que se reutiliza | Próximo paso |
 | --- | --- | --- | --- |
-| F1 Centro de pendientes | Implementado | Alertas, obligaciones, reglas de acceso, reposiciones regulares y `pendientes_gestion` | Verificar funcionalmente en producción y, conforme avancen F2/F4/F5, incorporar tipos diferidos sin rehacer la cola. |
-| F2 Finanzas | En revisión | Pagos, abonos, obligaciones registradas, reglas, periodos, reportes y cierres | Cerrar PR #261 tras Quality/revisión; desplegar y verificar el primer incremento antes de ampliar integraciones. |
+| F1 Centro de pendientes | Implementado | Alertas, obligaciones, reglas de acceso, reposiciones regulares y `pendientes_gestion` | Verificar funcionalmente en producción; PR #262 incorpora deuda intensiva desde F2 y F4/F5 mantienen sus tipos diferidos. |
+| F2 Finanzas | En revisión | Pagos, abonos, obligaciones registradas, reglas, periodos, reportes y cierres | Cerrar PR #262 tras checks/revisión y verificar con una sesión ADMIN la vista financiera y el Centro de pendientes antes de marcar la fase Implementada. |
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Pendiente | Alertas existentes | Resolver P-05 y catálogo acotado de reglas. |
