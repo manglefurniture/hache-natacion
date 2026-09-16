@@ -4,7 +4,7 @@
 >
 > Si un cambio contradice una regla de este documento, introduce ambigüedad sobre ella o no puede demostrar que la conserva, **el cambio no se hace** hasta aclarar la contradicción.
 
-Última actualización: 2026-09-15.
+Última actualización: 2026-09-16.
 
 ## 1. Propósito
 
@@ -230,15 +230,19 @@ La intervención humana no destruye contexto comercial válido y tiene tres esta
 - `manual_grace`: una respuesta humana ordinaria cancela salidas automáticas pendientes y abre una intervención puntual. Cuando el cliente responde, Sharky espera **30 segundos desde el último mensaje del cliente**. Si llega otra intervención humana durante esa ventana, la respuesta automática queda cancelada; si no llega, Sharky retoma usando también el turno humano inmediato como contexto permitido.
 - `manual_takeover`: Sharky queda silenciado para esa conversación hasta reactivación explícita o reinicio diario.
 
-Comandos operativos:
+Controles operativos en mensajes humanos salientes de Hache:
 
-- **`Sharky duerme`** activa `manual_takeover` exclusivo para esa conversación.
-- **`Sharky despierta`** libera ese takeover antes del reinicio diario.
+- **`Sharky duerme`** activa `manual_takeover` exclusivo para esa conversación, también cuando la frase aparece dentro de un mensaje mayor.
+- **`profe Ariel`** activa exactamente el mismo `manual_takeover` que `Sharky duerme`, también cuando forma parte de un mensaje mayor.
+- **`Sharky despierta`** libera ese takeover antes del reinicio diario, también cuando la frase aparece dentro de un mensaje mayor.
+- La detección no distingue mayúsculas/minúsculas y tolera espacios repetidos entre las palabras de la frase.
+- Si un mismo mensaje contiene más de un control contradictorio, manda el último control que aparece en el texto.
+- Estos controles solo se interpretan desde ecos salientes autorizados de Hache; una mención escrita por el cliente nunca activa ni libera takeover.
 - `Sharky vuelve ahora` queda retirado y no reactiva Sharky.
 
 El takeover manual exclusivo creado durante un día se libera también mediante el mantenimiento diario ya existente, usando el calendario local de `America/Cancun`. Una respuesta humana ordinaria no debe convertirse por sí sola en takeover indefinido.
 
-Los comandos son control operativo y no deben contarse como contenido conversacional ni como evidencia de aprendizaje. Los mensajes humanos reales sí se conservan internamente como `HUMANO_HACHE`, separados de `USUARIO` y `SHARKY`.
+Los mensajes que contienen un control de takeover son control operativo y no deben contarse como contenido conversacional ni como evidencia de aprendizaje. Los mensajes humanos ordinarios sí se conservan internamente como `HUMANO_HACHE`, separados de `USUARIO` y `SHARKY`.
 
 Al reactivar Sharky:
 
@@ -317,6 +321,7 @@ Las reglas se materializan, entre otros puntos, en:
 - `docs/SHARKY-POSITIVE-PATTERNS.md`;
 - `tests/sharky-meta3-regression.php`;
 - `tests/sharky-takeover-resume-command-regression.php`;
+- `tests/sharky-takeover-phrase-trigger-regression.php`;
 - `tests/sharky-guided-first-prospect-regression.php`;
 - `tests/sharky-pr162-review-regression.php`;
 - suites de WhatsApp, Flow, outbox, registro y pagos.
@@ -345,10 +350,13 @@ Deben cubrir:
 - respuesta humana ordinaria → `manual_grace`, no takeover indefinido;
 - cliente responde tras intervención humana → 30 segundos desde el último mensaje antes de retomar;
 - nueva intervención humana durante la gracia → cancela la salida automática pendiente;
-- `Sharky duerme` → takeover exclusivo;
-- `Sharky despierta` → libera solo esa conversación;
+- `Sharky duerme` dentro de un mensaje humano saliente → takeover exclusivo;
+- `profe Ariel` dentro de un mensaje humano saliente → mismo takeover exclusivo;
+- `Sharky despierta` dentro de un mensaje humano saliente → libera solo esa conversación;
+- una mención equivalente escrita por el cliente no dispara control operativo;
+- si coexisten controles contradictorios en un mensaje, prevalece el último;
 - reinicio diario libera takeovers anteriores sin liberar uno creado después de medianoche ese mismo día;
-- comandos operativos no entran como texto conversacional/aprendizaje;
+- controles operativos no entran como texto conversacional/aprendizaje;
 - respuesta corta segura después de pregunta humana conserva contexto sin saltarse el funnel ni guards.
 
 ## 23. Flujo de trabajo del repositorio
@@ -385,10 +393,10 @@ Antes de mergear un cambio de captación responder **sí** a lo aplicable:
 - [ ] ¿Alumno conocido no entra como prospecto?
 - [ ] ¿Takeover/reactivación conserva contexto válido?
 - [ ] ¿Intervención humana puntual conserva la ventana de 30 s sin convertirse en takeover indefinido?
-- [ ] ¿`Sharky duerme` / `Sharky despierta` afectan únicamente la conversación correspondiente?
+- [ ] ¿`Sharky duerme`, `Sharky despierta` y `profe Ariel` solo reaccionan a mensajes humanos salientes autorizados y afectan únicamente la conversación correspondiente?
 - [ ] ¿Las respuestas automáticas pendientes quedan cercadas frente a una intervención humana?
 - [ ] ¿Edad y mutaciones fallan cerrado cuando corresponde?
-- [ ] ¿Mensajes de prospectos usan 2–5 emojis funcionales sin saturar?
+- [ ] ¿Mensajes de prospectos usan 2–5 emojis funcionales sin saturación?
 - [ ] ¿Existe regresión del comportamiento nuevo?
 - [ ] ¿Quality está completamente verde?
 - [ ] ¿Comentarios automáticos relevantes quedaron atendidos?

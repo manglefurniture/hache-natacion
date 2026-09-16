@@ -20,6 +20,8 @@ jobs:
         run: find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
       - name: Static regressions and JavaScript syntax
         run: npm test
+      - name: Expediente 360 regression
+        run: node tests/expediente-360-regression.mjs
       - name: Sharky onboarding review regression
         run: php tests/sharky-onboarding-review-regression.php
       - name: Sharky conversational Brain experiment regression
@@ -50,6 +52,8 @@ jobs:
         run: php tests/sharky-meta3-regression.php
       - name: Sharky safe side-question regression
         run: php tests/sharky-safe-side-question-regression.php
+      - name: Sharky takeover phrase trigger regression
+        run: php tests/sharky-takeover-phrase-trigger-regression.php
       - name: Sharky Brain numeric context regression
         run: php tests/sharky-brain-numeric-context-regression.php
       - name: Sharky contact book regression
