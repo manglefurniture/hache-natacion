@@ -11,6 +11,7 @@ $service=file_get_contents($root.'/config/portal-access.php')?:'';
 $migration=file_get_contents($root.'/database/migrations/20260916_portal_access_tokens.sql')?:'';
 $route=file_get_contents($root.'/public/acceso.php')?:'';
 $auth=file_get_contents($root.'/config/auth.php')?:'';
+$bootstrap=file_get_contents($root.'/config/backend-bootstrap.php')?:'';
 $passwordApi=file_get_contents($root.'/api/cambiar-password.php')?:'';
 $passwordPage=file_get_contents($root.'/public/cambiar-password.php')?:'';
 $template=file_get_contents($root.'/config/sharky-template-notifications.php')?:'';
@@ -32,6 +33,7 @@ portal_expect(str_contains($route,"header('Referrer-Policy: no-referrer')"),'El 
 portal_expect(str_contains($route,'hache_portal_access_consume($pdo,$token)'),'La ruta debe consumir el token antes de iniciar sesión.');
 portal_expect(str_contains($route,'auth_login($user)'),'El acceso válido debe crear la sesión normal del alumno.');
 portal_expect(str_contains($route,'auth_portal_bootstrap_grant'),'El primer acceso debe autorizar únicamente la creación de contraseña.');
+portal_expect(str_contains($bootstrap,"'/acceso.php'"),'El bootstrap debe permitir abrir el enlace seguro sin sesión previa.');
 portal_expect(str_contains($auth,'function auth_portal_bootstrap_active'),'La sesión debe validar el grant temporal.');
 portal_expect(str_contains($passwordApi,'!$bootstrap&&!password_verify($actual,$hash)'),'Solo el grant seguro puede omitir la contraseña actual.');
 $txPos=strpos($passwordApi,'$pdo->beginTransaction()');
