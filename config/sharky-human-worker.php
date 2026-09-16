@@ -95,6 +95,14 @@ function hache_sharky_human_process_event(PDO $pdo,array $event,array $business,
     if(($wait['active']??false)!==true)return hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
     if(($wait['ready']??false)!==true)return false;
 
+    // The durable inbox is authoritative for burst coalescing. If a newer
+    // customer receipt already exists, this older waiter must never answer.
+    $latest=hache_sharky_human_latest_pending_customer_event($pdo,$contact);$latestId=trim((string)($latest['message_id']??''));
+    if($latestId!==''&&$latestId!==$eventId){
+        $latestTurn=hache_sharky_human_grace_customer_turn($contact,$latestId,null,(int)($latest['timestamp_ms']??0));$newDue=(int)($latestTurn['due_at']??0);
+        if($newDue>0)hache_sharky_human_inbox_defer_until($pdo,$eventId,$newDue);return false;
+    }
+
     $humanEventId=(string)($wait['human_event_id']??'');$humanText=hache_sharky_human_echo_text($pdo,$humanEventId);
     $actualText=trim((string)($event['text']??''));$graceIds=[$eventId];
     if(($event['type']??'text')==='text'&&trim((string)($event['interactive_id']??''))===''){
@@ -103,13 +111,22 @@ function hache_sharky_human_process_event(PDO $pdo,array $event,array $business,
 
     $syntheticContext=false;$state=null;
     try{$state=hache_sharky_db_state_load($pdo,$contact);}catch(Throwable $e){}
-    if(is_array($state)&&$humanText!==''&&hache_sharky_human_affirmative($actualText)&&hache_sharky_human_safe_context_question($humanText)){
+    if(is_array($state)&&$humanText!==''&&hache_sharky_human_affirmative_turn($actualText)&&hache_sharky_human_safe_context_question($humanText)){
         $event['text']=$humanText;$syntheticContext=true;
         if(function_exists('hache_sharky_meta_active')&&hache_sharky_meta_active($state))$event['interactive_id']='meta:free_text';
     }elseif(is_array($state)&&$humanText!==''&&!is_array($state['flow']??null)&&(!function_exists('hache_sharky_meta_active')||!hache_sharky_meta_active($state))){
         // In open conversation, expose the human question as the immediately
         // preceding turn so a short answer such as “sí” remains interpretable.
         try{$state['last_user_text']=mb_substr($humanText,0,700);$state['updated_at']=time();hache_sharky_db_state_save($pdo,$contact,$state,86400);}catch(Throwable $e){}
+    }
+
+    // Re-check immediately before entering the base worker. This catches the
+    // boundary race where a second customer message is persisted as the first
+    // 30-second timer expires.
+    $latest=hache_sharky_human_latest_pending_customer_event($pdo,$contact);$latestId=trim((string)($latest['message_id']??''));
+    if($latestId!==''&&$latestId!==$eventId){
+        $latestTurn=hache_sharky_human_grace_customer_turn($contact,$latestId,null,(int)($latest['timestamp_ms']??0));$newDue=(int)($latestTurn['due_at']??0);
+        if($newDue>0)hache_sharky_human_inbox_defer_until($pdo,$eventId,$newDue);return false;
     }
 
     $ok=hache_sharky_lab_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
