@@ -113,7 +113,7 @@ try{
                  CONCAT(m.periodo_inicio,' → ',m.periodo_fin) periodo_obligacion,
                  m.periodo_inicio fecha_referencia,
                  m.importe_a_cobrar total_obligacion,m.importe_cobrado,m.estado obligacion_estado,m.observacion,
-                 COUNT(p.id) pagos_totales,
+                 (SELECT COUNT(*) FROM pagos px WHERE px.mensualidad_id=m.id) pagos_totales,
                  EXISTS(SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=m.alumno_id AND ci.sede_id=m.sede_id AND ci.fecha_inicio<=m.periodo_fin AND ci.fecha_fin>=m.periodo_inicio) intensivo_solapado,
                  COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0) pagado_valido,
                  COALESCE(SUM(p.estado='VALIDO'),0) pagos_validos,
