@@ -29,14 +29,30 @@ try{
     if($siteId==='')out(['ok'=>false,'error'=>'Alumno no encontrado en la sede activa'],404);
 
     $items=[];
-    $push=function(string $date,string $type,string $title,string $detail='',?string $href=null)use(&$items):void{
-        $items[]=['fecha'=>$date,'tipo'=>$type,'titulo'=>$title,'detalle'=>$detail,'href'=>$href];
+    $push=function(string $date,string $type,string $title,string $detail='',?string $href=null,?string $dateLabel=null)use(&$items):void{
+        $items[]=['fecha'=>$date,'fecha_etiqueta'=>$dateLabel,'tipo'=>$type,'titulo'=>$title,'detalle'=>$detail,'href'=>$href];
     };
 
     $stmt=$pdo->prepare("SELECT p.fecha,p.tipo,p.importe,p.metodo,p.estado,p.folio,p.observacion FROM pagos p JOIN alumnos a ON a.id=p.alumno_id WHERE p.alumno_id=:student AND a.sede_id=:site ORDER BY p.fecha");
     $stmt->execute([':student'=>$studentId,':site'=>$siteId]);
     foreach($stmt as $row){
-        $push($row['fecha'],'PAGO',$row['tipo'].' · $'.number_format((float)$row['importe'],0),'Folio '.$row['folio'].' · '.$row['metodo'].($row['estado']!=='VALIDO'?' · '.$row['estado']:'').($row['observacion']?' · '.$row['observacion']:''),'/pago-detalle.php?folio='.rawurlencode((string)$row['folio']));
+        $observacion=(string)($row['observacion']??'');
+        $historicoImpreciso=strtoupper((string)$row['metodo'])==='NO_REGISTRADO'
+            && str_contains($observacion,'Fecha exacta y método de pago no registrados');
+        $metodo=strtoupper((string)$row['metodo'])==='NO_REGISTRADO'
+            ? 'Método no registrado'
+            : (string)$row['metodo'];
+        if($historicoImpreciso){
+            $observacion=(string)preg_replace('/\s*Fecha exacta y método de pago no registrados\.?(\s*)/u',' ', $observacion);
+            $observacion=trim((string)preg_replace('/\s{2,}/u',' ', $observacion));
+        }
+        $detalle='Folio '.$row['folio'].' · '.$metodo
+            .($row['estado']!=='VALIDO'?' · '.$row['estado']:'')
+            .($observacion!==''?' · '.$observacion:'');
+        $fechaEtiqueta=$historicoImpreciso
+            ? date('m/Y',strtotime((string)$row['fecha'])).' · fecha exacta no registrada'
+            : null;
+        $push($row['fecha'],'PAGO',$row['tipo'].' · $'.number_format((float)$row['importe'],0),$detalle,'/pago-detalle.php?folio='.rawurlencode((string)$row['folio']),$fechaEtiqueta);
     }
 
     $stmt=$pdo->prepare('SELECT ci.id,ci.fecha_inicio,ci.fecha_fin,ci.estado,cia.continua_regular,cia.observacion_continuidad FROM curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:student AND ci.sede_id=:site ORDER BY ci.fecha_inicio');
