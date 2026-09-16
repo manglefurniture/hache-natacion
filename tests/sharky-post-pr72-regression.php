@@ -91,9 +91,11 @@ $message=hache_sharky_post72_registration_message([
     ],
 ],$business);
 post72_expect(is_string($message),'Registration success message must render.');
-foreach(['Total del curso: $1,200 MXN','Reserva mínima (50%): $600 MXN','Usuario: juan.perez','Contraseña temporal: Temporal-2026','📋 CLABE para copiar','Mantén pulsada la CLABE para copiarla.','https://hnatacion.com/index.php','Acceso al portal Hache Natación'] as $needle){
+foreach(['Total del curso: $1,200 MXN','Reserva mínima (50%): $600 MXN','📋 CLABE para copiar','Mantén pulsada la CLABE para copiarla.','acceso seguro al portal por WhatsApp','Abrir PORTAL'] as $needle){
     post72_expect(str_contains((string)$message,$needle),'Registration message missing: '.$needle);
 }
+post72_expect(!str_contains((string)$message,'Usuario: juan.perez'),'Registration chat must not expose the generated portal username.');
+post72_expect(!str_contains((string)$message,'Contraseña temporal: Temporal-2026'),'Registration chat must not expose the generated temporary password.');
 post72_expect(str_contains((string)$message,"\n123456789012345678\n"),'CLABE digits must stay isolated on their own line for easy copy.');
 post72_expect(!str_contains((string)$message,'Tarjeta: 5% de recargo'),'Registration transfer message must not mix in the card surcharge.');
 
@@ -149,9 +151,9 @@ post72_expect(str_contains($db,'Sharky conversation state storage is unavailable
 post72_expect(!str_contains($db,'return hache_sharky_orchestrator_state_save($contact,$state)'),'DB state save must not silently fall back to local state.');
 post72_expect(!str_contains($db,'return hache_sharky_orchestrator_state_load($contact)'),'DB state load must not silently fall back to local state.');
 
-// P2 Codex: un recovery de alta rota una credencial nueva que sí puede entregarse.
+// P2 Codex: un recovery de alta rota una credencial nueva que sí puede entregarse internamente y queda forzada a cambio.
 post72_expect(str_contains($registrationRecovery,"debe_cambiar_password=1"),'Recovered portal credential must force password change.');
-post72_expect(str_contains($registrationRecovery,"'temporary_password'=>\$temporaryPassword"),'Recovered registration must return a deliverable temporary password.');
+post72_expect(str_contains($registrationRecovery,"'temporary_password'=>\$temporaryPassword"),'Recovered registration must retain a temporary credential for transactional recovery.');
 post72_expect(str_contains($registrationRecovery,'regla_bloquear_identidades_alumnos($pdo)'),'Recovered registration must reconcile under the same identity serialization used by fresh creation.');
 
 // Autoridad dura: el executor jamás automatiza un inicio intensivo fuera de lunes/futuro.
