@@ -106,14 +106,26 @@ assert.match(
 
 assert.match(
   intensivoFlow,
-  /<option value="ACTUAL">Este periodo<\/option><option value="PROXIMO">Próximo periodo<\/option>/,
-  'el formulario debe permitir elegir este periodo o el próximo'
+  /<option value="ACTUAL">Este periodo · genera mensualidad ahora<\/option><option value="PROXIMO">Próximo periodo · no cobra este periodo<\/option>/,
+  'el formulario debe explicar el efecto financiero de cada periodo'
+);
+
+assert.match(
+  intensivoFlow,
+  /const continuidadExistente=data\.relacion\.continua_regular===1\|\|data\.relacion\.continua_regular==='1';document\.getElementById\('hache-inicio-periodo'\)\.value=continuidadExistente\?\(data\.inicio_regular==='PROXIMO'\?'PROXIMO':'ACTUAL'\):'PROXIMO'/,
+  'una continuidad nueva debe proponer próximo periodo y una ya guardada debe conservar su periodo'
 );
 
 assert.match(
   intensivoFlow,
   /No se generará mensualidad del periodo actual\. La primera obligación será la del próximo periodo\./,
   'la interfaz debe explicar que iniciar el próximo periodo no crea deuda actual'
+);
+
+assert.match(
+  intensivoFlow,
+  /Generará una mensualidad del periodo actual\. Úsalo solo si el alumno realmente empieza clases regulares en este periodo/,
+  'la interfaz debe advertir que elegir el periodo actual genera obligación inmediata'
 );
 
 assert.match(
