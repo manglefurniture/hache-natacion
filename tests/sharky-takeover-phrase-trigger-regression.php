@@ -9,12 +9,12 @@ function phrase_takeover_ok(bool $condition,string $message): void
     if(!$condition){fwrite(STDERR,"SHARKY TAKEOVER PHRASE FAIL: $message\n");exit(1);}
 }
 
-phrase_takeover_ok(hache_sharky_whatsapp_echo_sleep_requested(['type'=>'text','text'=>'Voy a seguir yo, Sharky duerme por favor.']),'Embedded Sharky duerme must activate exclusive takeover.');
-phrase_takeover_ok(hache_sharky_whatsapp_echo_resume_requested(['type'=>'text','text'=>'Listo por acá; Sharky despierta y continúa.']),'Embedded Sharky despierta must release takeover.');
-phrase_takeover_ok(hache_sharky_whatsapp_echo_sleep_requested(['type'=>'text','text'=>'Hola, soy el profe Ariel.']),'Profe Ariel must activate the same exclusive takeover as Sharky duerme.');
-phrase_takeover_ok(hache_sharky_whatsapp_echo_sleep_requested(['type'=>'text','text'=>'HOLA, SOY EL PROFE   ARIEL!']),'Profe Ariel trigger must be case-insensitive and tolerate repeated spaces.');
-phrase_takeover_ok(!hache_sharky_whatsapp_echo_sleep_requested(['type'=>'text','text'=>'Hola, soy Ariel.']),'A normal human message must not become exclusive takeover.');
-phrase_takeover_ok(!hache_sharky_whatsapp_echo_sleep_requested(['type'=>'image','text'=>'profe Ariel']),'Only text echoes may trigger phrase takeover.');
+phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'text','text'=>'Voy a seguir yo, Sharky duerme por favor.'])==='sleep','Embedded Sharky duerme must activate exclusive takeover.');
+phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'text','text'=>'Listo por acá; Sharky despierta y continúa.'])==='wake','Embedded Sharky despierta must release takeover.');
+phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'text','text'=>'Hola, soy el profe Ariel.'])==='sleep','Profe Ariel must activate the same exclusive takeover as Sharky duerme.');
+phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'text','text'=>'HOLA, SOY EL PROFE   ARIEL!'])==='sleep','Profe Ariel trigger must be case-insensitive and tolerate repeated spaces.');
+phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'text','text'=>'Hola, soy Ariel.'])===null,'A normal human message must not become exclusive takeover.');
+phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'image','text'=>'profe Ariel'])===null,'Only text echoes may trigger phrase takeover.');
 phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'text','text'=>'Sharky duerme. Luego, Sharky despierta.'])==='wake','When commands conflict, the last instruction in the message must win.');
 phrase_takeover_ok(hache_sharky_whatsapp_echo_operator_command(['type'=>'text','text'=>'Sharky despierta. Ahora atiende el profe Ariel.'])==='sleep','A later Profe Ariel trigger must override an earlier wake instruction.');
 
