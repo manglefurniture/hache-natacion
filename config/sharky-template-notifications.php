@@ -3,10 +3,11 @@ declare(strict_types=1);
 
 require_once __DIR__.'/telefono.php';
 require_once __DIR__.'/sharky-outbox.php';
+require_once __DIR__.'/portal-access.php';
 
 const HACHE_SHARKY_TEMPLATE_LANGUAGE_MX = 'es_MX';
 const HACHE_SHARKY_TEMPLATE_PAYMENT_CONFIRMED = 'hache_pago_confirmado';
-const HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED = 'hache_inscripcion_confirmada_mx';
+const HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED = 'hache_registro_recibido_mx';
 const HACHE_SHARKY_TEMPLATE_COURSE_START = 'hache_inicio_curso';
 const HACHE_SHARKY_TEMPLATE_CLASS_CANCELLED = 'hache_clase_cancelada';
 const HACHE_SHARKY_TEMPLATE_MAKEUP_CONFIRMED = 'hache_reposicion_confirmada';
@@ -34,7 +35,7 @@ function hache_sharky_template_text(string $value,int $max=900): string
 }
 
 /** @param list<string> $bodyParameters */
-function hache_sharky_template_payload(string $to,string $templateName,array $bodyParameters=[]): array
+function hache_sharky_template_payload(string $to,string $templateName,array $bodyParameters=[],?string $urlButtonParameter=null): array
 {
     $parameters=[];
     foreach($bodyParameters as $value){
@@ -44,9 +45,18 @@ function hache_sharky_template_payload(string $to,string $templateName,array $bo
         'name'=>$templateName,
         'language'=>['code'=>HACHE_SHARKY_TEMPLATE_LANGUAGE_MX],
     ];
-    if($parameters!==[]){
-        $template['components']=[['type'=>'body','parameters'=>$parameters]];
+    $components=[];
+    if($parameters!==[])$components[]=['type'=>'body','parameters'=>$parameters];
+    $urlButtonParameter=$urlButtonParameter!==null?hache_sharky_template_text($urlButtonParameter,256):'';
+    if($urlButtonParameter!==''){
+        $components[]=[
+            'type'=>'button',
+            'sub_type'=>'url',
+            'index'=>'0',
+            'parameters'=>[['type'=>'text','text'=>$urlButtonParameter]],
+        ];
     }
+    if($components!==[])$template['components']=$components;
     return [
         'messaging_product'=>'whatsapp',
         'to'=>$to,
@@ -56,7 +66,7 @@ function hache_sharky_template_payload(string $to,string $templateName,array $bo
 }
 
 /** @return array{ok:bool,reason:string,queued:bool} */
-function hache_sharky_template_enqueue(PDO $pdo,string $phone,string $templateName,array $bodyParameters,string $dedupeSeed): array
+function hache_sharky_template_enqueue(PDO $pdo,string $phone,string $templateName,array $bodyParameters,string $dedupeSeed,?string $urlButtonParameter=null): array
 {
     if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
         return ['ok'=>false,'reason'=>'SHARKY_DISABLED','queued'=>false];
@@ -64,7 +74,7 @@ function hache_sharky_template_enqueue(PDO $pdo,string $phone,string $templateNa
     $normalized=hache_sharky_template_phone($phone);
     if($normalized===null)return ['ok'=>false,'reason'=>'INVALID_PHONE','queued'=>false];
     if(!preg_match('/^[a-z0-9_]{1,512}$/',$templateName))return ['ok'=>false,'reason'=>'INVALID_TEMPLATE','queued'=>false];
-    $payload=hache_sharky_template_payload($normalized['digits'],$templateName,$bodyParameters);
+    $payload=hache_sharky_template_payload($normalized['digits'],$templateName,$bodyParameters,$urlButtonParameter);
     $queued=hache_sharky_outbox_enqueue_raw($pdo,$normalized['digits'],$payload,'template|'.$dedupeSeed,time());
     return ['ok'=>$queued,'reason'=>$queued?'QUEUED':'OUTBOX_UNAVAILABLE','queued'=>$queued];
 }
@@ -158,12 +168,19 @@ function hache_sharky_notify_enrollment_confirmed(PDO $pdo,array $student,array 
             return ['ok'=>false,'reason'=>'ENROLLMENT_CONTEXT_INCOMPLETE','queued'=>false];
         }
         $eventScope=($courseStart!==''?'intensive':'base').'|'.$startRaw.'|'.$schedule;
+        $dedupeSeed='enrollment-confirmed|student:'.$studentId.'|event:'.hash('sha256',$eventScope);
+        if(hache_sharky_outbox_exists($pdo,'template|'.$dedupeSeed))return ['ok'=>true,'reason'=>'ALREADY_QUEUED','queued'=>true];
+        $portalAccess=hache_portal_access_issue($pdo,$studentId);
+        if(!is_array($portalAccess)||trim((string)($portalAccess['token']??''))===''){
+            return ['ok'=>false,'reason'=>'PORTAL_ACCESS_UNAVAILABLE','queued'=>false];
+        }
         return hache_sharky_template_enqueue(
             $pdo,
             $phone,
             HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED,
             [$name,$schedule,$site,$startDate],
-            'enrollment-confirmed|student:'.$studentId.'|event:'.hash('sha256',$eventScope)
+            $dedupeSeed,
+            (string)$portalAccess['token']
         );
     }catch(Throwable $e){
         error_log('[sharky-template] enrollment confirmation enqueue failed');
