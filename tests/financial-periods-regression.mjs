@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const helper=fs.readFileSync(new URL('../config/periodos-financieros.php',import.meta.url),'utf8');
+const correctionRules=fs.readFileSync(new URL('../config/finanzas-correcciones.php',import.meta.url),'utf8');
+const correctionApi=fs.readFileSync(new URL('../api/corregir-obligacion-mensual.php',import.meta.url),'utf8');
 const migration=fs.readFileSync(new URL('../database/migrations/20260825_financial_periods.sql',import.meta.url),'utf8');
 const close=fs.readFileSync(new URL('../api/cierres-mensuales.php',import.meta.url),'utf8');
 const reports=fs.readFileSync(new URL('../api/reportes.php',import.meta.url),'utf8');
@@ -49,10 +51,29 @@ assert.match(internal,/p\.intensivo_id=ci\.id AND p\.alumno_id=cia\.alumno_id AN
 assert.match(internal,/FROM cierres_mensuales c/);
 assert.match(internal,/diferencia_total/);
 assert.doesNotMatch(internal,/\b(?:INSERT|UPDATE|DELETE|REPLACE)\s+(?:INTO\s+)?(?:pagos|mensualidades|inscripciones|cursos_intensivos|curso_intensivo_alumnos|periodos_financieros|cierres_mensuales)\b/i);
+
+// Una corrección histórica es una acción ADMIN separada de la lectura y debe
+// negarse en cuanto exista movimiento financiero o falte evidencia de intensivo.
+assert.match(correctionRules,/\$estado==='PENDIENTE'/);
+assert.match(correctionRules,/\$sinCobro && \$sinPagos/);
+assert.match(correctionRules,/\$continuidad \|\| \$intensivoSolapado/);
+assert.match(correctionApi,/auth_require\(\['ADMIN'\]\)/);
+assert.match(correctionApi,/mb_strlen\(\$motivo\)<5/);
+assert.match(correctionApi,/SELECT id FROM pagos WHERE mensualidad_id=:id FOR UPDATE/);
+assert.match(correctionApi,/finanzas_mensualidad_corregible\(\$m\)/);
+assert.match(correctionApi,/hache_admin_history\([\s\S]*'MENSUALIDAD'[\s\S]*'MENSUALIDAD_CORREGIDA'/);
+assert.match(correctionApi,/DELETE FROM mensualidades WHERE id=:id[\s\S]*estado='PENDIENTE'[\s\S]*importe_cobrado IS NULL[\s\S]*NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=:pid\)/);
+assert.match(internal,/\(\$viewer\['rol'\]\?\?'\'\)==='ADMIN'&&finanzas_mensualidad_corregible\(\$r\)/);
+assert.match(internal,/COUNT\(p\.id\) pagos_totales/);
+assert.match(internal,/intensivo_solapado/);
+
 assert.match(internalPage,/Saldo = obligación registrada/);
 assert.match(internalPage,/No sobrescribe el cierre guardado/);
 assert.match(internalPage,/ultima_fecha_pago/);
 assert.match(internalPage,/Último cobro/);
+assert.match(internalPage,/Corregir obligación/);
+assert.match(internalPage,/corregir-obligacion-mensual\.php/);
+assert.match(internalPage,/Motivo obligatorio de la corrección histórica/);
 assert.match(roadmap,/Decisión P-02 resuelta para el primer incremento/);
 assert.match(roadmap,/Fase 1 \*\*Implementada\*\*/);
 assert.match(roadmap,/Fase 2 \*\*Desplegado\*\*/);
