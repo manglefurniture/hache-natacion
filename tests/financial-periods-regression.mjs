@@ -51,6 +51,8 @@ assert.match(internal,/diferencia_total/);
 assert.doesNotMatch(internal,/\b(?:INSERT|UPDATE|DELETE|REPLACE)\s+(?:INTO\s+)?(?:pagos|mensualidades|inscripciones|cursos_intensivos|curso_intensivo_alumnos|periodos_financieros|cierres_mensuales)\b/i);
 assert.match(internalPage,/Saldo = obligación registrada/);
 assert.match(internalPage,/No sobrescribe el cierre guardado/);
+assert.match(internalPage,/ultima_fecha_pago/);
+assert.match(internalPage,/Último cobro/);
 assert.match(roadmap,/Decisión P-02 resuelta para el primer incremento/);
 assert.match(roadmap,/Fase 1 \*\*Implementada\*\*/);
 assert.match(roadmap,/Fase 2 \*\*En revisión\*\*/);
