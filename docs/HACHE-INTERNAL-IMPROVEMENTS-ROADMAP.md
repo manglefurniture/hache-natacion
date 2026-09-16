@@ -3,15 +3,16 @@
 **Documento maestro:** `docs/HACHE-INTERNAL-IMPROVEMENTS-ROADMAP.md`  
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
-**Base comprobada en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Estado del roadmap:** Fase 1 en revisión; las fases 2–9 permanecen **Pendientes**.
-**Autorización de esta tarea:** crear este MD. Ninguna implementación funcional, migración ni operación de producción está autorizada por este documento.
+**Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
+**Última base comprobada para esta actualización:** `main`, commit `d096e8457f8da8c00eadf3ed5ee61a8f3cff6ed0`.  
+**Estado del roadmap:** Fase 1 **Implementada**; Fase 2 **En revisión**; fases 3–9 **Pendientes**.  
+**Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
 ## 1. Propósito
 
 Conservar el contexto de la siguiente etapa de mejoras del sistema administrativo de Hache Natación: qué construir, en qué orden, qué reutilizar, qué decisiones respetar y qué evidencia permitirá dar cada fase por terminada. Cualquier persona o conversación futura debe poder continuar desde aquí sin duplicar módulos ni introducir cambios que contradigan otra fase.
 
-Este roadmap describe trabajo futuro incremental sobre el sistema existente. La elaboración del documento termina al completar y revisar este archivo; no inicia automáticamente la fase 1.
+Este roadmap describe trabajo incremental sobre el sistema existente. La elaboración inicial del documento no inició automáticamente ninguna fase; el trabajo funcional posterior se registra expresamente en las secciones de decisiones y progreso.
 
 ## 2. Alcance
 
@@ -31,20 +32,19 @@ Se reutilizarán alumnos, pagos, mensualidades, inscripciones, asistencia, ausen
 
 ## 3. Qué NO forma parte de este roadmap
 
-- Implementar mejoras durante la creación de este documento o cambiar comportamientos actuales.
 - Auditar todo el proyecto, revisar su seguridad de forma general, buscar deuda técnica ajena a estas fases o revisar SEO y frontend público.
 - Rediseñar Hache Natación, reemplazar la arquitectura, migrar de tecnología o refactorizar globalmente.
-- Modificar infraestructura, VPS, configuración operativa, servicios, workflows o despliegues.
+- Modificar infraestructura, VPS, configuración operativa, servicios o workflows salvo dependencia directa y autorización separada.
 - Añadir nómina, contabilidad fiscal, facturación tributaria, nuevas campañas, nuevos canales de comunicación o funciones comerciales fuera de las nueve fases.
-- Cambiar tarifas, porcentajes, convenios, mínimos, elegibilidad, políticas de pago, acceso a clase o reposiciones.
+- Cambiar tarifas, porcentajes, convenios, mínimos, elegibilidad, políticas de pago, acceso a clase o reposiciones sin una decisión explícita distinta.
 - Sustituir los flujos de Sharky, reactivar Brain en captación, cambiar prioridades comerciales o permitir aprendizaje autónomo que modifique producción.
 - Borrar historia para simplificar las nuevas vistas o generar datos retroactivos sin evidencia.
 
-La fase 8 es un historial operativo de acciones; no es una auditoría general de seguridad. Si aparece algo ajeno al alcance, se ignora salvo dependencia directa o riesgo evidente para una fase, que se documentará sin corregirlo dentro de esta tarea.
+La fase 8 es un historial operativo de acciones; no es una auditoría general de seguridad. Si aparece algo ajeno al alcance, se ignora salvo dependencia directa o riesgo evidente para una fase, que se documentará sin corregirlo de forma implícita.
 
 ## 4. Principios de implementación futura
 
-1. **Consultar este documento antes de modificar cualquiera de las áreas de la sección 2.** Leer también el registro de decisiones y progreso, identificar la fase y sus dependencias y verificar qué cambió desde el commit de referencia.
+1. **Consultar este documento antes de modificar cualquiera de las áreas de la sección 2.** Leer también el registro de decisiones y progreso, identificar la fase y sus dependencias y verificar qué cambió desde el último commit de referencia.
 2. **Reutilizar la implementación actual.** Extender consultas, reglas y pantallas relacionadas cuando sea suficiente. Este documento no prescribe tablas nuevas, endpoints nuevos ni otra arquitectura.
 3. **Una autoridad por dato o regla.** Los módulos operativos mantienen sus registros; pendientes, alertas, expediente, dashboard y resumen consumen esa información sin mantener saldos, estados de alumno o asistencias paralelos.
 4. **Cambios pequeños y reversibles.** Cada incremento futuro delimitará archivos afectados, comportamiento anterior y nuevo, validaciones y forma de retirar el incremento sin perder datos previos.
@@ -52,20 +52,20 @@ La fase 8 es un historial operativo de acciones; no es una auditoría general de
 6. **Datos disponibles y datos desconocidos son distintos.** Un campo ausente no equivale a cero, una fecha desconocida no es la de hoy y falta de evidencia no significa resuelto, pagado o inscrito.
 7. **Historia y actualidad son distintas.** No recalcular silenciosamente el pasado con el precio, sede, plan, profesor o porcentaje vigente hoy. Distinguir un resumen actual de un cierre ya guardado.
 8. **Reglas claras antes de automatizar.** Umbrales nuevos se deciden expresamente; se conservan los que ya estén definidos. Ningún pendiente o alerta ejecuta por sí mismo una operación administrativa o un mensaje de Sharky.
-9. **Preparación para producción sin adelantar despliegues.** En una implementación futura, validar casos de negocio y regresiones afectadas, obtener revisión y registrar evidencia. Integración, despliegue y verificación son hitos distintos. Esta tarea documental no llega a ellos.
+9. **Preparación para producción sin confundir hitos.** Validar casos de negocio y regresiones afectadas, obtener revisión y registrar evidencia. Integración, despliegue y verificación son hitos distintos.
 10. **Documentar al cambiar.** Actualizar aquí decisiones, fuentes, dependencia afectada, estado y evidencia. Un cambio de alcance requiere decisión explícita, no una interpretación tácita del implementador.
 
 ## 5. Estado actual relevante y evidencia
 
 ### 5.1 Cómo leer esta comprobación
 
-Se revisaron en GitHub la estructura del repositorio, `AGENTS.md`, documentación normativa de Sharky y archivos concretos relacionados con las nueve fases. No se ejecutó la aplicación, no se consultaron datos reales ni se comprobó el estado de migraciones o servicios en producción.
+Se revisaron en GitHub la estructura del repositorio, `AGENTS.md`, documentación normativa de Sharky y archivos concretos relacionados con las nueve fases. La revisión documental inicial no consultó datos reales de producción; las fases posteriores deben registrar por separado cuando exista verificación de producción.
 
 - **Existente:** identificado en código o documentación versionada; no certifica por sí solo que esté desplegado.
 - **Parcial:** existe una base útil, pero la revisión dirigida no acredita todo el alcance futuro.
 - **Futuro:** alcance por desarrollar; no implica que se haya demostrado la ausencia absoluta de cualquier pieza similar.
 
-Los enlaces siguientes son rutas relativas del repositorio; la referencia reproducible de esta revisión es el commit indicado en la cabecera. El esquema inicial es una referencia histórica: debe leerse junto con las migraciones y el código vigente, no como fotografía única del modelo actual.
+Los enlaces siguientes son rutas relativas del repositorio. El esquema inicial es una referencia histórica: debe leerse junto con las migraciones y el código vigente, no como fotografía única del modelo actual.
 
 ### 5.2 Mapa de fuentes y límites
 
@@ -77,7 +77,7 @@ Los enlaces siguientes son rutas relativas del repositorio; la referencia reprod
 | Ajustes e historial financiero | Existente: edición de importe, método y fecha con motivo; la edición registra antes/después en `historial`. La invalidación conserva el pago y recalcula obligaciones relacionadas. | [editar-pago](../api/editar-pago.php), [invalidar-pago](../api/invalidar-pago.php). | No imponer que toda corrección deba borrar o reemplazar el pago: hay operaciones vigentes diferentes. |
 | Periodos, reparto y cierres | Existente: periodos financieros por sede, totales por concepto, reparto desde configuración de sede y cierres guardados. | [periodos-financieros](../config/periodos-financieros.php), [cierres-mensuales](../api/cierres-mensuales.php), [resumen-financiero](../api/resumen-financiero.php), [estándar de reportes](REPORTES.md). | La fase 2 completa y concilia la visión; no inventa otro motor contable ni porcentajes. |
 | Asistencia, ausencias y reposiciones | Existente: sesiones, marcas de asistencia, avisos de ausencia, reposiciones regulares y tratamiento de ausencias/reposiciones de intensivos. | [sesiones](../api/sesiones.php), [asistencia](../api/asistencia.php), [ausencias programadas](../api/ausencias-programadas.php), [modelo de asistencia](../database/migrations/20260816_attendance_model.sql). | Preservar estados, cierre de sesiones, elegibilidad y límites vigentes. Las reposiciones de ambos productos no tienen una representación idéntica. |
-| Pendientes y alertas | Parcial: alertas derivadas por sede sobre mensualidad, altas pendientes, ausencia, reposición y fin de intensivo; obligaciones regulares por alumno. No se acredita en estas APIs un seguimiento persistente general pendiente/atendido/resuelto. | [alertas](../api/alertas.php), [obligaciones-alumnos](../api/obligaciones-alumnos.php). | La fase 1 organiza atención sobre estas señales; la fase 5 amplía reglas y presentación de alertas. |
+| Pendientes y alertas | F1 implementó gestión persistente para las tres causas iniciales; alertas derivadas existentes continúan siendo fuentes separadas. | [pendientes](../api/pendientes.php), [centro de pendientes](../config/centro-pendientes.php), [alertas](../api/alertas.php), [obligaciones-alumnos](../api/obligaciones-alumnos.php). | F1 gestiona atención; F2/F4/F5 incorporan los tipos diferidos sin duplicar la cola. |
 | Expediente | Parcial: ficha con datos, observaciones y acciones; API de timeline que combina pagos, intensivos, asistencia, avisos e historial. | [ficha-alumno](../public/ficha-alumno.php), [timeline-alumno](../api/timeline-alumno.php). | Ampliar la ficha y la línea de tiempo existentes. No se verificó un campo de nivel académico unificado en la API de alumnos ni un módulo separado de notas con versiones. |
 | Sharky / base para CRM | Existente: memoria comercial estructurada, atribución, estado conversacional, contactos con roles y referencias de alumno/profesor. Parcial respecto de un CRM interno. | [memoria comercial](../config/sharky-commercial-memory.php), [modelo de orquestador](../database/migrations/20260902_sharky_orchestrator.sql), [contactos](../database/migrations/20260908_sharky_contact_book.sql), [panel Sharky](../api/sharky-admin.php). | Contacto, identidad, estado conversacional y etapa comercial no son la misma cosa. No se acredita un pipeline CRM completo con los seis estados propuestos. |
 | Dashboard | Existente: indicadores por sede, fecha operativa, facturación por periodo, alumnos activos, pendientes, mensualidades, intensivos, avisos y reposiciones. | [dashboard](../api/dashboard.php), [tiempo operativo](../config/dashboard-tiempo.php). | La fase 6 mejora el dashboard vigente y define fuentes verificables para cada indicador nuevo. |
@@ -89,9 +89,9 @@ Los enlaces siguientes son rutas relativas del repositorio; la referencia reprod
 
 1. **Abono no significa liquidación ni derecho a clase.** `pago-contexto.php` distingue `PENDIENTE`, `ANTICIPO` y `PAGADO` para el intensivo. `regla_intensivo_pagado()` compara la suma de pagos válidos del alumno/curso con el precio. No restablecer la restricción antigua de un solo pago por intensivo ni sumar los abonos de otros alumnos del mismo curso.
 2. **Mensualidad vigente y mensualidad vencida son señales diferentes.** Existen ciclos `P1`/`P15` para Palapas, rangos de vigencia y obligaciones cubiertas históricamente o por continuidad cuando corresponde. No crear deuda por diferencia con la tarifa actual ni por ausencia de un recibo cuando una excepción vigente cubre la obligación.
-3. **Periodo financiero y fecha de cobro no son equivalentes.** `financiero_totales()` atribuye mensualidades por mes/año de la obligación y usa fecha de inscripción o inicio de curso para los otros conceptos dentro del rango financiero. El resumen financiero consultado usa rangos de mes calendario; cierres y dashboard reutilizan periodos financieros. Una futura vista debe explicar su base temporal y conciliar diferencias, sin cambiar reglas silenciosamente.
+3. **Periodo financiero y fecha de cobro no son equivalentes.** `financiero_totales()` atribuye mensualidades por mes/año de la obligación y usa fecha de inscripción o inicio de curso para los otros conceptos dentro del rango financiero. Una vista financiera debe explicar su base temporal y conciliar diferencias, sin cambiar reglas silenciosamente.
 4. **“Activo” tiene significados actuales distintos.** El dashboard cuenta regulares con mensualidad pagada vigente e intensivos vigentes con algún pago válido, excluyendo bajas. El derecho a clase exige las reglas de `reglas-acceso.php`, incluida liquidación del intensivo. El nuevo dashboard no puede presentar su conteo como autorización de acceso ni modificar esa autorización para que coincidan.
-5. **Consultar una API no siempre es una lectura sin efectos.** En el código revisado, `pago-contexto.php` puede promover planes programados para ADMIN y el GET de `sesiones.php` puede generar sesiones para ADMIN. Las nuevas vistas de consulta deben reutilizar reglas sin disparar escrituras incidentales. Esta observación no autoriza cambiar esos endpoints ahora.
+5. **Consultar una API no siempre es una lectura sin efectos.** En el código revisado, `pago-contexto.php` puede promover planes programados para ADMIN y el GET de `sesiones.php` puede generar sesiones para ADMIN. Las nuevas vistas de consulta deben reutilizar reglas sin disparar escrituras incidentales.
 6. **La línea de tiempo ya compone fuentes y algunas horas son de presentación.** Por ejemplo, el timeline asigna una hora fija a asistencias y a eventos con fecha sin hora. No convertir esa hora en una marca de auditoría real ni inventar una secuencia exacta de acciones del mismo día.
 7. **El historial no está garantizado de forma global.** La gestión actual de alumnos contiene una operación de eliminación definitiva con sus controles; no se modifica ni se incorpora automáticamente al expediente nuevo. La nueva gestión de profesores debe usar inactivación: el modelo tiene relaciones que podrían eliminarse en cascada ante un borrado físico.
 8. **Docencia compartida.** La migración de profesores documenta que una cancelación individual no equivale a cancelar la clase si queda otro profesor activo asignado disponible. Sustituciones, carga y resumen diario deben preservar esta distinción.
@@ -117,7 +117,7 @@ Estas observaciones son dependencias directas del roadmap, no una lista de corre
 
 ### 6.2 Dependencias sin ciclos ni fases nuevas
 
-- **F1 no espera a F2, F4 o F5 completas.** Empieza con las señales verificadas. Usa los cálculos actuales; incorpora saldos más completos de F2, prospectos de F4 y reglas de F5 cuando estén disponibles. Los tipos aplazados permanecen explícitos en el progreso.
+- **F1 no espera a F2, F4 o F5 completas.** Empezó con las señales verificadas. Usa los cálculos actuales; incorpora saldos más completos de F2, prospectos de F4 y reglas de F5 cuando estén disponibles. Los tipos aplazados permanecen explícitos en el progreso.
 - **F2 no depende de que F1 resuelva un pendiente.** Un pago válido o una corrección financiera determina la obligación; la etiqueta de atención nunca la determina.
 - **F3 consume F1/F2 y la historia ya existente.** No necesita esperar a F8 para mostrar eventos comprobados ni a F7 para mostrar relaciones de profesores ya disponibles.
 - **F4 alimenta seguimiento interno.** El CRM no controla el funnel ni exige modificarlo para empezar. La sede comercial puede estar todavía sin confirmar y debe mantenerse así.
@@ -147,7 +147,7 @@ Estas observaciones son dependencias directas del roadmap, no una lista de corre
 
 Un mismo hecho no debe producir duplicados al recargar. Una nueva mensualidad o una recurrencia debe distinguirse del asunto anterior sin borrar su historia. Antes de cerrar un caso se revalida el registro de origen. Resolver o atender desde este centro nunca debe marcar pagos, asistencia ni inscripciones como completados por simple cambio de etiqueta.
 
-**Información necesaria.** Referencia estable a entidad/registro, tipo de señal, periodo o sesión/curso, sede, evidencia, estado de atención, fecha de detección y responsable/fecha de gestión cuando aplique. **Pendiente de decidir:** granularidad por tipo, persistencia mínima de la gestión, permisos de atención y criterio de recurrencia; no se prescribe una tabla.
+**Información necesaria.** Referencia estable a entidad/registro, tipo de señal, periodo o sesión/curso, sede, evidencia, estado de atención, fecha de detección y responsable/fecha de gestión cuando aplique. La primera implementación resolvió granularidad, persistencia y permisos para sus tres causas iniciales; nuevas causas deben definir su recurrencia y origen estable antes de incorporarse.
 
 **Riesgos de compatibilidad.** Duplicar alertas agregadas como si fueran casos individuales; confundir falta de mensualidad vigente con deuda cuantificada; generar pendientes por inscripciones históricamente cubiertas; perder restricciones por sede al agrupar.
 
@@ -155,7 +155,7 @@ Un mismo hecho no debe producir duplicados al recargar. Una nueva mensualidad o 
 
 **Criterio de terminado.** Los tipos habilitados tienen fuente y regla verificables, enlace al detalle y estados persistentes de gestión; recargas no duplican casos; atención identifica al responsable cuando corresponde; resolución conserva evidencia e historia; se prueban un pago posterior, una invalidación, una nueva obligación y el aislamiento por sede. Tipos diferidos quedan registrados y la fase completa no se declara verificada mientras falte alcance comprometido sin decisión documentada.
 
-**Estado:** En revisión. Se preparó el incremento inicial con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. El [PR #254](https://github.com/manglefurniture/hache-natacion/pull/254) está abierto en borrador; Quality ya ejecutó correctamente las regresiones PHP/estáticas y `delivery-status-mariadb`. La migración versionada se incorpora al flujo de release y el incremento queda listo para revisión, sin despliegue.
+**Estado:** **Implementado.** El PR #254 fue integrado a `main` el 2026-09-15 e incorporó el primer incremento con mensualidad regular sin cobertura, inscripción regular sin cobertura y reposición regular disponible. Se difieren saldos de intensivo a F2; prospectos sin seguimiento a F4; y varias ausencias, continuidad de intensivos y nuevas reglas de alerta a F5. La gestión se conserva en una tabla específica, sin modificar las fuentes de dominio. El PR #257, también integrado, corrigió la interfaz para que “Marcar atendido” solo aparezca cuando el estado efectivo es `PENDIENTE` y la causa siga activa; `ATENDIDO` conserva su traza y `RESUELTO` no ofrece la acción. Quality pasó en ambos incrementos. La fase no se marca **Verificada** solo por integración: ese estado exige comprobación funcional de producción.
 
 ### FASE 2 — Finanzas internas
 
@@ -173,7 +173,20 @@ La deuda debe provenir de obligaciones verificadas y ajustes autorizados. El pre
 
 Si se extienden reportes administrativos/financieros, respetar [REPORTES.md](REPORTES.md): exportación PDF con identidad Hache, resolución por sede/periodo y CSV cuando corresponda. El detalle interno puede mostrar método de pago; el PDF de liquidación conserva su contenido y exclusiones vigentes.
 
-**Información necesaria.** Identificadores de pago y obligación, alumno, sede atribuida a la operación, importe total/cobrado, validez, fechas, concepto, método si está registrado, motivo/autor del ajuste, reglas del periodo y del convenio. **Pendiente de decidir:** presentación de diferencias entre mes calendario y periodo personalizado, tratamiento explícito de ajustes posteriores a un cierre y cobertura de saldos sin obligación registrada. Conservar las reglas actuales hasta resolver esas decisiones.
+**Información necesaria.** Identificadores de pago y obligación, alumno, sede atribuida a la operación, importe total/cobrado, validez, fechas, concepto, método si está registrado, motivo/autor del ajuste, reglas del periodo y del convenio.
+
+**Decisión P-02 resuelta para el primer incremento (2026-09-15).**
+
+1. La vista distingue **periodo de obligación**, **periodo financiero** y **fecha de cobro**; no intenta forzar que coincidan.
+2. Para totales de reparto y comparación con cierres se reutilizan `financiero_totales()` y `financiero_rango()` como autoridades vigentes.
+3. Un cierre guardado es una instantánea histórica inmutable. La vista puede comparar cálculo actual contra cierre guardado, pero nunca lo sobrescribe ni lo rehace.
+4. Solo se cuantifica saldo cuando existe una obligación con importe registrado: `mensualidades.importe_a_cobrar`, `inscripciones.importe` o precio del intensivo para el alumno/curso. Una señal sin importe verificable no se convierte en deuda usando la tarifa actual.
+5. El monto pagado proviene de pagos `VALIDO`; un pago `INVALIDADO` permanece visible como historia, pero no reduce saldo.
+6. En intensivos, los abonos se suman por `alumno_id + curso_intensivo_id`; el precio de la obligación se cuenta una sola vez por alumno/curso.
+7. La fase no generaliza multiabono a mensualidad ni inscripción.
+8. Porcentajes, socio y mínimos siguen viniendo de la configuración de sede; no se copian a otra autoridad.
+
+**Primer incremento en revisión.** El PR #261 incorpora una API estrictamente de lectura y una vista interna “Obligaciones y saldos”, integrada al centro financiero. Presenta resumen del periodo financiero, obligaciones cuantificables, pagos válidos, saldos, pagos invalidados como historia y comparación `actual vs cierre guardado`. No añade migración ni acciones de cobro. Quality #1399 completó con éxito sobre el primer HEAD revisado; cualquier commit posterior debe volver a pasar Quality antes de integración.
 
 **Riesgos de compatibilidad.** Sumar el total del curso una vez por cada abono; duplicar mensualidad e importe del pago; trasladar ingresos históricos a la sede actual del alumno; alterar reparto por recalcular con parámetros actuales; presentar un anticipo como curso liquidado; tratar diferencias de calendario como errores de datos.
 
@@ -181,7 +194,7 @@ Si se extienden reportes administrativos/financieros, respetar [REPORTES.md](REP
 
 **Criterio de terminado.** Total, pagado y saldo se explican por registros concretos y coinciden con sus operaciones de origen; se verifican cero pagos, uno y varios abonos, liquidación, rechazo de sobrepago, edición e invalidación. Se comprueban periodos P1/P15 cuando corresponda, sedes, excepción de inscripción cubierta y comparación cierre/actual. Las vistas F1/F3/F6/F9 consumen la misma definición financiera aplicable y no suman dos veces el mismo dinero.
 
-**Estado:** Pendiente. Pagos, abonos de intensivo, reparto y cierres ya tienen implementación versionada.
+**Estado:** **En revisión.** El primer incremento está en PR #261; la fase completa no se considera terminada por este incremento aislado.
 
 ### FASE 3 — Expediente 360° del alumno
 
@@ -361,15 +374,15 @@ Cobros del día usan fecha de cobro y validez conforme a la definición aprobada
 
 **Criterio de terminado.** Cada bloque enlaza a los registros que explican su cifra bajo la misma sede y fecha; apertura/cierre funcionan con un día normal, un día sin actividad y datos incompletos. Cobros concilian por fecha, asistencia respeta cancelaciones y marcas, y consultar no produce mutaciones. El resumen reutiliza definiciones de módulos anteriores y declara diferencias de cobertura.
 
-**Estado:** Pendiente. No se implementa ni se programa envío alguno en esta tarea.
+**Estado:** Pendiente. No se implementa ni se programa envío alguno en esta fase todavía.
 
 ## 8. Orden recomendado de implementación
 
 El orden general se mantiene: **F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9**.
 
-Dentro de cada fase, trabajar en incrementos pequeños: confirmar la fuente y decisiones pendientes, delimitar el comportamiento, implementar solo lo autorizado en una tarea futura y revisar su compatibilidad con consumidores. Estos son pasos internos, no fases adicionales.
+Dentro de cada fase, trabajar en incrementos pequeños: confirmar la fuente y decisiones pendientes, delimitar el comportamiento, implementar solo lo autorizado y revisar su compatibilidad con consumidores. Estos son pasos internos, no fases adicionales.
 
-La disponibilidad de alertas, finanzas, profesores y auditoría actuales permite avanzar sin invertir el orden. Al completar una fuente posterior, volver solo a los puntos de integración ya registrados de fases anteriores. Por ejemplo, F4 habilita los pendientes de prospectos aplazados en F1; no obliga a rehacer el centro. Cualquier necesidad directa de alterar el orden se registra con motivo e impacto y requiere una decisión explícita; este documento no introduce esa alteración.
+La disponibilidad de alertas, finanzas, profesores y auditoría actuales permite avanzar sin invertir el orden. Al completar una fuente posterior, volver solo a los puntos de integración ya registrados de fases anteriores. Por ejemplo, F4 habilita los pendientes de prospectos aplazados en F1; no obliga a rehacer el centro. Cualquier necesidad directa de alterar el orden se registra con motivo e impacto y requiere una decisión explícita.
 
 ## 9. Reglas para evitar que una fase pise a otra
 
@@ -388,24 +401,22 @@ La disponibilidad de alertas, finanzas, profesores y auditoría actuales permite
 
 ## 10. Relación con «Charquí MD» / Sharky
 
-**El solicitante confirmó que «Charquí MD» se refiere a [`SHARKY-CORE-RULES.md`](../SHARKY-CORE-RULES.md).** No se crea un alias de archivo ni un documento normativo competidor. Se consultaron Core Rules, `AGENTS.md`, patrones positivos, guía lingüística y el documento del funnel vigente.
-
-Core Rules conserva la autoridad sobre identidad, fuente, producto, sede, memoria, seguimiento y acciones reales. Este roadmap gobierna la coordinación de las mejoras internas y no cambia esas reglas. Si una integración futura no puede demostrar compatibilidad, se detiene únicamente el cambio dependiente hasta aclararlo, sin reinterpretar las reglas vigentes.
+**El solicitante confirmó que «Charquí MD» se refiere a [`SHARKY-CORE-RULES.md`](../SHARKY-CORE-RULES.md).** No se crea un alias de archivo ni un documento normativo competidor. Core Rules conserva la autoridad sobre identidad, fuente, producto, sede, memoria, seguimiento y acciones reales. Este roadmap gobierna la coordinación de las mejoras internas y no cambia esas reglas.
 
 Contratos que deben preservarse en F4 y en cualquier conexión de F1/F3/F5/F6/F7/F8/F9 con Sharky:
 
 - Sharky sigue siendo un asistente con IA, identificado como tal.
-- Prospectos nuevos `meta_ad`, `web` y `direct` usan el funnel cerrado vigente, preservando la fuente real; referrals no publicitarios mantienen el fallback documentado en GP-001. GP-002 es el patrón activo de captación común.
+- Prospectos nuevos `meta_ad`, `web` y `direct` usan el funnel cerrado vigente, preservando la fuente real; referrals no publicitarios mantienen el fallback documentado.
 - Alumno conocido no se degrada a prospecto. Fuente de entrada e identidad son conceptos separados.
 - Controles y estado estructurado gobiernan producto/sede/inscripción; texto, campañas, prefills y audio no sustituyen selecciones. Brain no gana autoridad en el funnel por incorporar CRM.
 - Horarios, planes, precios, edad y elegibilidad derivan de autoridades actuales. El roadmap no cambia el recorrido ni las prioridades comerciales.
 - Regulares conserva el Flow protegido y el takeover humano para coordinar pago; no se añade cobro automático. Intensivo reutiliza registro/pago y validaciones vigentes.
 - Takeover y reactivación conservan contexto válido; no se reinicia conversación desde un pendiente o etiqueta CRM.
-- Las reglas vigentes de seguimiento, incluida deliberación del prospecto, se respetan. “Sin seguimiento” en una vista interna no autoriza un nuevo mensaje.
+- Las reglas vigentes de seguimiento se respetan. “Sin seguimiento” en una vista interna no autoriza un nuevo mensaje.
 - Las acciones reales mantienen intención, confirmación cuando corresponde, revalidación e idempotencia. Si falta autoridad, no se ejecutan.
 - Se conserva la guía de lenguaje y la política de tono/emojis sin convertir este roadmap en un nuevo prompt.
 
-No se reabren decisiones de aprendizaje, captación o Brain. Si una futura tarea surgiera de conversaciones o de la bandeja de aprendizaje, deberá consultar además los documentos que `AGENTS.md` exige para ese caso; eso no amplía la misión actual.
+Antes de modificar archivos relacionados con Sharky deben consultarse `AGENTS.md`, Core Rules y los documentos adicionales que `AGENTS.md` exija para el caso concreto.
 
 ## 11. Registro de decisiones
 
@@ -413,7 +424,7 @@ No se reabren decisiones de aprendizaje, captación o Brain. Si una futura tarea
 
 | ID | Fecha | Decisión y fundamento | Efecto |
 | --- | --- | --- | --- |
-| D-01 | 2026-09-15 | Crear exclusivamente este MD; instrucción del solicitante. | No implementación, migraciones, configuración ni producción. |
+| D-01 | 2026-09-15 | Crear inicialmente este MD como documento maestro. | Estableció el roadmap; no autorizó por sí solo cambios funcionales. |
 | D-02 | 2026-09-15 | Mantener nueve fases en el orden solicitado. | No añadir fases ni rediseñar la arquitectura. |
 | D-03 | 2026-09-15 | Reutilizar módulos comprobados en GitHub; distinguir existente/parcial/futuro. | Alertas, dashboard, ficha/timeline, profesores y auditoría no se presentan como inexistentes. |
 | D-04 | 2026-09-15 | Preservar las reglas financieras actuales y sus fuentes. | Abonos múltiples de intensivo por alumno/curso; unicidad vigente de inscripción/mensualidad; sin porcentajes nuevos. |
@@ -421,9 +432,12 @@ No se reabren decisiones de aprendizaje, captación o Brain. Si una futura tarea
 | D-06 | 2026-09-15 | Separar gestión de pendientes, detección de alertas y estados de dominio. | Un atendido/resuelto no cambia deuda ni estado de alumno. |
 | D-07 | 2026-09-15 | Preservar historia; baja futura de profesor mediante inactivación. | No borrado físico para dar de baja ni reconstrucción ficticia del pasado. |
 | D-08 | 2026-09-15 | Indicadores con fuente, unidad, sede y periodo explícitos. | Resolver por decisión las diferencias de activos y periodos; no corregirlas de forma tácita. |
-| D-09 | 2026-09-15 | Todas las fases comienzan Pendientes. | Elaborar el documento no equivale a analizar, implementar o desplegar una fase. |
-| D-10 | 2026-09-15 | Entrega documental mediante rama/PR sin merge: Core Rules §23 describe auto-deploy al integrar a `main` y el solicitante prohíbe desplegar. | Esta tarea termina en el MD revisable; no fusionar ni activar despliegues para completarla. |
-| D-11 | 2026-09-15 | Para F1 se habilitan únicamente tres causas ya verificables: mensualidad regular sin cobertura del período vigente, inscripción regular sin cobertura y reposición regular `DISPONIBLE`. `pendientes_gestion` es necesaria porque `historial` y `auditoria_eventos` no pueden conservar por sí solos estado, origen estable y atención de un asunto transversal. | La tabla guarda solo identidad/origen, estado y trazabilidad; ADMIN gestiona y ADMIN/VERIFICADOR consultan dentro de su sede. La causa se revalida antes de una resolución manual; si un pago o uso de reposición la deja de aplicar, la vista la presenta como resuelta por fuente sin escribir en ella. |
+| D-09 | 2026-09-15 | Todas las fases comenzaron Pendientes. | Elaborar el documento no equivale a implementar o desplegar una fase. |
+| D-10 | 2026-09-15 | La entrega documental inicial se hizo mediante rama/PR. | Decisión histórica de PR #253; no limita autorizaciones funcionales posteriores. |
+| D-11 | 2026-09-15 | Para F1 se habilitan únicamente tres causas ya verificables: mensualidad regular sin cobertura del período vigente, inscripción regular sin cobertura y reposición regular `DISPONIBLE`. `pendientes_gestion` conserva estado y atención transversal. | La tabla guarda identidad/origen, estado y trazabilidad; ADMIN gestiona y ADMIN/VERIFICADOR consultan dentro de su sede. |
+| D-12 | 2026-09-15 | PR #254 y corrección #257 integrados a `main`. | F1 pasa a **Implementado**; los tipos diferidos permanecen asignados a F2/F4/F5. |
+| D-13 | 2026-09-15 | Resolver P-02 separando obligación, periodo financiero y cobro; cierres históricos inmutables; saldo solo con obligación registrada; pagos válidos como reducción del saldo. | Define el primer incremento de F2 y evita recrear deuda con precios actuales o una contabilidad paralela. |
+| D-14 | 2026-09-15 | F2 empieza con una vista/API de solo lectura sin migración. | PR #261 agrega “Obligaciones y saldos” y comparación con cierre; no modifica pagos ni cierres. |
 
 ### 11.2 Decisiones pendientes antes del incremento afectado
 
@@ -431,8 +445,6 @@ No es necesario resolverlas todas para iniciar una fase; sí resolver cada una a
 
 | ID | Fase | Decisión pendiente | Quién debe validarla / condición |
 | --- | --- | --- | --- |
-| P-01 | F1 | Granularidad, persistencia mínima, responsables y recurrencia de asuntos. | Responsable de operación con quien implemente; compatibilidad con estados de dominio. |
-| P-02 | F2 | Presentación/conciliación de periodos y ajustes posteriores a cierres; saldos sin obligación explícita. | Responsable administrativo/financiero; preservar convenios y cierres actuales. |
 | P-03 | F3 | Fuente del nivel, notas con autoría y cobertura temporal de cambios del alumno. | Operación; datos verificables, sin completar historia por inferencia. |
 | P-04 | F4 | Mapeo de etapas, contacto/participante/oportunidad, último contacto, conversión y retención mínima. | Responsable comercial; cumplimiento de Core Rules y fuentes existentes. |
 | P-05 | F5 | Umbrales nuevos de ausencias/seguimiento/continuidad y prioridad. | Operación; no sustituir parámetros ya definidos ni imponer sanciones. |
@@ -441,24 +453,27 @@ No es necesario resolverlas todas para iniciar una fase; sí resolver cada una a
 | P-08 | F8 | Matriz de cobertura y representación de antes/después con registros existentes. | Administración; consistencia entre resultado y evento, sin inventar datos pasados. |
 | P-09 | F9 | Corte diario, necesidad de instantánea y correcciones posteriores. | Operación; no confundir cierre operativo con cierre financiero. |
 
-Toda decisión nueva añadirá fecha, responsable real, motivo, fuentes, fases afectadas y la decisión anterior que sustituye, si existe. No borrar decisiones anteriores.
+P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resuelta para el primer incremento mediante D-13. Si un incremento posterior requiere ampliar esas decisiones, se registra una decisión adicional; no se borra la anterior.
 
 ## 12. Registro de progreso
 
-### 12.1 Entrega documental inicial
+### 12.1 Historial
 
 | Fecha | Trabajo realizado | Evidencia / límite | Resultado |
 | --- | --- | --- | --- |
-| 2026-09-15 | Revisión dirigida de fuentes de GitHub y aclaración de «Charquí MD». | Commit de referencia y rutas de la sección 5; Core Rules confirmado por el solicitante. Sin acceso a producción. | Base existente y limitaciones documentadas. |
-| 2026-09-15 | Definición de las nueve fases, dependencias, criterios y registros. | Este archivo. | Roadmap documental completo; ninguna fase implementada. |
-| 2026-09-15 | Implementación de F1 en la rama `feature/centro-pendientes-fase-1`. | `api/pendientes.php`, `config/centro-pendientes.php`, migración aditiva y vista administrativa. Sin acceso a producción. | Regresiones estáticas y JavaScript aprobadas; queda pendiente ejecutar PHP e integración. PR en borrador pendiente de crear. |
+| 2026-09-15 | Revisión dirigida de fuentes de GitHub y aclaración de «Charquí MD». | Commit de referencia y rutas de la sección 5; Core Rules confirmado por el solicitante. | Base existente y limitaciones documentadas. |
+| 2026-09-15 | Definición de las nueve fases, dependencias, criterios y registros. | PR #253. | Roadmap documental integrado. |
+| 2026-09-15 | Implementación del primer incremento de F1. | PR #254; `api/pendientes.php`, `config/centro-pendientes.php`, migración aditiva y vista administrativa. | Integrado a `main`; Quality exitoso. |
+| 2026-09-15 | Corrección de render de acción ATENDER. | PR #257; `public/pendientes.php` y regresión. | Integrado a `main`; `ATENDIDO`/`RESUELTO` ya no muestran “Marcar atendido”. |
+| 2026-09-15 | Análisis F2 y resolución P-02. | Revisión de periodos, cierres, obligaciones y abonos sobre `main` `d096e845...`. | Contrato financiero del primer incremento documentado. |
+| 2026-09-15 | Primer incremento F2: lectura unificada de obligaciones/saldos y comparación con cierre. | PR #261; API/vista de solo lectura; sin migración. | En revisión. Quality #1399 exitoso sobre HEAD `78ee778...`; debe repetirse tras cambios posteriores del PR. |
 
 ### 12.2 Estado de las fases
 
-| Fase | Estado | Base que se reutiliza | Próximo paso cuando se autorice trabajo funcional |
+| Fase | Estado | Base que se reutiliza | Próximo paso |
 | --- | --- | --- | --- |
-| F1 Centro de pendientes | En revisión | Alertas, obligaciones, reglas de acceso y reposiciones regulares | Revisar el PR #254 en borrador; mantener visibles los tipos diferidos hasta sus fases dependientes. |
-| F2 Finanzas | Pendiente | Pagos, abonos, reglas, reportes y cierres | Resolver P-02 para la primera vista financiera. |
+| F1 Centro de pendientes | Implementado | Alertas, obligaciones, reglas de acceso, reposiciones regulares y `pendientes_gestion` | Verificar funcionalmente en producción y, conforme avancen F2/F4/F5, incorporar tipos diferidos sin rehacer la cola. |
+| F2 Finanzas | En revisión | Pagos, abonos, obligaciones registradas, reglas, periodos, reportes y cierres | Cerrar PR #261 tras Quality/revisión; desplegar y verificar el primer incremento antes de ampliar integraciones. |
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Pendiente | Alertas existentes | Resolver P-05 y catálogo acotado de reglas. |
@@ -487,22 +502,19 @@ Una fase se considera terminada cuando todo su alcance comprometido cumple sus c
 
 ## 14. Regla de continuidad y control de cierre
 
-**Antes de modificar alumnos, pagos, mensualidades, asistencia, ausencias, reposiciones, profesores, usuarios o Sharky por motivos incluidos en este roadmap, es obligatorio consultar este documento y actualizarlo con las decisiones y el progreso del cambio.** También se consulta `AGENTS.md` y, para Sharky, Core Rules y los documentos aplicables. Esta regla documental no implementa un bloqueo técnico ni modifica otros archivos.
+**Antes de modificar alumnos, pagos, mensualidades, asistencia, ausencias, reposiciones, profesores, usuarios o Sharky por motivos incluidos en este roadmap, es obligatorio consultar este documento y actualizarlo con las decisiones y el progreso del cambio.** También se consulta `AGENTS.md` y, para Sharky, Core Rules y los documentos aplicables.
 
 Para retomar el trabajo desde otra conversación:
 
 1. Leer propósito, exclusiones, estado real y registros de decisiones/progreso.
-2. Comparar las fuentes relevantes de GitHub con el commit de referencia, únicamente dentro de la fase autorizada.
+2. Comparar las fuentes relevantes de GitHub con el último commit de referencia, únicamente dentro de la fase autorizada.
 3. Identificar el incremento, sus datos y consumidores, resolver sus decisiones pendientes y registrar el criterio de terminado.
 4. Mantener el orden general y las reglas para evitar interferencias. No usar un dato supuesto como dependencia satisfecha.
-5. Al terminar el incremento futuro, registrar evidencia y siguiente paso sin iniciar otra fase automáticamente.
+5. Al terminar el incremento, registrar evidencia y siguiente paso sin iniciar otra fase automáticamente.
 
-### Cierre de la misión documental
+### Cierre de la misión documental inicial — histórico
 
-- Archivo autorizado: **`docs/HACHE-INTERNAL-IMPROVEMENTS-ROADMAP.md`**.
-- No es indispensable modificar un índice documental: no se propone otro archivo.
-- Las nueve fases están definidas con problema, objetivo, alcance, dependencias, comportamiento, información, riesgos, exclusiones, criterio de terminado y estado.
-- Las fuentes de GitHub, los límites de la comprobación y la relación con Core Rules están documentados.
-- No se implementa funcionalidad, no se ejecutan migraciones, no se cambia configuración, no se accede al VPS y no se despliega.
-- No se invocan manualmente Codex, Inge ni agentes adicionales.
-- La misión termina con este MD completo y revisable en GitHub. Cualquier implementación requiere una tarea posterior explícita.
+- PR #253 creó este documento maestro.
+- Las nueve fases quedaron definidas con problema, objetivo, alcance, dependencias, comportamiento, información, riesgos, exclusiones, criterio de terminado y estado.
+- Las fuentes de GitHub, los límites de la comprobación y la relación con Core Rules quedaron documentados.
+- Ese cierre describía exclusivamente la misión documental inicial y **no** representa el estado funcional actual; para el estado vigente deben leerse las secciones 11 y 12.
