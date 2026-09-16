@@ -21,7 +21,7 @@ page_require(['ADMIN','VERIFICADOR']);
     <label>Tipo<select id="tipo"><option value="">Todos los tipos</option></select></label>
   </section>
   <div id="list" class="list"><div class="empty">Cargando pendientes…</div></div>
-  <div class="deferred">Esta primera versión no incluye saldos de intensivos, prospectos sin seguimiento, varias ausencias ni continuidad de intensivos: dependen de fases posteriores o de decisiones aún no aprobadas.</div>
+  <div class="deferred">Prospectos sin seguimiento, varias ausencias y continuidad de intensivos permanecen diferidos a sus fases correspondientes.</div>
 </main>
 <script>
 const list=document.getElementById('list'),estado=document.getElementById('estado'),tipo=document.getElementById('tipo');
