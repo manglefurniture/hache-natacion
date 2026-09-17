@@ -10,12 +10,14 @@ declare(strict_types=1);
  */
 
 require_once __DIR__.'/reglas-acceso.php';
+require_once __DIR__.'/consecutive-absence-alert.php';
 
 const CENTRO_PENDIENTES_TIPOS_HABILITADOS = [
     'MENSUALIDAD_REGULAR_SIN_COBERTURA',
     'INSCRIPCION_REGULAR_SIN_COBERTURA',
     'REPOSICION_REGULAR_DISPONIBLE',
     'SALDO_INTENSIVO_PENDIENTE',
+    'RACHA_AUSENCIAS_CONSECUTIVAS',
 ];
 
 function centro_pendientes_identidad(string $tipo, string $origenTipo, string $origenId, ?string $periodoInicio = null, ?string $periodoFin = null): string
@@ -96,6 +98,7 @@ function centro_pendientes_url(string $tipo, string $alumnoId, ?string $cursoInt
             => '/pagos.php?alumno_id='.rawurlencode($alumnoId).'&tipo=INTENSIVO'
                 .($cursoIntensivoId !== null && $cursoIntensivoId !== '' ? '&curso_intensivo_id='.rawurlencode($cursoIntensivoId) : ''),
         'REPOSICION_REGULAR_DISPONIBLE' => '/ausencias.php?alerta=reposiciones',
+        'RACHA_AUSENCIAS_CONSECUTIVAS' => '/ficha-alumno.php?id='.rawurlencode($alumnoId),
         default => '/dashboard.php',
     };
 }
@@ -107,6 +110,7 @@ function centro_pendientes_descripcion_tipo(string $tipo): string
         'INSCRIPCION_REGULAR_SIN_COBERTURA' => 'Inscripción regular sin cobertura',
         'REPOSICION_REGULAR_DISPONIBLE' => 'Reposición regular disponible',
         'SALDO_INTENSIVO_PENDIENTE' => 'Saldo de intensivo pendiente',
+        'RACHA_AUSENCIAS_CONSECUTIVAS' => 'Racha de ausencias consecutivas',
         default => 'Pendiente administrativo',
     };
 }
@@ -246,6 +250,31 @@ function centro_pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sed
         ]);
     }
 
+    foreach (hache_internal_consecutive_absence_candidates($pdo, $sedeId) as $racha) {
+        $alumnoId = (string)$racha['alumno_id'];
+        $total = (int)$racha['ausencias_consecutivas'];
+        $noJustificadas = (int)$racha['no_justificadas_consecutivas'];
+        $explicacion = $total.' ausencia'.($total === 1 ? '' : 's').' consecutiva'.($total === 1 ? '' : 's').' registrada'.($total === 1 ? '' : 's').'.';
+        if ($noJustificadas >= HACHE_INTERNAL_CONSECUTIVE_UNJUSTIFIED_THRESHOLD) {
+            $explicacion .= ' '.$noJustificadas.' no justificadas consecutivas.';
+        }
+        centro_pendientes_agregar($pendientes, [
+            'tipo' => 'RACHA_AUSENCIAS_CONSECUTIVAS',
+            'origen_tipo' => 'ASISTENCIA_RACHA',
+            'origen_id' => (string)$racha['origen_asistencia_id'],
+            'alumno_id' => $alumnoId,
+            'alumno_nombre' => (string)$racha['alumno_nombre'],
+            'sede_id' => $sedeId,
+            'sede_nombre' => $sedeNombre,
+            'periodo_inicio' => null,
+            'periodo_fin' => null,
+            'fecha_referencia' => $racha['fecha_ultima_marca'],
+            'explicacion' => $explicacion,
+            'href' => centro_pendientes_url('RACHA_AUSENCIAS_CONSECUTIVAS', $alumnoId),
+            'causa_activa' => true,
+        ]);
+    }
+
     return centro_pendientes_indizar($pendientes);
 }
 
@@ -284,6 +313,14 @@ function centro_pendientes_causa_activa(PDO $pdo, array $pendiente, string $sede
             LIMIT 1");
         $st->execute([':curso'=>$origen['curso_id'], ':alumno'=>$origen['alumno_id'], ':sede'=>$sedeId]);
         return (bool)$st->fetchColumn();
+    }
+    if ($tipo === 'RACHA_AUSENCIAS_CONSECUTIVAS') {
+        $alumnoId = trim((string)($pendiente['alumno_id'] ?? ''));
+        if ($alumnoId === '' || $origenId === '') {
+            return false;
+        }
+        $racha = hache_internal_consecutive_absence_candidate($pdo, $sedeId, $alumnoId);
+        return is_array($racha) && (string)$racha['origen_asistencia_id'] === $origenId;
     }
 
     if (!in_array($tipo, ['MENSUALIDAD_REGULAR_SIN_COBERTURA', 'INSCRIPCION_REGULAR_SIN_COBERTURA'], true)) {
