@@ -68,6 +68,8 @@ jobs:
         run: php tests/internal-alert-settings-regression.php
       - name: Intensive no-continuity internal alert regression
         run: php tests/intensive-no-continuity-alert-regression.php
+      - name: Intensive continuity pending regression
+        run: php tests/intensive-continuity-pending-regression.php
       - name: Sharky WhatsApp template notifications regression
         run: php tests/sharky-template-notifications-regression.php
       - name: Sharky 48h prospect re-engagement regression
