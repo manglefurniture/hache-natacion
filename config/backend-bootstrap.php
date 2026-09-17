@@ -100,7 +100,7 @@ ob_start(static function (string $html): string {
     $themeCss = '<link rel="stylesheet" href="/assets/backend-theme.css?v=20260831-1">';
     $themeReviewFixes = '<link rel="stylesheet" href="/assets/backend-theme-review-fixes.css?v=20260831-3">';
     $diag = '<script src="/assets/diagnostico.js?v=20260817-1"></script>';
-    $js = '<script src="/assets/backend-menu.js?v=20260915-pendientes1" defer></script>';
+    $js = '<script src="/assets/backend-menu.js?v=20260915-pendientes1&f3=20260916-timeline1" defer></script>';
     $oblig = '<script src="/assets/obligaciones-alumnos.js?v=20260821-1" defer></script>';
     $phone = '<script src="/assets/telefono-internacional.js?v=20260821-1" defer></script>';
     foreach ([['/assets/backend-theme.js',$themeJs,'</head>'],['/assets/backend-menu.css',$css,'</head>'],['/assets/backend-relief.css',$relief,'</head>'],['/assets/backend-theme.css',$themeCss,'</head>'],['/assets/backend-theme-review-fixes.css',$themeReviewFixes,'</head>'],['/assets/diagnostico.js',$diag,'</head>'],['/assets/backend-menu.js',$js,'</body>'],['/assets/obligaciones-alumnos.js',$oblig,'</body>'],['/assets/telefono-internacional.js',$phone,'</body>']] as [$needle,$tag,$close]) {
