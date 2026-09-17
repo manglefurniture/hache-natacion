@@ -15,7 +15,8 @@ function hache_alumno_estado_evento(
     string $sedeId,
     string $nuevoEstado,
     string $tipoHistorial,
-    string $accionAuditoria
+    string $accionAuditoria,
+    string $ruta='/api/alumno-gestion.php'
 ): void {
     $alumnoId=(string)$alumno['id'];
     $anterior=(string)$alumno['estado_administrativo'];
@@ -49,6 +50,6 @@ function hache_alumno_estado_evento(
         ':accion'=>$accionAuditoria,
         ':aid'=>$alumnoId,
         ':detalle'=>$detalle,
-        ':ruta'=>(string)($actor['_audit_route']??'/api/alumno-gestion.php'),
+        ':ruta'=>$ruta,
     ]);
 }
