@@ -60,4 +60,4 @@ La causa se revalida contra la misma detección F5 antes de resolver. Deja de es
 
 Un caso atendido conserva quién, cuándo y la nota mediante el contrato existente de F1. Cuando la causa deja de aplicar, el Centro lo presenta como resuelto por fuente hasta que ADMIN confirme la resolución. Si la misma relación vuelve a cumplir la regla más adelante, reaparece con la misma identidad en vez de crear un duplicado.
 
-No se requiere migración: `pendientes_gestion.tipo` y `origen_id` ya admiten este nuevo origen. Los prospectos sin sede confirmada continúan fuera del Centro de pendientes; esa limitación F1/F4 es independiente de esta integración.
+No se requiere migración específica para continuidad: `pendientes_gestion.tipo` y `origen_id` ya admiten este origen. La limitación histórica de prospectos sin sede fue resuelta posteriormente por la integración F1/F4/F5 de `PROSPECTO_SIN_SEGUIMIENTO`, que utiliza alcance global ADMIN con `sede_id=NULL` sin asignar una sede ficticia.
