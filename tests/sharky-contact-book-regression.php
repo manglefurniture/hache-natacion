@@ -81,6 +81,9 @@ $admin=file_get_contents(__DIR__.'/../api/sharky-admin.php')?:'';
 $business=file_get_contents(__DIR__.'/../config/sharky-business-actions.php')?:'';
 $maintenance=file_get_contents(__DIR__.'/../bin/sharky-google-contacts-maintenance.php')?:'';
 $wrapper=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion-wrapper')?:'';
+$oauthApi=file_get_contents(__DIR__.'/../api/google-contacts-oauth.php')?:'';
+$oauthPage=file_get_contents(__DIR__.'/../public/google-contacts-oauth.php')?:'';
+$configPage=file_get_contents(__DIR__.'/../public/configuracion.php')?:'';
 contact_book_expect(str_contains($sql,'CREATE TABLE IF NOT EXISTS sharky_contacts'),'Contact book migration must be additive/idempotent.');
 contact_book_expect(str_contains($sql,'contact_ciphertext MEDIUMTEXT')&&str_contains($sql,'desired_hash CHAR(64)'),'Contact book must encrypt PII and keep only a deterministic desired-state hash searchable.');
 contact_book_expect(!str_contains($sql,'whatsapp VARCHAR')&&!str_contains($sql,'nombre VARCHAR')&&!str_contains($sql,'phone VARCHAR'),'Migration must not create searchable plaintext phone/name columns.');
@@ -106,5 +109,13 @@ contact_book_expect(str_contains($maintenance,"https://oauth2.googleapis.com/tok
 contact_book_expect(str_contains($maintenance,"token_exchange_ok")&&!str_contains($maintenance,"['refresh_token'=>\$refreshToken"),'Authorization-code recovery must confirm success without printing the refresh token.');
 contact_book_expect(str_contains($wrapper,'google-contacts-status)')&&str_contains($wrapper,'google-contacts-sync-once)')&&str_contains($wrapper,'google-contacts-token-set)')&&str_contains($wrapper,'google-contacts-code-exchange)'),'Deploy wrapper must expose only guarded Google Contacts recovery operations.');
 contact_book_expect(str_contains($wrapper,'google-contacts-token-set recibe el token exclusivamente por stdin')&&str_contains($wrapper,'google-contacts-code-exchange recibe el código exclusivamente por stdin'),'OAuth recovery secrets must not be accepted as command-line arguments.');
+contact_book_expect(str_contains($oauthApi,"auth_require(['ADMIN'])")&&str_contains($oauthApi,'auth_csrf_validate'),'OAuth renewal API must be ADMIN-only and CSRF protected.');
+contact_book_expect(str_contains($oauthApi,"https://accounts.google.com/o/oauth2/v2/auth")&&str_contains($oauthApi,"'client_id'=>\$clientId")&&str_contains($oauthApi,"'scope'=>'https://www.googleapis.com/auth/contacts'"),'OAuth renewal UI must generate authorization for the configured Google client, not the Playground default client.');
+contact_book_expect(str_contains($oauthApi,"hache_sharky_orchestrator_runtime_dir('secrets')")&&str_contains($oauthApi,'google-contacts-oauth-stage.json')&&str_contains($oauthApi,'chmod($path,0600)'),'OAuth renewal must stage credentials only in a private ephemeral server location.');
+contact_book_expect(str_contains($oauthApi,"'client_secret'=>\$clientSecret")&&str_contains($oauthApi,"'grant_type'=>'authorization_code'")&&str_contains($oauthApi,'unset($clientSecret,$refreshToken,$accessToken,$decoded,$response,$fields,$code)'),'Server must exchange the authorization code with the supplied rotated secret and clear sensitive variables before responding.');
+contact_book_expect(str_contains($maintenance,'hache_google_contacts_promote_staged()')&&str_contains($maintenance,'time()-900')&&str_contains($maintenance,'hache_google_contacts_store_credentials($clientSecret,$refreshToken)')&&str_contains($maintenance,'@unlink($path)'),'Privileged maintenance must promote only fresh staged credentials into the authoritative environment and delete staging.');
+contact_book_expect(str_contains($maintenance,'hache_sharky_contact_book_sync_pending($pdo,50)')&&str_contains($maintenance,"'token_refresh_ok'=>true"),'Promotion must validate OAuth and retry pending contacts immediately.');
+contact_book_expect(str_contains($oauthPage,"page_require(['ADMIN'])")&&substr_count($oauthPage,'type="password"')>=2&&!str_contains($oauthPage,'localStorage')&&!str_contains($oauthPage,'sessionStorage'),'OAuth renewal UI must be ADMIN-only and never persist entered secrets in browser storage.');
+contact_book_expect(str_contains($configPage,'/google-contacts-oauth.php'),'Configuration must expose the OAuth recovery page to administrators.');
 
 fwrite(STDOUT,"SHARKY_CONTACT_BOOK_OK\n");
