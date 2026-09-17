@@ -283,7 +283,7 @@ test('el cambio rápido de horario se serializa con el ingreso a intensivos', ()
 test('la edición completa revalida alumno, horario y plan dentro de la transacción', () => {
   const source = read('public/editar-alumno.php');
   const begin = source.indexOf('$pdo->beginTransaction()');
-  const studentLock = source.indexOf('SELECT sede_id,horario_preferido_id,plan_actual_id', begin);
+  const studentLock = source.indexOf('FROM alumnos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE', begin);
   const scheduleLock = source.indexOf('SELECT activo FROM horarios', studentLock);
   const planLock = source.indexOf('SELECT activo FROM planes', scheduleLock);
   const update = source.indexOf('UPDATE alumnos SET nombre=', planLock);
