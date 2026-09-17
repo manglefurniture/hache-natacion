@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+putenv('SHARKY_CONTACT_HASH_KEY='.str_repeat('k',64));
 require_once __DIR__.'/../config/centro-pendientes-prospectos.php';
 
 function prospect_pending_expect(bool $ok,string $message): void
