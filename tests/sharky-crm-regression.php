@@ -22,11 +22,11 @@ crm_expect(hache_sharky_crm_stage(['commercial_context'=>['program'=>'regular']]
 $helper=file_get_contents(__DIR__.'/../config/sharky-crm.php')?:'';
 $api=file_get_contents(__DIR__.'/../api/prospectos.php')?:'';
 $page=file_get_contents(__DIR__.'/../public/prospectos.php')?:'';
-$menu=file_get_contents(__DIR__.'/../public/assets/backend-menu.js')?:'';
+$configPage=file_get_contents(__DIR__.'/../public/configuracion.php')?:'';
 crm_expect(!preg_match('/\b(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)?/i',$helper),'La proyección CRM debe ser de solo lectura.');
 crm_expect(str_contains($api,"auth_require(['ADMIN'])"),'El CRM debe limitar PII a ADMIN.');
 crm_expect(str_contains($api,"REQUEST_METHOD")&&str_contains($api,"'GET'"),'La API debe exponer únicamente lectura GET.');
 crm_expect(str_contains($page,'No cambia el funnel')&&str_contains($page,'no envía mensajes'),'La vista debe declarar su alcance de solo lectura.');
-crm_expect(str_contains($menu,"'/prospectos.php'")&&str_contains($menu,'CRM de prospectos'),'El CRM debe quedar accesible desde el menú interno.');
+crm_expect(str_contains($configPage,'href="/prospectos.php"')&&str_contains($configPage,'CRM de prospectos'),'El CRM debe quedar accesible desde Configuración.');
 
 echo "Sharky CRM read-only regression: OK\n";
