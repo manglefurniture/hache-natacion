@@ -39,17 +39,25 @@ try{
   $st->execute([':ss'=>$sid,':site'=>$sedeId]);$sesion=$st->fetch();
   if(!$sesion){$pdo->rollBack();out(['ok'=>false,'error'=>'La sesión no existe, ya está cerrada o fue cancelada'],409);}
   $alumnosCierre=alumnosSesion($pdo,$sesion,(string)$sesion['fecha'],$sedeId);
-  $esperados=0;$marcados=0;
+  $esperados=0;$presentes=0;$justificadas=0;$injustificadas=0;
   foreach($alumnosCierre as $alumnoCierre){
    if(empty($alumnoCierre['puede_tomar_clase']))continue;
    $esperados++;
-   if(in_array((string)($alumnoCierre['asistencia_estado']??''),['PRESENTE','AUSENTE_JUSTIFICADA','AUSENTE_NO_JUSTIFICADA'],true))$marcados++;
+   $marca=(string)($alumnoCierre['asistencia_estado']??'');
+   if($marca==='PRESENTE')$presentes++;
+   elseif($marca==='AUSENTE_JUSTIFICADA')$justificadas++;
+   elseif($marca==='AUSENTE_NO_JUSTIFICADA')$injustificadas++;
   }
+  $marcados=$presentes+$justificadas+$injustificadas;
   $st=$pdo->prepare("UPDATE sesiones SET estado='REALIZADA',cerrada=1,fecha_cierre=NOW(),cerrada_por=:u WHERE id=:ss AND cerrada=0 AND estado<>'CANCELADA'");
   $st->execute([':u'=>$uid,':ss'=>$sid]);if($st->rowCount()===0){$pdo->rollBack();out(['ok'=>false,'error'=>'La sesión cambió antes de cerrarse'],409);}
-  $coberturaGuardada=hache_asistencia_cobertura_guardar($pdo,$sid,$esperados,$marcados,$uid);
+  hache_asistencia_cobertura_guardar($pdo,$sid,$esperados,$presentes,$justificadas,$injustificadas,$uid);
   $pdo->commit();
-  out(['ok'=>true,'cobertura_asistencia'=>['guardada'=>$coberturaGuardada,'esperados'=>$esperados,'marcados'=>$marcados,'completa'=>$esperados>0&&$esperados===$marcados]]);
+  out(['ok'=>true,'cobertura_asistencia'=>[
+   'guardada'=>true,'esperados'=>$esperados,'marcados'=>$marcados,
+   'presentes'=>$presentes,'justificadas'=>$justificadas,'injustificadas'=>$injustificadas,
+   'completa'=>$esperados>0&&$esperados===$marcados
+  ]]);
  }
  out(['ok'=>false,'error'=>'Acción inválida'],422);
 }catch(Throwable $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('[sesiones] '.$e->getMessage());out(['ok'=>false,'error'=>'No se pudo procesar la sesión'],500);}
