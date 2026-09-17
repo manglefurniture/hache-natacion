@@ -358,7 +358,9 @@ test('las altas revalidan sus referencias activas después de adquirir el bloque
 
 test('el cierre de sesión inexistente no reporta éxito', () => {
   const source = read('api/sesiones.php');
-  assert.match(source, /rowCount\(\)===0\)out\(\['ok'=>false/);
+  assert.match(source, /WHERE s\.id=:ss[\s\S]{0,180}s\.cerrada=0[\s\S]{0,120}FOR UPDATE/);
+  assert.match(source, /if\(!\$sesion\)\{\$pdo->rollBack\(\);out\(\['ok'=>false[\s\S]{0,120},409\)/);
+  assert.match(source, /rowCount\(\)===0\)\{\$pdo->rollBack\(\);out\(\['ok'=>false[\s\S]{0,120},409\)/);
 });
 
 test('la reconciliación global no se repite en cada vista', () => {
