@@ -140,26 +140,21 @@ function dashboard_asistencia_periodo(PDO $pdo,string $sedeId,string $inicio,str
 
         $st=$pdo->prepare("SELECT
                 s.id,s.fecha,h.hora_inicio,h.hora_fin,
-                c.expected_count,c.marked_count,c.captured_at,
-                COALESCE(SUM(aa.estado='PRESENTE'),0) presentes,
-                COALESCE(SUM(aa.estado='AUSENTE_JUSTIFICADA'),0) justificadas,
-                COALESCE(SUM(aa.estado='AUSENTE_NO_JUSTIFICADA'),0) injustificadas
+                c.expected_count,c.marked_count,c.present_count,c.justified_count,c.unjustified_count,c.captured_at
             FROM sesion_asistencia_cobertura c
             INNER JOIN sesiones s ON s.id=c.sesion_id
             INNER JOIN horarios h ON h.id=s.horario_id
-            LEFT JOIN asistencias aa ON aa.sesion_id=s.id
             WHERE h.sede_id=:site
               AND s.fecha BETWEEN :i AND :f
               AND s.estado='REALIZADA'
               AND c.complete=1
               AND c.expected_count>0
-            GROUP BY s.id,s.fecha,h.hora_inicio,h.hora_fin,c.expected_count,c.marked_count,c.captured_at
             ORDER BY s.fecha,h.hora_inicio,s.id");
         $st->execute([':site'=>$sedeId,':i'=>$inicio,':f'=>$fin]);
 
         $rows=[];$esperados=0;$presentes=0;$justificadas=0;$injustificadas=0;
         foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
-            $e=(int)$row['expected_count'];$p=(int)$row['presentes'];$j=(int)$row['justificadas'];$n=(int)$row['injustificadas'];
+            $e=(int)$row['expected_count'];$p=(int)$row['present_count'];$j=(int)$row['justified_count'];$n=(int)$row['unjustified_count'];
             $esperados+=$e;$presentes+=$p;$justificadas+=$j;$injustificadas+=$n;
             $rows[]=[
                 'sesion_id'=>(string)$row['id'],
