@@ -6,6 +6,7 @@ require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/periodos-financieros.php';
 require_once __DIR__.'/../config/finanzas-obligaciones.php';
 require_once __DIR__.'/../config/dashboard-tiempo.php';
+require_once __DIR__.'/../config/dashboard-operacion.php';
 require_once __DIR__.'/../config/centro-pendientes-compuesto.php';
 
 $me=auth_require(['ADMIN','VERIFICADOR']);
@@ -80,6 +81,9 @@ try {
     $st->execute([':s'=>$sid,':hoy'=>$hoy]);
     $avisos=(int)$st->fetchColumn();
 
+    // Lectura pura: nunca llama api/sesiones.php porque ese GET puede crear sesiones para ADMIN.
+    $operacionHoy=dashboard_operacion_fecha($pdo,$sid,$hoy);
+
     // F1 gestiona estados y F5 detecta las causas. Esta lectura usa las mismas fuentes puras,
     // sin consultar endpoints con posibles efectos secundarios ni recalcular reglas en paralelo.
     $includeGlobalProspects=(string)($me['rol']??'')==='ADMIN';
@@ -122,6 +126,7 @@ try {
         ],
         'intensivos'=>$intensivos,
         'avisos_hoy'=>$avisos,
+        'operacion_hoy'=>$operacionHoy,
         'reposiciones'=>$repos,
         'centro_pendientes'=>$pendientesResumen,
         'alertas_f5'=>[
@@ -136,6 +141,7 @@ try {
             'alumnos_activos'=>'Mensualidad PAGADA vigente o intensivo vigente con algún pago VALIDO, excluyendo BAJA; no equivale a derecho de acceso.',
             'facturacion'=>'F2: ingresos atribuidos al periodo financiero vigente según la regla de cada concepto.',
             'saldos_periodo'=>'F2: suma de obligaciones registradas del periodo menos pagos VALIDOS; el detalle reconciliable vive en Finanzas internas.',
+            'operacion_hoy'=>'Sesiones y marcas ya registradas para la fecha operativa y atribuibles a la sede por horario. Cero sesiones registradas no significa cero clases planificadas; F6 no genera sesiones ni calcula porcentaje de asistencia sin denominador estable.',
             'alertas_f5'=>'F5: causas activas compartidas con F1; los casos globales de prospectos solo se incluyen para ADMIN.',
             'centro_pendientes'=>'F1: causas activas separadas entre PENDIENTE y ATENDIDO; históricos resueltos no inflan el total operativo.',
         ],
