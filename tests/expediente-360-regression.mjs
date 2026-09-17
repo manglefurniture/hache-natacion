@@ -32,7 +32,7 @@ assert.match(timeline, /usort\(\$items/, 'los eventos se ordenan sin copiarse a 
 
 assert.match(backendMenu, /'\/ficha-alumno\.php':\['\/assets\/ficha-alumno-flow\.js','\/assets\/ficha-relations\.js'\]/, 'la ficha conserva sus helpers vigentes');
 assert.doesNotMatch(backendMenu, /ficha-timeline\.js/, 'el timeline legado no debe inyectarse sobre el Expediente 360 nativo');
-assert.match(backendBootstrap, /backend-menu\.js\?v=20260916-f3timeline1/, 'el loader invalida la caché del menú al retirar el timeline legado');
+assert.match(backendBootstrap, /backend-menu\.js\?v=20260915-pendientes1&f3=20260916-timeline1/, 'el loader invalida la caché del menú al retirar el timeline legado');
 assert.doesNotMatch(ficha, /sharky/i, 'F3 no debe convertir datos comerciales de Sharky en datos académicos');
 
 console.log('Expediente 360 first increment regression: OK');
