@@ -48,7 +48,43 @@ function hache_sharky_crm_stage(array $state,?array $registration): string
     if(is_array($registration)&&($registration['status']??'')==='COMPLETED')return 'INSCRITO';
     $flow=is_array($state['flow']??null)?$state['flow']:[];
     if(in_array((string)($flow['name']??''),['register_intensive','register_regular'],true))return 'INSCRIPCION_INICIADA';
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $program=in_array(($commercial['program']??null),['intensive','regular'],true);
+    $sede=in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true);
+    if($program&&$sede)return 'SEDE_CONFIRMADA';
+    if($program)return 'PRODUCTO_CONFIRMADO';
     return 'PROSPECTO';
+}
+
+function hache_sharky_crm_stage_evidence(string $stage): string
+{
+    return match($stage){
+        'INSCRITO'=>'Alta COMPLETED registrada',
+        'INSCRIPCION_INICIADA'=>'Flow de inscripción vigente',
+        'SEDE_CONFIRMADA'=>'Producto y sede en estado estructurado',
+        'PRODUCTO_CONFIRMADO'=>'Producto en estado estructurado',
+        default=>'Contacto sin otro hito comercial verificable',
+    };
+}
+
+function hache_sharky_crm_product_evidence(array $state,?string $program): ?string
+{
+    if(!in_array($program,['intensive','regular'],true))return null;
+    $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
+    $choice=(string)($commercial['program_button_choice']??'');
+    if(($choice==='learn'&&$program==='intensive')||($choice==='regular'&&$program==='regular'))return 'EXPLICITO';
+    if($choice==='regular'&&$program==='intensive')return 'ELEGIBILIDAD';
+    return 'ESTRUCTURADO';
+}
+
+function hache_sharky_crm_human_product_evidence(?string $evidence): string
+{
+    return match($evidence){
+        'EXPLICITO'=>'Selección explícita del prospecto',
+        'ELEGIBILIDAD'=>'Resuelto por regla de elegibilidad',
+        'ESTRUCTURADO'=>'Contexto estructurado vigente',
+        default=>'Sin evidencia de producto disponible',
+    };
 }
 
 function hache_sharky_crm_human_source(?string $source): string
@@ -149,11 +185,13 @@ function hache_sharky_crm_project_rows(PDO $pdo,array $rows): array
         $source=hache_sharky_crm_source($state,is_array($referral)?$referral:null);
         $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
         $program=in_array(($commercial['program']??null),['intensive','regular'],true)?(string)$commercial['program']:null;
+        $programEvidence=hache_sharky_crm_product_evidence($state,$program);
         $sede=in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)?(string)$commercial['sede_clave']:null;
+        $stage=hache_sharky_crm_stage($state,is_array($registration)?$registration:null);
         $last=hache_sharky_crm_last_contact((string)($inbound[$hash]??''),(string)($outbound[$hash]??''),(string)$row['last_seen_at']);
         $studentId=trim((string)($registration['resolved_alumno_id']??$row['alumno_id']??''));
         $name=trim((string)($payload['base_name']??''));if($name==='')$name=trim((string)($payload['managed_name']??''));
-        $out[]=['contact_hash'=>$hash,'nombre'=>$name!==''?$name:'Prospecto sin nombre confirmado','whatsapp'=>(string)($payload['e164']??''),'rol_actual'=>(string)$row['role'],'alumno_id'=>$studentId!==''?$studentId:null,'fuente'=>$source,'fuente_etiqueta'=>hache_sharky_crm_human_source($source),'campana'=>trim((string)($referral['headline']??''))?:null,'producto'=>$program,'producto_etiqueta'=>hache_sharky_crm_human_program($program),'sede'=>$sede,'estado_crm'=>hache_sharky_crm_stage($state,is_array($registration)?$registration:null),'registro_estado'=>$registration['status']??null,'registro_tipo'=>$registration['action_type']??null,'primer_contacto'=>(string)$row['first_seen_at'],'ultimo_contacto'=>$last['at'],'ultimo_contacto_tipo'=>$last['direction'],'estado_conversacion_disponible'=>!empty($state)];
+        $out[]=['contact_hash'=>$hash,'nombre'=>$name!==''?$name:'Prospecto sin nombre confirmado','whatsapp'=>(string)($payload['e164']??''),'rol_actual'=>(string)$row['role'],'alumno_id'=>$studentId!==''?$studentId:null,'fuente'=>$source,'fuente_etiqueta'=>hache_sharky_crm_human_source($source),'campana'=>trim((string)($referral['headline']??''))?:null,'producto'=>$program,'producto_etiqueta'=>hache_sharky_crm_human_program($program),'producto_evidencia'=>$programEvidence,'producto_evidencia_etiqueta'=>hache_sharky_crm_human_product_evidence($programEvidence),'sede'=>$sede,'estado_crm'=>$stage,'estado_crm_evidencia'=>hache_sharky_crm_stage_evidence($stage),'registro_estado'=>$registration['status']??null,'registro_tipo'=>$registration['action_type']??null,'primer_contacto'=>(string)$row['first_seen_at'],'ultimo_contacto'=>$last['at'],'ultimo_contacto_tipo'=>$last['direction'],'estado_conversacion_disponible'=>!empty($state)];
     }
     return $out;
 }
