@@ -7,6 +7,7 @@ require_once __DIR__.'/../config/periodos-financieros.php';
 require_once __DIR__.'/../config/finanzas-obligaciones.php';
 require_once __DIR__.'/../config/dashboard-tiempo.php';
 require_once __DIR__.'/../config/dashboard-operacion.php';
+require_once __DIR__.'/../config/dashboard-alumnos.php';
 require_once __DIR__.'/../config/centro-pendientes-compuesto.php';
 
 $me=auth_require(['ADMIN','VERIFICADOR']);
@@ -47,23 +48,10 @@ try {
     $lecturaObligaciones=finanzas_obligaciones_periodo($pdo,$sede,$periodoVigente,false);
     $saldosPeriodo=$lecturaObligaciones['resumen'];
 
-    // Definición histórica del dashboard: no equivale a estado administrativo ni a derecho de acceso.
-    $sqlActivos="SELECT COUNT(*) FROM (
-      SELECT m.alumno_id
-      FROM mensualidades m
-      INNER JOIN alumnos a ON a.id=m.alumno_id AND a.sede_id=m.sede_id
-      WHERE m.sede_id=:sm AND m.estado='PAGADA' AND :hoy_m BETWEEN m.periodo_inicio AND m.periodo_fin AND a.estado_administrativo<>'BAJA'
-      UNION
-      SELECT cia.alumno_id
-      FROM curso_intensivo_alumnos cia
-      INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id
-      INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id
-      WHERE ci.sede_id=:si AND :hoy_i BETWEEN ci.fecha_inicio AND ci.fecha_fin AND a.estado_administrativo<>'BAJA'
-        AND EXISTS(SELECT 1 FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=ci.id AND p.tipo='INTENSIVO' AND p.estado='VALIDO')
-    ) activos";
-    $st=$pdo->prepare($sqlActivos);
-    $st->execute([':sm'=>$sid,':hoy_m'=>$hoy,':si'=>$sid,':hoy_i'=>$hoy]);
-    $alumnos=(int)$st->fetchColumn();
+    // Definición histórica del dashboard, ahora con el mismo detalle reconciliable.
+    // No equivale a estado administrativo ni a derecho de acceso.
+    $alumnosActivos=dashboard_alumnos_activos($pdo,$sid,$hoy);
+    $alumnos=(int)$alumnosActivos['total'];
 
     $st=$pdo->prepare("SELECT COUNT(*) FROM alumnos WHERE sede_id=:s AND estado_administrativo='PENDIENTE'");
     $st->execute([':s'=>$sid]);
@@ -119,6 +107,7 @@ try {
             'con_saldo'=>(int)$saldosPeriodo['con_saldo'],
         ],
         'alumnos_activos'=>$alumnos,
+        'alumnos_activos_detalle'=>$alumnosActivos,
         'alumnos_pendientes'=>$alumnosPendientes,
         'mensualidades'=>[
             'cantidad'=>(int)$mens['c'],
