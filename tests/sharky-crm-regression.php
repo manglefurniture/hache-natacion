@@ -24,6 +24,8 @@ $api=file_get_contents(__DIR__.'/../api/prospectos.php')?:'';
 $page=file_get_contents(__DIR__.'/../public/prospectos.php')?:'';
 $configPage=file_get_contents(__DIR__.'/../public/configuracion.php')?:'';
 crm_expect(!preg_match('/\b(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)?/i',$helper),'La proyección CRM debe ser de solo lectura.');
+crm_expect(str_contains($helper,"(status='COMPLETED') DESC"),'Una conversión completada debe prevalecer sobre intentos posteriores fallidos o cancelados.');
+crm_expect(str_contains($helper,'hache_sharky_crm_bulk_states')&&str_contains($helper,'hache_sharky_crm_bulk_referrals')&&str_contains($helper,'hache_sharky_crm_bulk_registrations'),'El listado debe resolver fuentes CRM en consultas agrupadas y evitar una consulta completa por contacto.');
 crm_expect(str_contains($api,"auth_require(['ADMIN'])"),'El CRM debe limitar PII a ADMIN.');
 crm_expect(str_contains($api,"REQUEST_METHOD")&&str_contains($api,"'GET'"),'La API debe exponer únicamente lectura GET.');
 crm_expect(str_contains($page,'No cambia el funnel')&&str_contains($page,'no envía mensajes'),'La vista debe declarar su alcance de solo lectura.');
