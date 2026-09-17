@@ -86,8 +86,9 @@ assert.match(internalPage,/Corregir obligación/);
 assert.match(internalPage,/corregir-obligacion-mensual\.php/);
 assert.match(internalPage,/Motivo obligatorio de la corrección histórica/);
 assert.match(roadmap,/Decisión P-02 resuelta para el primer incremento/);
-assert.match(roadmap,/Fase 1 \*\*Implementada\*\*/);
-assert.match(roadmap,/Fase 2 \*\*Desplegado\*\*/);
+assert.match(roadmap,/\| F1 Centro de pendientes \| Implementado \|/);
+assert.match(roadmap,/\| F2 Finanzas \| Desplegado \|/);
+assert.match(roadmap,/\| F5 Alertas \| Desplegado \|/);
 assert.match(roadmap,/PR #261/);
 
 console.log('financial period regression checks: OK');
