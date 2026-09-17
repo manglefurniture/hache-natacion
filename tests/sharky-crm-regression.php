@@ -45,7 +45,22 @@ crm_expect(str_contains($api,"\$_GET['page']")&&str_contains($api,"\$_GET['q']")
 crm_expect(str_contains($page,'Buscar en todo el CRM por nombre o WhatsApp')&&str_contains($page,'id="prev"')&&str_contains($page,'id="next"'),'La vista debe permitir navegar y buscar fuera de la primera página.');
 crm_expect(str_contains($page,'PRODUCTO_CONFIRMADO')&&str_contains($page,'SEDE_CONFIRMADA'),'La vista debe permitir filtrar los hitos verificables nuevos.');
 crm_expect(str_contains($page,'estado_crm_evidencia')&&str_contains($page,'producto_evidencia_etiqueta'),'La UI debe mostrar de dónde sale cada hito sin inferencias ocultas.');
-crm_expect(str_contains($page,'No cambia el funnel')&&str_contains($page,'no envía mensajes'),'La vista debe declarar su alcance de solo lectura.');
+crm_expect(str_contains($page,'No cambia el funnel')&&str_contains($page,'no envía mensajes'),'La vista debe declarar que la gestión administrativa no altera Sharky ni dispara mensajes.');
 crm_expect(str_contains($configPage,'href="/prospectos.php"')&&str_contains($configPage,'CRM de prospectos'),'El CRM debe quedar accesible desde Configuración.');
 
-echo "Sharky CRM read-only regression: OK\n";
+$management=file_get_contents(__DIR__.'/../config/sharky-crm-management.php')?:'';
+$managementApi=file_get_contents(__DIR__.'/../api/prospectos-gestion.php')?:'';
+$managementMigration=file_get_contents(__DIR__.'/../database/migrations/20260917_sharky_crm_managements.sql')?:'';
+$managementRunner=file_get_contents(__DIR__.'/../bin/migrate-sharky-crm-managements.php')?:'';
+crm_expect(str_contains($managementMigration,'CREATE TABLE IF NOT EXISTS sharky_crm_managements'),'F4.3.2 debe persistir la gestión en una tabla histórica propia.');
+crm_expect(str_contains($managementMigration,'contact_hash')&&str_contains($managementMigration,'admin_user_id')&&str_contains($managementMigration,'managed_at')&&str_contains($managementMigration,'observed_last_contact_at'),'La persistencia mínima debe conservar identidad estable, ADMIN, momento y ancla temporal.');
+crm_expect(!preg_match('/\b(?:nombre|telefono|whatsapp|producto|sede|campana|mensaje)\b/i',$managementMigration),'La tabla de gestión no debe duplicar PII ni contexto comercial del prospecto.');
+crm_expect(str_contains($management,'hache_sharky_crm_last_contact')&&str_contains($management,"status='SENT'")&&str_contains($management,"aa.status='COMPLETED'"),'El ancla debe recalcularse desde las mismas fuentes verificables del CRM y limitarse a su universo elegible.');
+crm_expect(str_contains($management,'INSERT INTO sharky_crm_managements')&&!str_contains($management,'sharky_conversation_state SET'),'La escritura debe quedar aislada de Sharky y del estado conversacional.');
+crm_expect(str_contains($managementApi,"auth_require(['ADMIN'])")&&str_contains($managementApi,'auth_csrf_validate'),'Registrar gestión debe ser una acción ADMIN protegida por CSRF.');
+crm_expect(str_contains($managementApi,"'REGISTRAR_GESTION'")&&str_contains($managementApi,'hache_sharky_crm_record_management'),'El endpoint de F4.3.2 debe aceptar únicamente el registro explícito previsto.');
+crm_expect(str_contains($page,'Registrar gestión')&&str_contains($page,'/api/prospectos-gestion.php'),'La UI debe exponer la acción explícita sin reutilizar la API de lectura.');
+crm_expect(str_contains($page,'no pausa ni reactiva Sharky')&&str_contains($page,'Centro de pendientes'),'La UI debe dejar claro que la gestión no altera takeover, follow-up ni F1.');
+crm_expect(str_contains($managementRunner,'20260917_sharky_crm_managements.sql')&&str_contains($managementRunner,'sharky_crm_managements_schema_ready'),'La migración debe disponer de un runner idempotente y verificable.');
+
+echo "Sharky CRM read-only + explicit management regression: OK\n";
