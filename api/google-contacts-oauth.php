@@ -10,6 +10,9 @@ auth_require(['ADMIN']);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+const HACHE_GOOGLE_CONTACTS_OAUTH_STAGE_DIR='/var/lib/hache-natacion/oauth-stage';
+const HACHE_GOOGLE_CONTACTS_OAUTH_STAGE_FILE=HACHE_GOOGLE_CONTACTS_OAUTH_STAGE_DIR.'/google-contacts-oauth-stage.json';
+
 function google_contacts_oauth_summary(PDO $pdo): array
 {
     $counts=['PENDING'=>0,'SYNCED'=>0,'UNMANAGED'=>0,'FAILED'=>0];
@@ -44,10 +47,9 @@ function google_contacts_oauth_authorize_url(string $clientId): string
 function google_contacts_oauth_stage(string $clientSecret,string $refreshToken): bool
 {
     if(!google_contacts_oauth_secret_valid($clientSecret,1024)||!google_contacts_oauth_secret_valid($refreshToken))return false;
-    $dir=hache_sharky_orchestrator_runtime_dir('secrets');
-    if($dir===''||!is_dir($dir)||is_link($dir)||!is_writable($dir))return false;
-    $path=$dir.'/google-contacts-oauth-stage.json';
-    if(is_link($path))return false;
+    $dir=HACHE_GOOGLE_CONTACTS_OAUTH_STAGE_DIR;
+    $path=HACHE_GOOGLE_CONTACTS_OAUTH_STAGE_FILE;
+    if(!is_dir($dir)||is_link($dir)||!is_writable($dir)||is_link($path))return false;
     $json=json_encode([
         'version'=>1,
         'issued_at'=>time(),
