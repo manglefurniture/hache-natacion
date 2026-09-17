@@ -41,6 +41,7 @@ try {
         static fn(string $sedeId,string $fecha):string=>financiero_periodo_para_fecha($pdo,$sedeId,$fecha),
     );
     $hoy=$tiempo['fecha'];
+    $actualizadoEn=(string)$tiempo['actualizado_en'];
     $periodoVigente=$tiempo['periodo_vigente'];
 
     // F2 conserva la autoridad de ingresos, obligaciones y saldos por periodo financiero.
@@ -94,6 +95,7 @@ try {
         'ok'=>true,
         'sede'=>['clave'=>$clave,'nombre'=>$s['nombre']],
         'fecha'=>$hoy,
+        'actualizado_en'=>$actualizadoEn,
         'periodo_vigente'=>$periodoVigente,
         'rango_periodo'=>['inicio'=>$rangoPeriodo['inicio'],'cierre'=>$rangoPeriodo['cierre']],
         'facturacion'=>[
