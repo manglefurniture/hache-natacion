@@ -88,10 +88,12 @@ function dashboard_bajas_registradas(PDO $pdo,string $sedeId,string $inicio,stri
         if(!is_array($detalle)||(string)($detalle['sede_id']??'')!==$sedeId)continue;
         $alumnoId=trim((string)($row['entidad_id']??''));
         if($alumnoId!=='')$ids[$alumnoId]=true;
+        $fechaUtc=(string)$row['created_at'];
         $events[]=[
             'evento_id'=>(string)$row['id'],
             'alumno_id'=>$alumnoId!==''?$alumnoId:null,
-            'fecha_hora'=>(string)$row['created_at'],
+            'fecha_hora'=>dashboard_p06_utc_to_cancun($fechaUtc),
+            'fecha_hora_utc'=>$fechaUtc,
         ];
     }
 
