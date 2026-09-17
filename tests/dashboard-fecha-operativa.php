@@ -24,6 +24,7 @@ $utcAunDiaAnterior = dashboard_contexto_temporal(
     new DateTimeImmutable('2026-08-30T00:30:00+00:00')
 );
 same('00:30 UTC fecha Cancún', $utcAunDiaAnterior['fecha'], '2026-08-29');
+same('00:30 UTC instante Cancún', $utcAunDiaAnterior['actualizado_en'], '2026-08-29T19:30:00-05:00');
 same('00:30 UTC periodo Cancún', $utcAunDiaAnterior['periodo_vigente'], '2026-08');
 
 $antesMedianocheCancun = dashboard_contexto_temporal(
@@ -40,6 +41,7 @@ $despuesMedianocheCancun = dashboard_contexto_temporal(
     new DateTimeImmutable('2026-08-31T05:00:00+00:00')
 );
 same('después medianoche fecha', $despuesMedianocheCancun['fecha'], '2026-08-31');
+same('después medianoche instante', $despuesMedianocheCancun['actualizado_en'], '2026-08-31T00:00:00-05:00');
 same('después medianoche periodo', $despuesMedianocheCancun['periodo_vigente'], '2026-09');
 
 echo "dashboard Cancun operational boundary: OK\n";
