@@ -4,7 +4,7 @@ Fecha de implementación: 2026-09-17.
 
 ## Alcance
 
-Este micro-paso implementa la detección de **intensivo terminado sin continuidad** como señal administrativa de solo lectura. No registra continuidad, no crea mensualidades, no modifica alumnos, no envía mensajes y no altera Sharky.
+F5 detecta **intensivo terminado sin continuidad** como señal administrativa de solo lectura. No registra continuidad, no crea mensualidades, no modifica alumnos, no envía mensajes y no altera Sharky.
 
 La regla es distinta de la alerta existente de **intensivo próximo a terminar**. La alerta previa mira cursos `EN_CURSO` próximos a `fecha_fin`; esta regla solo considera relaciones cuyo curso ya terminó por fecha.
 
@@ -48,6 +48,16 @@ El Centro de alertas muestra una entrada `CONTINUIDAD` con nivel `NEUTRA`, nombr
 
 ## Centro de pendientes
 
-Este micro-paso no persiste todavía la señal en `pendientes_gestion`. La relación `curso_intensivo_alumnos.id` ya deja resuelta la identidad estable necesaria para ese siguiente incremento: una misma relación no cambia de identidad porque cambie el plazo configurado.
+La misma detección se integra con F1 mediante el tipo `INTENSIVO_SIN_CONTINUIDAD`. No se crea otra cola ni otra regla: `api/pendientes.php` compone la fuente F5 con las fuentes ya existentes y persiste la gestión, cuando ADMIN marca el caso atendido, en la tabla común `pendientes_gestion`.
 
-Al integrar la señal con F1, la causa deberá revalidarse contra esta misma detección y resolverse cuando la configuración deje de incluir el caso o cuando cambie `continua_regular`.
+La identidad usa `curso_intensivo_alumnos.id` como `origen_id` y no incorpora el número de días configurado. Por tanto, cambiar el umbral no duplica el mismo caso. La sede sigue viniendo del curso y el enlace activo abre el detalle del intensivo.
+
+La causa se revalida contra la misma detección F5 antes de resolver. Deja de estar activa si, entre otros casos verificables:
+
+- `continua_regular` cambia a un valor que el alcance configurado ya no incluye;
+- ADMIN deshabilita la regla dejando incompleta su configuración;
+- el curso deja de pertenecer al alcance válido de la regla.
+
+Un caso atendido conserva quién, cuándo y la nota mediante el contrato existente de F1. Cuando la causa deja de aplicar, el Centro lo presenta como resuelto por fuente hasta que ADMIN confirme la resolución. Si la misma relación vuelve a cumplir la regla más adelante, reaparece con la misma identidad en vez de crear un duplicado.
+
+No se requiere migración: `pendientes_gestion.tipo` y `origen_id` ya admiten este nuevo origen. Los prospectos sin sede confirmada continúan fuera del Centro de pendientes; esa limitación F1/F4 es independiente de esta integración.
