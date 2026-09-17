@@ -25,9 +25,10 @@ function google_contacts_oauth_summary(PDO $pdo): array
 function google_contacts_oauth_store_refresh_token(string $token): bool
 {
     if(strlen($token)<20||strlen($token)>2048||preg_match('/[\x00-\x20\x7F]/',$token))return false;
-    $path=HACHE_SHARKY_GOOGLE_CONTACTS_REFRESH_TOKEN_FILE;
-    $dir=dirname($path);
-    if(!is_dir($dir)||!is_writable($dir)||is_link($dir))return false;
+    $dir=hache_sharky_orchestrator_runtime_dir('secrets');
+    if($dir===''||!is_writable($dir)||is_link($dir))return false;
+    $path=$dir.'/google-contacts-refresh-token';
+    if($path!==HACHE_SHARKY_GOOGLE_CONTACTS_REFRESH_TOKEN_FILE)return false;
     $tmp=$dir.'/.google-contacts-refresh-token.'.bin2hex(random_bytes(6));
     if(file_put_contents($tmp,$token."\n",LOCK_EX)===false)return false;
     chmod($tmp,0600);
