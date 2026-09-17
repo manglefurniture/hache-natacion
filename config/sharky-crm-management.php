@@ -13,6 +13,73 @@ function hache_sharky_crm_management_schema_ready(PDO $pdo): bool
     }
 }
 
+function hache_sharky_crm_management_state(?array $management,?string $lastContactAt): string
+{
+    if(!is_array($management))return 'SIN_GESTION';
+    $anchor=trim((string)($management['observed_last_contact_at']??''));
+    $last=trim((string)$lastContactAt);
+    if($anchor!==''&&$last!==''&&strcmp($last,$anchor)>0)return 'ACTIVIDAD_POSTERIOR';
+    return 'GESTIONADO';
+}
+
+function hache_sharky_crm_management_state_label(string $state): string
+{
+    return match($state){
+        'GESTIONADO'=>'Gestionado',
+        'ACTIVIDAD_POSTERIOR'=>'Actividad posterior',
+        default=>'Sin gestión',
+    };
+}
+
+function hache_sharky_crm_latest_managements(PDO $pdo,array $contactHashes): array
+{
+    if(!$contactHashes||!hache_sharky_crm_management_schema_ready($pdo))return [];
+    [$scope,$params]=hache_sharky_crm_hash_scope(array_values(array_unique(array_map('strval',$contactHashes))));
+    if($scope==='')return [];
+    $st=$pdo->prepare("SELECT m.contact_hash,m.admin_user_id,m.managed_at,m.observed_last_contact_at,u.usuario admin_usuario
+        FROM sharky_crm_managements m
+        LEFT JOIN usuarios u ON u.id=m.admin_user_id
+        WHERE m.contact_hash IN ($scope)
+        ORDER BY m.contact_hash,m.managed_at DESC,m.id DESC");
+    $st->execute($params);
+    $out=[];
+    foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+        $hash=(string)($row['contact_hash']??'');
+        if($hash!==''&&!isset($out[$hash]))$out[$hash]=$row;
+    }
+    return $out;
+}
+
+function hache_sharky_crm_attach_managements(PDO $pdo,array $rows): array
+{
+    if(!$rows)return [];
+    $available=hache_sharky_crm_management_schema_ready($pdo);
+    $hashes=array_map(static fn(array $row):string=>(string)($row['contact_hash']??''),$rows);
+    $latest=$available?hache_sharky_crm_latest_managements($pdo,$hashes):[];
+    foreach($rows as &$row){
+        $hash=(string)($row['contact_hash']??'');
+        $management=$latest[$hash]??null;
+        if(!$available){
+            $row['gestion_disponible']=false;
+            $row['gestion_estado']=null;
+            $row['gestion_estado_etiqueta']='No disponible';
+            $row['gestion_fecha']=null;
+            $row['gestion_responsable']=null;
+            $row['gestion_ancla']=null;
+            continue;
+        }
+        $state=hache_sharky_crm_management_state(is_array($management)?$management:null,(string)($row['ultimo_contacto']??''));
+        $row['gestion_disponible']=true;
+        $row['gestion_estado']=$state;
+        $row['gestion_estado_etiqueta']=hache_sharky_crm_management_state_label($state);
+        $row['gestion_fecha']=is_array($management)?((string)($management['managed_at']??'')?:null):null;
+        $row['gestion_responsable']=is_array($management)?((string)($management['admin_usuario']??'')?:null):null;
+        $row['gestion_ancla']=is_array($management)?((string)($management['observed_last_contact_at']??'')?:null):null;
+    }
+    unset($row);
+    return $rows;
+}
+
 /** @return array{contact_hash:string,last_contact_at:string,last_contact_type:string} */
 function hache_sharky_crm_management_snapshot(PDO $pdo,string $contactHash): array
 {
