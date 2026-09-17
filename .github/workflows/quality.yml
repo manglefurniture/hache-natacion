@@ -62,6 +62,8 @@ jobs:
         run: php tests/sharky-crm-regression.php
       - name: Prospect follow-up internal alert regression
         run: php tests/prospect-followup-alert-regression.php
+      - name: Prospect follow-up pending integration regression
+        run: php tests/prospect-pending-integration-regression.php
       - name: Consecutive absence internal alert regression
         run: php tests/consecutive-absence-alert-regression.php
       - name: Configurable internal alert settings regression

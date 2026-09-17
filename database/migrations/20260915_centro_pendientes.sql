@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS pendientes_gestion (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     identidad CHAR(64) NOT NULL,
-    sede_id CHAR(36) NOT NULL,
+    sede_id CHAR(36) NULL,
     tipo VARCHAR(80) NOT NULL,
     origen_tipo VARCHAR(80) NOT NULL,
     origen_id VARCHAR(100) NOT NULL,
@@ -32,3 +32,8 @@ CREATE TABLE IF NOT EXISTS pendientes_gestion (
     CONSTRAINT fk_pendientes_gestion_atendido_por FOREIGN KEY (atendido_por) REFERENCES usuarios(id) ON DELETE SET NULL,
     CONSTRAINT fk_pendientes_gestion_resuelto_por FOREIGN KEY (resuelto_por) REFERENCES usuarios(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- F5/F4: los prospectos sin seguimiento son pendientes globales ADMIN. La FK
+-- sigue protegiendo los casos con sede; NULL evita inventar una sede cuando F4
+-- no la ha confirmado. Repetir este ALTER es seguro e idempotente.
+ALTER TABLE pendientes_gestion MODIFY sede_id CHAR(36) NULL;

@@ -28,6 +28,11 @@ function centro_pendientes_schema_ready(PDO $pdo): bool
         return false;
     }
 
+    $column = $pdo->query("SELECT is_nullable FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='pendientes_gestion' AND column_name='sede_id' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($column) || strtoupper((string)($column['is_nullable'] ?? '')) !== 'YES') {
+        return false;
+    }
+
     $indexes = [
         'PRIMARY'=>['columns'=>['id'], 'non_unique'=>0],
         'uq_pendientes_gestion_identidad'=>['columns'=>['identidad'], 'non_unique'=>0],

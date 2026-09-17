@@ -63,6 +63,8 @@ $table = $pdo->query("SELECT ENGINE,TABLE_COLLATION FROM information_schema.tabl
 pendientes_db_expect(is_array($table), 'La tabla pendientes_gestion no fue creada.');
 pendientes_db_expect(strtoupper((string)$table['ENGINE']) === 'INNODB', 'pendientes_gestion debe usar InnoDB.');
 pendientes_db_expect(strtolower((string)$table['TABLE_COLLATION']) === 'utf8mb4_unicode_ci', 'La colación de pendientes_gestion cambió.');
+$siteColumn=$pdo->query("SELECT IS_NULLABLE FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='pendientes_gestion' AND column_name='sede_id' LIMIT 1")->fetch();
+pendientes_db_expect(is_array($siteColumn)&&strtoupper((string)$siteColumn['IS_NULLABLE'])==='YES','sede_id debe aceptar NULL únicamente para pendientes globales sin sede confirmada.');
 
 $indexes = [
     'PRIMARY'=>['id'],
@@ -105,6 +107,10 @@ try {
     $duplicateBlocked = true;
 }
 pendientes_db_expect($duplicateBlocked, 'La identidad de gestión debe permanecer única.');
+$global=$pdo->prepare("INSERT INTO pendientes_gestion(id,identidad,sede_id,tipo,origen_tipo,origen_id) VALUES(:id,:identidad,NULL,'PROSPECTO_SIN_SEGUIMIENTO','SHARKY_PROSPECT',:origen)");
+$global->execute([':id'=>'00000000-0000-0000-0000-000000000093',':identidad'=>str_repeat('b',64),':origen'=>str_repeat('c',64)]);
+$globalRow=$pdo->query("SELECT sede_id,tipo FROM pendientes_gestion WHERE id='00000000-0000-0000-0000-000000000093'")->fetch();
+pendientes_db_expect(is_array($globalRow)&&$globalRow['sede_id']===null&&$globalRow['tipo']==='PROSPECTO_SIN_SEGUIMIENTO','El pendiente global debe persistir sin inventar sede.');
 
 fwrite(STDOUT, "CENTRO_PENDIENTES_MARIADB_OK\n");
 } finally {

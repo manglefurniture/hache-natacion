@@ -4,7 +4,7 @@ Fecha de decisión: 2026-09-17.
 
 ## Alcance de este micro-paso
 
-Se habilita únicamente la primera regla de F5: **prospecto sin seguimiento interno**. Es una señal administrativa para el equipo de Hache Natación; **no envía mensajes** al prospecto, no modifica el funnel, no cambia `_idle_followup`, no altera takeover y no ejecuta operaciones de inscripción o pago.
+Se habilita la regla de F5 **prospecto sin seguimiento interno**. Es una señal administrativa para el equipo de Hache Natación; **no envía mensajes** al prospecto, no modifica el funnel, no cambia `_idle_followup`, no altera takeover y no ejecuta operaciones de inscripción o pago.
 
 ## Umbral aprobado
 
@@ -36,13 +36,19 @@ Cuando varios receipts comparten el mismo segundo `DATETIME`, se usa la marca du
 
 ## Presentación
 
-La primera salida es una alerta global visible únicamente para ADMIN en el Centro de alertas. Muestra un conteo agregado y, cuando está disponible, distribución por Monteverde, Palapas y “sin sede”. El enlace abre el CRM de prospectos.
+El Centro de alertas mantiene una alerta global visible únicamente para ADMIN. Muestra un conteo agregado y, cuando está disponible, distribución por Monteverde, Palapas y “sin sede”. El enlace abre el CRM de prospectos.
 
 No se asigna todavía prioridad alta/media/baja porque el roadmap mantiene esa decisión pendiente. La interfaz usa una presentación **NEUTRA**, que significa “prioridad no definida”, no “prioridad baja”.
 
 ## Centro de pendientes
 
-Este micro-paso **no persiste todavía el caso en el Centro de pendientes**. F1 exige `sede_id` en `pendientes_gestion` y F4 documenta que algunos prospectos pueden no tener sede confirmada. Excluirlos de la regla o imputarles una sede sería una decisión nueva. La integración persistente con F1 queda para un micro-paso posterior que resuelva ese contrato sin duplicar ni perder prospectos.
+La misma regla F5 se integra con F1 mediante el tipo `PROSPECTO_SIN_SEGUIMIENTO`. La identidad estable usa `contact_hash` como `origen_id`; no incorpora sede, horas transcurridas ni el valor del umbral. Por ello una consulta repetida, un aumento de horas o una sede comercial confirmada posteriormente no crean otro caso.
+
+Los pendientes de prospectos son **globales y exclusivos de ADMIN**. `pendientes_gestion.sede_id` admite `NULL` para este tipo concreto, manteniendo la clave foránea y el aislamiento por sede de todos los tipos anteriores. Esto evita dos errores que el roadmap prohíbe: excluir a los prospectos cuya sede todavía no está confirmada o imputarles una sede ficticia.
+
+Cuando F4 sí tiene una sede confirmada, se muestra como contexto de presentación, pero la gestión sigue siendo global. Si no existe, el Centro muestra “Sin sede confirmada”. VERIFICADOR no recibe ni gestiona estos pendientes y conserva el alcance previo del Centro.
+
+La causa se revalida con `hache_internal_prospect_followup_candidates()`. Deja de aplicar, entre otros casos, si el prospecto se convierte, si se registra una gestión que cubre la actividad, si el seguimiento queda pausado o si deja de cumplir el umbral. El historial de atención permanece en `pendientes_gestion`; al desaparecer la causa puede confirmarse su resolución con el contrato normal de F1.
 
 ## Fuentes y seguridad
 
@@ -55,4 +61,4 @@ La evaluación reutiliza:
 - `_idle_followup` mientras el estado conversacional siga vigente;
 - el último inbound persistido como evidencia durable de pausa cuando ese estado ya expiró.
 
-La regla trabaja con `contact_hash` y metadatos operativos. Solo en la ruta de estado expirado descifra en memoria el último inbound necesario para clasificar una pausa; no lo devuelve, no lo copia y no añade migraciones ni escrituras nuevas.
+La integración con F1 persiste solo `contact_hash`, tipo/origen, estado de atención, responsable, fechas y nota administrativa. No copia nombre, WhatsApp ni contenido de conversación a `pendientes_gestion`. Solo en la ruta de estado expirado la regla descifra en memoria el último inbound necesario para clasificar una pausa; no lo devuelve ni crea una copia adicional.

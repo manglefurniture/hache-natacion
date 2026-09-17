@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/centro-pendientes-continuidad.php';
+require_once __DIR__.'/../config/centro-pendientes-prospectos.php';
 
 $me = auth_require(['ADMIN','VERIFICADOR']);
 $config = require __DIR__.'/../config/database.php';
@@ -27,20 +28,30 @@ function pendientes_sede(PDO $pdo, string $clave): array
     return $sede;
 }
 
-function pendientes_tipos_habilitados(): array
+function pendientes_tipos_habilitados(bool $includeGlobalProspects = false): array
 {
-    return array_values(array_unique([...CENTRO_PENDIENTES_TIPOS_HABILITADOS, CENTRO_PENDIENTES_CONTINUIDAD_TIPO]));
+    $tipos=[...CENTRO_PENDIENTES_TIPOS_HABILITADOS, CENTRO_PENDIENTES_CONTINUIDAD_TIPO];
+    if($includeGlobalProspects)$tipos[]=CENTRO_PENDIENTES_PROSPECTO_TIPO;
+    return array_values(array_unique($tipos));
 }
 
-function pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sedeClave, string $sedeNombre): array
+function pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sedeClave, string $sedeNombre, bool $includeGlobalProspects = false): array
 {
-    return centro_pendientes_fuentes_activas($pdo, $sedeId, $sedeClave, $sedeNombre)
+    $fuentes=centro_pendientes_fuentes_activas($pdo, $sedeId, $sedeClave, $sedeNombre)
         + centro_pendientes_continuidad_fuentes_activas($pdo, $sedeId, $sedeNombre);
+    if($includeGlobalProspects){
+        $fuentes += centro_pendientes_prospectos_fuentes_activas($pdo);
+    }
+    return $fuentes;
 }
 
 function pendientes_causa_activa(PDO $pdo, array $pendiente, string $sedeId, string $sedeClave): bool
 {
-    if ((string)($pendiente['tipo'] ?? '') === CENTRO_PENDIENTES_CONTINUIDAD_TIPO) {
+    $tipo=(string)($pendiente['tipo'] ?? '');
+    if ($tipo === CENTRO_PENDIENTES_PROSPECTO_TIPO) {
+        return centro_pendientes_prospectos_causa_activa($pdo, $pendiente);
+    }
+    if ($tipo === CENTRO_PENDIENTES_CONTINUIDAD_TIPO) {
         return centro_pendientes_continuidad_causa_activa($pdo, $pendiente, $sedeId);
     }
     return centro_pendientes_causa_activa($pdo, $pendiente, $sedeId, $sedeClave);
@@ -48,7 +59,9 @@ function pendientes_causa_activa(PDO $pdo, array $pendiente, string $sedeId, str
 
 function pendientes_tipo_nombre(string $tipo): string
 {
-    return centro_pendientes_continuidad_descripcion_tipo($tipo) ?? centro_pendientes_descripcion_tipo($tipo);
+    return centro_pendientes_prospectos_descripcion_tipo($tipo)
+        ?? centro_pendientes_continuidad_descripcion_tipo($tipo)
+        ?? centro_pendientes_descripcion_tipo($tipo);
 }
 
 function pendientes_presentar(array $pendiente, ?array $gestion, bool $causaActiva): array
@@ -80,24 +93,38 @@ function pendientes_historico_presentable(array $gestion, bool $causaActiva): ar
         'origen_id' => (string)$gestion['origen_id'],
         'alumno_id' => $alumnoId !== '' ? $alumnoId : null,
         'alumno_nombre' => $gestion['alumno_nombre'] ?? null,
-        'sede_id' => (string)$gestion['sede_id'],
-        'sede_nombre' => (string)$gestion['sede_nombre'],
+        'sede_id' => $gestion['sede_id'] !== null ? (string)$gestion['sede_id'] : null,
+        'sede_nombre' => (string)($gestion['sede_nombre'] ?? 'CRM global'),
         'periodo_inicio' => $gestion['periodo_inicio'] ?? null,
         'periodo_fin' => $gestion['periodo_fin'] ?? null,
         'fecha_referencia' => $gestion['periodo_inicio'] ?? $gestion['created_at'] ?? null,
         'explicacion' => $causaActiva
             ? 'La regla o el registro de origen vuelve a requerir atención.'
             : 'La causa ya no aplica según la fuente original.',
-        'href' => centro_pendientes_continuidad_href_historico($tipo) ?? centro_pendientes_url($tipo, $alumnoId),
+        'href' => centro_pendientes_prospectos_href_historico($tipo)
+            ?? centro_pendientes_continuidad_href_historico($tipo)
+            ?? centro_pendientes_url($tipo, $alumnoId),
     ];
 }
 
-function pendientes_listar(PDO $pdo, array $sede): array
+function pendientes_gestion_alcance_valido(array $gestion, string $sedeId): bool
+{
+    $gestionSede=$gestion['sede_id'] ?? null;
+    if($gestionSede===null || $gestionSede===''){
+        return (string)($gestion['tipo']??'')===CENTRO_PENDIENTES_PROSPECTO_TIPO;
+    }
+    return hash_equals((string)$gestionSede,$sedeId);
+}
+
+function pendientes_listar(PDO $pdo, array $sede, bool $includeGlobalProspects = false): array
 {
     $sedeId = (string)$sede['id'];
     $sedeClave = (string)$sede['clave'];
-    $fuentes = pendientes_fuentes_activas($pdo, $sedeId, $sedeClave, (string)$sede['nombre']);
+    $fuentes = pendientes_fuentes_activas($pdo, $sedeId, $sedeClave, (string)$sede['nombre'], $includeGlobalProspects);
     $historico = centro_pendientes_historico($pdo, $sedeId);
+    if($includeGlobalProspects){
+        $historico += centro_pendientes_prospectos_historico($pdo);
+    }
     $items = [];
 
     foreach ($fuentes as $identidad => $pendiente) {
@@ -156,15 +183,16 @@ try {
     );
     $sede = pendientes_sede($pdo, auth_active_sede_clave());
     $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    $includeGlobalProspects=($me['rol'] ?? '')==='ADMIN';
 
     if ($method === 'GET') {
         pendientes_out([
             'ok'=>true,
             'sede'=>(string)$sede['clave'],
-            'puede_gestionar'=>($me['rol'] ?? '') === 'ADMIN',
+            'puede_gestionar'=>$includeGlobalProspects,
             'csrf'=>auth_csrf_token(),
-            'tipos_habilitados'=>pendientes_tipos_habilitados(),
-            'pendientes'=>pendientes_listar($pdo, $sede),
+            'tipos_habilitados'=>pendientes_tipos_habilitados($includeGlobalProspects),
+            'pendientes'=>pendientes_listar($pdo, $sede, $includeGlobalProspects),
         ]);
     }
     if ($method !== 'POST') {
@@ -192,11 +220,11 @@ try {
     $sede = pendientes_sede($pdo, auth_active_sede_clave());
     $sedeId = (string)$sede['id'];
     if ($accion === 'ATENDER') {
-        $fuentes = pendientes_fuentes_activas($pdo, $sedeId, (string)$sede['clave'], (string)$sede['nombre']);
+        $fuentes = pendientes_fuentes_activas($pdo, $sedeId, (string)$sede['clave'], (string)$sede['nombre'], true);
         $pendiente = $fuentes[$identidad] ?? null;
         if (!$pendiente) {
             $pdo->rollBack();
-            pendientes_out(['ok'=>false,'error'=>'La causa ya no requiere atención o no pertenece a la sede activa'], 409);
+            pendientes_out(['ok'=>false,'error'=>'La causa ya no requiere atención o no pertenece al alcance administrativo'], 409);
         }
         $atendido = centro_pendientes_gestion_atendida($pendiente, $me, $nota !== '' ? $nota : null, date('Y-m-d H:i:s'));
         $id = (string)$pdo->query('SELECT UUID()')->fetchColumn();
@@ -207,6 +235,7 @@ try {
                 :id,:identidad,:sede,:tipo,:origen_tipo,:origen_id,:alumno,:periodo_inicio,:periodo_fin,
                 'ATENDIDO',:atendido_por,:atendido_por_nombre,:atendido_at,:atencion_nota
             ) ON DUPLICATE KEY UPDATE
+                sede_id=VALUES(sede_id),
                 estado='ATENDIDO',
                 atendido_por=VALUES(atendido_por),
                 atendido_por_nombre=VALUES(atendido_por_nombre),
@@ -215,7 +244,7 @@ try {
         $st->execute([
             ':id'=>$id,
             ':identidad'=>$identidad,
-            ':sede'=>$sedeId,
+            ':sede'=>$pendiente['sede_id'] ?? null,
             ':tipo'=>$pendiente['tipo'],
             ':origen_tipo'=>$pendiente['origen_tipo'],
             ':origen_id'=>$pendiente['origen_id'],
@@ -227,8 +256,8 @@ try {
             ':atendido_at'=>$atendido['atendido_at'],
             ':atencion_nota'=>$atendido['atencion_nota'],
         ]);
-        $st = $pdo->prepare('SELECT * FROM pendientes_gestion WHERE identidad=:identidad AND sede_id=:sede LIMIT 1 FOR UPDATE');
-        $st->execute([':identidad'=>$identidad, ':sede'=>$sedeId]);
+        $st = $pdo->prepare('SELECT * FROM pendientes_gestion WHERE identidad=:identidad LIMIT 1 FOR UPDATE');
+        $st->execute([':identidad'=>$identidad]);
         $gestion = $st->fetch();
         if (!$gestion) {
             throw new RuntimeException('No se pudo guardar la atención del pendiente');
@@ -238,12 +267,12 @@ try {
         pendientes_out(['ok'=>true,'estado'=>'ATENDIDO']);
     }
 
-    $st = $pdo->prepare('SELECT * FROM pendientes_gestion WHERE identidad=:identidad AND sede_id=:sede LIMIT 1 FOR UPDATE');
-    $st->execute([':identidad'=>$identidad, ':sede'=>$sedeId]);
+    $st = $pdo->prepare('SELECT * FROM pendientes_gestion WHERE identidad=:identidad LIMIT 1 FOR UPDATE');
+    $st->execute([':identidad'=>$identidad]);
     $gestion = $st->fetch();
-    if (!$gestion) {
+    if (!$gestion || !pendientes_gestion_alcance_valido($gestion, $sedeId)) {
         $pdo->rollBack();
-        pendientes_out(['ok'=>false,'error'=>'Solo puede resolverse un pendiente con gestión registrada'], 409);
+        pendientes_out(['ok'=>false,'error'=>'Solo puede resolverse un pendiente con gestión registrada en el alcance permitido'], 409);
     }
     if (!centro_pendientes_puede_resolver(pendientes_causa_activa($pdo, $gestion, $sedeId, (string)$sede['clave']))) {
         $pdo->rollBack();
@@ -251,13 +280,12 @@ try {
     }
     $st = $pdo->prepare("UPDATE pendientes_gestion
         SET estado='RESUELTO',resuelto_por=:usuario,resuelto_por_nombre=:nombre,resuelto_at=NOW(),resolucion_nota=:nota
-        WHERE id=:id AND sede_id=:sede");
+        WHERE id=:id");
     $st->execute([
         ':usuario'=>(string)$me['id'],
         ':nombre'=>(string)($me['usuario'] ?? ''),
         ':nota'=>$nota !== '' ? $nota : null,
         ':id'=>$gestion['id'],
-        ':sede'=>$sedeId,
     ]);
     $st = $pdo->prepare('SELECT * FROM pendientes_gestion WHERE id=:id LIMIT 1');
     $st->execute([':id'=>$gestion['id']]);
