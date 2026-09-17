@@ -48,7 +48,7 @@ $unavailable=$base;$unavailable['gestion_disponible']=false;
 followup_alert_expect(!hache_internal_prospect_followup_due($unavailable,$state,$now),'Durante una ventana sin esquema de gestión disponible no se deben generar falsos positivos.');
 
 followup_alert_expect(hache_internal_prospect_followup_event_paused(['text'=>'No por el momento','interactive_id'=>'flow:pause']),'El botón dedicado de pausa debe reconstruirse como pausa durable.');
-followup_alert_expect(hache_internal_prospect_followup_event_paused(['text'=>'Déjame analizarlo','interactive_id'=>'']),'La pausa explícita del Brain debe reconstruirse desde texto durable.');
+followup_alert_expect(hache_internal_prospect_followup_event_paused(['text'=>'Déjame analizar','interactive_id'=>'']),'La pausa explícita del Brain debe reconstruirse desde texto durable.');
 followup_alert_expect(!hache_internal_prospect_followup_event_paused(['text'=>'¿Qué horarios tienen?','interactive_id'=>'']),'Una pregunta comercial normal no debe convertirse en pausa.');
 
 // Regresión del P1 de Codex: el estado persistido ya está expirado a las 24 h,
