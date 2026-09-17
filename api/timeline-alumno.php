@@ -78,8 +78,8 @@ try{
         $push($row['fecha_desde'].' 00:00:00','AUSENCIA','Aviso de ausencia · '.$row['estado'],$detalle,'/ausencias.php?alumno_id='.rawurlencode($studentId),null,'Avisos de ausencia');
     }
 
-    $stmt=$pdo->prepare('SELECT rr.estado,rr.created_at,rr.used_at,sa.fecha AS ausencia_fecha,sr.fecha AS reposicion_fecha FROM reposiciones_regulares rr JOIN alumnos al ON al.id=rr.alumno_id JOIN asistencias aa ON aa.id=rr.ausencia_asistencia_id AND aa.alumno_id=rr.alumno_id JOIN sesiones sa ON sa.id=aa.sesion_id JOIN horarios ha ON ha.id=sa.horario_id AND ha.sede_id=:site LEFT JOIN sesiones sr ON sr.id=rr.sesion_reposicion_id WHERE rr.alumno_id=:student AND al.sede_id=:site ORDER BY rr.created_at');
-    $stmt->execute([':student'=>$studentId,':site'=>$siteId]);
+    $stmt=$pdo->prepare('SELECT rr.estado,rr.created_at,rr.used_at,sa.fecha AS ausencia_fecha,sr.fecha AS reposicion_fecha FROM reposiciones_regulares rr JOIN alumnos al ON al.id=rr.alumno_id JOIN asistencias aa ON aa.id=rr.ausencia_asistencia_id AND aa.alumno_id=rr.alumno_id JOIN sesiones sa ON sa.id=aa.sesion_id JOIN horarios ha ON ha.id=sa.horario_id AND ha.sede_id=:site_source LEFT JOIN sesiones sr ON sr.id=rr.sesion_reposicion_id WHERE rr.alumno_id=:student AND al.sede_id=:site_student ORDER BY rr.created_at');
+    $stmt->execute([':student'=>$studentId,':site_source'=>$siteId,':site_student'=>$siteId]);
     foreach($stmt as $row){
         $detalle='Fuente: Reposición regular · Ausencia '.date('d/m/Y',strtotime((string)$row['ausencia_fecha']));
         if(!empty($row['reposicion_fecha']))$detalle.=' · Clase de reposición '.date('d/m/Y',strtotime((string)$row['reposicion_fecha']));

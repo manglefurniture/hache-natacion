@@ -36,6 +36,10 @@ assert.match(timeline, /Método no registrado/, 'NO_REGISTRADO se presenta con t
 assert.match(timeline, /JOIN horarios h ON h\.id=s\.horario_id WHERE a\.alumno_id=:student AND h\.sede_id=:site/, 'la asistencia se limita a la sede del expediente');
 assert.match(timeline, /FROM reposiciones_regulares rr/, 'el expediente incorpora reposiciones regulares desde su fuente');
 assert.match(timeline, /rr\.ausencia_asistencia_id/, 'cada reposición regular conserva la relación con su ausencia de origen');
+assert.match(timeline, /ha\.sede_id=:site_source/, 'la sesión origen de una reposición regular se limita a la sede');
+assert.match(timeline, /al\.sede_id=:site_student/, 'el alumno de una reposición regular se limita a la sede');
+assert.match(timeline, /':site_source'=>\$siteId,':site_student'=>\$siteId/, 'los placeholders de sede de reposiciones son distintos bajo prepares nativos');
+assert.doesNotMatch(timeline, /ha\.sede_id=:site[^_][\s\S]*al\.sede_id=:site/, 'las reposiciones no reutilizan el mismo placeholder PDO dos veces');
 assert.match(timeline, /Reposición regular · /, 'la reposición regular queda identificada por producto');
 assert.match(timeline, /reposiciones_justificadas/, 'el intensivo conserva reposiciones justificadas');
 assert.match(timeline, /reposiciones_cancelacion/, 'el intensivo conserva reposiciones por cancelación');
