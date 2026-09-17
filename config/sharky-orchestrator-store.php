@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-orchestrator.php';
 
 const HACHE_SHARKY_MESSAGE_LEASE_SECONDS = 180;
-const HACHE_SHARKY_GOOGLE_CONTACTS_REFRESH_TOKEN_FILE = '/var/lib/hache-natacion/google-contacts-refresh-token';
+const HACHE_SHARKY_GOOGLE_CONTACTS_REFRESH_TOKEN_FILE = '/var/tmp/hache-sharky-secrets/google-contacts-refresh-token';
 
 function hache_sharky_orchestrator_runtime_secret(string $name): string
 {
