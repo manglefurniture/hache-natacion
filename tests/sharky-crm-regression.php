@@ -25,9 +25,14 @@ $page=file_get_contents(__DIR__.'/../public/prospectos.php')?:'';
 $configPage=file_get_contents(__DIR__.'/../public/configuracion.php')?:'';
 crm_expect(!preg_match('/\b(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)?/i',$helper),'La proyección CRM debe ser de solo lectura.');
 crm_expect(str_contains($helper,"(status='COMPLETED') DESC"),'Una conversión completada debe prevalecer sobre intentos posteriores fallidos o cancelados.');
+crm_expect(str_contains($helper,"['student_id']")&&str_contains($helper,"resolved_alumno_id"),'El CRM debe recuperar el alumno creado desde el resultado durable del registro cuando el audit no tenga alumno_id.');
 crm_expect(str_contains($helper,'hache_sharky_crm_bulk_states')&&str_contains($helper,'hache_sharky_crm_bulk_referrals')&&str_contains($helper,'hache_sharky_crm_bulk_registrations'),'El listado debe resolver fuentes CRM en consultas agrupadas y evitar una consulta completa por contacto.');
+crm_expect(str_contains($helper,'function hache_sharky_crm_page')&&str_contains($helper,'LIMIT '.$perPage??'')===false,'El CRM debe exponer una función de paginación sin un tope fijo de 300 contactos.');
+crm_expect(!str_contains($helper,'LIMIT 300'),'El CRM no debe truncar silenciosamente a 300 contactos.');
 crm_expect(str_contains($api,"auth_require(['ADMIN'])"),'El CRM debe limitar PII a ADMIN.');
 crm_expect(str_contains($api,"REQUEST_METHOD")&&str_contains($api,"'GET'"),'La API debe exponer únicamente lectura GET.');
+crm_expect(str_contains($api,"$_GET['page']")&&str_contains($api,"$_GET['q']")&&str_contains($api,"'paginacion'"),'La API debe ofrecer paginación y búsqueda global por nombre/WhatsApp.');
+crm_expect(str_contains($page,'Buscar en todo el CRM por nombre o WhatsApp')&&str_contains($page,'id="prev"')&&str_contains($page,'id="next"'),'La vista debe permitir navegar y buscar fuera de la primera página.');
 crm_expect(str_contains($page,'No cambia el funnel')&&str_contains($page,'no envía mensajes'),'La vista debe declarar su alcance de solo lectura.');
 crm_expect(str_contains($configPage,'href="/prospectos.php"')&&str_contains($configPage,'CRM de prospectos'),'El CRM debe quedar accesible desde Configuración.');
 
