@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const helper=fs.readFileSync(new URL('../config/periodos-financieros.php',import.meta.url),'utf8');
+const obligations=fs.readFileSync(new URL('../config/finanzas-obligaciones.php',import.meta.url),'utf8');
 const correctionRules=fs.readFileSync(new URL('../config/finanzas-correcciones.php',import.meta.url),'utf8');
 const correctionApi=fs.readFileSync(new URL('../api/corregir-obligacion-mensual.php',import.meta.url),'utf8');
 const migration=fs.readFileSync(new URL('../database/migrations/20260825_financial_periods.sql',import.meta.url),'utf8');
@@ -43,16 +44,19 @@ assert.match(close,/closedPeriod\(\$pdo,\(string\)\$site\['id'\],\$nextPeriod\)/
 // Fase 2: una sola autoridad financiera y lectura sin efectos.
 assert.match(internal,/financiero_totales\(\$pdo,\$sede,\$periodo\)/);
 assert.match(internal,/\$rango=\$totales\['rango'\]/);
-assert.match(internal,/m\.importe_a_cobrar total_obligacion/);
-assert.match(internal,/i\.importe total_obligacion/);
-assert.match(internal,/ci\.precio total_obligacion/);
-assert.doesNotMatch(internal,/JOIN planes/);
-assert.match(internal,/CASE WHEN p\.estado='VALIDO' THEN p\.importe ELSE 0 END/);
-assert.match(internal,/SUM\(p\.estado='INVALIDADO'\)/);
-assert.match(internal,/p\.intensivo_id=ci\.id AND p\.alumno_id=cia\.alumno_id AND p\.tipo='INTENSIVO'/);
+assert.match(internal,/finanzas-obligaciones\.php/);
+assert.match(internal,/finanzas_obligaciones_periodo\(/);
+assert.match(obligations,/m\.importe_a_cobrar total_obligacion/);
+assert.match(obligations,/i\.importe total_obligacion/);
+assert.match(obligations,/ci\.precio total_obligacion/);
+assert.doesNotMatch(obligations,/JOIN planes/);
+assert.match(obligations,/CASE WHEN p\.estado='VALIDO' THEN p\.importe ELSE 0 END/);
+assert.match(obligations,/SUM\(p\.estado='INVALIDADO'\)/);
+assert.match(obligations,/p\.intensivo_id=ci\.id AND p\.alumno_id=cia\.alumno_id AND p\.tipo='INTENSIVO'/);
 assert.match(internal,/FROM cierres_mensuales c/);
 assert.match(internal,/diferencia_total/);
 assert.doesNotMatch(internal,/\b(?:INSERT|UPDATE|DELETE|REPLACE)\s+(?:INTO\s+)?(?:pagos|mensualidades|inscripciones|cursos_intensivos|curso_intensivo_alumnos|periodos_financieros|cierres_mensuales)\b/i);
+assert.doesNotMatch(obligations,/\b(?:INSERT|UPDATE|DELETE|REPLACE)\s+(?:INTO\s+)?(?:pagos|mensualidades|inscripciones|cursos_intensivos|curso_intensivo_alumnos|periodos_financieros|cierres_mensuales)\b/i);
 
 // Una corrección histórica es una acción ADMIN separada de la lectura y debe
 // negarse en cuanto exista movimiento financiero o falte evidencia de intensivo.
@@ -74,9 +78,10 @@ assert.match(correctionApi,/SELECT id FROM pagos WHERE mensualidad_id=:id FOR UP
 assert.match(correctionApi,/finanzas_mensualidad_corregible\(\$m\)/);
 assert.match(correctionApi,/hache_admin_history\([\s\S]*'MENSUALIDAD'[\s\S]*'MENSUALIDAD_CORREGIDA'/);
 assert.match(correctionApi,/DELETE FROM mensualidades WHERE id=:id[\s\S]*estado='PENDIENTE'[\s\S]*importe_cobrado IS NULL[\s\S]*NOT EXISTS \(SELECT 1 FROM pagos p WHERE p\.mensualidad_id=:pid\)/);
-assert.match(internal,/\(\$viewer\['rol'\]\?\?'\'\)==='ADMIN'&&finanzas_mensualidad_corregible\(\$r\)/);
-assert.match(internal,/\(SELECT COUNT\(\*\) FROM pagos px WHERE px\.mensualidad_id=m\.id\) pagos_totales/);
-assert.match(internal,/intensivo_solapado/);
+assert.match(internal,/\(\$viewer\['rol'\]\?\?'\'\)==='ADMIN'/);
+assert.match(obligations,/\$permitirCorrecciones&&finanzas_mensualidad_corregible\(\$r\)/);
+assert.match(obligations,/\(SELECT COUNT\(\*\) FROM pagos px WHERE px\.mensualidad_id=m\.id\) pagos_totales/);
+assert.match(obligations,/intensivo_solapado/);
 
 assert.match(internalPage,/Saldo = obligación registrada/);
 assert.match(internalPage,/No sobrescribe el cierre guardado/);
@@ -85,6 +90,9 @@ assert.match(internalPage,/Último cobro/);
 assert.match(internalPage,/Corregir obligación/);
 assert.match(internalPage,/corregir-obligacion-mensual\.php/);
 assert.match(internalPage,/Motivo obligatorio de la corrección histórica/);
+assert.match(internalPage,/requestedPeriod=qs\.get\('periodo'\)/);
+assert.match(internalPage,/validRequestedPeriod=\/\^\\d\{4\}-\(0\[1-9\]\|1\[0-2\]\)\$\//);
+assert.match(internalPage,/\$\('periodo'\)\.value=validRequestedPeriod\|\|/);
 assert.match(roadmap,/Decisión P-02 resuelta para el primer incremento/);
 assert.match(roadmap,/\| F1 Centro de pendientes \| Implementado \|/);
 assert.match(roadmap,/\| F2 Finanzas \| Desplegado \|/);

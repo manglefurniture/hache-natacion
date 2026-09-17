@@ -9,7 +9,8 @@ const qs=new URLSearchParams(location.search),SEDE=(qs.get('sede')||localStorage
 const $=id=>document.getElementById(id),money=n=>Number(n||0).toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:2});
 const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]));
 const fmtDate=v=>{if(!v)return'—';const d=String(v).slice(0,10).split('-');return d.length===3?`${d[2]}/${d[1]}/${d[0]}`:v};
-const now=new Date();$('periodo').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+const requestedPeriod=qs.get('periodo'),validRequestedPeriod=/^\d{4}-(0[1-9]|1[0-2])$/.test(requestedPeriod||'')?requestedPeriod:null;
+const now=new Date();$('periodo').value=validRequestedPeriod||`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 let DATA=null,FILTER='SALDO';
 function card(k,v,s='',wide=false){return `<div class="card ${wide?'wide':''}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${s?`<div class="s">${esc(s)}</div>`:''}</div>`}
 function delta(n){const x=Number(n||0),cls=x>0?'pos':x<0?'neg':'';return `<span class="delta ${cls}">${x>0?'+':''}${money(x)}</span>`}
