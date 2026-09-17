@@ -42,6 +42,16 @@ $intensivoAlumno2 = centro_pendientes_identidad('SALDO_INTENSIVO_PENDIENTE', 'CU
 pendientes_ok($intensivoAlumno1 !== $intensivoAlumno2, 'Dos alumnos del mismo intensivo deben conservar pendientes independientes');
 pendientes_ok(centro_pendientes_url('SALDO_INTENSIVO_PENDIENTE', 'alumno-1', 'curso-1') === '/pagos.php?alumno_id=alumno-1&tipo=INTENSIVO&curso_intensivo_id=curso-1', 'El saldo intensivo debe abrir directamente el tipo, alumno y curso correctos en pagos');
 
+// La recurrencia de ausencias se identifica por la primera marca de la racha.
+// La misma racha conserva identidad al crecer; una racha posterior usa otro origen.
+$racha1 = centro_pendientes_identidad('RACHA_AUSENCIAS_CONSECUTIVAS', 'ASISTENCIA_RACHA', 'asistencia-inicial-1');
+$racha1OtraConsulta = centro_pendientes_identidad('RACHA_AUSENCIAS_CONSECUTIVAS', 'ASISTENCIA_RACHA', 'asistencia-inicial-1');
+$racha2 = centro_pendientes_identidad('RACHA_AUSENCIAS_CONSECUTIVAS', 'ASISTENCIA_RACHA', 'asistencia-inicial-2');
+pendientes_ok($racha1 === $racha1OtraConsulta, 'Una racha activa debe conservar identidad aunque se vuelva a consultar');
+pendientes_ok($racha1 !== $racha2, 'Una recurrencia posterior debe tener otra identidad estable');
+pendientes_ok(centro_pendientes_url('RACHA_AUSENCIAS_CONSECUTIVAS', 'alumno-1') === '/ficha-alumno.php?id=alumno-1', 'La racha debe abrir la ficha del alumno');
+pendientes_ok(centro_pendientes_descripcion_tipo('RACHA_AUSENCIAS_CONSECUTIVAS') === 'Racha de ausencias consecutivas', 'El tipo de racha debe tener una descripción administrativa explícita');
+
 // Atender no toca la causa y conserva responsable, fecha y nota.
 $causa = ['identidad'=>$septiembre, 'tipo'=>'MENSUALIDAD_REGULAR_SIN_COBERTURA', 'origen_id'=>'alumno-1'];
 $copiaCausa = $causa;
@@ -73,8 +83,8 @@ pendientes_ok(centro_pendientes_estado_efectivo($atencion, false) === 'RESUELTO'
 pendientes_ok(centro_pendientes_estado_efectivo($atencion, true) === 'ATENDIDO', 'Una invalidación debe volver a hacer aplicable el asunto sin inventar pagos');
 pendientes_ok(centro_pendientes_estado_efectivo(['estado'=>'RESUELTO'], true) === 'PENDIENTE', 'Una causa reactivada tras una resolución previa debe volver a requerir atención');
 
-// Ningún pendiente puede escapar de su sede. F2 habilita ahora el saldo de
-// intensivo; los demás tipos diferidos siguen fuera hasta su fase correspondiente.
+// Ningún pendiente puede escapar de su sede. F2 habilita el saldo de intensivo
+// y F5 habilita ahora las rachas de ausencias con regla compartida.
 pendientes_ok(centro_pendientes_mismo_alcance(['sede_id'=>'sede-monteverde'], 'sede-monteverde'), 'La sede propia debe poder consultar su pendiente');
 pendientes_ok(!centro_pendientes_mismo_alcance(['sede_id'=>'sede-monteverde'], 'sede-palapas'), 'La sede ajena no debe poder consultar ni gestionar el pendiente');
 pendientes_ok(CENTRO_PENDIENTES_TIPOS_HABILITADOS === [
@@ -82,7 +92,8 @@ pendientes_ok(CENTRO_PENDIENTES_TIPOS_HABILITADOS === [
     'INSCRIPCION_REGULAR_SIN_COBERTURA',
     'REPOSICION_REGULAR_DISPONIBLE',
     'SALDO_INTENSIVO_PENDIENTE',
-], 'Solo los cuatro tipos con regla disponible deben quedar habilitados');
+    'RACHA_AUSENCIAS_CONSECUTIVAS',
+], 'Solo los cinco tipos con regla disponible deben quedar habilitados');
 
 // La fuente de intensivos reutiliza la obligación registrada en el curso y solo
 // resta pagos VALIDOS del mismo alumno + curso, incluidos abonos múltiples.
@@ -90,9 +101,12 @@ $fuentes = pendientes_function_source('centro_pendientes_fuentes_activas');
 pendientes_ok(str_contains($fuentes, "p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id AND p.tipo='INTENSIVO'"), 'El saldo intensivo debe aislar pagos por alumno + curso');
 pendientes_ok(str_contains($fuentes, "CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END"), 'Solo pagos VALIDOS pueden reducir el saldo intensivo');
 pendientes_ok(str_contains($fuentes, "+0.009<ci.precio"), 'El pendiente intensivo debe desaparecer al liquidar el precio registrado');
+pendientes_ok(str_contains($fuentes, 'hache_internal_consecutive_absence_candidates($pdo, $sedeId)'), 'El Centro debe reutilizar la regla F5 de ausencias, no recalcular otra racha');
+pendientes_ok(str_contains($fuentes, "'origen_tipo' => 'ASISTENCIA_RACHA'") && str_contains($fuentes, "'origen_id' => (string)\$racha['origen_asistencia_id']"), 'La racha debe persistir una identidad basada en su primera marca de ausencia');
 $revalidacion = pendientes_function_source('centro_pendientes_causa_activa');
 pendientes_ok(str_contains($revalidacion, "SALDO_INTENSIVO_PENDIENTE"), 'La resolución debe revalidar también el saldo intensivo');
 pendientes_ok(str_contains($revalidacion, "CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END"), 'La revalidación intensiva debe ignorar pagos invalidados');
+pendientes_ok(str_contains($revalidacion, "RACHA_AUSENCIAS_CONSECUTIVAS") && str_contains($revalidacion, 'hache_internal_consecutive_absence_candidate'), 'La resolución de una racha debe consultar de nuevo la misma regla F5');
 
 // La carga de fuentes y la rama GET son de lectura: no crean ni modifican pagos,
 // asistencias, alumnos, inscripciones o reposiciones al abrir o recargar la vista.
