@@ -95,22 +95,25 @@ pendientes_ok(CENTRO_PENDIENTES_TIPOS_HABILITADOS === [
     'RACHA_AUSENCIAS_CONSECUTIVAS',
 ], 'Solo los cinco tipos con regla disponible deben quedar habilitados');
 
-// La fuente de intensivos reutiliza la obligación registrada en el curso y solo
-// resta pagos VALIDOS del mismo alumno + curso, incluidos abonos múltiples.
+// La fuente financiera compartida conserva el contrato F2: mismo alumno + curso,
+// solo pagos VALIDOS y desaparición del pendiente al liquidar el precio.
 $fuentes = pendientes_function_source('centro_pendientes_fuentes_activas');
-pendientes_ok(str_contains($fuentes, "p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id AND p.tipo='INTENSIVO'"), 'El saldo intensivo debe aislar pagos por alumno + curso');
-pendientes_ok(str_contains($fuentes, "CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END"), 'Solo pagos VALIDOS pueden reducir el saldo intensivo');
-pendientes_ok(str_contains($fuentes, "+0.009<ci.precio"), 'El pendiente intensivo debe desaparecer al liquidar el precio registrado');
+$saldoFuente = pendientes_function_source('hache_intensive_pending_balance_candidates');
+pendientes_ok(str_contains($fuentes, 'hache_intensive_pending_balance_candidates($pdo, $sedeId)'), 'El Centro debe consumir la fuente financiera compartida del saldo intensivo');
+pendientes_ok(str_contains($saldoFuente, "p.intensivo_id=ci.id AND p.alumno_id=cia.alumno_id AND p.tipo='INTENSIVO'"), 'El saldo intensivo debe aislar pagos por alumno + curso');
+pendientes_ok(str_contains($saldoFuente, "CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END"), 'Solo pagos VALIDOS pueden reducir el saldo intensivo');
+pendientes_ok(str_contains($saldoFuente, "+0.009<ci.precio"), 'El pendiente intensivo debe desaparecer al liquidar el precio registrado');
 pendientes_ok(str_contains($fuentes, 'hache_internal_consecutive_absence_candidates($pdo, $sedeId)'), 'El Centro debe reutilizar la regla F5 de ausencias, no recalcular otra racha');
 pendientes_ok(str_contains($fuentes, "'origen_tipo' => 'ASISTENCIA_RACHA'") && str_contains($fuentes, "'origen_id' => (string)\$racha['origen_asistencia_id']"), 'La racha debe persistir una identidad basada en su primera marca de ausencia');
 $revalidacion = pendientes_function_source('centro_pendientes_causa_activa');
 pendientes_ok(str_contains($revalidacion, "SALDO_INTENSIVO_PENDIENTE"), 'La resolución debe revalidar también el saldo intensivo');
-pendientes_ok(str_contains($revalidacion, "CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END"), 'La revalidación intensiva debe ignorar pagos invalidados');
+pendientes_ok(str_contains($revalidacion, 'hache_intensive_pending_balance_candidates($pdo, $sedeId'), 'La revalidación intensiva debe consumir la misma fuente financiera compartida');
 pendientes_ok(str_contains($revalidacion, "RACHA_AUSENCIAS_CONSECUTIVAS") && str_contains($revalidacion, 'hache_internal_consecutive_absence_candidate'), 'La resolución de una racha debe consultar de nuevo la misma regla F5');
 
-// La carga de fuentes y la rama GET son de lectura: no crean ni modifican pagos,
-// asistencias, alumnos, inscripciones o reposiciones al abrir o recargar la vista.
+// La carga de fuentes y las autoridades compartidas son de lectura: no crean ni
+// modifican pagos, asistencias, alumnos, inscripciones o reposiciones al consultar.
 pendientes_ok(!preg_match('/\b(?:INSERT|UPDATE|DELETE)\b/i', $fuentes), 'Consultar las fuentes de pendientes debe ser solo lectura');
+pendientes_ok(!preg_match('/\b(?:INSERT|UPDATE|DELETE)\b/i', $saldoFuente), 'Consultar la fuente financiera compartida debe ser solo lectura');
 $api = file_get_contents(__DIR__.'/../api/pendientes.php');
 pendientes_ok(is_string($api), 'La API del centro de pendientes debe existir');
 $getStart = strpos($api, 'if ($method === \'GET\')');
