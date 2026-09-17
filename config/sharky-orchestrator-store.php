@@ -5,9 +5,22 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-orchestrator.php';
 
 const HACHE_SHARKY_MESSAGE_LEASE_SECONDS = 180;
+const HACHE_SHARKY_GOOGLE_CONTACTS_REFRESH_TOKEN_FILE = '/var/lib/hache-natacion/google-contacts-refresh-token';
+
+function hache_sharky_orchestrator_runtime_secret(string $name): string
+{
+    if($name!=='GOOGLE_CONTACTS_REFRESH_TOKEN')return '';
+    $file=HACHE_SHARKY_GOOGLE_CONTACTS_REFRESH_TOKEN_FILE;
+    if(!is_file($file)||!is_readable($file)||is_link($file))return '';
+    $value=trim((string)@file_get_contents($file));
+    if(strlen($value)<20||strlen($value)>2048||preg_match('/[\x00-\x20\x7F]/',$value))return '';
+    return $value;
+}
 
 function hache_sharky_orchestrator_secret(string $name): string
 {
+    $runtime=hache_sharky_orchestrator_runtime_secret($name);
+    if($runtime!=='')return $runtime;
     $value=trim((string)getenv($name));
     if($value!=='') return $value;
     foreach([dirname(__DIR__).'/.env',dirname(__DIR__,2).'/.env'] as $file){
@@ -157,14 +170,16 @@ function hache_sharky_orchestrator_state_save(string $contact,array $state): boo
 function hache_sharky_orchestrator_lock(string $contact)
 {
     $dir=hache_sharky_orchestrator_runtime_dir('locks');if($dir==='') return null;
-    $path=$dir.'/'.hache_sharky_orchestrator_contact_hash($contact).'.lock';$fh=@fopen($path,'c');if($fh===false) return null;
+    $path=$dir.'/'.hache_sharky_orchestrator_contact_hash($contact).'.lock';$fh=@fopen($path,'c');
+    if($fh===false) return null;
     @chmod($path,0600);if(!flock($fh,LOCK_EX)){fclose($fh);return null;}return $fh;
 }
 
 function hache_sharky_orchestrator_delivery_lock(string $contact)
 {
     $dir=hache_sharky_orchestrator_runtime_dir('delivery-locks');if($dir==='') return null;
-    $path=$dir.'/'.hache_sharky_orchestrator_contact_hash($contact).'.lock';$fh=@fopen($path,'c');if($fh===false) return null;
+    $path=$dir.'/'.hache_sharky_orchestrator_contact_hash($contact).'.lock';$fh=@fopen($path,'c');
+    if($fh===false) return null;
     @chmod($path,0600);if(!flock($fh,LOCK_EX)){fclose($fh);return null;}return $fh;
 }
 
@@ -178,8 +193,7 @@ function hache_sharky_orchestrator_batch_enqueue_and_wait(string $contact,array 
     $windowMs=max(200,min(5000,$windowMs));$dir=hache_sharky_orchestrator_runtime_dir('batch');
     if($dir==='') return hache_sharky_orchestrator_batch([$event]);
     $hash=hache_sharky_orchestrator_contact_hash($contact);$queue=$dir.'/'.$hash.'.json';$lockPath=$dir.'/'.$hash.'.lock';$lock=@fopen($lockPath,'c');
-    if($lock===false) return hache_sharky_orchestrator_batch([$event]);
-    flock($lock,LOCK_EX);$stored=is_file($queue)?json_decode((string)@file_get_contents($queue),true):null;$nowMs=(int)floor(microtime(true)*1000);
+    if($lock===false) return null;flock($lock,LOCK_EX);$stored=is_file($queue)?json_decode((string)@file_get_contents($queue),true):null;$nowMs=(int)floor(microtime(true)*1000);
     if(!is_array($stored))$stored=['first_at_ms'=>$nowMs,'flush_at_ms'=>$nowMs+$windowMs,'events'=>[],'receipt_ids'=>[],'referral'=>null];
     $eventId=trim((string)($event['id']??''));if($eventId!=='')$stored['receipt_ids'][]=$eventId;
     $stored['receipt_ids']=array_values(array_unique(array_map('strval',is_array($stored['receipt_ids']??null)?$stored['receipt_ids']:[])));
