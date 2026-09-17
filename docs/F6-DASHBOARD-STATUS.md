@@ -6,19 +6,21 @@ Fecha de actualización: 2026-09-17.
 
 F6 — Dashboard operativo queda **En implementación** según la convención del roadmap.
 
-Los incrementos técnicamente definibles sin nuevas decisiones de negocio están implementados, revisados y desplegados. La fase completa no se marca **Implementada**, **Desplegada** ni **Verificada** porque siguen abiertos indicadores cuyo significado debe decidirse antes de publicarlos. No se asignan valores provisionales ni se fabrican datos para cerrar esos huecos.
+Los incrementos técnicamente definibles sin nuevas decisiones de negocio están implementados, revisados, desplegados y comprobados en producción. La fase completa no se marca **Implementada**, **Desplegada** ni **Verificada** porque siguen abiertos indicadores cuyo significado debe decidirse antes de publicarlos. No se asignan valores provisionales ni se fabrican datos para cerrar esos huecos.
 
-Base funcional comprobada: `f87f14d20d6d196a55716deb289859acf915cf53`.
+Base funcional comprobada: `6d521421a8508c6a63de01ffbb4813aecd2bf28f`.
 
 ## Cobertura desplegada
 
-- **Contexto operativo:** sede autorizada, fecha `America/Cancun`, periodo financiero vigente y hora de actualización visible.
+- **Contexto operativo:** sede autorizada, fecha `America/Cancun`, periodo financiero vigente y hora de actualización visible también forzada a `America/Cancun` en el navegador.
 - **Alumnos activos:** conserva la definición histórica del dashboard: alumno único con mensualidad `PAGADA` vigente o intensivo vigente con algún pago `VALIDO`, excluyendo `BAJA`. Total y detalle usan la misma lectura pura. No equivale a derecho de acceso.
 - **Situación financiera:** facturación del periodo usa `financiero_totales()`; obligaciones y saldo usan la autoridad compartida de F2. El detalle de Finanzas internas conserva el mismo periodo del dashboard.
-- **Centro de pendientes y alertas:** F6 consume las causas activas de F5 y el estado de gestión de F1 sin mantener otra cola ni recalcular las reglas. Los prospectos globales solo se incorporan para ADMIN.
-- **Operación del día:** sesiones ya registradas y marcas de asistencia se consultan con una lectura pura. F6 no usa el GET de `api/sesiones.php` que puede generar sesiones para ADMIN.
-- **Datos incompletos:** ausencia de sesiones registradas produce asistencia desconocida; no se presenta como cero ni se calcula porcentaje sin denominador aprobado.
+- **Mensualidades pagadas:** conserva el agregado histórico —registros `PAGADA` cuya vigencia contiene la fecha operativa— y ahora cantidad, total monetario y detalle salen de la misma lectura pura.
+- **Centro de pendientes y alertas:** F6 consume las causas activas de F5 y el estado de gestión de F1 sin mantener otra cola ni recalcular las reglas. La cobertura regular recibe el mismo instante operativo de Cancún que el resto del dashboard. Los prospectos globales solo se incorporan para ADMIN.
+- **Operación del día:** sesiones ya registradas y marcas de asistencia se consultan con una lectura pura. El desglose visible incluye `PROGRAMADA`, `REALIZADA`, `CANCELADA` y cerrada; las marcas de sesiones `CANCELADA` se excluyen de asistencia. F6 no usa el GET de `api/sesiones.php` que puede generar sesiones para ADMIN.
+- **Datos incompletos:** ausencia de sesiones registradas produce asistencia desconocida; un día con solo sesiones canceladas se distingue y no contabiliza sus marcas. No se calcula porcentaje sin denominador aprobado.
 - **Intensivos activos:** conserva la definición histórica por estado almacenado `PROGRAMADO` o `EN_CURSO`; total y detalle salen de la misma consulta sin reconciliar ni escribir estados.
+- **Avisos de ausencia activos:** conserva el conteo histórico de avisos `ACTIVO` cuyo rango contiene la fecha operativa; el total y el detalle salen de la misma lectura.
 - **Sede:** enlaces de detalle y acciones del dashboard propagan la sede autoritativa de la sesión, respetando ADMIN/VERIFICADOR.
 
 ## Autoridades reutilizadas
@@ -29,6 +31,7 @@ Base funcional comprobada: `f87f14d20d6d196a55716deb289859acf915cf53`.
 | Finanzas | F2 / periodos financieros, `financiero_totales()` y obligaciones compartidas |
 | Alertas | F5 / mismas causas activas consumidas por F1 |
 | Alumnos activos | contrato histórico del dashboard extraído a `config/dashboard-alumnos.php` |
+| Mensualidades pagadas y avisos | contratos históricos del dashboard extraídos a `config/dashboard-indicadores.php` |
 | Sesiones y asistencia | `sesiones` + `asistencias`, mediante `config/dashboard-operacion.php` |
 | Intensivos activos | `cursos_intensivos.estado`, mediante `config/dashboard-intensivos.php` |
 | Fecha/hora | `config/dashboard-tiempo.php`, zona `America/Cancun` |
@@ -45,8 +48,11 @@ F6 no escribe en ninguna de estas autoridades.
 | #303 | alumnos activos reconciliables y sede | `fe3470861723cacefb13c1b03612efbb23b71e49` |
 | #304 | intensivos activos reconciliables | `b5fbc876268243c4e27b236d70197acded0f2841` |
 | #305 | sede, fecha y hora de actualización visibles | `f87f14d20d6d196a55716deb289859acf915cf53` |
+| #307 | cierre de hallazgos técnicos: fecha operativa F1/F5, cancelaciones/programadas, zona horaria y detalle de mensualidades/avisos | `6d521421a8508c6a63de01ffbb4813aecd2bf28f` |
 
-Quality posterior a los merges pasó en #1540, #1545, #1547, #1549, #1551 y #1553 respectivamente. Los deploys automáticos #266–#271 terminaron correctamente. La última comprobación de producción confirmó el marcador exacto `f87f14d20d6d196a55716deb289859acf915cf53`, sintaxis PHP correcta del dashboard/contexto temporal y `/api/health.php` con `ok: true`.
+Quality del PR #307 falló inicialmente por una expectativa de fixture detectada también por la revisión automática; el fixture se corrigió sin cambiar el contrato funcional. Quality #1557 pasó en el PR y Quality #1558 pasó después del merge sobre `main`. Deploy automático #273 terminó correctamente. La comprobación de producción confirmó el marcador exacto `6d521421a8508c6a63de01ffbb4813aecd2bf28f`, sintaxis PHP correcta de `api/dashboard.php`, `config/dashboard-indicadores.php`, `config/dashboard-operacion.php` y `public/dashboard.php`, y `https://hnatacion.com/api/health.php` respondió `ok: true`.
+
+Los hilos P2 pendientes de los PR #300, #302, #305 y #306 quedaron resueltos después de integrar #307. El hilo P1 de #307 correspondía al fixture ya corregido y también quedó resuelto.
 
 ## Huecos que requieren decisión antes de continuar
 

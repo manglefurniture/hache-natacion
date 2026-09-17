@@ -4,7 +4,7 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Última base comprobada para esta actualización:** `main`, commit `f87f14d20d6d196a55716deb289859acf915cf53`.  
+**Última base comprobada para esta actualización:** `main`, commit `6d521421a8508c6a63de01ffbb4813aecd2bf28f`.  
 **Estado del roadmap en esta actualización:** Fase 6 **En implementación**; los incrementos técnicamente definidos de F6 están desplegados y los huecos restantes de P-06 requieren decisiones explícitas antes de publicar nuevas métricas.  
 **Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
@@ -306,7 +306,7 @@ Una ausencia consecutiva debe basarse en clases aplicables y marcas válidas, di
 
 **Criterio de terminado.** Cada indicador publicado tiene contrato documentado y un detalle reconciliable; se comprueban sedes, límites del periodo, alumnos con varios pagos y datos incompletos. Las cifras existentes preservan su significado o cuentan con una decisión explícita de cambio y comparación antes/después. Indicadores sin fuente suficiente permanecen pendientes, sin valores ficticios.
 
-**Estado:** **En implementación.** PR #300–#305 integraron y desplegaron fuentes reconciliables de F1/F2/F5, operación diaria en lectura pura, alumnos activos, intensivos activos, sede y contexto temporal, preservando los contratos previos. La evidencia y los límites actuales están en [F6-DASHBOARD-STATUS.md](F6-DASHBOARD-STATUS.md). La fase no pasa a **Implementado** mientras sigan abiertas las decisiones de P-06 sobre nuevos alumnos, bajas, cobertura/denominador de asistencia, unidad de prospecto y cohorte/denominador de conversión.
+**Estado:** **En implementación.** PR #300–#307 integraron y desplegaron fuentes reconciliables de F1/F2/F5, operación diaria en lectura pura, alumnos activos, intensivos activos, mensualidades pagadas, avisos de ausencia, sede y contexto temporal, preservando los contratos previos. #307 cerró los hallazgos técnicos pendientes de revisión automática sobre fecha operativa, cancelaciones, sesiones programadas, zona horaria y detalle reconciliable. La evidencia y los límites actuales están en [F6-DASHBOARD-STATUS.md](F6-DASHBOARD-STATUS.md). La fase no pasa a **Implementado** mientras sigan abiertas las decisiones de P-06 sobre nuevos alumnos, bajas, cobertura/denominador de asistencia, unidad de prospecto y cohorte/denominador de conversión.
 
 ### FASE 7 — Gestión interna de profesores
 
@@ -478,7 +478,8 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | 2026-09-16 | Verificación funcional representativa de F2 en producción. | Sesión ADMIN: vista “Obligaciones y saldos”, Centro de pendientes y deep link hacia Pagos; marcador desplegado `bed91c7...`; regresión `CENTRO_PENDIENTES_REGRESSION_OK`. | Evidencia parcial correcta; F2 permanece **Desplegado** hasta completar todos sus criterios de verificación. |
 | 2026-09-17 | Implementación incremental de F5 sobre fuentes compartidas. | Prospectos, ausencias, continuidad, saldo, mensualidad, reposición e inscripción; regresiones específicas y Quality por incremento. | Cobertura funcional del catálogo comprometido sin nueva cola ni reglas financieras paralelas. |
 | 2026-09-17 | Integración final F1/F4/F5 de prospectos sin seguimiento. | PR #298; Quality #1534 y #1535; Deploy #264; `CENTRO_PENDIENTES_MIGRATION_OK`; producción `cf7dc078...`. | Último hueco funcional de F5 cerrado; fase pasa a **Desplegado** y queda pendiente solo verificación operativa completa para **Verificado**. |
-| 2026-09-17 | F6 Dashboard: integración incremental de autoridades y contratos seguros. | PR #300–#305; Quality post-merge #1540, #1545, #1547, #1549, #1551 y #1553; Deploy #266–#271; producción final `f87f14d...`; evidencia en `F6-DASHBOARD-STATUS.md`. | F6 queda **En implementación**: lo técnicamente definible sin nuevas decisiones está desplegado; P-06 conserva cinco definiciones de negocio/evidencia pendientes. |
+| 2026-09-17 | F6 Dashboard: integración incremental de autoridades y contratos seguros. | PR #300–#305; Quality post-merge #1540, #1545, #1547, #1549, #1551 y #1553; Deploy #266–#271; producción `f87f14d...`; evidencia en `F6-DASHBOARD-STATUS.md`. | Base funcional de F6 integrada; revisiones automáticas posteriores identificaron huecos técnicos adicionales antes del cierre. |
+| 2026-09-17 | F6 Dashboard: cierre de hallazgos técnicos publicados. | PR #307; Quality #1557 en PR y #1558 en `main`; Deploy #273; producción `6d521421...`; marcador, sintaxis PHP y health verificados. | Los indicadores ya publicados cumplen contrato/detalle reconciliable y los hilos técnicos de #300/#302/#305/#306 quedaron resueltos; F6 sigue **En implementación** únicamente por P-06. |
 
 ### 12.2 Estado de las fases
 
@@ -489,7 +490,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Desplegado | Alertas, F1, F2, proyección F4 y configuración F5 | Realizar verificación operativa dirigida en producción sobre casos reales disponibles; no fabricar datos para forzar escenarios. |
-| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5 y lecturas puras de alumnos/sesiones/intensivos | Resolver las decisiones restantes de P-06; no publicar altas, bajas, porcentaje de asistencia, prospectos ni conversiones con semántica provisional. |
+| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5 y lecturas puras de alumnos/sesiones/intensivos/mensualidades/avisos | Resolver las decisiones restantes de P-06; no publicar altas, bajas, porcentaje de asistencia, prospectos ni conversiones con semántica provisional. |
 | F7 Profesores | Pendiente | Profesores, horarios y cancelaciones | Resolver P-07 y preservar historial. |
 | F8 Auditoría | Pendiente | Auditoría e historial existentes | Resolver P-08 mediante matriz de acciones relevantes. |
 | F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |
