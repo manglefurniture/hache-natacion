@@ -54,14 +54,17 @@ function hache_internal_prospect_followup_durable_pause_evidence(PDO $pdo,array 
     if($scope==='')return [];
 
     try{
+        // Los receipts `echo` son mensajes salientes del staff reflejados por Meta;
+        // nunca deben sustituir el último turno real del prospecto para esta regla.
         $sql="SELECT r.contact_hash,r.message_id,r.received_at,r.payload_ciphertext,r.payload_iv,r.payload_tag
             FROM sharky_message_receipts r
             JOIN (
                 SELECT contact_hash,MAX(received_at) latest_at
                 FROM sharky_message_receipts
-                WHERE contact_hash IN ($scope)
+                WHERE contact_hash IN ($scope) AND message_type<>'echo'
                 GROUP BY contact_hash
             ) latest ON latest.contact_hash=r.contact_hash AND latest.latest_at=r.received_at
+            WHERE r.message_type<>'echo'
             ORDER BY r.contact_hash,r.message_id";
         $st=$pdo->prepare($sql);$st->execute($params);
     }catch(Throwable $e){
