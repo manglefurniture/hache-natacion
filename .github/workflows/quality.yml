@@ -72,6 +72,8 @@ jobs:
         run: php tests/intensive-continuity-pending-regression.php
       - name: Intensive pending balance alert regression
         run: php tests/intensive-balance-alert-regression.php
+      - name: Regular monthly coverage alert regression
+        run: php tests/regular-monthly-coverage-alert-regression.php
       - name: Sharky WhatsApp template notifications regression
         run: php tests/sharky-template-notifications-regression.php
       - name: Sharky 48h prospect re-engagement regression
