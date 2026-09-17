@@ -14,5 +14,5 @@ CREATE TABLE IF NOT EXISTS sesion_asistencia_cobertura (
 
 INSERT IGNORE INTO configuracion(clave,valor,descripcion)
 VALUES
-  ('dashboard_bajas_cobertura_desde',DATE_FORMAT(NOW(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura fiable para bajas registradas por F6'),
-  ('dashboard_asistencia_cobertura_desde',DATE_FORMAT(NOW(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura persistida para porcentaje de asistencia F6');
+  ('dashboard_bajas_cobertura_desde',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura fiable para bajas registradas por F6'),
+  ('dashboard_asistencia_cobertura_desde',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura persistida para porcentaje de asistencia F6');
