@@ -51,6 +51,6 @@ balance_alert_expect(str_contains($center,"require_once __DIR__.'/intensive-bala
 balance_alert_expect(!str_contains($center,"COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0) pagado_valido"),'El cálculo financiero no debe quedar duplicado dentro del Centro.');
 balance_alert_expect(str_contains($alerts,"require_once __DIR__.'/../config/intensive-balance-source.php'")&&str_contains($alerts,"'tipo'=>'SALDO','nivel'=>'NEUTRA'"),'F5 debe consumir la misma fuente y mantener prioridad nueva neutra.');
 balance_alert_expect(str_contains($alerts,'hache_intensive_pending_balance_summary(hache_intensive_pending_balance_candidates($pdo,(string)$sid))'),'El resumen F5 debe derivar exactamente de candidatos financieros compartidos.');
-balance_alert_expect(str_contains($alerts,"$students=(int)$saldoResumen['alumnos']")&&str_contains($alerts,"$balances=(int)$saldoResumen['total']"),'La presentación debe distinguir alumnos únicos de relaciones con saldo.');
+balance_alert_expect(str_contains($alerts,'$students=(int)$saldoResumen[\'alumnos\']')&&str_contains($alerts,'$balances=(int)$saldoResumen[\'total\']'),'La presentación debe distinguir alumnos únicos de relaciones con saldo.');
 
 echo "INTENSIVE_BALANCE_ALERT_REGRESSION_OK\n";
