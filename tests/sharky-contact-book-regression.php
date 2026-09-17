@@ -74,6 +74,7 @@ $sql=file_get_contents(__DIR__.'/../database/migrations/20260908_sharky_contact_
 $inbox=file_get_contents(__DIR__.'/../config/sharky-inbox.php')?:'';
 $worker=file_get_contents(__DIR__.'/../bin/sharky-inbox-dispatch.php')?:'';
 $source=file_get_contents(__DIR__.'/../config/sharky-contact-book.php')?:'';
+$store=file_get_contents(__DIR__.'/../config/sharky-orchestrator-store.php')?:'';
 $naming=file_get_contents(__DIR__.'/../config/sharky-contact-naming.php')?:'';
 $profiles=file_get_contents(__DIR__.'/../config/sharky-contact-profiles.php')?:'';
 $delivery=file_get_contents(__DIR__.'/../config/sharky-delivery-status.php')?:'';
@@ -81,6 +82,9 @@ $admin=file_get_contents(__DIR__.'/../api/sharky-admin.php')?:'';
 $business=file_get_contents(__DIR__.'/../config/sharky-business-actions.php')?:'';
 $maintenance=file_get_contents(__DIR__.'/../bin/sharky-google-contacts-maintenance.php')?:'';
 $wrapper=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion-wrapper')?:'';
+$oauthApi=file_get_contents(__DIR__.'/../api/google-contacts-oauth.php')?:'';
+$oauthPage=file_get_contents(__DIR__.'/../public/google-contacts-oauth.php')?:'';
+$configPage=file_get_contents(__DIR__.'/../public/configuracion.php')?:'';
 contact_book_expect(str_contains($sql,'CREATE TABLE IF NOT EXISTS sharky_contacts'),'Contact book migration must be additive/idempotent.');
 contact_book_expect(str_contains($sql,'contact_ciphertext MEDIUMTEXT')&&str_contains($sql,'desired_hash CHAR(64)'),'Contact book must encrypt PII and keep only a deterministic desired-state hash searchable.');
 contact_book_expect(!str_contains($sql,'whatsapp VARCHAR')&&!str_contains($sql,'nombre VARCHAR')&&!str_contains($sql,'phone VARCHAR'),'Migration must not create searchable plaintext phone/name columns.');
@@ -106,5 +110,11 @@ contact_book_expect(str_contains($maintenance,"https://oauth2.googleapis.com/tok
 contact_book_expect(str_contains($maintenance,"token_exchange_ok")&&!str_contains($maintenance,"['refresh_token'=>\$refreshToken"),'Authorization-code recovery must confirm success without printing the refresh token.');
 contact_book_expect(str_contains($wrapper,'google-contacts-status)')&&str_contains($wrapper,'google-contacts-sync-once)')&&str_contains($wrapper,'google-contacts-token-set)')&&str_contains($wrapper,'google-contacts-code-exchange)'),'Deploy wrapper must expose only guarded Google Contacts recovery operations.');
 contact_book_expect(str_contains($wrapper,'google-contacts-token-set recibe el token exclusivamente por stdin')&&str_contains($wrapper,'google-contacts-code-exchange recibe el código exclusivamente por stdin'),'OAuth recovery secrets must not be accepted as command-line arguments.');
+contact_book_expect(str_contains($store,"HACHE_SHARKY_GOOGLE_CONTACTS_REFRESH_TOKEN_FILE = '/var/tmp/hache-sharky-secrets/google-contacts-refresh-token'")&&str_contains($store,'hache_sharky_orchestrator_runtime_secret($name)'),'Runtime OAuth override must live outside the webroot and precede the stale environment token.');
+contact_book_expect(str_contains($oauthApi,"auth_require(['ADMIN'])")&&str_contains($oauthApi,'auth_csrf_validate'),'OAuth renewal API must be ADMIN-only and CSRF protected.');
+contact_book_expect(str_contains($oauthApi,"https://oauth2.googleapis.com/token")&&str_contains($oauthApi,"https://developers.google.com/oauthplayground")&&str_contains($oauthApi,'hache_sharky_contact_book_sync_pending($pdo,50)'),'OAuth renewal API must exchange the code server-side and immediately retry pending contacts.');
+contact_book_expect(str_contains($oauthApi,'unset($refreshToken,$decoded,$response,$fields,$code)')&&!str_contains($oauthApi,"'refresh_token'=>"),'OAuth renewal response must not expose the refresh token.');
+contact_book_expect(str_contains($oauthPage,"page_require(['ADMIN'])")&&str_contains($oauthPage,'type="password"')&&str_contains($oauthPage,'autocomplete="off"'),'OAuth renewal UI must be ADMIN-only and avoid displaying the authorization code.');
+contact_book_expect(str_contains($configPage,'/google-contacts-oauth.php'),'Configuration must expose the OAuth recovery page to administrators.');
 
 fwrite(STDOUT,"SHARKY_CONTACT_BOOK_OK\n");
