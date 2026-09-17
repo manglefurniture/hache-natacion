@@ -4,7 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/sharky-runtime.php';
-require_once __DIR__.'/../config/sharky-crm.php';
+require_once __DIR__.'/../config/sharky-crm-management.php';
 
 auth_require(['ADMIN']);
 
@@ -24,7 +24,7 @@ try{
     $perPage=max(10,min(100,(int)($_GET['per_page']??50)));
     $query=mb_substr(trim((string)($_GET['q']??'')),0,120);
     $result=hache_sharky_crm_page($pdo,$page,$perPage,$query);
-    $rows=$result['rows'];
+    $rows=hache_sharky_crm_attach_managements($pdo,$result['rows']);
     $summary=['total_crm'=>$result['total_all'],'resultados'=>$result['total'],'prospectos_pagina'=>0,'inscripcion_iniciada_pagina'=>0,'inscritos_pagina'=>0,'sin_fuente_persistente_pagina'=>0];
     foreach($rows as $row){
         $stage=(string)($row['estado_crm']??'PROSPECTO');
