@@ -5,6 +5,7 @@ require_once __DIR__.'/../config/telefono.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
 require_once __DIR__.'/../config/intensivo-transferencias.php';
 require_once __DIR__.'/../config/admin-historical-corrections.php';
+require_once __DIR__.'/../config/alumno-estado-eventos.php';
 $admin=page_require(['ADMIN']);
 $config=require __DIR__.'/../config/database.php';
 $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
@@ -32,7 +33,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $pdo->beginTransaction();
     try{
         regla_bloquear_identidades_alumnos($pdo);
-        $st=$pdo->prepare("SELECT sede_id,horario_preferido_id,plan_actual_id,fecha_inicio FROM alumnos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$id,':s'=>$sedeId]);$actual=$st->fetch();if(!$actual){$pdo->rollBack();http_response_code(404);exit('Alumno no encontrado en la sede activa.');}
+        $st=$pdo->prepare("SELECT id,nombre,sede_id,horario_preferido_id,plan_actual_id,fecha_inicio,estado_administrativo FROM alumnos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$id,':s'=>$sedeId]);$actual=$st->fetch();if(!$actual){$pdo->rollBack();http_response_code(404);exit('Alumno no encontrado en la sede activa.');}
         $dup=$pdo->prepare("SELECT nombre FROM alumnos WHERE whatsapp=:w AND id<>:id LIMIT 1");$dup->execute([':w'=>$whatsapp,':id'=>$id]);if($x=$dup->fetch()){$pdo->rollBack();exit('Ese WhatsApp ya pertenece a '.htmlspecialchars($x['nombre'],ENT_QUOTES,'UTF-8').'.');}
         if($horario){$st=$pdo->prepare("SELECT activo FROM horarios WHERE id=:id AND sede_id=:s AND regular=1 LIMIT 1 FOR UPDATE");$st->execute([':id'=>$horario,':s'=>$actual['sede_id']]);$activo=$st->fetchColumn();if($activo===false||(!(bool)$activo&&(string)$actual['horario_preferido_id']!==$horario)){$pdo->rollBack();exit('El horario seleccionado no pertenece a la sede del alumno o ya no está disponible.');}}
         if($plan){$st=$pdo->prepare("SELECT activo FROM planes WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$plan,':s'=>$actual['sede_id']]);$activo=$st->fetchColumn();if($activo===false||(!(bool)$activo&&(string)$actual['plan_actual_id']!==$plan)){$pdo->rollBack();exit('El plan seleccionado no pertenece a la sede del alumno o ya no está disponible.');}}
@@ -44,9 +45,17 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $pdo->prepare($sql)->execute([$nombre,$fechaNacimiento!==''?$fechaNacimiento:null,$whatsapp,$correo!==''?$correo:null,$fechaInicio,$horario,$plan,$estado==='BAJA'?'BAJA':'PENDIENTE',$obs!==''?$obs:null,$id,$sedeId]);
         regla_marcar_inscripcion_historica($pdo,$id,$historica,$historica?'Inscripción cubierta antes de la implementación del sistema':null);
         $transferencia=['aplica'=>false,'transferido'=>false];
+        $estadoFinal='BAJA';
         if($estado!=='BAJA'){
             $transferencia=intensivo_transferir_por_fecha_edicion($pdo,$id,$sedeId,$fechaInicio,(string)$admin['id'],$cambioFecha,$cambioFecha?$obs:null);
-            regla_recalcular_alumno($pdo,$id);
+            $resultadoEstado=regla_recalcular_alumno($pdo,$id);
+            $estadoFinal=(string)($resultadoEstado['estado']??'PENDIENTE');
+        }
+        $estadoAnterior=(string)$actual['estado_administrativo'];
+        if($estadoAnterior!=='BAJA'&&$estado==='BAJA'){
+            hache_alumno_estado_evento($pdo,$admin,$actual,$sedeId,'BAJA','BAJA','ALUMNO_BAJA','/public/editar-alumno.php');
+        }elseif($estadoAnterior==='BAJA'&&$estado!=='BAJA'){
+            hache_alumno_estado_evento($pdo,$admin,$actual,$sedeId,$estadoFinal,'REACTIVACION','ALUMNO_REACTIVACION','/public/editar-alumno.php');
         }
         if($cambioFecha){
             $tipo=(bool)($transferencia['aplica']??false)?'INTENSIVO':'OTRO';
