@@ -7,6 +7,8 @@ const helper=fs.readFileSync(new URL('../config/dashboard-p06.php',import.meta.u
 const coverage=fs.readFileSync(new URL('../config/asistencia-cobertura.php',import.meta.url),'utf8');
 const api=fs.readFileSync(new URL('../api/dashboard.php',import.meta.url),'utf8');
 const studentsApi=fs.readFileSync(new URL('../api/alumno-gestion.php',import.meta.url),'utf8');
+const editStudent=fs.readFileSync(new URL('../public/editar-alumno.php',import.meta.url),'utf8');
+const stateEvents=fs.readFileSync(new URL('../config/alumno-estado-eventos.php',import.meta.url),'utf8');
 const sessionsApi=fs.readFileSync(new URL('../api/sesiones.php',import.meta.url),'utf8');
 const page=fs.readFileSync(new URL('../public/dashboard.php',import.meta.url),'utf8');
 const migration=fs.readFileSync(new URL('../database/migrations/20260917_f6_dashboard_metrics.sql',import.meta.url),'utf8');
@@ -22,6 +24,10 @@ assert.match(helper,/function dashboard_asistencia_periodo/);
 assert.match(helper,/s\.estado='REALIZADA'/);
 assert.match(helper,/c\.complete=1/);
 assert.match(helper,/c\.expected_count>0/);
+assert.doesNotMatch(helper,/JOIN asistencias/);
+assert.match(helper,/c\.present_count/);
+assert.match(helper,/function dashboard_p06_period_bounds_utc/);
+assert.match(helper,/America\/Cancun/);
 
 const helperPath=fileURLToPath(new URL('../config/dashboard-p06.php',import.meta.url));
 const program=`require ${JSON.stringify(helperPath)};
@@ -32,15 +38,16 @@ $pdo->exec("INSERT INTO configuracion VALUES ('dashboard_bajas_cobertura_desde',
 $pdo->exec('CREATE TABLE alumnos(id TEXT PRIMARY KEY,sede_id TEXT,nombre TEXT,fecha_inicio TEXT,estado_administrativo TEXT)');
 $pdo->exec("INSERT INTO alumnos VALUES ('a1','A','Ana','2026-09-02','ACTIVO'),('a2','A','Beto','2026-08-20','ACTIVO'),('a3','B','Cora','2026-09-05','ACTIVO')");
 $pdo->exec('CREATE TABLE auditoria_eventos(id TEXT PRIMARY KEY,accion TEXT,entidad TEXT,entidad_id TEXT,detalle TEXT,created_at TEXT)');
-$pdo->exec("INSERT INTO auditoria_eventos VALUES ('e1','ALUMNO_BAJA','alumno','a1','{\"sede_id\":\"A\"}','2026-09-17 19:00:00'),('e2','ALUMNO_BAJA','alumno','a3','{\"sede_id\":\"B\"}','2026-09-17 19:05:00'),('e3','ALUMNO_BAJA','alumno','a2','{\"sede_id\":\"A\"}','2026-09-17 17:00:00')");
+$event=$pdo->prepare('INSERT INTO auditoria_eventos(id,accion,entidad,entidad_id,detalle,created_at) VALUES(?,?,?,?,?,?)');
+$event->execute(['e1','ALUMNO_BAJA','alumno','a1',json_encode(['sede_id'=>'A']),'2026-09-17 19:00:00']);
+$event->execute(['e2','ALUMNO_BAJA','alumno','a3',json_encode(['sede_id'=>'B']),'2026-09-17 19:05:00']);
+$event->execute(['e3','ALUMNO_BAJA','alumno','a2',json_encode(['sede_id'=>'A']),'2026-09-17 17:00:00']);
 $pdo->exec('CREATE TABLE horarios(id TEXT PRIMARY KEY,sede_id TEXT,hora_inicio TEXT,hora_fin TEXT)');
 $pdo->exec("INSERT INTO horarios VALUES ('h1','A','07:00:00','08:00:00'),('h2','B','07:00:00','08:00:00')");
 $pdo->exec('CREATE TABLE sesiones(id TEXT PRIMARY KEY,fecha TEXT,horario_id TEXT,estado TEXT)');
 $pdo->exec("INSERT INTO sesiones VALUES ('s1','2026-09-17','h1','REALIZADA'),('s2','2026-09-17','h1','REALIZADA'),('s3','2026-09-17','h1','CANCELADA'),('s4','2026-09-17','h2','REALIZADA')");
-$pdo->exec('CREATE TABLE sesion_asistencia_cobertura(sesion_id TEXT PRIMARY KEY,expected_count INTEGER,marked_count INTEGER,complete INTEGER,captured_at TEXT)');
-$pdo->exec("INSERT INTO sesion_asistencia_cobertura VALUES ('s1',3,3,1,'2026-09-17 20:00:00'),('s2',2,1,0,'2026-09-17 21:00:00'),('s3',2,2,1,'2026-09-17 22:00:00'),('s4',1,1,1,'2026-09-17 20:00:00')");
-$pdo->exec('CREATE TABLE asistencias(id TEXT PRIMARY KEY,sesion_id TEXT,estado TEXT)');
-$pdo->exec("INSERT INTO asistencias VALUES ('x1','s1','PRESENTE'),('x2','s1','PRESENTE'),('x3','s1','AUSENTE_JUSTIFICADA'),('x4','s2','PRESENTE'),('x5','s3','PRESENTE'),('x6','s3','PRESENTE'),('x7','s4','PRESENTE')");
+$pdo->exec('CREATE TABLE sesion_asistencia_cobertura(sesion_id TEXT PRIMARY KEY,expected_count INTEGER,marked_count INTEGER,present_count INTEGER,justified_count INTEGER,unjustified_count INTEGER,complete INTEGER,captured_at TEXT)');
+$pdo->exec("INSERT INTO sesion_asistencia_cobertura VALUES ('s1',3,3,2,1,0,1,'2026-09-17 20:00:00'),('s2',2,1,1,0,0,0,'2026-09-17 21:00:00'),('s3',2,2,2,0,0,1,'2026-09-17 22:00:00'),('s4',1,1,1,0,0,1,'2026-09-17 20:00:00')");
 echo json_encode([
  dashboard_nuevos_alumnos($pdo,'A','2026-09-01','2026-09-30'),
  dashboard_bajas_registradas($pdo,'A','2026-09-01','2026-09-30'),
@@ -52,6 +59,8 @@ assert.equal(newStudents.rows[0].alumno_id,'a1');
 assert.equal(withdrawals.disponible,true);
 assert.equal(withdrawals.total,1);
 assert.equal(withdrawals.rows[0].evento_id,'e1');
+assert.equal(withdrawals.cobertura_desde,'2026-09-17 13:00:00');
+assert.equal(withdrawals.rows[0].fecha_hora,'2026-09-17 14:00:00');
 assert.equal(attendance.disponible,true);
 assert.equal(attendance.porcentaje,66.7);
 assert.equal(attendance.sesiones_completas,1);
@@ -61,13 +70,21 @@ assert.equal(attendance.esperados,3);
 
 assert.match(coverage,/INSERT INTO sesion_asistencia_cobertura/);
 assert.match(coverage,/complete=VALUES\(complete\)/);
+assert.match(coverage,/present_count=VALUES\(present_count\)/);
+assert.doesNotMatch(coverage,/catch\(Throwable/);
 assert.match(sessionsApi,/asistencia-cobertura\.php/);
 assert.match(sessionsApi,/alumnosSesion\(\$pdo,\$sesion/);
-assert.match(sessionsApi,/hache_asistencia_cobertura_guardar\(\$pdo,\$sid,\$esperados,\$marcados,\$uid\)/);
-assert.match(studentsApi,/registrar_cambio_estado_alumno/);
+assert.match(sessionsApi,/hache_asistencia_cobertura_guardar\(\$pdo,\$sid,\$esperados,\$presentes,\$justificadas,\$injustificadas,\$uid\)/);
+assert.match(stateEvents,/function hache_alumno_estado_evento/);
+assert.match(stateEvents,/INSERT INTO auditoria_eventos/);
+assert.match(stateEvents,/hache_admin_history/);
+assert.match(studentsApi,/hache_alumno_estado_evento\(\$pdo,\$me/);
 assert.match(studentsApi,/'BAJA','ALUMNO_BAJA'/);
 assert.match(studentsApi,/'REACTIVACION','ALUMNO_REACTIVACION'/);
 assert.match(studentsApi,/\(string\)\$alumno\['estado_administrativo'\]!=='BAJA'/);
+assert.match(editStudent,/estado_administrativo FROM alumnos[\s\S]{0,120}FOR UPDATE/);
+assert.match(editStudent,/hache_alumno_estado_evento\(\$pdo,\$admin[\s\S]{0,120}'ALUMNO_BAJA'/);
+assert.match(editStudent,/hache_alumno_estado_evento\(\$pdo,\$admin[\s\S]{0,140}'ALUMNO_REACTIVACION'/);
 assert.match(api,/dashboard-p06\.php/);
 assert.match(api,/dashboard_nuevos_alumnos/);
 assert.match(api,/dashboard_bajas_registradas/);
@@ -85,6 +102,9 @@ assert.match(page,/id="asistencia-periodo"/);
 assert.match(migration,/CREATE TABLE IF NOT EXISTS sesion_asistencia_cobertura/);
 assert.match(migration,/dashboard_bajas_cobertura_desde/);
 assert.match(migration,/dashboard_asistencia_cobertura_desde/);
+assert.match(migration,/present_count INT UNSIGNED/);
+assert.match(migration,/marked_count=present_count\+justified_count\+unjustified_count/);
+assert.match(migration,/UTC_TIMESTAMP\(\)/);
 assert.match(migrationRunner,/F6_DASHBOARD_METRICS_MIGRATION_OK/);
 assert.match(deploy,/migrate-f6-dashboard-metrics\.php/);
 
