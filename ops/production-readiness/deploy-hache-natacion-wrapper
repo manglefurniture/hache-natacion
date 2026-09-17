@@ -11,6 +11,8 @@ DB_NAME="hache_natacion"
 DB_OPS_USER="deploy_hache_ops"
 DB_OPS_HOME="/home/deploy-hache"
 DB_OPS_CNF="${DB_OPS_HOME}/.my.cnf"
+GOOGLE_CONTACTS_OAUTH_ROOT="/var/lib/hache-natacion"
+GOOGLE_CONTACTS_OAUTH_STAGE_DIR="${GOOGLE_CONTACTS_OAUTH_ROOT}/oauth-stage"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 require_root() { [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "este wrapper debe ejecutarse como root mediante sudo."; }
@@ -21,6 +23,16 @@ publish_deployed_sha() {
   local sha="$1" temp; validate_sha "$sha"
   temp="$(mktemp "${REPO}/.hache-deployed-sha.tmp.XXXXXX")"
   printf '%s\n' "$sha" > "$temp"; chmod 0644 "$temp"; chown root:root "$temp"; mv -f -- "$temp" "$DEPLOY_SHA_FILE"
+}
+
+ensure_google_contacts_oauth_stage_dir() {
+  require_command install; require_command stat
+  id www-data >/dev/null 2>&1 || fail "usuario Linux www-data ausente."
+  [[ ! -L "$GOOGLE_CONTACTS_OAUTH_ROOT" ]] || fail "ruta OAuth raíz no puede ser symlink."
+  install -d -o root -g root -m 0755 "$GOOGLE_CONTACTS_OAUTH_ROOT"
+  [[ ! -L "$GOOGLE_CONTACTS_OAUTH_STAGE_DIR" ]] || fail "staging OAuth no puede ser symlink."
+  install -d -o www-data -g www-data -m 0700 "$GOOGLE_CONTACTS_OAUTH_STAGE_DIR"
+  [[ "$(stat -c '%U:%G:%a' "$GOOGLE_CONTACTS_OAUTH_STAGE_DIR")" == 'www-data:www-data:700' ]] || fail "permisos inesperados en staging OAuth."
 }
 
 normalize_tracked_worktree_permissions() {
@@ -59,6 +71,7 @@ run_target_deploy() {
   cd "$REPO"; git fetch origin main
   [[ "$(git rev-parse origin/main)" == "$sha" ]] || fail "origin/main no coincide con el SHA aprobado."
   sync_wrapper_from_target_if_present "$sha"
+  ensure_google_contacts_oauth_stage_dir
   implementation="$(mktemp /tmp/hache-deploy-implementation.XXXXXX)"
   extract_target_file "$sha" "$IMPLEMENTATION_PATH" "$implementation"; bash -n "$implementation"; chmod 0700 "$implementation"
   set +e; bash "$implementation" "$sha"; rc=$?; set -e; rm -f -- "$implementation"
@@ -113,10 +126,10 @@ run_sharky_learn_reengagement_backfill_once() { run_php_guarded "$REPO/bin/shark
 run_sharky_learning_pending() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --pending 10; }
 run_sharky_learning_summary() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --summary; }
 run_sharky_learning_verdict() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --verdict; }
-run_google_contacts_status() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --status; }
-run_google_contacts_sync_once() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --sync-once; }
-run_google_contacts_token_set() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --set-refresh-token; }
-run_google_contacts_code_exchange() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --exchange-auth-code; }
+run_google_contacts_status() { ensure_google_contacts_oauth_stage_dir; run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --status; }
+run_google_contacts_sync_once() { ensure_google_contacts_oauth_stage_dir; run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --sync-once; }
+run_google_contacts_token_set() { ensure_google_contacts_oauth_stage_dir; run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --set-refresh-token; }
+run_google_contacts_code_exchange() { ensure_google_contacts_oauth_stage_dir; run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --exchange-auth-code; }
 
 main() {
   require_root; [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -138,7 +151,7 @@ main() {
     google-contacts-status) [[ "$#" -eq 1 ]] || fail "google-contacts-status no acepta argumentos."; run_google_contacts_status ;;
     google-contacts-sync-once) [[ "$#" -eq 1 ]] || fail "google-contacts-sync-once no acepta argumentos."; run_google_contacts_sync_once ;;
     google-contacts-token-set) [[ "$#" -eq 1 ]] || fail "google-contacts-token-set recibe el token exclusivamente por stdin."; run_google_contacts_token_set ;;
-    google-contacts-code-exchange) [[ "$#" -eq 1 ]] || fail "google-contacts-code-exchange recibe el código exclusivamente por stdin."; run_google_contacts_code_exchange ;;
+    google-contacts-code-exchange) [[ "$#" -eq 1 ]] || fail "google-contacts-code-exchange recibe el código exclusivamente por stdin; con stdin vacío promueve el staging OAuth verificado."; run_google_contacts_code_exchange ;;
     *) [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."; run_target_deploy "$1" ;;
   esac
 }
