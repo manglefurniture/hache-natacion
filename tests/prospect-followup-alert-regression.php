@@ -60,7 +60,7 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
 $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE,PDO::FETCH_ASSOC);
 $pdo->sqliteCreateFunction('NOW',static fn():string=>'2026-09-17 12:00:00',0);
 $pdo->exec('CREATE TABLE sharky_conversation_state (contact_hash TEXT PRIMARY KEY,state_json TEXT NULL,state_ciphertext TEXT NULL,state_iv TEXT NULL,state_tag TEXT NULL,expires_at TEXT NOT NULL)');
-$pdo->exec('CREATE TABLE sharky_message_receipts (message_id TEXT PRIMARY KEY,contact_hash TEXT NOT NULL,payload_ciphertext TEXT NULL,payload_iv TEXT NULL,payload_tag TEXT NULL,received_at TEXT NOT NULL)');
+$pdo->exec('CREATE TABLE sharky_message_receipts (message_id TEXT PRIMARY KEY,contact_hash TEXT NOT NULL,message_type TEXT NOT NULL,payload_ciphertext TEXT NULL,payload_iv TEXT NULL,payload_tag TEXT NULL,received_at TEXT NOT NULL)');
 $hash=str_repeat('a',64);
 $insertState=$pdo->prepare('INSERT INTO sharky_conversation_state(contact_hash,state_json,state_ciphertext,state_iv,state_tag,expires_at) VALUES(:c,NULL,NULL,NULL,NULL,:e)');
 $insertState->execute([':c'=>$hash,':e'=>'2026-09-17 11:59:59']);
@@ -68,35 +68,47 @@ $insertState->execute([':c'=>$hash,':e'=>'2026-09-17 11:59:59']);
 $expiredStates=hache_sharky_crm_bulk_states($pdo,$scope,$params);
 followup_alert_expect(!isset($expiredStates[$hash]),'La prueba debe confirmar primero que el estado persistido ya expiró y el CRM dejó de devolverlo.');
 
-$insertReceipt=$pdo->prepare('INSERT INTO sharky_message_receipts(message_id,contact_hash,payload_ciphertext,payload_iv,payload_tag,received_at) VALUES(:m,:c,:p,:iv,:tag,:r)');
+$insertReceipt=$pdo->prepare('INSERT INTO sharky_message_receipts(message_id,contact_hash,message_type,payload_ciphertext,payload_iv,payload_tag,received_at) VALUES(:m,:c,:t,:p,:iv,:tag,:r)');
 $normal=hache_sharky_inbox_encrypt([
     'text'=>'Quiero revisar los horarios',
     'interactive_id'=>'',
     'timestamp_ms'=>1789646400000,
     '_inbox_arrival_us'=>1789646400000000,
 ]);
-$insertReceipt->execute([':m'=>'m-normal',':c'=>$hash,':p'=>$normal['ciphertext'],':iv'=>$normal['iv'],':tag'=>$normal['tag'],':r'=>'2026-09-16 12:00:00']);
+$insertReceipt->execute([':m'=>'m-normal',':c'=>$hash,':t'=>'message',':p'=>$normal['ciphertext'],':iv'=>$normal['iv'],':tag'=>$normal['tag'],':r'=>'2026-09-16 12:00:00']);
 $evidence=hache_internal_prospect_followup_durable_pause_evidence($pdo,[$hash]);
 followup_alert_expect(($evidence[$hash]['known']??false)===true&&($evidence[$hash]['paused']??true)===false,'Con estado expirado, un inbound durable normal debe permitir evaluar la alerta.');
 $expiredRow=$base;$expiredRow['pausa_durable_disponible']=($evidence[$hash]['known']??false)===true;$expiredRow['seguimiento_pausado']=($evidence[$hash]['paused']??false)===true;
 followup_alert_expect(hache_internal_prospect_followup_due($expiredRow,$expiredStates[$hash]??[],$now),'La alerta debe seguir siendo elegible a las 24 h aunque el estado persistido ya haya expirado.');
 
-// Dos receipts pueden compartir el segundo DATETIME. La marca durable de llegada
-// dentro del payload decide cuál fue realmente el último evento.
+// Dos receipts del prospecto pueden compartir el segundo DATETIME. La marca
+// durable de llegada dentro del payload decide cuál fue realmente el último.
 $pause=hache_sharky_inbox_encrypt([
     'text'=>'No por el momento',
     'interactive_id'=>'flow:pause',
     'timestamp_ms'=>1789646400001,
     '_inbox_arrival_us'=>1789646400001000,
 ]);
-$insertReceipt->execute([':m'=>'m-pause',':c'=>$hash,':p'=>$pause['ciphertext'],':iv'=>$pause['iv'],':tag'=>$pause['tag'],':r'=>'2026-09-16 12:00:00']);
+$insertReceipt->execute([':m'=>'m-pause',':c'=>$hash,':t'=>'message',':p'=>$pause['ciphertext'],':iv'=>$pause['iv'],':tag'=>$pause['tag'],':r'=>'2026-09-16 12:00:00']);
 $evidence=hache_internal_prospect_followup_durable_pause_evidence($pdo,[$hash]);
 followup_alert_expect(($evidence[$hash]['known']??false)===true&&($evidence[$hash]['paused']??false)===true,'El último inbound durable debe conservar la exclusión de pausa después de expirar el estado.');
 $pausedExpired=$base;$pausedExpired['pausa_durable_disponible']=true;$pausedExpired['seguimiento_pausado']=true;
 followup_alert_expect(!hache_internal_prospect_followup_due($pausedExpired,$expiredStates[$hash]??[],$now),'La evidencia durable de pausa debe impedir falsos positivos con estado expirado.');
 
-$corrupt=$pdo->prepare('INSERT INTO sharky_message_receipts(message_id,contact_hash,payload_ciphertext,payload_iv,payload_tag,received_at) VALUES(:m,:c,:p,:iv,:tag,:r)');
-$corrupt->execute([':m'=>'m-corrupt',':c'=>$hash,':p'=>'invalid',':iv'=>'invalid',':tag'=>'invalid',':r'=>'2026-09-16 12:00:01']);
+// Un reply saliente del staff vuelve como receipt `echo`; aunque sea posterior,
+// no debe reemplazar la última decisión real del prospecto.
+$echo=hache_sharky_inbox_encrypt([
+    'text'=>'Claro, aquí quedamos',
+    'interactive_id'=>'',
+    'timestamp_ms'=>1789646401000,
+    '_inbox_arrival_us'=>1789646401000000,
+]);
+$insertReceipt->execute([':m'=>'m-echo',':c'=>$hash,':t'=>'echo',':p'=>$echo['ciphertext'],':iv'=>$echo['iv'],':tag'=>$echo['tag'],':r'=>'2026-09-16 12:00:01']);
+$evidence=hache_internal_prospect_followup_durable_pause_evidence($pdo,[$hash]);
+followup_alert_expect(($evidence[$hash]['known']??false)===true&&($evidence[$hash]['paused']??false)===true,'Un echo posterior del staff no debe tapar la pausa durable del prospecto.');
+
+$corrupt=$pdo->prepare('INSERT INTO sharky_message_receipts(message_id,contact_hash,message_type,payload_ciphertext,payload_iv,payload_tag,received_at) VALUES(:m,:c,:t,:p,:iv,:tag,:r)');
+$corrupt->execute([':m'=>'m-corrupt',':c'=>$hash,':t'=>'message',':p'=>'invalid',':iv'=>'invalid',':tag'=>'invalid',':r'=>'2026-09-16 12:00:02']);
 $evidence=hache_internal_prospect_followup_durable_pause_evidence($pdo,[$hash]);
 followup_alert_expect(($evidence[$hash]['known']??true)===false,'Si el último inbound durable no puede descifrarse, la pausa debe quedar como desconocida.');
 $unknownPersisted=$base;$unknownPersisted['pausa_durable_disponible']=false;
