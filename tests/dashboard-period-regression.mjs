@@ -28,8 +28,9 @@ assert.match(api,/'facturacion'=>\['cantidad'/);
 assert.match(alerts,/dashboard-tiempo\.php/);
 assert.match(alerts,/\$hoy=hache_instante_operativo\(\)/);
 assert.match(alerts,/\$hoyFecha=\$hoy->format\('Y-m-d'\)/);
-assert.match(alerts,/m\.estado='PAGADA' AND :hoy BETWEEN m\.periodo_inicio AND m\.periodo_fin/);
-assert.match(alerts,/'?:hoy'?/);
+assert.match(alerts,/reglas-acceso\.php/);
+assert.match(alerts,/regla_mensualidad_regular_cubierta\(/);
+assert.doesNotMatch(alerts,/m\.estado='PAGADA' AND :hoy BETWEEN m\.periodo_inicio AND m\.periodo_fin/);
 assert.doesNotMatch(alerts,/CURDATE\(\)/);
 assert.doesNotMatch(alerts,/new DateTimeImmutable\('today'\)/);
 
