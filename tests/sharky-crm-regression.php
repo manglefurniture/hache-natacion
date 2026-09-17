@@ -73,6 +73,7 @@ crm_expect(str_contains($management,'hache_sharky_crm_last_contact')&&str_contai
 crm_expect(str_contains($management,'INSERT INTO sharky_crm_managements')&&!str_contains($management,'sharky_conversation_state SET'),'La escritura debe quedar aislada de Sharky y del estado conversacional.');
 crm_expect(str_contains($management,'hache_sharky_crm_bulk_activity_counts')&&str_contains($management,"COUNT(*) activity_count"),'La lectura debe comparar contadores de actividad por lote y no depender solo de DATETIME a segundos.');
 crm_expect(str_contains($management,'observed_inbound_count')&&str_contains($management,'observed_outbound_count'),'Cada nueva gestión debe persistir el ancla monotónica de actividad.');
+crm_expect(str_contains($management,'information_schema.columns')&&str_contains($management,"'observed_inbound_count','observed_outbound_count'"),'La disponibilidad de gestión debe validar las columnas nuevas antes de consultarlas durante el deploy.');
 crm_expect(str_contains($managementApi,"auth_require(['ADMIN'])")&&str_contains($managementApi,'auth_csrf_validate'),'Registrar gestión debe ser una acción ADMIN protegida por CSRF.');
 crm_expect(str_contains($managementApi,"'REGISTRAR_GESTION'")&&str_contains($managementApi,'hache_sharky_crm_record_management'),'El endpoint de F4.3.2 debe aceptar únicamente el registro explícito previsto.');
 crm_expect(str_contains($page,'Registrar gestión')&&str_contains($page,'/api/prospectos-gestion.php'),'La UI debe exponer la acción explícita sin reutilizar la API de lectura.');
