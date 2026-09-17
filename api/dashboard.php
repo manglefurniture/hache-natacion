@@ -10,6 +10,7 @@ require_once __DIR__.'/../config/dashboard-operacion.php';
 require_once __DIR__.'/../config/dashboard-alumnos.php';
 require_once __DIR__.'/../config/dashboard-intensivos.php';
 require_once __DIR__.'/../config/dashboard-indicadores.php';
+require_once __DIR__.'/../config/dashboard-p06.php';
 require_once __DIR__.'/../config/centro-pendientes-compuesto.php';
 
 $me=auth_require(['ADMIN','VERIFICADOR']);
@@ -51,6 +52,13 @@ try {
     $rangoPeriodo=$facturacion['rango']??financiero_rango($pdo,$sid,$periodoVigente);
     $lecturaObligaciones=finanzas_obligaciones_periodo($pdo,$sede,$periodoVigente,false);
     $saldosPeriodo=$lecturaObligaciones['resumen'];
+    $periodoInicio=(string)$rangoPeriodo['inicio'];
+    $periodoFin=(string)$rangoPeriodo['cierre'];
+
+    // P-06: métricas aprobadas con fecha/fuente verificable.
+    $nuevosAlumnos=dashboard_nuevos_alumnos($pdo,$sid,$periodoInicio,$periodoFin);
+    $bajasRegistradas=dashboard_bajas_registradas($pdo,$sid,$periodoInicio,$periodoFin);
+    $asistenciaPeriodo=dashboard_asistencia_periodo($pdo,$sid,$periodoInicio,$periodoFin);
 
     // Definición histórica del dashboard, ahora con el mismo detalle reconciliable.
     // No equivale a estado administrativo ni a derecho de acceso.
@@ -113,6 +121,9 @@ try {
         'alumnos_activos'=>$alumnos,
         'alumnos_activos_detalle'=>$alumnosActivos,
         'alumnos_pendientes'=>$alumnosPendientes,
+        'nuevos_alumnos'=>$nuevosAlumnos,
+        'bajas_registradas'=>$bajasRegistradas,
+        'asistencia_periodo'=>$asistenciaPeriodo,
         'mensualidades'=>$mens,
         'intensivos'=>$intensivos,
         'intensivos_detalle'=>$intensivosActivos,
@@ -131,6 +142,9 @@ try {
         'horarios'=>$horarios,
         'contratos'=>[
             'alumnos_activos'=>'Mensualidad PAGADA vigente o intensivo vigente con algún pago VALIDO, excluyendo BAJA; no equivale a derecho de acceso.',
+            'nuevos_alumnos'=>'Alumno único cuya fecha_inicio cae dentro del periodo financiero visible. Una reactivación no modifica fecha_inicio y no crea un alta nueva.',
+            'bajas_registradas'=>'Eventos ALUMNO_BAJA registrados desde el inicio explícito de cobertura F6; no se reconstruyen bajas históricas desde updated_at.',
+            'asistencia_periodo'=>'Porcentaje calculado solo con sesiones REALIZADA no canceladas cuya cobertura persistida al cierre demuestra una marca por cada alumno con derecho a clase. Sesiones incompletas o sin snapshot quedan fuera.',
             'facturacion'=>'F2: ingresos atribuidos al periodo financiero vigente según la regla de cada concepto.',
             'saldos_periodo'=>'F2: suma de obligaciones registradas del periodo menos pagos VALIDOS; el detalle reconciliable vive en Finanzas internas.',
             'mensualidades'=>'Registros de mensualidad PAGADA cuya vigencia contiene la fecha operativa; cantidad y total monetario salen exactamente de las filas expuestas.',

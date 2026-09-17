@@ -6,6 +6,7 @@ require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
 require_once __DIR__.'/../config/rate-limit.php';
 require_once __DIR__.'/../config/periodos-financieros.php';
+require_once __DIR__.'/../config/alumno-estado-eventos.php';
 $me=auth_require(['ADMIN']);
 $config=require __DIR__.'/../config/database.php';
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST'){http_response_code(405);header('Allow: POST');echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);exit;}
@@ -67,8 +68,22 @@ try{
     $pdo->beginTransaction();
     $stmt=$pdo->prepare("SELECT id,nombre,estado_administrativo FROM alumnos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$alumno=$stmt->fetch();if(!$alumno){$pdo->rollBack();http_response_code(404);echo json_encode(['ok'=>false,'error'=>'Alumno no encontrado en la sede activa']);exit;}
 
-    if($accion==='BAJA'){$stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='BAJA',updated_at=NOW() WHERE id=:id AND sede_id=:s");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$pdo->commit();echo json_encode(['ok'=>true,'estado'=>'BAJA','mensaje'=>'Alumno dado de baja'],JSON_UNESCAPED_UNICODE);exit;}
-    if($accion==='REACTIVAR'){$stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:id AND sede_id=:s");$stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);$resultado=regla_recalcular_alumno($pdo,$alumnoId);$nuevo=(string)($resultado['estado']??'PENDIENTE');$pdo->commit();echo json_encode(['ok'=>true,'estado'=>$nuevo,'mensaje'=>$nuevo==='ACTIVO'?'Alumno reactivado con obligaciones vigentes':'Alumno reabierto como pendiente hasta cubrir sus obligaciones vigentes'],JSON_UNESCAPED_UNICODE);exit;}
+    if($accion==='BAJA'){
+        if((string)$alumno['estado_administrativo']!=='BAJA'){
+            $stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='BAJA',updated_at=NOW() WHERE id=:id AND sede_id=:s");
+            $stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);
+            hache_alumno_estado_evento($pdo,$me,$alumno,$sedeId,'BAJA','BAJA','ALUMNO_BAJA');
+        }
+        $pdo->commit();echo json_encode(['ok'=>true,'estado'=>'BAJA','mensaje'=>'Alumno dado de baja'],JSON_UNESCAPED_UNICODE);exit;
+    }
+    if($accion==='REACTIVAR'){
+        $eraBaja=(string)$alumno['estado_administrativo']==='BAJA';
+        $stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:id AND sede_id=:s");
+        $stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);
+        $resultado=regla_recalcular_alumno($pdo,$alumnoId);$nuevo=(string)($resultado['estado']??'PENDIENTE');
+        if($eraBaja)hache_alumno_estado_evento($pdo,$me,$alumno,$sedeId,$nuevo,'REACTIVACION','ALUMNO_REACTIVACION');
+        $pdo->commit();echo json_encode(['ok'=>true,'estado'=>$nuevo,'mensaje'=>$nuevo==='ACTIVO'?'Alumno reactivado con obligaciones vigentes':'Alumno reabierto como pendiente hasta cubrir sus obligaciones vigentes'],JSON_UNESCAPED_UNICODE);exit;
+    }
 
     $cerrados=periodos_cerrados_alumno($pdo,$alumnoId,$sedeId);if($cerrados){$pdo->rollBack();http_response_code(409);echo json_encode(['ok'=>false,'error'=>'No se puede eliminar definitivamente: el alumno tiene pagos que formaron parte de un cierre mensual ya congelado. Usa Dar de baja o una corrección contable.','periodos_cerrados'=>$cerrados],JSON_UNESCAPED_UNICODE);exit;}
 
