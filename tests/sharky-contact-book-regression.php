@@ -79,6 +79,8 @@ $profiles=file_get_contents(__DIR__.'/../config/sharky-contact-profiles.php')?:'
 $delivery=file_get_contents(__DIR__.'/../config/sharky-delivery-status.php')?:'';
 $admin=file_get_contents(__DIR__.'/../api/sharky-admin.php')?:'';
 $business=file_get_contents(__DIR__.'/../config/sharky-business-actions.php')?:'';
+$maintenance=file_get_contents(__DIR__.'/../bin/sharky-google-contacts-maintenance.php')?:'';
+$wrapper=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion-wrapper')?:'';
 contact_book_expect(str_contains($sql,'CREATE TABLE IF NOT EXISTS sharky_contacts'),'Contact book migration must be additive/idempotent.');
 contact_book_expect(str_contains($sql,'contact_ciphertext MEDIUMTEXT')&&str_contains($sql,'desired_hash CHAR(64)'),'Contact book must encrypt PII and keep only a deterministic desired-state hash searchable.');
 contact_book_expect(!str_contains($sql,'whatsapp VARCHAR')&&!str_contains($sql,'nombre VARCHAR')&&!str_contains($sql,'phone VARCHAR'),'Migration must not create searchable plaintext phone/name columns.');
@@ -98,5 +100,9 @@ contact_book_expect(str_contains($source,'WHERE contact_hash=:c AND desired_hash
 contact_book_expect(str_contains($naming,"'MONTEVERDE')return 'MV'")&&str_contains($naming,"'PALAPAS')return 'PAL'"),'Current venue siglas must remain explicit defaults.');
 contact_book_expect(str_contains($admin,'hache_sharky_contact_naming_config_rows($pdo)'),'Sharky Admin must expose contact siglas dynamically for every active venue.');
 contact_book_expect(str_contains($business,"'kind'=>'registration_created'")&&str_contains($business,'hache_sharky_contact_book_capture_event'),'Successful registration must refresh the contact immediately.');
+contact_book_expect(str_contains($maintenance,"--status")&&str_contains($maintenance,"--sync-once")&&str_contains($maintenance,"--set-refresh-token"),'Google Contacts recovery must support status, one-shot sync and secure refresh-token replacement.');
+contact_book_expect(str_contains($maintenance,"token_refresh_ok")&&str_contains($maintenance,"GOOGLE_CONTACTS_REFRESH_TOKEN"),'Recovery status must diagnose OAuth refresh without printing credentials.');
+contact_book_expect(str_contains($wrapper,'google-contacts-status)')&&str_contains($wrapper,'google-contacts-sync-once)')&&str_contains($wrapper,'google-contacts-token-set)'),'Deploy wrapper must expose only guarded Google Contacts recovery operations.');
+contact_book_expect(str_contains($wrapper,'google-contacts-token-set recibe el token exclusivamente por stdin'),'Refresh token must not be accepted as a command-line argument.');
 
 fwrite(STDOUT,"SHARKY_CONTACT_BOOK_OK\n");
