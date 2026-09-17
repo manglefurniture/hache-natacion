@@ -6,6 +6,7 @@ require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
 require_once __DIR__.'/../config/rate-limit.php';
 require_once __DIR__.'/../config/periodos-financieros.php';
+require_once __DIR__.'/../config/alumno-estado-eventos.php';
 $me=auth_require(['ADMIN']);
 $config=require __DIR__.'/../config/database.php';
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST'){http_response_code(405);header('Allow: POST');echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);exit;}
@@ -47,20 +48,6 @@ function auditar_eliminacion(PDO $pdo,array $me,array $alumno,array $detalle):vo
     $st=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta) VALUES(:uid,:un,'ELIMINAR_DEFINITIVO','alumno',:aid,:detalle,'POST','/api/alumno-gestion.php')");
     $st->execute([':uid'=>$me['id'],':un'=>$me['usuario']??null,':aid'=>$alumno['id'],':detalle'=>json_encode(['alumno'=>$alumno['nombre'],'eliminados'=>$detalle],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)]);
 }
-function registrar_cambio_estado_alumno(PDO $pdo,array $me,array $alumno,string $sedeId,string $nuevoEstado,string $tipoHistorial,string $accionAuditoria):void
-{
-    $anterior=(string)$alumno['estado_administrativo'];
-    $hid=(string)$pdo->query('SELECT UUID()')->fetchColumn();
-    $descripcion=$tipoHistorial==='BAJA'?'Alumno dado de baja administrativamente.':'Alumno reactivado administrativamente.';
-    $st=$pdo->prepare("INSERT INTO historial(id,alumno_id,tipo,descripcion,usuario_id,referencia_tipo,referencia_id) VALUES(:id,:a,:t,:d,:u,'ALUMNO_ESTADO',:r)");
-    $st->execute([':id'=>$hid,':a'=>$alumno['id'],':t'=>$tipoHistorial,':d'=>$descripcion,':u'=>$me['id'],':r'=>$alumno['id']]);
-
-    if(tabla_tiene_columna($pdo,'auditoria_eventos','entidad_id')){
-        $detalle=json_encode(['sede_id'=>$sedeId,'estado_anterior'=>$anterior,'estado_nuevo'=>$nuevoEstado],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-        $st=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta) VALUES(:uid,:un,:accion,'alumno',:aid,:detalle,'POST','/api/alumno-gestion.php')");
-        $st->execute([':uid'=>$me['id'],':un'=>$me['usuario']??null,':accion'=>$accionAuditoria,':aid'=>$alumno['id'],':detalle'=>$detalle]);
-    }
-}
 
 try{
     $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
@@ -85,7 +72,7 @@ try{
         if((string)$alumno['estado_administrativo']!=='BAJA'){
             $stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='BAJA',updated_at=NOW() WHERE id=:id AND sede_id=:s");
             $stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);
-            registrar_cambio_estado_alumno($pdo,$me,$alumno,$sedeId,'BAJA','BAJA','ALUMNO_BAJA');
+            hache_alumno_estado_evento($pdo,$me,$alumno,$sedeId,'BAJA','BAJA','ALUMNO_BAJA');
         }
         $pdo->commit();echo json_encode(['ok'=>true,'estado'=>'BAJA','mensaje'=>'Alumno dado de baja'],JSON_UNESCAPED_UNICODE);exit;
     }
@@ -94,7 +81,7 @@ try{
         $stmt=$pdo->prepare("UPDATE alumnos SET estado_administrativo='PENDIENTE',updated_at=NOW() WHERE id=:id AND sede_id=:s");
         $stmt->execute([':id'=>$alumnoId,':s'=>$sedeId]);
         $resultado=regla_recalcular_alumno($pdo,$alumnoId);$nuevo=(string)($resultado['estado']??'PENDIENTE');
-        if($eraBaja)registrar_cambio_estado_alumno($pdo,$me,$alumno,$sedeId,$nuevo,'REACTIVACION','ALUMNO_REACTIVACION');
+        if($eraBaja)hache_alumno_estado_evento($pdo,$me,$alumno,$sedeId,$nuevo,'REACTIVACION','ALUMNO_REACTIVACION');
         $pdo->commit();echo json_encode(['ok'=>true,'estado'=>$nuevo,'mensaje'=>$nuevo==='ACTIVO'?'Alumno reactivado con obligaciones vigentes':'Alumno reabierto como pendiente hasta cubrir sus obligaciones vigentes'],JSON_UNESCAPED_UNICODE);exit;
     }
 
