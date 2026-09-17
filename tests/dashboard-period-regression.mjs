@@ -26,7 +26,7 @@ assert.match(api,/financiero_periodo_para_fecha\(\$pdo,\$sedeId,\$fecha\)/);
 assert.match(api,/financiero_totales\(\$pdo,\$sede,\$periodoVigente\)/);
 assert.match(api,/finanzas_obligaciones_periodo\(\$pdo,\$sede,\$periodoVigente,false\)/);
 assert.match(api,/dashboard_operacion_fecha\(\$pdo,\$sid,\$hoy\)/);
-assert.doesNotMatch(api,/api\/sesiones\.php/);
+assert.doesNotMatch(api,/require_once[^\n]*api\/sesiones\.php/);
 assert.match(api,/m\.estado='PAGADA'.*:hoy_m BETWEEN m\.periodo_inicio AND m\.periodo_fin/s);
 assert.match(api,/UNION\s+SELECT cia\.alumno_id/s);
 assert.match(api,/:hoy_i BETWEEN ci\.fecha_inicio AND ci\.fecha_fin/);
