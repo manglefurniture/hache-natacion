@@ -116,6 +116,7 @@ run_sharky_learning_verdict() { run_php_guarded "$REPO/bin/sharky-learning-revie
 run_google_contacts_status() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --status; }
 run_google_contacts_sync_once() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --sync-once; }
 run_google_contacts_token_set() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --set-refresh-token; }
+run_google_contacts_code_exchange() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --exchange-auth-code; }
 
 main() {
   require_root; [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -137,6 +138,7 @@ main() {
     google-contacts-status) [[ "$#" -eq 1 ]] || fail "google-contacts-status no acepta argumentos."; run_google_contacts_status ;;
     google-contacts-sync-once) [[ "$#" -eq 1 ]] || fail "google-contacts-sync-once no acepta argumentos."; run_google_contacts_sync_once ;;
     google-contacts-token-set) [[ "$#" -eq 1 ]] || fail "google-contacts-token-set recibe el token exclusivamente por stdin."; run_google_contacts_token_set ;;
+    google-contacts-code-exchange) [[ "$#" -eq 1 ]] || fail "google-contacts-code-exchange recibe el código exclusivamente por stdin."; run_google_contacts_code_exchange ;;
     *) [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."; run_target_deploy "$1" ;;
   esac
 }

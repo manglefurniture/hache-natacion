@@ -28,58 +28,110 @@ function hache_google_contacts_summary(PDO $pdo): array
     ];
 }
 
-function hache_google_contacts_set_refresh_token(): never
+function hache_google_contacts_refresh_token_valid(string $token): bool
 {
-    $token=trim((string)stream_get_contents(STDIN));
-    if(strlen($token)<20||strlen($token)>2048||preg_match('/[\x00-\x20\x7F]/',$token)){
-        fwrite(STDERR,"Invalid Google refresh token\n");
-        exit(2);
-    }
+    return strlen($token)>=20
+        &&strlen($token)<=2048
+        &&!preg_match('/[\x00-\x20\x7F]/',$token);
+}
+
+function hache_google_contacts_store_refresh_token(string $token): bool
+{
+    if(!hache_google_contacts_refresh_token_valid($token))return false;
     $env=dirname(__DIR__).'/.env';
-    if(!is_file($env)||is_link($env)||!is_readable($env)||!is_writable($env)){
-        fwrite(STDERR,"Environment file unavailable\n");
-        exit(1);
-    }
+    if(!is_file($env)||is_link($env)||!is_readable($env)||!is_writable($env))return false;
     $raw=file_get_contents($env);
-    if(!is_string($raw)){
-        fwrite(STDERR,"Unable to read environment file\n");
-        exit(1);
-    }
+    if(!is_string($raw))return false;
     $line='GOOGLE_CONTACTS_REFRESH_TOKEN='.$token;
     if(preg_match('/^(?:export\s+)?GOOGLE_CONTACTS_REFRESH_TOKEN=.*$/m',$raw)){
         $next=preg_replace_callback('/^(?:export\s+)?GOOGLE_CONTACTS_REFRESH_TOKEN=.*$/m',static fn():string=>$line,$raw,1);
     }else{
         $next=rtrim($raw,"\r\n")."\n".$line."\n";
     }
-    if(!is_string($next)){
-        fwrite(STDERR,"Unable to update environment content\n");
-        exit(1);
-    }
+    if(!is_string($next))return false;
     $stat=stat($env);
-    if(!is_array($stat)){
-        fwrite(STDERR,"Unable to stat environment file\n");
-        exit(1);
-    }
+    if(!is_array($stat))return false;
     $tmp=$env.'.google-contacts.'.bin2hex(random_bytes(6)).'.tmp';
-    if(file_put_contents($tmp,$next,LOCK_EX)===false){
-        fwrite(STDERR,"Unable to write environment update\n");
-        exit(1);
-    }
+    if(file_put_contents($tmp,$next,LOCK_EX)===false)return false;
     chmod($tmp,0600);
     @chown($tmp,(int)$stat['uid']);
     @chgrp($tmp,(int)$stat['gid']);
     chmod($tmp,(int)$stat['mode']&0777);
     if(!rename($tmp,$env)){
         @unlink($tmp);
-        fwrite(STDERR,"Unable to publish environment update\n");
+        return false;
+    }
+    return true;
+}
+
+function hache_google_contacts_set_refresh_token(): never
+{
+    $token=trim((string)stream_get_contents(STDIN));
+    if(!hache_google_contacts_refresh_token_valid($token)){
+        fwrite(STDERR,"Invalid Google refresh token\n");
+        exit(2);
+    }
+    if(!hache_google_contacts_store_refresh_token($token)){
+        fwrite(STDERR,"Unable to update Google refresh token\n");
         exit(1);
     }
     fwrite(STDOUT,json_encode(['ok'=>true,'updated'=>true],JSON_UNESCAPED_SLASHES).PHP_EOL);
     exit(0);
 }
 
+function hache_google_contacts_exchange_auth_code(): never
+{
+    $code=trim((string)stream_get_contents(STDIN));
+    if(strlen($code)<20||strlen($code)>4096||preg_match('/[\x00-\x20\x7F]/',$code)){
+        fwrite(STDERR,"Invalid Google authorization code\n");
+        exit(2);
+    }
+    $clientId=hache_sharky_orchestrator_secret('GOOGLE_CONTACTS_CLIENT_ID');
+    $clientSecret=hache_sharky_orchestrator_secret('GOOGLE_CONTACTS_CLIENT_SECRET');
+    if($clientId===''||$clientSecret===''){
+        fwrite(STDERR,"Google OAuth client unavailable\n");
+        exit(1);
+    }
+    $ch=curl_init('https://oauth2.googleapis.com/token');
+    if($ch===false){
+        fwrite(STDERR,"Unable to initialize Google OAuth exchange\n");
+        exit(1);
+    }
+    $fields=http_build_query([
+        'code'=>$code,
+        'client_id'=>$clientId,
+        'client_secret'=>$clientSecret,
+        'redirect_uri'=>'https://developers.google.com/oauthplayground',
+        'grant_type'=>'authorization_code',
+    ]);
+    curl_setopt_array($ch,[
+        CURLOPT_POST=>true,
+        CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_CONNECTTIMEOUT=>5,
+        CURLOPT_TIMEOUT=>20,
+        CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_POSTFIELDS=>$fields,
+    ]);
+    $response=curl_exec($ch);
+    $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $decoded=is_string($response)?json_decode($response,true):null;
+    $refreshToken=is_array($decoded)?trim((string)($decoded['refresh_token']??'')):'';
+    if($status<200||$status>=300||!hache_google_contacts_refresh_token_valid($refreshToken)){
+        fwrite(STDERR,"Google authorization code exchange failed\n");
+        exit(1);
+    }
+    if(!hache_google_contacts_store_refresh_token($refreshToken)){
+        fwrite(STDERR,"Unable to update Google refresh token\n");
+        exit(1);
+    }
+    fwrite(STDOUT,json_encode(['ok'=>true,'updated'=>true,'token_exchange_ok'=>true],JSON_UNESCAPED_SLASHES).PHP_EOL);
+    exit(0);
+}
+
 $mode=$argv[1]??'--status';
 if($mode==='--set-refresh-token')hache_google_contacts_set_refresh_token();
+if($mode==='--exchange-auth-code')hache_google_contacts_exchange_auth_code();
 
 $pdo=hache_sharky_pdo();
 if(!$pdo instanceof PDO){
@@ -104,5 +156,5 @@ if($mode==='--sync-once'){
     exit(($stats['configured']??false)===true&&($stats['failed']??0)===0?0:1);
 }
 
-fwrite(STDERR,"Usage: --status | --sync-once | --set-refresh-token\n");
+fwrite(STDERR,"Usage: --status | --sync-once | --set-refresh-token | --exchange-auth-code\n");
 exit(2);
