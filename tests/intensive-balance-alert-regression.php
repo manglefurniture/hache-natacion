@@ -38,7 +38,9 @@ balance_alert_expect(array_column($rows,'curso_id')===['c1','c5'],'Solo cursos v
 balance_alert_expect(abs((float)$rows[0]['importe_pagado']-500)<0.001&&abs((float)$rows[0]['saldo']-700)<0.001,'Pagos inválidos no deben reducir el saldo.');
 balance_alert_expect(abs((float)$rows[1]['saldo']-1200)<0.001,'Un intensivo sin pagos válidos conserva el total como saldo.');
 $summary=hache_intensive_pending_balance_summary($rows);
-balance_alert_expect($summary['total']===2&&abs((float)$summary['saldo']-1900)<0.001,'El resumen debe reconciliar conteo y saldo.');
+balance_alert_expect($summary['total']===2&&$summary['alumnos']===2&&abs((float)$summary['saldo']-1900)<0.001,'El resumen debe reconciliar relaciones, alumnos únicos y saldo.');
+$duplicateStudent=hache_intensive_pending_balance_summary([...$rows,['alumno_id'=>'a1','saldo'=>50]]);
+balance_alert_expect($duplicateStudent['total']===3&&$duplicateStudent['alumnos']===2&&abs((float)$duplicateStudent['saldo']-1950)<0.001,'Un alumno con dos cursos pendientes debe contarse una vez como alumno y dos veces como saldo.');
 $one=hache_intensive_pending_balance_candidates($pdo,'s1','c1','a1');
 balance_alert_expect(count($one)===1&&$one[0]['curso_id']==='c1','La misma fuente debe permitir revalidar un curso/alumno específico.');
 balance_alert_expect(hache_intensive_pending_balance_candidates($pdo,'s1','c2','a2')===[],'Un saldo liquidado debe dejar de ser candidato.');
@@ -49,5 +51,6 @@ balance_alert_expect(str_contains($center,"require_once __DIR__.'/intensive-bala
 balance_alert_expect(!str_contains($center,"COALESCE(SUM(CASE WHEN p.estado='VALIDO' THEN p.importe ELSE 0 END),0) pagado_valido"),'El cálculo financiero no debe quedar duplicado dentro del Centro.');
 balance_alert_expect(str_contains($alerts,"require_once __DIR__.'/../config/intensive-balance-source.php'")&&str_contains($alerts,"'tipo'=>'SALDO','nivel'=>'NEUTRA'"),'F5 debe consumir la misma fuente y mantener prioridad nueva neutra.');
 balance_alert_expect(str_contains($alerts,'hache_intensive_pending_balance_summary(hache_intensive_pending_balance_candidates($pdo,(string)$sid))'),'El resumen F5 debe derivar exactamente de candidatos financieros compartidos.');
+balance_alert_expect(str_contains($alerts,"$students=(int)$saldoResumen['alumnos']")&&str_contains($alerts,"$balances=(int)$saldoResumen['total']"),'La presentación debe distinguir alumnos únicos de relaciones con saldo.');
 
 echo "INTENSIVE_BALANCE_ALERT_REGRESSION_OK\n";
