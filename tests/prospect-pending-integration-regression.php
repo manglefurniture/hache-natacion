@@ -59,7 +59,7 @@ prospect_pending_expect(!str_contains($page,'permanecen fuera del Centro de pend
 prospect_pending_expect(str_contains($page,"x.tipo==='PROSPECTO_SIN_SEGUIMIENTO'?'Prospecto'"),'La tarjeta debe identificar el caso sin inventar nombre o alumno.');
 
 $doc=file_get_contents(__DIR__.'/../docs/F5-PROSPECT-FOLLOWUP-ALERT.md')?:'';
-prospect_pending_expect(str_contains($doc,'pendientes globales')&&str_contains($doc,'sede ficticia'),'La decisión de scope global y no inventar sede debe quedar documentada.');
+prospect_pending_expect(str_contains($doc,'**globales y exclusivos de ADMIN**')&&str_contains($doc,'sede ficticia'),'La decisión de scope global y no inventar sede debe quedar documentada.');
 prospect_pending_expect(str_contains($doc,'VERIFICADOR no recibe ni gestiona estos pendientes'),'La documentación debe conservar el límite de permisos.');
 
 echo "PROSPECT_PENDING_INTEGRATION_REGRESSION_OK\n";
