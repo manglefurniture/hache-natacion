@@ -85,7 +85,7 @@ function hache_google_contacts_store_refresh_token(string $token): bool
 
 function hache_google_contacts_stage_path(): string
 {
-    return '/var/tmp/hache-sharky-secrets/google-contacts-oauth-stage.json';
+    return '/var/lib/hache-natacion/oauth-stage/google-contacts-oauth-stage.json';
 }
 
 function hache_google_contacts_promote_staged(): never
