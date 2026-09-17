@@ -41,6 +41,8 @@ sharky_entry_expect($palapasStart!==false&&$palapasEnd!==false,'Palapas must hav
 $palapasBlock=substr($routing,$palapasStart,$palapasEnd-$palapasStart);
 sharky_entry_expect(str_contains($palapasBlock,"strtoupper((string)(\$identity['sede_clave']??''))!=='PALAPAS'"),'Restriction must be scoped only to Palapas.');
 sharky_entry_expect(str_contains($palapasBlock,"['id'=>'member:class_today','title'=>'Mi clase hoy']"),'Palapas menu must keep class-today access.');
+sharky_entry_expect(!str_contains($palapasBlock,"['id'=>'member:portal'"),'Palapas red light must not expose portal access while the portal still permits absence mutations.');
+sharky_entry_expect(!str_contains($palapasBlock,'hache_sharky_member_portal_requested'),'Portal requests must remain inside the Palapas restriction instead of bypassing it.');
 sharky_entry_expect(str_contains($palapasBlock,'Por ahora los temas de pagos de Palapas los está revisando directamente el equipo de Hache.'),'Palapas accounting requests must be answered without balances or checkout.');
 
 // A professor who is also a Palapas student may bypass the gate only for
@@ -71,10 +73,14 @@ sharky_entry_expect($routeHandoff!==false&&$routePayment!==false&&$routeHandoff<
 $teacherPreflight=strpos($routeBlock,'$teacherPreState=hache_sharky_db_state_load($pdo,$contact)');
 $teacherDeferred=strpos($routeBlock,'hache_sharky_member_teacher_owned_event($pdo,$teacherPre,$teacherPreFlow,$event,$teacherPreIntent)&&!hache_sharky_member_coteaching_ready($pdo))return false;');
 $palapasRoute=strpos($routeBlock,'hache_sharky_member_palapas_restricted_route($pdo,$event)');
+$routePortal=strpos($routeBlock,'if(hache_sharky_member_portal_requested');
+$routeDeterministic=strpos($routeBlock,'if(hache_sharky_member_deterministic_event($pdo,$event,$state))');
 $pendingStudentFallback=strpos($routeBlock,'$student=hache_sharky_member_student_context($pdo,$contact);');
 $activeStudentFallback=strrpos($routeBlock,'hache_sharky_member_student_fallback($pdo,$event);');
 sharky_entry_expect($teacherPreflight!==false&&$teacherDeferred!==false&&$teacherPreflight<$teacherDeferred,'Shared router must preflight teacher ownership independently of readiness.');
 sharky_entry_expect($palapasRoute!==false&&$teacherDeferred<$palapasRoute&&$teacherDeferred<$routePayment,'Unready teacher events must defer before Palapas and payment routing.');
+sharky_entry_expect($routePortal!==false&&$palapasRoute<$routePortal&&$routePortal<$routePayment,'Portal requests must be handled after the Palapas red light but before payment-flow ownership.');
+sharky_entry_expect($routeDeterministic!==false&&$routePortal<$routeDeterministic,'Portal requests must preempt an active absence-flow deterministic dispatch.');
 sharky_entry_expect($pendingStudentFallback!==false&&$teacherDeferred<$pendingStudentFallback,'Unready teacher events must defer before pending-student fallback.');
 sharky_entry_expect($activeStudentFallback!==false&&$teacherDeferred<$activeStudentFallback,'Unready teacher events must defer before active-student fallback.');
 sharky_entry_expect(str_contains($routeBlock,'if($teacherOwned&&!hache_sharky_member_coteaching_ready($pdo))return false;'),'Late teacher readiness guard must also return a non-null deferred result.');

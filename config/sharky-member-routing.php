@@ -4,11 +4,50 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-member-ops.php';
 require_once __DIR__.'/sharky-member-payments.php';
+require_once __DIR__.'/portal-access.php';
 
 function hache_sharky_member_routing_ready(PDO $pdo): bool
 {
     return hache_sharky_member_schema_ready($pdo)
         && hache_sharky_member_payments_schema_ready($pdo);
+}
+
+function hache_sharky_member_portal_requested(string $text,string $interactiveId=''): bool
+{
+    if(strtolower(trim($interactiveId))==='member:portal')return true;
+    $t=hache_sharky_member_normalize($text);
+    if($t==='')return false;
+    if(in_array($t,['portal','mi cuenta','mi perfil','mis datos'],true))return true;
+    return preg_match('/\b(?:abrir|abre|entrar|entra|ir|ver|acceder|acceso)\b.{0,35}\b(?:portal|mi cuenta|mi perfil|mis datos)\b/u',$t)===1
+        ||preg_match('/\b(?:portal|mi cuenta|mi perfil)\b.{0,25}\b(?:abrir|entrar|acceder|acceso)\b/u',$t)===1;
+}
+
+function hache_sharky_member_portal_cta_payload(string $contact,string $url): array
+{
+    return [
+        'messaging_product'=>'whatsapp',
+        'recipient_type'=>'individual',
+        'to'=>$contact,
+        'type'=>'interactive',
+        'interactive'=>[
+            'type'=>'cta_url',
+            'body'=>['text'=>'Aquí tienes tu acceso seguro al portal. Este enlace es personal y de un solo uso. 🔐'],
+            'action'=>[
+                'name'=>'cta_url',
+                'parameters'=>['display_text'=>'Abrir PORTAL','url'=>$url],
+            ],
+        ],
+    ];
+}
+
+function hache_sharky_member_portal_access_payload(PDO $pdo,string $contact,array $student): array
+{
+    $studentId=trim((string)($student['identity']['student_id']??''));
+    if($studentId==='')return hache_sharky_whatsapp_text_payload($contact,'No pude generar tu acceso al portal en este momento. Intenta de nuevo más tarde.');
+    $access=hache_portal_access_issue($pdo,$studentId);
+    $token=is_array($access)?trim((string)($access['token']??'')):'';
+    if(preg_match('/^[a-f0-9]{64}$/',$token)!==1)return hache_sharky_whatsapp_text_payload($contact,'No pude generar tu acceso al portal en este momento. Intenta de nuevo más tarde.');
+    return hache_sharky_member_portal_cta_payload($contact,'https://hnatacion.com/acceso.php?t='.$token);
 }
 
 function hache_sharky_member_routing_handoff_requested(string $text): bool
@@ -70,7 +109,7 @@ function hache_sharky_member_pending_payment_payload(string $contact,array $stud
     $program=($payment['kind']??'')==='intensive'?'tu inscripción al curso intensivo':'tu inscripción';
     $amount='$'.number_format($due,2,'.',',').' MXN';
     $body='¡Hola'.($first!==''?', '.$first:'').'! 😊 '.$program.' sigue pendiente de pago. 💰 Tienes '.$amount.' pendientes. ¿Deseas pagar ahora o cambiar la forma de pago que habías elegido?';
-    return hache_sharky_member_buttons($contact,$body,[['id'=>'member:pay','title'=>'Pagar ahora']]);
+    return hache_sharky_member_buttons($contact,$body,[['id'=>'member:pay','title'=>'Pagar ahora'],['id'=>'member:portal','title'=>'Abrir PORTAL']]);
 }
 
 function hache_sharky_member_teacher_owned_event(PDO $pdo,array $teacher,?array $flow,array $event,?string $intent=null): bool
@@ -231,6 +270,11 @@ function hache_sharky_member_student_fallback(PDO $pdo,array $event): bool
         $intent=(string)(hache_sharky_member_intent($text,(string)($event['interactive_id']??''))??'');
         $first=function_exists('hache_sharky_member_first_name')?hache_sharky_member_first_name($student):'';
 
+        if(hache_sharky_member_portal_requested($text,(string)($event['interactive_id']??''))){
+            $payload=hache_sharky_member_portal_access_payload($pdo,$contact,$student);
+            return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-portal');
+        }
+
         if(hache_sharky_member_closure_text($text)){
             $body='¡Con gusto'.($first!==''?', '.$first:'').'! 😊';
             $payload=hache_sharky_whatsapp_text_payload($contact,$body);
@@ -243,15 +287,17 @@ function hache_sharky_member_student_fallback(PDO $pdo,array $event): bool
         if(is_array($paymentPayload))return hache_sharky_member_queue($pdo,$contact,$event,$state,$paymentPayload,'student-pending-payment');
     }
     $body=hache_sharky_member_pending_message($student,$text,$intent);
-    $payload=hache_sharky_whatsapp_text_payload($contact,$body);
+    $payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:portal','title'=>'Abrir PORTAL']]);
     return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-pending');
 }
 
-        $body='Claro'.($first!==''?', '.$first:'').' 😊 Dime qué necesitas. Puedo ayudarte con tus clases, pagos, ausencias y reposiciones; si es otra cosa, escríbemela con confianza.';
+        $body=$intent==='greeting'
+            ?hache_sharky_member_student_greeting($student)
+            :'Claro'.($first!==''?', '.$first:'').' 😊 Dime qué necesitas. Puedo ayudarte con tus clases, pagos, ausencias y reposiciones; si es otra cosa, escríbemela con confianza.';
         $payload=hache_sharky_member_buttons($contact,$body,[
             ['id'=>'member:class_today','title'=>'Mi clase hoy'],
             ['id'=>'member:payments','title'=>'Pagos'],
-            ['id'=>'member:absence','title'=>'Reportar ausencia'],
+            ['id'=>'member:portal','title'=>'Abrir PORTAL'],
         ]);
         return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'student-fallback');
     }catch(Throwable $e){
@@ -337,6 +383,17 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
         return $palapas;
     }
 
+    // Portal is an explicit navigation request. Handle it before payment or
+    // absence flow ownership so a stale member flow cannot swallow the action.
+    if(hache_sharky_member_portal_requested((string)($event['text']??''),(string)($event['interactive_id']??''))){
+        $portalStudent=hache_sharky_member_student_context($pdo,$contact);
+        if(($portalStudent['found']??false)===true){
+            $handled=hache_sharky_member_student_fallback($pdo,$event);
+            if($handled)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
+            return $handled;
+        }
+    }
+
     $paymentResult=hache_sharky_member_payment_process_event($pdo,$event,$business);
     if($paymentResult!==null){
         if($paymentResult===true)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
@@ -361,6 +418,11 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if(!$teacherIntent){
         $student=hache_sharky_member_student_context($pdo,$contact);
         if(($student['found']??false)===true&&hache_sharky_member_pending_registration($student)&&$intent!=='payments'){
+            $handled=hache_sharky_member_student_fallback($pdo,$event);
+            if($handled)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
+            return $handled;
+        }
+        if(($student['found']??false)===true&&!hache_sharky_member_pending_registration($student)&&$intent==='greeting'){
             $handled=hache_sharky_member_student_fallback($pdo,$event);
             if($handled)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
             return $handled;
