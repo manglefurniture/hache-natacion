@@ -63,11 +63,13 @@ El CRM vigente conserva como autoridades:
 
 ### Estado de gestión derivado
 
-No se introduce todavía un enum persistente. La UI futura podrá derivar tres situaciones sencillas:
+No se introduce todavía un enum persistente. La UI futura podrá derivar tres situaciones sencillas y mutuamente excluyentes:
 
-1. **SIN_GESTIÓN**: no existe una gestión interna explícita que cubra el último contacto verificable disponible.
-2. **GESTIONADO**: existe una gestión explícita anclada al último contacto que era visible cuando se realizó y no hay actividad verificable posterior.
-3. **ACTIVIDAD POSTERIOR**: después de la última gestión existe un contacto verificable más reciente; la gestión histórica se conserva, pero ya no representa el estado más reciente.
+1. **SIN_GESTIÓN**: no existe ninguna gestión interna explícita en el historial del contacto.
+2. **GESTIONADO**: existe al menos una gestión y el último contacto verificable disponible no es posterior al ancla de la gestión más reciente.
+3. **ACTIVIDAD POSTERIOR**: existe al menos una gestión y después de la más reciente aparece un contacto verificable posterior a su ancla; la gestión histórica se conserva, pero ya no representa el estado más reciente.
+
+La derivación aplica esa precedencia: primero ausencia total de historial; si hay historial, se compara exclusivamente el último contacto verificable con el ancla de la gestión más reciente.
 
 `INSCRITO` sigue siendo un hito comercial derivado del alta real y no se reescribe como estado de gestión. La conversión puede hacer innecesaria una nueva gestión comercial en la UI, pero no borra su historia.
 
