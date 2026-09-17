@@ -212,6 +212,10 @@ apply_release_migrations() {
   if [[ -f "$portal_access" ]]; then
     php "$portal_access"
   fi
+  local sharky_crm_managements="$REPO/bin/migrate-sharky-crm-managements.php"
+  if [[ -f "$sharky_crm_managements" ]]; then
+    php "$sharky_crm_managements"
+  fi
 }
 
 deploy_sha() {
