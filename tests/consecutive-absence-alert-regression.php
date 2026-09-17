@@ -12,31 +12,40 @@ consecutive_absence_expect(HACHE_INTERNAL_CONSECUTIVE_ABSENCE_THRESHOLD===3, 'F5
 consecutive_absence_expect(HACHE_INTERNAL_CONSECUTIVE_UNJUSTIFIED_THRESHOLD===2, 'F5 debe conservar el umbral aprobado de 2 ausencias no justificadas consecutivas.');
 
 $general=hache_internal_consecutive_absence_state([
-    ['estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-17'],
-    ['estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-16'],
-    ['estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-15'],
+    ['asistencia_id'=>'g3','estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-17'],
+    ['asistencia_id'=>'g2','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-16'],
+    ['asistencia_id'=>'g1','estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-15'],
 ]);
 consecutive_absence_expect($general['alerta']===true&&$general['ausencias_consecutivas']===3&&$general['no_justificadas_consecutivas']===0,'Tres ausencias de cualquier tipo deben activar la regla general.');
+consecutive_absence_expect($general['origen_asistencia_id']==='g1'&&$general['fecha_inicio_racha']==='2026-09-15','El origen debe ser la primera asistencia ausente de la racha activa.');
 
 $unjustified=hache_internal_consecutive_absence_state([
-    ['estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-17'],
-    ['estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-16'],
+    ['asistencia_id'=>'u2','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-17'],
+    ['asistencia_id'=>'u1','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-16'],
 ]);
 consecutive_absence_expect($unjustified['alerta']===true&&$unjustified['ausencias_consecutivas']===2&&$unjustified['no_justificadas_consecutivas']===2,'Dos ausencias no justificadas consecutivas deben activar la alerta temprana.');
 
 $presentBreaks=hache_internal_consecutive_absence_state([
-    ['estado'=>'PRESENTE','fecha'=>'2026-09-17'],
-    ['estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-16'],
-    ['estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-15'],
+    ['asistencia_id'=>'p3','estado'=>'PRESENTE','fecha'=>'2026-09-17'],
+    ['asistencia_id'=>'p2','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-16'],
+    ['asistencia_id'=>'p1','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-15'],
 ]);
 consecutive_absence_expect($presentBreaks['alerta']===false,'Una presencia reciente debe cortar las rachas.');
 
 $mixed=hache_internal_consecutive_absence_state([
-    ['estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-17'],
-    ['estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-16'],
-    ['estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-15'],
+    ['asistencia_id'=>'m3','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-17'],
+    ['asistencia_id'=>'m2','estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-16'],
+    ['asistencia_id'=>'m1','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-15'],
 ]);
 consecutive_absence_expect($mixed['alerta']===true&&$mixed['ausencias_consecutivas']===3&&$mixed['no_justificadas_consecutivas']===1,'Una justificada mantiene la racha general pero corta la racha específica de no justificadas.');
+
+$four=hache_internal_consecutive_absence_state([
+    ['asistencia_id'=>'r4','estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-18'],
+    ['asistencia_id'=>'r3','estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-17'],
+    ['asistencia_id'=>'r2','estado'=>'AUSENTE_NO_JUSTIFICADA','fecha'=>'2026-09-16'],
+    ['asistencia_id'=>'r1','estado'=>'AUSENTE_JUSTIFICADA','fecha'=>'2026-09-15'],
+]);
+consecutive_absence_expect($four['ausencias_consecutivas']===4&&$four['origen_asistencia_id']==='r1','La racha puede crecer más allá del umbral sin cambiar su origen estable.');
 
 consecutive_absence_expect(in_array('sqlite',PDO::getAvailableDrivers(),true),'La regresión de F5 requiere PDO SQLite.');
 $pdo=new PDO('sqlite::memory:');
@@ -120,6 +129,12 @@ $add('j','Ambos criterios una sola alerta',[
     ['fecha'=>'2026-09-16','estado'=>'AUSENTE_NO_JUSTIFICADA'],
     ['fecha'=>'2026-09-15','estado'=>'AUSENTE_NO_JUSTIFICADA'],
 ]);
+$add('k','Racha de cuatro estable',[
+    ['fecha'=>'2026-09-18','estado'=>'AUSENTE_JUSTIFICADA'],
+    ['fecha'=>'2026-09-17','estado'=>'AUSENTE_JUSTIFICADA'],
+    ['fecha'=>'2026-09-16','estado'=>'AUSENTE_JUSTIFICADA'],
+    ['fecha'=>'2026-09-15','estado'=>'AUSENTE_JUSTIFICADA'],
+]);
 
 $candidates=hache_internal_consecutive_absence_candidates($pdo,'mv');
 $byId=[];foreach($candidates as $candidate)$byId[$candidate['alumno_id']]=$candidate;
@@ -133,6 +148,9 @@ consecutive_absence_expect(isset($byId['h'])&&$byId['h']['ausencias_consecutivas
 consecutive_absence_expect(!isset($byId['i']),'Una sesión sin marca no debe convertirse automáticamente en ausencia.');
 consecutive_absence_expect(isset($byId['j'])&&$byId['j']['ausencias_consecutivas']===3&&$byId['j']['no_justificadas_consecutivas']===3,'Un alumno que cumple ambos criterios debe producir un solo candidato.');
 consecutive_absence_expect(count(array_filter($candidates,static fn(array $c):bool=>$c['alumno_id']==='j'))===1,'Los dos umbrales no deben duplicar el mismo alumno.');
+consecutive_absence_expect(isset($byId['k'])&&$byId['k']['ausencias_consecutivas']===4&&$byId['k']['origen_asistencia_id']==='k-a3','Una cuarta ausencia debe conservar como origen la primera marca de la racha.');
+$onlyK=hache_internal_consecutive_absence_candidate($pdo,'mv','k');
+consecutive_absence_expect(is_array($onlyK)&&$onlyK['alumno_id']==='k'&&$onlyK['origen_asistencia_id']==='k-a3','La revalidación por alumno debe recuperar exactamente la misma racha.');
 
 $api=file_get_contents(__DIR__.'/../api/alertas.php')?:'';
 $doc=file_get_contents(__DIR__.'/../docs/F5-CONSECUTIVE-ABSENCE-ALERT.md')?:'';
