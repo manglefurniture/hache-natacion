@@ -24,8 +24,8 @@ function hache_internal_alert_descriptions(): array
         HACHE_INTERNAL_ALERT_KEY_PROSPECT_FOLLOWUP_HOURS=>'Horas desde el último contacto verificable antes de alertar por prospecto sin seguimiento.',
         HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_ABSENCES=>'Cantidad de ausencias consecutivas, justificadas o no, que activa la alerta.',
         HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_UNJUSTIFIED=>'Cantidad de ausencias no justificadas consecutivas que activa la alerta temprana.',
-        HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_DAYS=>'Días después de finalizar un intensivo para evaluar falta de continuidad. Vacío = regla todavía no habilitada.',
-        HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE=>'Alcance de la futura regla de continuidad. Vacío = pendiente de definir.',
+        HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_DAYS=>'Días después de finalizar un intensivo para alertar por falta de continuidad. Vacío = regla deshabilitada.',
+        HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE=>'Qué estados de continuidad generan la alerta. Vacío = regla deshabilitada.',
     ];
 }
 
@@ -68,6 +68,6 @@ function hache_internal_alert_config_rows(PDO $pdo): array
         ['clave'=>HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_ABSENCES,'valor'=>$current[HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_ABSENCES],'descripcion'=>$descriptions[HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_ABSENCES],'etiqueta'=>'Ausencias consecutivas','tipo'=>'number','min'=>1,'max'=>30,'unidad'=>'ausencias'],
         ['clave'=>HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_UNJUSTIFIED,'valor'=>$current[HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_UNJUSTIFIED],'descripcion'=>$descriptions[HACHE_INTERNAL_ALERT_KEY_CONSECUTIVE_UNJUSTIFIED],'etiqueta'=>'Ausencias injustificadas consecutivas','tipo'=>'number','min'=>1,'max'=>30,'unidad'=>'ausencias'],
         ['clave'=>HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_DAYS,'valor'=>$current[HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_DAYS],'descripcion'=>$descriptions[HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_DAYS],'etiqueta'=>'Intensivo sin continuidad','tipo'=>'number_optional','min'=>0,'max'=>60,'unidad'=>'días después'],
-        ['clave'=>HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE,'valor'=>$current[HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE],'descripcion'=>$descriptions[HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE],'etiqueta'=>'Alcance de continuidad','tipo'=>'select','opciones'=>[''=>'Pendiente de definir','SIN_EVALUAR'=>'Solo sin evaluar','SIN_EVALUAR_O_NO'=>'Sin evaluar + marcado que no continúa']],
+        ['clave'=>HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE,'valor'=>$current[HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE],'descripcion'=>$descriptions[HACHE_INTERNAL_ALERT_KEY_INTENSIVE_CONTINUITY_SCOPE],'etiqueta'=>'Alcance de continuidad','tipo'=>'select','opciones'=>[''=>'Regla deshabilitada','SIN_EVALUAR'=>'Solo sin evaluar','SIN_EVALUAR_O_NO'=>'Sin evaluar + marcado que no continúa']],
     ];
 }
