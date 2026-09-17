@@ -31,7 +31,7 @@ function hache_google_contacts_summary(PDO $pdo): array
 function hache_google_contacts_set_refresh_token(): never
 {
     $token=trim((string)stream_get_contents(STDIN));
-    if(strlen($token)<20||strlen($token)>2048||preg_match('/[^A-Za-z0-9._\/-]/',$token)){
+    if(strlen($token)<20||strlen($token)>2048||preg_match('/[\x00-\x20\x7F]/',$token)){
         fwrite(STDERR,"Invalid Google refresh token\n");
         exit(2);
     }
@@ -47,7 +47,7 @@ function hache_google_contacts_set_refresh_token(): never
     }
     $line='GOOGLE_CONTACTS_REFRESH_TOKEN='.$token;
     if(preg_match('/^(?:export\s+)?GOOGLE_CONTACTS_REFRESH_TOKEN=.*$/m',$raw)){
-        $next=preg_replace('/^(?:export\s+)?GOOGLE_CONTACTS_REFRESH_TOKEN=.*$/m',$line,$raw,1);
+        $next=preg_replace_callback('/^(?:export\s+)?GOOGLE_CONTACTS_REFRESH_TOKEN=.*$/m',static fn():string=>$line,$raw,1);
     }else{
         $next=rtrim($raw,"\r\n")."\n".$line."\n";
     }
