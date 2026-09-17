@@ -1,23 +1,36 @@
 <?php
 declare(strict_types=1);
 
-function dashboard_p06_config_datetime(PDO $pdo,string $clave): ?string
+function dashboard_p06_config_datetime_utc(PDO $pdo,string $clave): ?string
 {
     try{
         $st=$pdo->prepare("SELECT valor FROM configuracion WHERE clave=:c LIMIT 1");
         $st->execute([':c'=>$clave]);
         $valor=trim((string)($st->fetchColumn()?:''));
         if($valor==='')return null;
-        $dt=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$valor,new DateTimeZone('America/Cancun'));
+        $dt=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$valor,new DateTimeZone('UTC'));
         return $dt&&$dt->format('Y-m-d H:i:s')===$valor?$valor:null;
     }catch(Throwable $e){
         return null;
     }
 }
 
-function dashboard_p06_period_bounds(string $inicio,string $fin): array
+function dashboard_p06_utc_to_cancun(string $utc): string
 {
-    return [$inicio.' 00:00:00',$fin.' 23:59:59'];
+    $dt=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$utc,new DateTimeZone('UTC'));
+    return $dt?$dt->setTimezone(new DateTimeZone('America/Cancun'))->format('Y-m-d H:i:s'):$utc;
+}
+
+function dashboard_p06_period_bounds_utc(string $inicio,string $fin): array
+{
+    $zona=new DateTimeZone('America/Cancun');
+    $desde=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$inicio.' 00:00:00',$zona);
+    $hasta=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$fin.' 23:59:59',$zona);
+    if(!$desde||!$hasta)throw new InvalidArgumentException('Rango de periodo inválido');
+    return [
+        $desde->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+        $hasta->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+    ];
 }
 
 function dashboard_nuevos_alumnos(PDO $pdo,string $sedeId,string $inicio,string $fin): array
@@ -48,15 +61,16 @@ function dashboard_nuevos_alumnos(PDO $pdo,string $sedeId,string $inicio,string 
 
 function dashboard_bajas_registradas(PDO $pdo,string $sedeId,string $inicio,string $fin): array
 {
-    $cobertura=dashboard_p06_config_datetime($pdo,'dashboard_bajas_cobertura_desde');
-    if($cobertura===null){
+    $coberturaUtc=dashboard_p06_config_datetime_utc($pdo,'dashboard_bajas_cobertura_desde');
+    if($coberturaUtc===null){
         return ['disponible'=>false,'total'=>null,'rows'=>[],'cobertura_desde'=>null,'motivo'=>'Cobertura de bajas todavía no inicializada.'];
     }
 
-    [$desdePeriodo,$hasta]=dashboard_p06_period_bounds($inicio,$fin);
-    $desde=max($desdePeriodo,$cobertura);
+    $coberturaLocal=dashboard_p06_utc_to_cancun($coberturaUtc);
+    [$desdePeriodo,$hasta]=dashboard_p06_period_bounds_utc($inicio,$fin);
+    $desde=max($desdePeriodo,$coberturaUtc);
     if($desde>$hasta){
-        return ['disponible'=>false,'total'=>null,'rows'=>[],'cobertura_desde'=>$cobertura,'motivo'=>'El periodo seleccionado es anterior al inicio de cobertura fiable.'];
+        return ['disponible'=>false,'total'=>null,'rows'=>[],'cobertura_desde'=>$coberturaLocal,'cobertura_desde_utc'=>$coberturaUtc,'motivo'=>'El periodo seleccionado es anterior al inicio de cobertura fiable.'];
     }
 
     $st=$pdo->prepare("SELECT id,entidad_id,detalle,created_at
@@ -96,7 +110,8 @@ function dashboard_bajas_registradas(PDO $pdo,string $sedeId,string $inicio,stri
         'total'=>count($events),
         'rows'=>$events,
         'periodo'=>['inicio'=>$inicio,'fin'=>$fin],
-        'cobertura_desde'=>$cobertura,
+        'cobertura_desde'=>$coberturaLocal,
+        'cobertura_desde_utc'=>$coberturaUtc,
         'unidad'=>'eventos_de_baja',
         'fuente'=>'auditoria_eventos.ALUMNO_BAJA',
     ];
@@ -104,10 +119,11 @@ function dashboard_bajas_registradas(PDO $pdo,string $sedeId,string $inicio,stri
 
 function dashboard_asistencia_periodo(PDO $pdo,string $sedeId,string $inicio,string $fin): array
 {
-    $cobertura=dashboard_p06_config_datetime($pdo,'dashboard_asistencia_cobertura_desde');
-    if($cobertura===null){
+    $coberturaUtc=dashboard_p06_config_datetime_utc($pdo,'dashboard_asistencia_cobertura_desde');
+    if($coberturaUtc===null){
         return ['disponible'=>false,'porcentaje'=>null,'rows'=>[],'cobertura_desde'=>null,'motivo'=>'Cobertura persistida de asistencia todavía no inicializada.'];
     }
+    $coberturaLocal=dashboard_p06_utc_to_cancun($coberturaUtc);
 
     try{
         $capturadas=$pdo->prepare("SELECT COUNT(*)
@@ -163,7 +179,8 @@ function dashboard_asistencia_periodo(PDO $pdo,string $sedeId,string $inicio,str
                 'rows'=>[],
                 'sesiones_completas'=>0,
                 'sesiones_capturadas'=>$sesionesCapturadas,
-                'cobertura_desde'=>$cobertura,
+                'cobertura_desde'=>$coberturaLocal,
+                'cobertura_desde_utc'=>$coberturaUtc,
                 'motivo'=>'Todavía no hay sesiones no canceladas con registro completo dentro del periodo.',
             ];
         }
@@ -179,10 +196,12 @@ function dashboard_asistencia_periodo(PDO $pdo,string $sedeId,string $inicio,str
             'sesiones_capturadas'=>$sesionesCapturadas,
             'rows'=>$rows,
             'periodo'=>['inicio'=>$inicio,'fin'=>$fin],
-            'cobertura_desde'=>$cobertura,
+            'cobertura_desde'=>$coberturaLocal,
+                'cobertura_desde_utc'=>$coberturaUtc,
             'unidad'=>'marcas_en_sesiones_con_cobertura_completa',
         ];
     }catch(Throwable $e){
-        return ['disponible'=>false,'porcentaje'=>null,'rows'=>[],'cobertura_desde'=>$cobertura,'motivo'=>'La cobertura persistida de asistencia no está disponible.'];
+        return ['disponible'=>false,'porcentaje'=>null,'rows'=>[],'cobertura_desde'=>$coberturaLocal,
+                'cobertura_desde_utc'=>$coberturaUtc,'motivo'=>'La cobertura persistida de asistencia no está disponible.'];
     }
 }
