@@ -20,15 +20,13 @@ function centro_pendientes_prospectos_sedes(PDO $pdo): array
     return $out;
 }
 
-function centro_pendientes_prospectos_fuentes_activas(PDO $pdo): array
+function centro_pendientes_prospectos_desde_candidatos(array $candidates,array $sedes): array
 {
     $pendientes=[];
-    $settings=hache_internal_alert_settings($pdo);
-    $sedes=centro_pendientes_prospectos_sedes($pdo);
-    foreach(hache_internal_prospect_followup_candidates($pdo,null,$settings) as$candidate){
+    foreach($candidates as$candidate){
         $hash=(string)$candidate['contact_hash'];
         $sedeClave=(string)($candidate['sede']??'');
-        $sedeNombre=$sedeClave!==''&&isset($sedes[$sedeClave])?$sedes[$sedeClave]['nombre']:'Sin sede confirmada';
+        $sedeNombre=$sedeClave!==''&&isset($sedes[$sedeClave])?(string)$sedes[$sedeClave]['nombre']:'Sin sede confirmada';
         $horas=(int)$candidate['horas_sin_seguimiento'];
         $umbral=(int)$candidate['umbral_horas'];
         centro_pendientes_agregar($pendientes,[
@@ -49,6 +47,15 @@ function centro_pendientes_prospectos_fuentes_activas(PDO $pdo): array
         ]);
     }
     return centro_pendientes_indizar($pendientes);
+}
+
+function centro_pendientes_prospectos_fuentes_activas(PDO $pdo): array
+{
+    $settings=hache_internal_alert_settings($pdo);
+    return centro_pendientes_prospectos_desde_candidatos(
+        hache_internal_prospect_followup_candidates($pdo,null,$settings),
+        centro_pendientes_prospectos_sedes($pdo),
+    );
 }
 
 function centro_pendientes_prospectos_historico(PDO $pdo): array
