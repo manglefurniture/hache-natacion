@@ -8,6 +8,7 @@ require_once __DIR__.'/../config/finanzas-obligaciones.php';
 require_once __DIR__.'/../config/dashboard-tiempo.php';
 require_once __DIR__.'/../config/dashboard-operacion.php';
 require_once __DIR__.'/../config/dashboard-alumnos.php';
+require_once __DIR__.'/../config/dashboard-intensivos.php';
 require_once __DIR__.'/../config/centro-pendientes-compuesto.php';
 
 $me=auth_require(['ADMIN','VERIFICADOR']);
@@ -61,9 +62,9 @@ try {
     $st->execute([':s'=>$sid,':hoy'=>$hoy]);
     $mens=$st->fetch();
 
-    $st=$pdo->prepare("SELECT COUNT(*) FROM cursos_intensivos WHERE sede_id=:s AND estado IN ('PROGRAMADO','EN_CURSO')");
-    $st->execute([':s'=>$sid]);
-    $intensivos=(int)$st->fetchColumn();
+    // Conserva la semántica histórica del indicador y comparte total + detalle.
+    $intensivosActivos=dashboard_intensivos_activos($pdo,$sid);
+    $intensivos=(int)$intensivosActivos['total'];
 
     $st=$pdo->prepare("SELECT COUNT(*) FROM avisos_ausencia aa JOIN alumnos a ON a.id=aa.alumno_id WHERE a.sede_id=:s AND aa.estado='ACTIVO' AND :hoy BETWEEN aa.fecha_desde AND aa.fecha_hasta");
     $st->execute([':s'=>$sid,':hoy'=>$hoy]);
@@ -114,6 +115,7 @@ try {
             'total'=>(float)$mens['total'],
         ],
         'intensivos'=>$intensivos,
+        'intensivos_detalle'=>$intensivosActivos,
         'avisos_hoy'=>$avisos,
         'operacion_hoy'=>$operacionHoy,
         'reposiciones'=>$repos,
@@ -131,6 +133,7 @@ try {
             'facturacion'=>'F2: ingresos atribuidos al periodo financiero vigente según la regla de cada concepto.',
             'saldos_periodo'=>'F2: suma de obligaciones registradas del periodo menos pagos VALIDOS; el detalle reconciliable vive en Finanzas internas.',
             'operacion_hoy'=>'Sesiones y marcas ya registradas para la fecha operativa y atribuibles a la sede por horario. Cero sesiones registradas no significa cero clases planificadas; F6 no genera sesiones ni calcula porcentaje de asistencia sin denominador estable.',
+            'intensivos'=>'Cursos de la sede con estado registrado PROGRAMADO o EN_CURSO; F6 no reconcilia ni modifica estados al consultar.',
             'alertas_f5'=>'F5: causas activas compartidas con F1; los casos globales de prospectos solo se incluyen para ADMIN.',
             'centro_pendientes'=>'F1: causas activas separadas entre PENDIENTE y ATENDIDO; históricos resueltos no inflan el total operativo.',
         ],
