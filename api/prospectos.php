@@ -20,16 +20,20 @@ $pdo=hache_sharky_pdo();
 if(!$pdo)prospectos_out(['ok'=>false,'error'=>'No se pudo conectar con la configuración'],503);
 
 try{
-    $rows=hache_sharky_crm_list($pdo,300);
-    $summary=['total'=>count($rows),'prospectos'=>0,'inscripcion_iniciada'=>0,'inscritos'=>0,'sin_fuente_persistente'=>0];
+    $page=max(1,(int)($_GET['page']??1));
+    $perPage=max(10,min(100,(int)($_GET['per_page']??50)));
+    $query=mb_substr(trim((string)($_GET['q']??'')),0,120);
+    $result=hache_sharky_crm_page($pdo,$page,$perPage,$query);
+    $rows=$result['rows'];
+    $summary=['total_crm'=>$result['total_all'],'resultados'=>$result['total'],'prospectos_pagina'=>0,'inscripcion_iniciada_pagina'=>0,'inscritos_pagina'=>0,'sin_fuente_persistente_pagina'=>0];
     foreach($rows as $row){
         $stage=(string)($row['estado_crm']??'PROSPECTO');
-        if($stage==='INSCRITO')$summary['inscritos']++;
-        elseif($stage==='INSCRIPCION_INICIADA')$summary['inscripcion_iniciada']++;
-        else $summary['prospectos']++;
-        if(($row['fuente']??null)===null)$summary['sin_fuente_persistente']++;
+        if($stage==='INSCRITO')$summary['inscritos_pagina']++;
+        elseif($stage==='INSCRIPCION_INICIADA')$summary['inscripcion_iniciada_pagina']++;
+        else $summary['prospectos_pagina']++;
+        if(($row['fuente']??null)===null)$summary['sin_fuente_persistente_pagina']++;
     }
-    prospectos_out(['ok'=>true,'resumen'=>$summary,'prospectos'=>$rows]);
+    prospectos_out(['ok'=>true,'resumen'=>$summary,'paginacion'=>['page'=>$result['page'],'per_page'=>$result['per_page'],'pages'=>$result['pages'],'total'=>$result['total'],'total_all'=>$result['total_all']],'prospectos'=>$rows]);
 }catch(Throwable $e){
     error_log('[prospectos] '.$e->getMessage());
     prospectos_out(['ok'=>false,'error'=>'No se pudo cargar el CRM de prospectos'],500);
