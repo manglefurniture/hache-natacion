@@ -47,9 +47,14 @@ function hache_intensive_pending_balance_candidates(PDO $pdo,string $sedeId,?str
     return $out;
 }
 
+/** @return array{total:int,alumnos:int,saldo:float} */
 function hache_intensive_pending_balance_summary(array $candidates): array
 {
-    $total=0.0;
-    foreach($candidates as$candidate)$total+=max(0.0,(float)($candidate['saldo']??0));
-    return ['total'=>count($candidates),'saldo'=>round($total,2)];
+    $saldo=0.0;$students=[];
+    foreach($candidates as$candidate){
+        $saldo+=max(0.0,(float)($candidate['saldo']??0));
+        $studentId=trim((string)($candidate['alumno_id']??''));
+        if($studentId!=='')$students[$studentId]=true;
+    }
+    return ['total'=>count($candidates),'alumnos'=>count($students),'saldo'=>round($saldo,2)];
 }
