@@ -20,15 +20,19 @@ Un contacto puede generar la alerta cuando se cumplen todas estas condiciones:
 - no existe una acción `register_intensive` o `register_regular` con estado `COMPLETED`;
 - F4 deriva su gestión como `SIN_GESTION` o `ACTIVIDAD_POSTERIOR`;
 - han transcurrido al menos 24 horas desde el último contacto verificable;
-- el estado estructurado vigente permite comprobar que el seguimiento no está pausado ni cerrado por registro.
+- puede comprobarse que el seguimiento no quedó pausado.
 
 Una gestión `GESTIONADO` cubre la actividad observada y, por tanto, no alerta. Si después aparece actividad verificable nueva, F4 vuelve a derivar `ACTIVIDAD_POSTERIOR`; el nuevo contacto se convierte en la referencia temporal para las 24 horas.
 
-## Exclusiones y datos insuficientes
+## Exclusiones y expiración del estado
 
-Se respetan las exclusiones ya documentadas para F5: un prospecto convertido no alerta y un seguimiento pausado (`completed_optout`) no alerta. `completed_registration` también falla cerrado aunque la auditoría durable de registro sigue siendo la autoridad principal de conversión.
+Se respetan las exclusiones ya documentadas para F5: un prospecto convertido no alerta y un seguimiento pausado (`completed_optout`) no alerta. `completed_registration` también se excluye mientras exista en el estado, aunque la auditoría durable de registro sigue siendo la autoridad principal de conversión.
 
-Si el estado estructurado ya expiró/no está disponible, la regla no supone que el seguimiento estaba activo: **falla cerrada** porque no puede verificar la exclusión de pausa. Esto aplica el principio del roadmap de que dato desconocido no equivale a un valor conocido.
+El estado conversacional ordinario expira a las 24 horas. La alerta no puede depender de que ese estado siga vivo porque su propio umbral también es de 24 horas. Cuando `_idle_followup` ya no está disponible, F5 usa como respaldo **el último inbound persistido y cifrado en `sharky_message_receipts`** para reconstruir únicamente si ese último turno fue una pausa/opt-out. Esto no prolonga el estado de conversación ni modifica los seguimientos automáticos de Sharky.
+
+El fallback descifra en memoria solo el último inbound necesario para esta decisión; no expone texto, nombre ni teléfono en la respuesta del Centro de alertas y no crea una copia adicional. Si el último inbound no existe o no puede descifrarse, la pausa queda como dato desconocido y la regla **falla cerrada**: no genera una alerta potencialmente falsa.
+
+Cuando varios receipts comparten el mismo segundo `DATETIME`, se usa la marca durable de llegada incluida en el payload (`_inbox_arrival_us`) y, como respaldo, `timestamp_ms`, para identificar el último evento real.
 
 ## Presentación
 
@@ -48,6 +52,7 @@ La evaluación reutiliza:
 - `sharky_message_receipts`, `sharky_outbox` y `last_seen_at` para último contacto;
 - `sharky_crm_managements` y sus contadores monotónicos para el estado de gestión de F4;
 - `sharky_action_audit` para excluir conversiones `COMPLETED`;
-- `_idle_followup` únicamente como lectura de la pausa vigente.
+- `_idle_followup` mientras el estado conversacional siga vigente;
+- el último inbound persistido como evidencia durable de pausa cuando ese estado ya expiró.
 
-La regla trabaja con `contact_hash` y metadatos operativos; no necesita descifrar nombre, teléfono ni conversación para calcular el conteo. No crea migraciones ni escrituras nuevas.
+La regla trabaja con `contact_hash` y metadatos operativos. Solo en la ruta de estado expirado descifra en memoria el último inbound necesario para clasificar una pausa; no lo devuelve, no lo copia y no añade migraciones ni escrituras nuevas.
