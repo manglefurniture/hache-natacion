@@ -216,6 +216,10 @@ apply_release_migrations() {
   if [[ -f "$sharky_crm_managements" ]]; then
     php "$sharky_crm_managements"
   fi
+  local f6_dashboard_metrics="$REPO/bin/migrate-f6-dashboard-metrics.php"
+  if [[ -f "$f6_dashboard_metrics" ]]; then
+    php "$f6_dashboard_metrics"
+  fi
 }
 
 deploy_sha() {
