@@ -6,8 +6,12 @@ require_once __DIR__.'/sharky-crm.php';
 function hache_sharky_crm_management_schema_ready(PDO $pdo): bool
 {
     try {
-        $st=$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='sharky_crm_managements'");
-        return (int)$st->fetchColumn()===1;
+        $required=['id','contact_hash','admin_user_id','managed_at','observed_last_contact_at','observed_inbound_count','observed_outbound_count'];
+        $quoted="'".implode("','",$required)."'";
+        $st=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sharky_crm_managements' AND column_name IN ($quoted)");
+        $found=array_fill_keys(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)),true);
+        foreach($required as $column)if(!isset($found[$column]))return false;
+        return true;
     } catch (Throwable $e) {
         return false;
     }
