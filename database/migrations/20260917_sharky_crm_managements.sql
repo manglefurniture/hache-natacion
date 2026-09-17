@@ -1,7 +1,9 @@
--- Hache Natación — F4.3.2: registro explícito de gestión interna de prospectos.
+-- Hache Natación — F4.3.2/F4.3.3: registro explícito de gestión interna de prospectos.
 --
 -- Guarda únicamente trazabilidad administrativa sobre la identidad estable del
 -- contacto. No duplica datos de contacto ni contexto comercial ya autoritativo.
+-- Los contadores observados permiten distinguir actividad posterior incluso cuando
+-- dos eventos comparten el mismo segundo en columnas DATETIME.
 
 CREATE TABLE IF NOT EXISTS sharky_crm_managements (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
@@ -9,6 +11,14 @@ CREATE TABLE IF NOT EXISTS sharky_crm_managements (
     admin_user_id CHAR(36) NOT NULL,
     managed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     observed_last_contact_at DATETIME NOT NULL,
+    observed_inbound_count BIGINT UNSIGNED NULL,
+    observed_outbound_count BIGINT UNSIGNED NULL,
     KEY idx_sharky_crm_managements_contact_time (contact_hash, managed_at, id),
     KEY idx_sharky_crm_managements_admin_time (admin_user_id, managed_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE sharky_crm_managements
+    ADD COLUMN IF NOT EXISTS observed_inbound_count BIGINT UNSIGNED NULL AFTER observed_last_contact_at;
+
+ALTER TABLE sharky_crm_managements
+    ADD COLUMN IF NOT EXISTS observed_outbound_count BIGINT UNSIGNED NULL AFTER observed_inbound_count;

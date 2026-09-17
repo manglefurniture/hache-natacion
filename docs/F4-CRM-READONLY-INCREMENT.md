@@ -66,18 +66,18 @@ El CRM vigente conserva como autoridades:
 No se introduce un enum persistente. La UI deriva tres situaciones sencillas y mutuamente excluyentes:
 
 1. **SIN_GESTIÓN**: no existe ninguna gestión interna explícita en el historial del contacto.
-2. **GESTIONADO**: existe al menos una gestión y el último contacto verificable disponible no es posterior al ancla de la gestión más reciente.
-3. **ACTIVIDAD POSTERIOR**: existe al menos una gestión y después de la más reciente aparece un contacto verificable posterior a su ancla; la gestión histórica se conserva, pero ya no representa el estado más reciente.
+2. **GESTIONADO**: existe al menos una gestión y no hay actividad verificable posterior al ancla de la gestión más reciente.
+3. **ACTIVIDAD POSTERIOR**: existe al menos una gestión y después de la más reciente aparece actividad verificable posterior a su ancla; la gestión histórica se conserva, pero ya no representa el estado más reciente.
 
-La derivación aplica esa precedencia: primero ausencia total de historial; si hay historial, se compara exclusivamente el último contacto verificable con el ancla de la gestión más reciente.
+La derivación aplica esa precedencia: primero ausencia total de historial; si hay historial, compara el último contacto verificable y los contadores monotónicos de entradas/salidas enviadas con el ancla de la gestión más reciente. Esto evita perder actividad cuando dos eventos comparten el mismo segundo en columnas `DATETIME`.
 
 `INSCRITO` sigue siendo un hito comercial derivado del alta real y no se reescribe como estado de gestión. La conversión puede hacer innecesaria una nueva gestión comercial en la UI, pero no borra su historia.
 
-### Ancla temporal
+### Ancla temporal y monotónica
 
-Cada gestión conserva el **último contacto verificable observado en el momento de la gestión**. Esa marca evita que “Gestionado” se convierta en una etiqueta permanente que oculte actividad posterior.
+Cada gestión conserva el **último contacto verificable observado en el momento de la gestión** y, además, los conteos observados de entradas persistidas y salidas efectivamente enviadas. La marca temporal mantiene la lectura humana y los contadores distinguen eventos nuevos aunque su `DATETIME` sea idéntico hasta el segundo.
 
-La fecha técnica de actualización de estado no sustituye a una fecha real de contacto cuando exista evidencia más precisa.
+La fecha técnica de actualización de estado no sustituye a una fecha real de contacto cuando exista evidencia más precisa. Una gestión histórica creada antes de disponer de los contadores monotónicos se trata conservadoramente como `ACTIVIDAD_POSTERIOR` cuando existe empate temporal, hasta que un ADMIN la registre de nuevo con el ancla completa.
 
 ### Persistencia mínima
 
@@ -86,7 +86,9 @@ La persistencia guarda como mínimo:
 - `contact_hash`;
 - usuario ADMIN que realizó la gestión;
 - fecha/hora real de la gestión;
-- ancla del último contacto verificable observado.
+- ancla del último contacto verificable observado;
+- contador observado de entradas persistidas;
+- contador observado de salidas `SENT`.
 
 La historia se conserva; una gestión posterior no borra quién realizó la anterior. No se persisten producto, sede, campaña, mensajes ni datos personales duplicados porque esas autoridades ya existen.
 
@@ -120,12 +122,13 @@ Registrar una gestión no envía mensajes, no cambia el funnel, no altera `_idle
 
 ## F4.3.3 — Estado derivado visible
 
-F4.3.3 consume la historia creada por F4.3.2 y la hace visible sin añadir nueva persistencia ni otra autoridad de estado.
+F4.3.3 consume la historia creada por F4.3.2 y la hace visible sin crear una autoridad paralela de estado. La corrección posterior al review de Codex amplía la misma tabla histórica con dos contadores técnicos, no con datos comerciales ni PII.
 
 Para cada fila del CRM:
 
 - se obtiene únicamente la gestión más reciente del contacto;
 - se compara su `observed_last_contact_at` con el último contacto verificable ya calculado por el CRM;
+- también se comparan `observed_inbound_count` y `observed_outbound_count` con los conteos actuales para detectar actividad nueva dentro del mismo segundo;
 - se deriva `SIN_GESTION`, `GESTIONADO` o `ACTIVIDAD_POSTERIOR` siguiendo el contrato de F4.3.1;
 - se muestra la fecha y el usuario ADMIN de la última gestión cuando existen;
 - la acción “Registrar gestión” se ofrece cuando no existe gestión o cuando hay actividad posterior; no se invita a duplicar una gestión que todavía cubre la actividad más reciente.
