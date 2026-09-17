@@ -12,6 +12,7 @@ declare(strict_types=1);
 require_once __DIR__.'/reglas-acceso.php';
 require_once __DIR__.'/consecutive-absence-alert.php';
 require_once __DIR__.'/intensive-balance-source.php';
+require_once __DIR__.'/regular-replacement-source.php';
 
 const CENTRO_PENDIENTES_TIPOS_HABILITADOS = [
     'MENSUALIDAD_REGULAR_SIN_COBERTURA',
@@ -215,19 +216,13 @@ function centro_pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sed
         ]);
     }
 
-    $reposiciones = $pdo->prepare("SELECT rr.id,rr.alumno_id,rr.created_at,a.nombre
-        FROM reposiciones_regulares rr
-        INNER JOIN alumnos a ON a.id=rr.alumno_id
-        WHERE rr.estado='DISPONIBLE' AND a.sede_id=:sede
-        ORDER BY rr.created_at,a.nombre,rr.id");
-    $reposiciones->execute([':sede'=>$sedeId]);
-    foreach ($reposiciones as $reposicion) {
+    foreach (hache_regular_available_replacement_candidates($pdo, $sedeId) as $reposicion) {
         centro_pendientes_agregar($pendientes, [
             'tipo' => 'REPOSICION_REGULAR_DISPONIBLE',
             'origen_tipo' => 'REPOSICION_REGULAR',
-            'origen_id' => (string)$reposicion['id'],
+            'origen_id' => (string)$reposicion['reposicion_id'],
             'alumno_id' => (string)$reposicion['alumno_id'],
-            'alumno_nombre' => (string)$reposicion['nombre'],
+            'alumno_nombre' => (string)$reposicion['alumno_nombre'],
             'sede_id' => $sedeId,
             'sede_nombre' => $sedeNombre,
             'periodo_inicio' => null,
@@ -278,13 +273,7 @@ function centro_pendientes_causa_activa(PDO $pdo, array $pendiente, string $sede
     $tipo = (string)($pendiente['tipo'] ?? '');
     $origenId = (string)($pendiente['origen_id'] ?? '');
     if ($tipo === 'REPOSICION_REGULAR_DISPONIBLE') {
-        $st = $pdo->prepare("SELECT 1
-            FROM reposiciones_regulares rr
-            INNER JOIN alumnos a ON a.id=rr.alumno_id
-            WHERE rr.id=:id AND rr.estado='DISPONIBLE' AND a.sede_id=:sede
-            LIMIT 1");
-        $st->execute([':id'=>$origenId, ':sede'=>$sedeId]);
-        return (bool)$st->fetchColumn();
+        return hache_regular_available_replacement_candidates($pdo, $sedeId, $origenId) !== [];
     }
     if ($tipo === 'SALDO_INTENSIVO_PENDIENTE') {
         $origen = centro_pendientes_parse_origen_intensivo($origenId);
