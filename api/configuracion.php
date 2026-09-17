@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
+require_once __DIR__.'/../config/internal-alert-settings.php';
 
 $me = auth_require(['ADMIN','VERIFICADOR']);
 $config = require __DIR__.'/../config/database.php';
@@ -24,6 +25,20 @@ function out(array $data, int $status = 200): never
     exit;
 }
 
+function hache_config_audit(PDO $pdo, array $me, string $key, string $before, string $after): void
+{
+    if (hash_equals($before, $after)) return;
+    $detail = json_encode(['clave'=>$key,'anterior'=>$before,'nuevo'=>$after], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $st = $pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta)
+        VALUES(:usuario_id,:usuario_nombre,'CONFIG_ALERTA_ACTUALIZADA','configuracion',:entidad_id,:detalle,'POST','/api/configuracion.php')");
+    $st->execute([
+        ':usuario_id'=>(string)$me['id'],
+        ':usuario_nombre'=>(string)($me['usuario'] ?? ''),
+        ':entidad_id'=>$key,
+        ':detalle'=>$detail,
+    ]);
+}
+
 $sedeClave = auth_active_sede_clave();
 $stmt = $pdo->prepare('SELECT id,nombre,clave FROM sedes WHERE clave=:clave AND activo=1 LIMIT 1');
 $stmt->execute([':clave' => $sedeClave]);
@@ -34,19 +49,28 @@ $sedeId = (string)$sede['id'];
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     if (($me['rol'] ?? '') === 'ADMIN') {
         $cfg = $pdo->query('SELECT clave,valor,descripcion,updated_at FROM configuracion ORDER BY clave')->fetchAll();
-        // Las claves de Sharky tienen validaciones más estrictas y se administran solo
-        // desde /sharky-admin.php. No se exponen aquí para evitar dos superficies de edición.
-        $cfg = array_values(array_filter($cfg, static fn(array $row): bool => !str_starts_with((string)($row['clave'] ?? ''), 'sharky_')));
+        $cfg = array_values(array_filter($cfg, static fn(array $row): bool =>
+            !str_starts_with((string)($row['clave'] ?? ''), 'sharky_')
+            && !str_starts_with((string)($row['clave'] ?? ''), 'f5_')
+        ));
+        $alertRows = hache_internal_alert_config_rows($pdo);
     } else {
         $visibles = ['nombre_app','dias_clase','version_app','alerta_dias_fin_intensivo','minimo_proa_mensual'];
         $marcas = implode(',', array_fill(0, count($visibles), '?'));
         $cfgStmt = $pdo->prepare("SELECT clave,valor,descripcion,updated_at FROM configuracion WHERE clave IN ($marcas) ORDER BY clave");
         $cfgStmt->execute($visibles);
         $cfg = $cfgStmt->fetchAll();
+        $alertRows = [];
     }
     $stmt = $pdo->prepare('SELECT id,nombre,sesiones_semana,precio,activo FROM planes WHERE sede_id=:sede ORDER BY activo DESC,sesiones_semana,nombre');
     $stmt->execute([':sede' => $sedeId]);
-    out(['ok'=>true,'sede'=>['clave'=>$sede['clave'],'nombre'=>$sede['nombre']],'configuracion'=>$cfg,'planes'=>$stmt->fetchAll()]);
+    out([
+        'ok'=>true,
+        'sede'=>['clave'=>$sede['clave'],'nombre'=>$sede['nombre']],
+        'configuracion'=>$cfg,
+        'alertas_internas'=>$alertRows,
+        'planes'=>$stmt->fetchAll(),
+    ]);
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') out(['ok'=>false,'error'=>'Método no permitido'], 405);
@@ -65,6 +89,30 @@ if ($accion === 'CONFIG') {
     if (str_starts_with($clave, 'sharky_')) {
         out(['ok'=>false,'error'=>'La configuración de Sharky se modifica únicamente desde Sharky Admin'], 422);
     }
+
+    $alertDefaults = hache_internal_alert_defaults();
+    if (array_key_exists($clave, $alertDefaults)) {
+        if (!hache_internal_alert_value_valid($clave, $valor)) {
+            out(['ok'=>false,'error'=>'Valor fuera del rango permitido para esta alerta'], 422);
+        }
+        $check = $pdo->prepare('SELECT valor FROM configuracion WHERE clave=:clave LIMIT 1');
+        $check->execute([':clave'=>$clave]);
+        $stored = $check->fetchColumn();
+        $before = $stored === false ? (string)$alertDefaults[$clave] : trim((string)$stored);
+        $description = (string)(hache_internal_alert_descriptions()[$clave] ?? 'Parámetro F5 de alertas internas.');
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare('INSERT INTO configuracion(clave,valor,descripcion,updated_by,updated_at) VALUES(:clave,:valor,:descripcion,:usuario,NOW()) ON DUPLICATE KEY UPDATE valor=VALUES(valor),descripcion=VALUES(descripcion),updated_by=VALUES(updated_by),updated_at=NOW()');
+            $stmt->execute([':clave'=>$clave,':valor'=>$valor,':descripcion'=>$description,':usuario'=>$me['id']]);
+            hache_config_audit($pdo, $me, $clave, $before, $valor);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+        out(['ok'=>true]);
+    }
+
     $stmt = $pdo->prepare('UPDATE configuracion SET valor=:valor,updated_by=:usuario,updated_at=NOW() WHERE clave=:clave');
     $stmt->execute([':valor'=>$valor,':usuario'=>$me['id'],':clave'=>$clave]);
     if ($stmt->rowCount() === 0) {
