@@ -28,7 +28,6 @@ function hache_sharky_crm_management_snapshot(PDO $pdo,string $contactHash): arr
             SELECT 1 FROM sharky_action_audit aa
             WHERE aa.contact_hash=:audit_contact
               AND aa.action_type IN ('register_intensive','register_regular')
-              AND aa.status='COMPLETED'
           ))
         LIMIT 1";
     $st=$pdo->prepare($sql);
