@@ -26,11 +26,11 @@ Si la tabla `configuracion` no contiene una clave, no puede leerse o contiene un
 | Intensivo terminado sin continuidad | 0–60 días o vacío | vacío |
 | Alcance de continuidad | `SIN_EVALUAR`, `SIN_EVALUAR_O_NO` o vacío | vacío |
 
-Los dos parámetros de continuidad quedan **vacíos y sin efecto** hasta definir expresamente esa regla. Este incremento no crea todavía la alerta de intensivo terminado sin continuidad.
+Los dos parámetros de continuidad controlan la regla **intensivo terminado sin continuidad**. La regla solo está habilitada cuando ambos tienen un valor válido; dejar cualquiera vacío la deshabilita sin inventar un umbral o alcance de negocio.
 
 ## Autoridad y consumidores
 
-`config/internal-alert-settings.php` define claves, defaults, validación y lectura. El Centro de alertas, la detección de prospectos y la detección de rachas de ausencia consumen esa autoridad. El Centro de pendientes reutiliza la misma detección de rachas, por lo que un cambio de umbral no crea una segunda definición.
+`config/internal-alert-settings.php` define claves, defaults, validación y lectura. El Centro de alertas, la detección de prospectos, la detección de rachas de ausencia y la detección de intensivos terminados sin continuidad consumen esa autoridad. El Centro de pendientes reutiliza la misma detección de rachas; la integración persistente de continuidad se mantiene como micro-paso separado para no ampliar este incremento.
 
 ## Permisos y auditoría
 
