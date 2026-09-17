@@ -12,7 +12,7 @@ function dashboard_mensualidades_pagadas(PDO $pdo,string $sedeId,string $fecha):
 {
     $st=$pdo->prepare("SELECT m.id,m.alumno_id,a.nombre,m.periodo_inicio,m.periodo_fin,m.importe_cobrado,m.fecha_pago
         FROM mensualidades m
-        INNER JOIN alumnos a ON a.id=m.alumno_id AND a.sede_id=m.sede_id
+        LEFT JOIN alumnos a ON a.id=m.alumno_id AND a.sede_id=m.sede_id
         WHERE m.sede_id=:s
           AND m.estado='PAGADA'
           AND :f BETWEEN m.periodo_inicio AND m.periodo_fin
@@ -27,7 +27,7 @@ function dashboard_mensualidades_pagadas(PDO $pdo,string $sedeId,string $fecha):
         $rows[]=[
             'id'=>(string)$row['id'],
             'alumno_id'=>(string)$row['alumno_id'],
-            'nombre'=>(string)$row['nombre'],
+            'nombre'=>$row['nombre']!==null?(string)$row['nombre']:'',
             'periodo_inicio'=>(string)$row['periodo_inicio'],
             'periodo_fin'=>(string)$row['periodo_fin'],
             'importe_cobrado'=>$importe,
