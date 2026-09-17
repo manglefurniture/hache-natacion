@@ -28,11 +28,15 @@ crm_expect(hache_sharky_crm_product_evidence(['commercial_context'=>['program'=>
 crm_expect(hache_sharky_crm_product_evidence(['commercial_context'=>['program'=>'regular']],'regular')==='ESTRUCTURADO','Un producto sin marca explícita debe presentarse solo como contexto estructurado.');
 crm_expect(str_contains(hache_sharky_crm_stage_evidence('INSCRITO'),'COMPLETED'),'La etapa Inscrito debe explicar su evidencia durable.');
 
-$managementFixture=['observed_last_contact_at'=>'2026-09-17 10:00:00'];
-crm_expect(hache_sharky_crm_management_state(null,'2026-09-17 10:00:00')==='SIN_GESTION','Sin historial de gestión debe derivarse Sin gestión.');
-crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:00')==='GESTIONADO','Una gestión anclada al último contacto debe quedar Gestionado.');
-crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:01')==='ACTIVIDAD_POSTERIOR','Un contacto posterior al ancla debe derivar Actividad posterior.');
-crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 09:59:59')==='GESTIONADO','Un contacto no posterior al ancla no debe reabrir la gestión.');
+$managementFixture=['observed_last_contact_at'=>'2026-09-17 10:00:00','observed_inbound_count'=>4,'observed_outbound_count'=>3];
+crm_expect(hache_sharky_crm_management_state(null,'2026-09-17 10:00:00',4,3)==='SIN_GESTION','Sin historial de gestión debe derivarse Sin gestión.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:00',4,3)==='GESTIONADO','Una gestión con el mismo ancla temporal y los mismos contadores debe quedar Gestionado.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:01',4,3)==='ACTIVIDAD_POSTERIOR','Un contacto posterior al ancla debe derivar Actividad posterior.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:00',5,3)==='ACTIVIDAD_POSTERIOR','Un entrante nuevo dentro del mismo segundo debe conservarse como Actividad posterior.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:00',4,4)==='ACTIVIDAD_POSTERIOR','Un saliente nuevo dentro del mismo segundo debe conservarse como Actividad posterior.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 09:59:59',4,3)==='GESTIONADO','Un contacto no posterior y sin crecimiento de actividad no debe reabrir la gestión.');
+$legacyManagement=['observed_last_contact_at'=>'2026-09-17 10:00:00','observed_inbound_count'=>null,'observed_outbound_count'=>null];
+crm_expect(hache_sharky_crm_management_state($legacyManagement,'2026-09-17 10:00:00',4,3)==='ACTIVIDAD_POSTERIOR','Una gestión previa al ancla monotónica debe ser conservadora ante empate de segundo.');
 
 $helper=file_get_contents(__DIR__.'/../config/sharky-crm.php')?:'';
 $api=file_get_contents(__DIR__.'/../api/prospectos.php')?:'';
@@ -63,14 +67,18 @@ $deploy=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-nat
 $contract=file_get_contents(__DIR__.'/../docs/F4-CRM-READONLY-INCREMENT.md')?:'';
 crm_expect(str_contains($managementMigration,'CREATE TABLE IF NOT EXISTS sharky_crm_managements'),'F4.3.2 debe persistir la gestión en una tabla histórica propia.');
 crm_expect(str_contains($managementMigration,'contact_hash')&&str_contains($managementMigration,'admin_user_id')&&str_contains($managementMigration,'managed_at')&&str_contains($managementMigration,'observed_last_contact_at'),'La persistencia mínima debe conservar identidad estable, ADMIN, momento y ancla temporal.');
+crm_expect(str_contains($managementMigration,'observed_inbound_count')&&str_contains($managementMigration,'observed_outbound_count'),'El ancla de F4.3.3 debe conservar contadores monotónicos para no perder actividad dentro del mismo segundo.');
 crm_expect(!preg_match('/\b(?:nombre|telefono|whatsapp|producto|sede|campana|mensaje)\b/i',$managementMigration),'La tabla de gestión no debe duplicar PII ni contexto comercial del prospecto.');
 crm_expect(str_contains($management,'hache_sharky_crm_last_contact')&&str_contains($management,"status='SENT'")&&str_contains($management,"aa.action_type IN ('register_intensive','register_regular')")&&!str_contains($management,"aa.status='COMPLETED'"),'La gestión debe recalcular el ancla desde las mismas fuentes verificables y aceptar exactamente el mismo universo que el listado CRM.');
 crm_expect(str_contains($management,'INSERT INTO sharky_crm_managements')&&!str_contains($management,'sharky_conversation_state SET'),'La escritura debe quedar aislada de Sharky y del estado conversacional.');
+crm_expect(str_contains($management,'hache_sharky_crm_bulk_activity_counts')&&str_contains($management,"COUNT(*) activity_count"),'La lectura debe comparar contadores de actividad por lote y no depender solo de DATETIME a segundos.');
+crm_expect(str_contains($management,'observed_inbound_count')&&str_contains($management,'observed_outbound_count'),'Cada nueva gestión debe persistir el ancla monotónica de actividad.');
 crm_expect(str_contains($managementApi,"auth_require(['ADMIN'])")&&str_contains($managementApi,'auth_csrf_validate'),'Registrar gestión debe ser una acción ADMIN protegida por CSRF.');
 crm_expect(str_contains($managementApi,"'REGISTRAR_GESTION'")&&str_contains($managementApi,'hache_sharky_crm_record_management'),'El endpoint de F4.3.2 debe aceptar únicamente el registro explícito previsto.');
 crm_expect(str_contains($page,'Registrar gestión')&&str_contains($page,'/api/prospectos-gestion.php'),'La UI debe exponer la acción explícita sin reutilizar la API de lectura.');
 crm_expect(str_contains($page,'no pausa ni reactiva Sharky')&&str_contains($page,'Centro de pendientes'),'La UI debe dejar claro que la gestión no altera takeover, follow-up ni F1.');
 crm_expect(str_contains($managementRunner,'20260917_sharky_crm_managements.sql')&&str_contains($managementRunner,'sharky_crm_managements_schema_ready'),'La migración debe disponer de un runner idempotente y verificable.');
+crm_expect(str_contains($managementRunner,"'observed_inbound_count','observed_outbound_count'"),'El runner debe verificar las columnas del ancla monotónica.');
 crm_expect(str_contains($deploy,'local sharky_crm_managements="$REPO/bin/migrate-sharky-crm-managements.php"')&&str_contains($deploy,'php "$sharky_crm_managements"'),'El auto-deploy debe ejecutar la migración idempotente de F4.3.2.');
 crm_expect(str_contains($contract,'SIN_GESTIÓN**: no existe ninguna gestión interna explícita en el historial del contacto')&&str_contains($contract,'mutuamente excluyentes'),'Los estados derivados de gestión deben ser mutuamente excluyentes.');
 crm_expect(str_contains($management,'function hache_sharky_crm_latest_managements')&&str_contains($management,'LEFT JOIN usuarios')&&str_contains($management,'admin_usuario'),'F4.3.3 debe leer la última gestión y resolver el responsable ADMIN sin duplicar datos en la tabla CRM.');
