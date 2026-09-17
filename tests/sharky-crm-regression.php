@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/../config/sharky-crm.php';
+require_once __DIR__.'/../config/sharky-crm-management.php';
 
 function crm_expect(bool $ok,string $message): void
 {
@@ -26,6 +27,12 @@ crm_expect(hache_sharky_crm_product_evidence(['commercial_context'=>['program'=>
 crm_expect(hache_sharky_crm_product_evidence(['commercial_context'=>['program'=>'intensive','program_button_choice'=>'regular','background'=>'no_formal']],'intensive')==='ELEGIBILIDAD','Regular→sin clases previas→intensivo debe distinguirse de una elección explícita de intensivo.');
 crm_expect(hache_sharky_crm_product_evidence(['commercial_context'=>['program'=>'regular']],'regular')==='ESTRUCTURADO','Un producto sin marca explícita debe presentarse solo como contexto estructurado.');
 crm_expect(str_contains(hache_sharky_crm_stage_evidence('INSCRITO'),'COMPLETED'),'La etapa Inscrito debe explicar su evidencia durable.');
+
+$managementFixture=['observed_last_contact_at'=>'2026-09-17 10:00:00'];
+crm_expect(hache_sharky_crm_management_state(null,'2026-09-17 10:00:00')==='SIN_GESTION','Sin historial de gestión debe derivarse Sin gestión.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:00')==='GESTIONADO','Una gestión anclada al último contacto debe quedar Gestionado.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 10:00:01')==='ACTIVIDAD_POSTERIOR','Un contacto posterior al ancla debe derivar Actividad posterior.');
+crm_expect(hache_sharky_crm_management_state($managementFixture,'2026-09-17 09:59:59')==='GESTIONADO','Un contacto no posterior al ancla no debe reabrir la gestión.');
 
 $helper=file_get_contents(__DIR__.'/../config/sharky-crm.php')?:'';
 $api=file_get_contents(__DIR__.'/../api/prospectos.php')?:'';
@@ -66,5 +73,11 @@ crm_expect(str_contains($page,'no pausa ni reactiva Sharky')&&str_contains($page
 crm_expect(str_contains($managementRunner,'20260917_sharky_crm_managements.sql')&&str_contains($managementRunner,'sharky_crm_managements_schema_ready'),'La migración debe disponer de un runner idempotente y verificable.');
 crm_expect(str_contains($deploy,'local sharky_crm_managements="$REPO/bin/migrate-sharky-crm-managements.php"')&&str_contains($deploy,'php "$sharky_crm_managements"'),'El auto-deploy debe ejecutar la migración idempotente de F4.3.2.');
 crm_expect(str_contains($contract,'SIN_GESTIÓN**: no existe ninguna gestión interna explícita en el historial del contacto')&&str_contains($contract,'mutuamente excluyentes'),'Los estados derivados de gestión deben ser mutuamente excluyentes.');
+crm_expect(str_contains($management,'function hache_sharky_crm_latest_managements')&&str_contains($management,'LEFT JOIN usuarios')&&str_contains($management,'admin_usuario'),'F4.3.3 debe leer la última gestión y resolver el responsable ADMIN sin duplicar datos en la tabla CRM.');
+crm_expect(str_contains($management,'function hache_sharky_crm_attach_managements')&&str_contains($management,"'gestion_estado'")&&str_contains($management,"'gestion_ancla'"),'F4.3.3 debe adjuntar estado derivado y ancla a cada fila del CRM.');
+crm_expect(str_contains($api,'hache_sharky_crm_attach_managements'),'La API de prospectos debe incorporar el historial de gestión al resultado de lectura.');
+crm_expect(str_contains($page,'gestion_estado_etiqueta')&&str_contains($page,'gestion_responsable')&&str_contains($page,'gestion_fecha'),'La vista debe mostrar estado, responsable y fecha de la última gestión.');
+crm_expect(str_contains($page,"r.gestion_estado!=='GESTIONADO'")&&str_contains($page,'Actividad posterior'),'La UI solo debe ofrecer una nueva gestión cuando no esté cubierta la actividad más reciente.');
+crm_expect(str_contains($contract,'## F4.3.3 — Estado derivado visible'),'El contrato debe documentar el alcance cerrado de F4.3.3.');
 
 echo "Sharky CRM read-only + explicit management regression: OK\n";

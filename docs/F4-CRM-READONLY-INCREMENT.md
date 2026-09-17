@@ -63,7 +63,7 @@ El CRM vigente conserva como autoridades:
 
 ### Estado de gestión derivado
 
-No se introduce todavía un enum persistente. La UI futura podrá derivar tres situaciones sencillas y mutuamente excluyentes:
+No se introduce un enum persistente. La UI deriva tres situaciones sencillas y mutuamente excluyentes:
 
 1. **SIN_GESTIÓN**: no existe ninguna gestión interna explícita en el historial del contacto.
 2. **GESTIONADO**: existe al menos una gestión y el último contacto verificable disponible no es posterior al ancla de la gestión más reciente.
@@ -75,25 +75,24 @@ La derivación aplica esa precedencia: primero ausencia total de historial; si h
 
 ### Ancla temporal
 
-Cada gestión futura debe conservar el **último contacto verificable observado en el momento de la gestión**. Esa marca evita que “Gestionado” se convierta en una etiqueta permanente que oculte actividad posterior.
+Cada gestión conserva el **último contacto verificable observado en el momento de la gestión**. Esa marca evita que “Gestionado” se convierta en una etiqueta permanente que oculte actividad posterior.
 
 La fecha técnica de actualización de estado no sustituye a una fecha real de contacto cuando exista evidencia más precisa.
 
-### Persistencia mínima para el siguiente incremento
+### Persistencia mínima
 
-Cuando se implemente la primera escritura de F4, la persistencia deberá guardar como mínimo:
+La persistencia guarda como mínimo:
 
 - `contact_hash`;
 - usuario ADMIN que realizó la gestión;
 - fecha/hora real de la gestión;
-- ancla del último contacto verificable observado;
-- nota interna opcional y breve, si ese incremento la habilita.
+- ancla del último contacto verificable observado.
 
-La historia debe conservarse; una gestión posterior no debe borrar quién realizó la anterior. No se persistirán producto, sede, campaña, mensajes ni datos personales duplicados porque esas autoridades ya existen.
+La historia se conserva; una gestión posterior no borra quién realizó la anterior. No se persisten producto, sede, campaña, mensajes ni datos personales duplicados porque esas autoridades ya existen.
 
-`pendientes_gestion` no será la autoridad primaria de este estado: pertenece a F1, exige sede y varios prospectos pueden no tener una sede confirmada. F1 podrá consumir posteriormente una regla definida por F4/F5 sin convertir su cola en la fuente del estado comercial.
+`pendientes_gestion` no es la autoridad primaria de este estado: pertenece a F1, exige sede y varios prospectos pueden no tener una sede confirmada. F1 podrá consumir posteriormente una regla definida por F4/F5 sin convertir su cola en la fuente del estado comercial.
 
-### Qué queda expresamente fuera de F4.3.1
+### Qué queda fuera del contrato de seguimiento
 
 - decidir después de cuántos minutos/horas/días un prospecto “requiere” seguimiento;
 - generar automáticamente un pendiente;
@@ -104,15 +103,40 @@ La historia debe conservarse; una gestión posterior no debe borrar quién reali
 - introducir puntuaciones de interés, prioridad o probabilidad;
 - inferir una gestión a partir de mensajes humanos, salidas de Sharky o actividad automática.
 
-El umbral y las exclusiones de “prospecto sin seguimiento” pertenecen al paso de alertas/reglas posterior. Primero se implementará una gestión humana explícita y trazable.
+El umbral y las exclusiones de “prospecto sin seguimiento” pertenecen al paso de alertas/reglas posterior.
 
-### Siguiente microincremento
+## F4.3.2 — Registro explícito de gestión interna
 
-**F4.3.2** podrá implementar únicamente el registro explícito de una gestión interna sobre un contacto, respetando este contrato. No deberá enviar mensajes ni alterar Sharky, el funnel, el follow-up automático o el Centro de pendientes.
+F4.3.2 implementa únicamente la primera escritura administrativa del CRM:
+
+- tabla histórica `sharky_crm_managements` sin PII duplicada;
+- registro explícito desde una sesión ADMIN protegida por CSRF;
+- almacenamiento de `contact_hash`, ADMIN, fecha/hora y ancla del último contacto verificable;
+- conservación del historial de gestiones;
+- misma elegibilidad que el universo mostrado por el CRM;
+- migración idempotente integrada al auto-deploy.
+
+Registrar una gestión no envía mensajes, no cambia el funnel, no altera `_idle_followup`, no cambia takeover y no crea ni resuelve casos del Centro de pendientes.
+
+## F4.3.3 — Estado derivado visible
+
+F4.3.3 consume la historia creada por F4.3.2 y la hace visible sin añadir nueva persistencia ni otra autoridad de estado.
+
+Para cada fila del CRM:
+
+- se obtiene únicamente la gestión más reciente del contacto;
+- se compara su `observed_last_contact_at` con el último contacto verificable ya calculado por el CRM;
+- se deriva `SIN_GESTION`, `GESTIONADO` o `ACTIVIDAD_POSTERIOR` siguiendo el contrato de F4.3.1;
+- se muestra la fecha y el usuario ADMIN de la última gestión cuando existen;
+- la acción “Registrar gestión” se ofrece cuando no existe gestión o cuando hay actividad posterior; no se invita a duplicar una gestión que todavía cubre la actividad más reciente.
+
+La lectura se realiza por lote para los contactos de la página actual. No se hace una consulta individual por fila y no se copia identidad, teléfono, producto, sede, campaña o conversación a `sharky_crm_managements`.
+
+Este paso no define todavía umbrales de atraso, prioridad, alertas, mensajes automáticos ni integración con el Centro de pendientes. Esas reglas siguen diferidas al paso posterior correspondiente.
 
 ## Límites deliberados
 
-El CRM sigue siendo de solo lectura. No crea tabla CRM, no copia conversaciones y no persiste PII nueva. No envía mensajes, no modifica seguimientos automáticos, no mueve el cursor del funnel, no cambia producto/sede y no altera Brain, takeover, inscripción ni pagos.
+El CRM no crea una tabla CRM paralela, no copia conversaciones y no persiste PII nueva. No envía mensajes, no modifica seguimientos automáticos, no mueve el cursor del funnel, no cambia producto/sede y no altera Brain, takeover, inscripción ni pagos.
 
 Cuando expira el estado conversacional, producto/sede pueden dejar de estar disponibles. El CRM no reconstruye esos hechos por intuición ni convierte una campaña en elección del usuario. `INSCRITO` sí puede permanecer porque su evidencia está en el registro durable de acciones.
 
@@ -120,4 +144,4 @@ Cuando expira el estado conversacional, producto/sede pueden dejar de estar disp
 
 Se preservan `SHARKY-CORE-RULES.md`, GP-002, la separación entre fuente e identidad y el principio de que campaña/interés no equivale a elección confirmada.
 
-Este incremento deja una base objetiva para el siguiente paso de F4: gestión interna de seguimiento separada del funnel, sin usar esos controles administrativos para disparar mensajes o alterar decisiones de Sharky.
+La gestión interna permanece separada del funnel y sus estados son una proyección de hechos verificables, no instrucciones para Sharky ni disparadores de comunicación.
