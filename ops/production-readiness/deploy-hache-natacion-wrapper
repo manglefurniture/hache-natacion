@@ -113,6 +113,9 @@ run_sharky_learn_reengagement_backfill_once() { run_php_guarded "$REPO/bin/shark
 run_sharky_learning_pending() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --pending 10; }
 run_sharky_learning_summary() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --summary; }
 run_sharky_learning_verdict() { run_php_guarded "$REPO/bin/sharky-learning-review.php" --verdict; }
+run_google_contacts_status() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --status; }
+run_google_contacts_sync_once() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --sync-once; }
+run_google_contacts_token_set() { run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --set-refresh-token; }
 
 main() {
   require_root; [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -131,6 +134,9 @@ main() {
     sharky-learning-pending) [[ "$#" -eq 1 ]] || fail "sharky-learning-pending no acepta argumentos."; run_sharky_learning_pending ;;
     sharky-learning-summary) [[ "$#" -eq 1 ]] || fail "sharky-learning-summary no acepta argumentos."; run_sharky_learning_summary ;;
     sharky-learning-verdict) [[ "$#" -eq 1 ]] || fail "sharky-learning-verdict no acepta argumentos; recibe JSON por stdin."; run_sharky_learning_verdict ;;
+    google-contacts-status) [[ "$#" -eq 1 ]] || fail "google-contacts-status no acepta argumentos."; run_google_contacts_status ;;
+    google-contacts-sync-once) [[ "$#" -eq 1 ]] || fail "google-contacts-sync-once no acepta argumentos."; run_google_contacts_sync_once ;;
+    google-contacts-token-set) [[ "$#" -eq 1 ]] || fail "google-contacts-token-set recibe el token exclusivamente por stdin."; run_google_contacts_token_set ;;
     *) [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."; run_target_deploy "$1" ;;
   esac
 }
