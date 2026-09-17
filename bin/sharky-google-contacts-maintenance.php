@@ -28,6 +28,11 @@ function hache_google_contacts_summary(PDO $pdo): array
     ];
 }
 
+function hache_google_contacts_secret_valid(string $value,int $max=2048): bool
+{
+    return strlen($value)>=16&&strlen($value)<=$max&&!preg_match('/[\x00-\x20\x7F]/',$value);
+}
+
 function hache_google_contacts_refresh_token_valid(string $token): bool
 {
     return strlen($token)>=20
@@ -35,20 +40,28 @@ function hache_google_contacts_refresh_token_valid(string $token): bool
         &&!preg_match('/[\x00-\x20\x7F]/',$token);
 }
 
-function hache_google_contacts_store_refresh_token(string $token): bool
+function hache_google_contacts_store_credentials(string $clientSecret,string $refreshToken): bool
 {
-    if(!hache_google_contacts_refresh_token_valid($token))return false;
+    if(!hache_google_contacts_secret_valid($clientSecret,1024)||!hache_google_contacts_refresh_token_valid($refreshToken))return false;
     $env=dirname(__DIR__).'/.env';
     if(!is_file($env)||is_link($env)||!is_readable($env)||!is_writable($env))return false;
     $raw=file_get_contents($env);
     if(!is_string($raw))return false;
-    $line='GOOGLE_CONTACTS_REFRESH_TOKEN='.$token;
-    if(preg_match('/^(?:export\s+)?GOOGLE_CONTACTS_REFRESH_TOKEN=.*$/m',$raw)){
-        $next=preg_replace_callback('/^(?:export\s+)?GOOGLE_CONTACTS_REFRESH_TOKEN=.*$/m',static fn():string=>$line,$raw,1);
-    }else{
-        $next=rtrim($raw,"\r\n")."\n".$line."\n";
+    $replacements=[
+        'GOOGLE_CONTACTS_CLIENT_SECRET'=>$clientSecret,
+        'GOOGLE_CONTACTS_REFRESH_TOKEN'=>$refreshToken,
+    ];
+    $next=$raw;
+    foreach($replacements as $key=>$value){
+        $line=$key.'='.$value;
+        $pattern='/^(?:export\s+)?'.preg_quote($key,'/').'=.*$/m';
+        if(preg_match($pattern,$next)){
+            $next=preg_replace_callback($pattern,static fn():string=>$line,$next,1);
+        }else{
+            $next=rtrim((string)$next,"\r\n")."\n".$line."\n";
+        }
+        if(!is_string($next))return false;
     }
-    if(!is_string($next))return false;
     $stat=stat($env);
     if(!is_array($stat))return false;
     $tmp=$env.'.google-contacts.'.bin2hex(random_bytes(6)).'.tmp';
@@ -62,6 +75,75 @@ function hache_google_contacts_store_refresh_token(string $token): bool
         return false;
     }
     return true;
+}
+
+function hache_google_contacts_store_refresh_token(string $token): bool
+{
+    $clientSecret=hache_sharky_orchestrator_secret('GOOGLE_CONTACTS_CLIENT_SECRET');
+    return hache_google_contacts_store_credentials($clientSecret,$token);
+}
+
+function hache_google_contacts_stage_path(): string
+{
+    return '/var/lib/hache-natacion/oauth-stage/google-contacts-oauth-stage.json';
+}
+
+function hache_google_contacts_promote_staged(): never
+{
+    $path=hache_google_contacts_stage_path();
+    if(!is_file($path)||is_link($path)||!is_readable($path)){
+        fwrite(STDERR,"Google OAuth staged renewal unavailable\n");
+        exit(2);
+    }
+    $stat=stat($path);
+    if(!is_array($stat)||(((int)$stat['mode'])&0777)!==0600){
+        fwrite(STDERR,"Google OAuth staged renewal has unsafe permissions\n");
+        exit(1);
+    }
+    $raw=file_get_contents($path);
+    $data=is_string($raw)?json_decode($raw,true):null;
+    $issuedAt=is_array($data)?(int)($data['issued_at']??0):0;
+    $clientSecret=is_array($data)?trim((string)($data['client_secret']??'')):'';
+    $refreshToken=is_array($data)?trim((string)($data['refresh_token']??'')):'';
+    if($issuedAt<=0||$issuedAt<time()-900||$issuedAt>time()+60){
+        @unlink($path);
+        fwrite(STDERR,"Google OAuth staged renewal expired\n");
+        exit(2);
+    }
+    if(!hache_google_contacts_secret_valid($clientSecret,1024)||!hache_google_contacts_refresh_token_valid($refreshToken)){
+        fwrite(STDERR,"Google OAuth staged renewal invalid\n");
+        exit(1);
+    }
+    if(!hache_google_contacts_store_credentials($clientSecret,$refreshToken)){
+        fwrite(STDERR,"Unable to promote Google OAuth credentials\n");
+        exit(1);
+    }
+    @unlink($path);
+    putenv('GOOGLE_CONTACTS_CLIENT_SECRET='.$clientSecret);
+    putenv('GOOGLE_CONTACTS_REFRESH_TOKEN='.$refreshToken);
+    unset($clientSecret,$refreshToken,$data,$raw);
+
+    $pdo=hache_sharky_pdo();
+    if(!$pdo instanceof PDO){
+        fwrite(STDERR,"Database unavailable after Google OAuth promotion\n");
+        exit(1);
+    }
+    $configured=hache_sharky_google_contacts_configured();
+    $tokenOk=$configured&&hache_sharky_google_contacts_access_token()!=='';
+    if(!$tokenOk){
+        fwrite(STDERR,"Google OAuth promotion completed but refresh validation failed\n");
+        exit(1);
+    }
+    $sync=hache_sharky_contact_book_sync_pending($pdo,50);
+    $out=[
+        'ok'=>true,
+        'promoted'=>true,
+        'token_refresh_ok'=>true,
+        'sync'=>$sync,
+        'summary'=>hache_google_contacts_summary($pdo),
+    ];
+    fwrite(STDOUT,json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL);
+    exit(($sync['failed']??0)===0?0:1);
 }
 
 function hache_google_contacts_set_refresh_token(): never
@@ -82,6 +164,7 @@ function hache_google_contacts_set_refresh_token(): never
 function hache_google_contacts_exchange_auth_code(): never
 {
     $code=trim((string)stream_get_contents(STDIN));
+    if($code==='')hache_google_contacts_promote_staged();
     if(strlen($code)<20||strlen($code)>4096||preg_match('/[\x00-\x20\x7F]/',$code)){
         fwrite(STDERR,"Invalid Google authorization code\n");
         exit(2);
