@@ -68,6 +68,7 @@ function dashboard_operacion_fecha(PDO $pdo,string $sedeId,string $fecha):array
         'programadas'=>(int)($sesiones['programadas']??0),
         'realizadas'=>(int)($sesiones['realizadas']??0),
         'canceladas'=>$canceladas,
+        'sesiones_elegibles_asistencia'=>$sesionesElegibles,
         'cerradas'=>(int)($sesiones['cerradas']??0),
         'asistencia'=>$asistencia,
         'alcance'=>'Solo sesiones ya registradas y atribuibles a la sede por horario; esta lectura no genera sesiones.',
