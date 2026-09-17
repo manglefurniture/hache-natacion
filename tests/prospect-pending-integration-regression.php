@@ -39,12 +39,12 @@ prospect_pending_expect(centro_pendientes_prospectos_href_historico(CENTRO_PENDI
 
 $api=file_get_contents(__DIR__.'/../api/pendientes.php')?:'';
 prospect_pending_expect(str_contains($api,"require_once __DIR__.'/../config/centro-pendientes-prospectos.php'"),'La API debe cargar la extensión global de prospectos.');
-prospect_pending_expect(str_contains($api,"$includeGlobalProspects=(\$me['rol'] ?? '')==='ADMIN';")||str_contains($api,"$includeGlobalProspects=(\$me['rol'] ?? '')==='ADMIN'"),'Solo ADMIN debe incorporar pendientes globales.');
+prospect_pending_expect(str_contains($api,'$includeGlobalProspects=($me[\'rol\'] ?? \'\')===\'ADMIN\';'),'Solo ADMIN debe incorporar pendientes globales.');
 prospect_pending_expect(str_contains($api,'centro_pendientes_prospectos_fuentes_activas($pdo)'),'La API debe consumir la misma fuente F5 que activa la alerta.');
 prospect_pending_expect(str_contains($api,"':sede'=>\$pendiente['sede_id'] ?? null"),'La gestión debe persistir NULL para el pendiente global.');
 prospect_pending_expect(str_contains($api,'pendientes_gestion_alcance_valido'),'La resolución debe validar explícitamente el scope global o de sede.');
 prospect_pending_expect(str_contains($api,"return (string)(\$gestion['tipo']??'')===CENTRO_PENDIENTES_PROSPECTO_TIPO"),'NULL solo debe aceptarse para el tipo global de prospecto.');
-prospect_pending_expect(str_contains($api,"($me['rol'] ?? '') !== 'ADMIN'"),'VERIFICADOR no debe obtener permisos de gestión.');
+prospect_pending_expect(str_contains($api,"(\$me['rol'] ?? '') !== 'ADMIN'"),'VERIFICADOR no debe obtener permisos de gestión.');
 
 $migration=file_get_contents(__DIR__.'/../database/migrations/20260915_centro_pendientes.sql')?:'';
 $runner=file_get_contents(__DIR__.'/../bin/migrate-centro-pendientes.php')?:'';
@@ -58,8 +58,7 @@ prospect_pending_expect(!str_contains($page,'permanecen fuera del Centro de pend
 prospect_pending_expect(str_contains($page,"x.tipo==='PROSPECTO_SIN_SEGUIMIENTO'?'Prospecto'"),'La tarjeta debe identificar el caso sin inventar nombre o alumno.');
 
 $doc=file_get_contents(__DIR__.'/../docs/F5-PROSPECT-FOLLOWUP-ALERT.md')?:'';
-prospect_pending_expect(str_contains($doc,'pendientes globales')&&str_contains($doc,'no asignar')===false,'');
-prospect_pending_expect(str_contains($doc,'no se les asigna una sede ficticia')||str_contains($doc,'no asignarles una sede ficticia')||str_contains($doc,'evita') ,'La decisión de no inventar sede debe quedar documentada.');
+prospect_pending_expect(str_contains($doc,'pendientes globales')&&str_contains($doc,'sede ficticia'),'La decisión de scope global y no inventar sede debe quedar documentada.');
 prospect_pending_expect(str_contains($doc,'VERIFICADOR no recibe ni gestiona estos pendientes'),'La documentación debe conservar el límite de permisos.');
 
 echo "PROSPECT_PENDING_INTEGRATION_REGRESSION_OK\n";
