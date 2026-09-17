@@ -19,7 +19,7 @@ function f6_dashboard_metrics_schema_ready(PDO $pdo): bool
     $st=$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='sesion_asistencia_cobertura'");
     if((int)$st->fetchColumn()!==1)return false;
 
-    $expected=['sesion_id','expected_count','marked_count','complete','captured_by','captured_at'];
+    $expected=['sesion_id','expected_count','marked_count','present_count','justified_count','unjustified_count','complete','captured_by','captured_at'];
     $st=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sesion_asistencia_cobertura' ORDER BY ordinal_position");
     if(array_values($st->fetchAll(PDO::FETCH_COLUMN))!==$expected)return false;
 
