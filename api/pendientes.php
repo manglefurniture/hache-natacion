@@ -4,7 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__.'/../config/auth.php';
-require_once __DIR__.'/../config/centro-pendientes.php';
+require_once __DIR__.'/../config/centro-pendientes-continuidad.php';
 
 $me = auth_require(['ADMIN','VERIFICADOR']);
 $config = require __DIR__.'/../config/database.php';
@@ -27,11 +27,35 @@ function pendientes_sede(PDO $pdo, string $clave): array
     return $sede;
 }
 
+function pendientes_tipos_habilitados(): array
+{
+    return array_values(array_unique([...CENTRO_PENDIENTES_TIPOS_HABILITADOS, CENTRO_PENDIENTES_CONTINUIDAD_TIPO]));
+}
+
+function pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sedeClave, string $sedeNombre): array
+{
+    return centro_pendientes_fuentes_activas($pdo, $sedeId, $sedeClave, $sedeNombre)
+        + centro_pendientes_continuidad_fuentes_activas($pdo, $sedeId, $sedeNombre);
+}
+
+function pendientes_causa_activa(PDO $pdo, array $pendiente, string $sedeId, string $sedeClave): bool
+{
+    if ((string)($pendiente['tipo'] ?? '') === CENTRO_PENDIENTES_CONTINUIDAD_TIPO) {
+        return centro_pendientes_continuidad_causa_activa($pdo, $pendiente, $sedeId);
+    }
+    return centro_pendientes_causa_activa($pdo, $pendiente, $sedeId, $sedeClave);
+}
+
+function pendientes_tipo_nombre(string $tipo): string
+{
+    return centro_pendientes_continuidad_descripcion_tipo($tipo) ?? centro_pendientes_descripcion_tipo($tipo);
+}
+
 function pendientes_presentar(array $pendiente, ?array $gestion, bool $causaActiva): array
 {
     $estadoGestion = strtoupper((string)($gestion['estado'] ?? 'PENDIENTE'));
     $estado = centro_pendientes_estado_efectivo($gestion, $causaActiva);
-    $pendiente['tipo_nombre'] = centro_pendientes_descripcion_tipo((string)$pendiente['tipo']);
+    $pendiente['tipo_nombre'] = pendientes_tipo_nombre((string)$pendiente['tipo']);
     $pendiente['estado'] = $estado;
     $pendiente['estado_gestion'] = $estadoGestion;
     $pendiente['causa_activa'] = $causaActiva;
@@ -64,7 +88,7 @@ function pendientes_historico_presentable(array $gestion, bool $causaActiva): ar
         'explicacion' => $causaActiva
             ? 'La regla o el registro de origen vuelve a requerir atención.'
             : 'La causa ya no aplica según la fuente original.',
-        'href' => centro_pendientes_url($tipo, $alumnoId),
+        'href' => centro_pendientes_continuidad_href_historico($tipo) ?? centro_pendientes_url($tipo, $alumnoId),
     ];
 }
 
@@ -72,7 +96,7 @@ function pendientes_listar(PDO $pdo, array $sede): array
 {
     $sedeId = (string)$sede['id'];
     $sedeClave = (string)$sede['clave'];
-    $fuentes = centro_pendientes_fuentes_activas($pdo, $sedeId, $sedeClave, (string)$sede['nombre']);
+    $fuentes = pendientes_fuentes_activas($pdo, $sedeId, $sedeClave, (string)$sede['nombre']);
     $historico = centro_pendientes_historico($pdo, $sedeId);
     $items = [];
 
@@ -83,7 +107,7 @@ function pendientes_listar(PDO $pdo, array $sede): array
         if (isset($items[$identidad])) {
             continue;
         }
-        $causaActiva = centro_pendientes_causa_activa($pdo, $gestion, $sedeId, $sedeClave);
+        $causaActiva = pendientes_causa_activa($pdo, $gestion, $sedeId, $sedeClave);
         $items[$identidad] = pendientes_presentar(
             pendientes_historico_presentable($gestion, $causaActiva),
             $gestion,
@@ -139,7 +163,7 @@ try {
             'sede'=>(string)$sede['clave'],
             'puede_gestionar'=>($me['rol'] ?? '') === 'ADMIN',
             'csrf'=>auth_csrf_token(),
-            'tipos_habilitados'=>CENTRO_PENDIENTES_TIPOS_HABILITADOS,
+            'tipos_habilitados'=>pendientes_tipos_habilitados(),
             'pendientes'=>pendientes_listar($pdo, $sede),
         ]);
     }
@@ -168,7 +192,7 @@ try {
     $sede = pendientes_sede($pdo, auth_active_sede_clave());
     $sedeId = (string)$sede['id'];
     if ($accion === 'ATENDER') {
-        $fuentes = centro_pendientes_fuentes_activas($pdo, $sedeId, (string)$sede['clave'], (string)$sede['nombre']);
+        $fuentes = pendientes_fuentes_activas($pdo, $sedeId, (string)$sede['clave'], (string)$sede['nombre']);
         $pendiente = $fuentes[$identidad] ?? null;
         if (!$pendiente) {
             $pdo->rollBack();
@@ -221,7 +245,7 @@ try {
         $pdo->rollBack();
         pendientes_out(['ok'=>false,'error'=>'Solo puede resolverse un pendiente con gestión registrada'], 409);
     }
-    if (!centro_pendientes_puede_resolver(centro_pendientes_causa_activa($pdo, $gestion, $sedeId, (string)$sede['clave']))) {
+    if (!centro_pendientes_puede_resolver(pendientes_causa_activa($pdo, $gestion, $sedeId, (string)$sede['clave']))) {
         $pdo->rollBack();
         pendientes_out(['ok'=>false,'error'=>'La causa original sigue vigente; resuélvela en su módulo antes de cerrar el pendiente'], 409);
     }
