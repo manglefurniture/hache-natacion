@@ -62,6 +62,8 @@ jobs:
         run: php tests/sharky-crm-regression.php
       - name: Prospect follow-up internal alert regression
         run: php tests/prospect-followup-alert-regression.php
+      - name: Consecutive absence internal alert regression
+        run: php tests/consecutive-absence-alert-regression.php
       - name: Sharky WhatsApp template notifications regression
         run: php tests/sharky-template-notifications-regression.php
       - name: Sharky 48h prospect re-engagement regression
