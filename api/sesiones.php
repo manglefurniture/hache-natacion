@@ -3,6 +3,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
+require_once __DIR__.'/../config/asistencia-cobertura.php';
 $config=require __DIR__.'/../config/database.php';
 $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
 function out(array $d,int $c=200):never{http_response_code($c);echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
@@ -31,6 +32,24 @@ try{
  $me=auth_require(['ADMIN']);if($method!=='POST')out(['ok'=>false,'error'=>'Método no permitido'],405);$in=json_decode(file_get_contents('php://input'),true);if(!is_array($in))out(['ok'=>false,'error'=>'JSON inválido'],400);$clave=auth_resolve_sede_clave((string)($in['sede']??'MONTEVERDE'));$sedeId=siteId($pdo,$clave);$uid=(string)$me['id'];$accion=strtoupper((string)($in['accion']??''));
  if($accion==='GENERAR'){$fecha=(string)($in['fecha']??date('Y-m-d'));fechaLaborable($fecha);out(['ok'=>true,'creadas'=>generarSesiones($pdo,$fecha,$uid,$sedeId)]);}
  if($accion==='ASISTENCIA'){$sid=(string)($in['sesion_id']??'');$aid=(string)($in['alumno_id']??'');$estado=(string)($in['estado']??'');$observacion=trim((string)($in['observacion']??''));if(!in_array($estado,['PRESENTE','AUSENTE_JUSTIFICADA','AUSENTE_NO_JUSTIFICADA'],true))out(['ok'=>false,'error'=>'Estado inválido'],422);if(mb_strlen($observacion)>500)out(['ok'=>false,'error'=>'La observación no puede exceder 500 caracteres'],422);$pdo->beginTransaction();$scope=$pdo->prepare("SELECT s.fecha,s.horario_id FROM sesiones s JOIN horarios h ON h.id=s.horario_id JOIN alumnos a ON a.id=:a WHERE s.id=:ss AND h.sede_id=:sh AND a.sede_id=:sa AND s.cerrada=0 AND s.estado<>'CANCELADA' LIMIT 1 FOR UPDATE");$scope->execute([':a'=>$aid,':ss'=>$sid,':sh'=>$sedeId,':sa'=>$sedeId]);$sesion=$scope->fetch();if(!$sesion){$pdo->rollBack();out(['ok'=>false,'error'=>'La sesión no está abierta o no pertenece a la sede seleccionada'],409);}$derecho=regla_derecho_clase($pdo,$aid,$sedeId,(string)$sesion['horario_id'],new DateTimeImmutable((string)$sesion['fecha']));if(!$derecho['puede']){$pdo->rollBack();out(['ok'=>false,'error'=>$derecho['motivo']?:'El alumno no tiene derecho a tomar esta clase'],422);}$st=$pdo->prepare("INSERT INTO asistencias(sesion_id,alumno_id,estado,observacion,created_by) VALUES(:s,:a,:e,:o,:u) ON DUPLICATE KEY UPDATE estado=VALUES(estado),observacion=VALUES(observacion),updated_at=NOW()");$st->execute([':s'=>$sid,':a'=>$aid,':e'=>$estado,':o'=>$observacion!==''?$observacion:null,':u'=>$uid]);$repo=sincronizarReposicion($pdo,$sid,$aid,$estado,$uid);$pdo->commit();out(['ok'=>true,'reposicion'=>$repo]);}
- if($accion==='CERRAR'){$sid=trim((string)($in['sesion_id']??''));if($sid==='')out(['ok'=>false,'error'=>'La sesión es obligatoria'],422);$st=$pdo->prepare("UPDATE sesiones s JOIN horarios h ON h.id=s.horario_id SET s.estado='REALIZADA',s.cerrada=1,s.fecha_cierre=NOW(),s.cerrada_por=:u WHERE s.id=:ss AND h.sede_id=:site AND s.cerrada=0 AND s.estado<>'CANCELADA'");$st->execute([':u'=>$uid,':ss'=>$sid,':site'=>$sedeId]);if($st->rowCount()===0)out(['ok'=>false,'error'=>'La sesión no existe, ya está cerrada o fue cancelada'],409);out(['ok'=>true]);}
+ if($accion==='CERRAR'){
+  $sid=trim((string)($in['sesion_id']??''));if($sid==='')out(['ok'=>false,'error'=>'La sesión es obligatoria'],422);
+  $pdo->beginTransaction();
+  $st=$pdo->prepare("SELECT s.id,s.fecha,s.horario_id,s.estado,s.cerrada FROM sesiones s JOIN horarios h ON h.id=s.horario_id WHERE s.id=:ss AND h.sede_id=:site AND s.cerrada=0 AND s.estado<>'CANCELADA' LIMIT 1 FOR UPDATE");
+  $st->execute([':ss'=>$sid,':site'=>$sedeId]);$sesion=$st->fetch();
+  if(!$sesion){$pdo->rollBack();out(['ok'=>false,'error'=>'La sesión no existe, ya está cerrada o fue cancelada'],409);}
+  $alumnosCierre=alumnosSesion($pdo,$sesion,(string)$sesion['fecha'],$sedeId);
+  $esperados=0;$marcados=0;
+  foreach($alumnosCierre as $alumnoCierre){
+   if(empty($alumnoCierre['puede_tomar_clase']))continue;
+   $esperados++;
+   if(in_array((string)($alumnoCierre['asistencia_estado']??''),['PRESENTE','AUSENTE_JUSTIFICADA','AUSENTE_NO_JUSTIFICADA'],true))$marcados++;
+  }
+  $st=$pdo->prepare("UPDATE sesiones SET estado='REALIZADA',cerrada=1,fecha_cierre=NOW(),cerrada_por=:u WHERE id=:ss AND cerrada=0 AND estado<>'CANCELADA'");
+  $st->execute([':u'=>$uid,':ss'=>$sid]);if($st->rowCount()===0){$pdo->rollBack();out(['ok'=>false,'error'=>'La sesión cambió antes de cerrarse'],409);}
+  $coberturaGuardada=hache_asistencia_cobertura_guardar($pdo,$sid,$esperados,$marcados,$uid);
+  $pdo->commit();
+  out(['ok'=>true,'cobertura_asistencia'=>['guardada'=>$coberturaGuardada,'esperados'=>$esperados,'marcados'=>$marcados,'completa'=>$esperados>0&&$esperados===$marcados]]);
+ }
  out(['ok'=>false,'error'=>'Acción inválida'],422);
 }catch(Throwable $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('[sesiones] '.$e->getMessage());out(['ok'=>false,'error'=>'No se pudo procesar la sesión'],500);}
