@@ -133,7 +133,7 @@ function centro_pendientes_agregar(array &$pendientes, array $data): void
  * Devuelve exclusivamente asuntos cuya causa sigue vigente en las fuentes.
  * No reutiliza endpoints GET porque algunos de ellos pueden reconciliar datos.
  */
-function centro_pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sedeClave, string $sedeNombre): array
+function centro_pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sedeClave, string $sedeNombre, ?DateTimeImmutable $referencia = null): array
 {
     $pendientes = [];
     $alumnos = $pdo->prepare("SELECT a.id,a.nombre,a.ciclo_pago,a.fecha_inicio
@@ -153,8 +153,8 @@ function centro_pendientes_fuentes_activas(PDO $pdo, string $sedeId, string $sed
     $alumnos->execute([':sede'=>$sedeId, ':sede_intensivo'=>$sedeId]);
     foreach ($alumnos as $alumno) {
         $alumnoId = (string)$alumno['id'];
-        $periodo = regla_periodo_regular_actual($sedeClave, $alumno['ciclo_pago'] !== null ? (string)$alumno['ciclo_pago'] : null);
-        if (!regla_mensualidad_regular_cubierta($pdo, $alumnoId, $sedeId, $sedeClave, $alumno['ciclo_pago'] !== null ? (string)$alumno['ciclo_pago'] : null)) {
+        $periodo = regla_periodo_regular_actual($sedeClave, $alumno['ciclo_pago'] !== null ? (string)$alumno['ciclo_pago'] : null, $referencia);
+        if (!regla_mensualidad_regular_cubierta($pdo, $alumnoId, $sedeId, $sedeClave, $alumno['ciclo_pago'] !== null ? (string)$alumno['ciclo_pago'] : null, $referencia)) {
             centro_pendientes_agregar($pendientes, [
                 'tipo' => 'MENSUALIDAD_REGULAR_SIN_COBERTURA',
                 'origen_tipo' => 'ALUMNO_REGULAR',

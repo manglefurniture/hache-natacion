@@ -22,9 +22,11 @@ function dashboard_operacion_fecha(PDO $pdo,string $sedeId,string $fecha):array
     $st->execute([':f'=>$fecha,':s'=>$sedeId]);
     $sesiones=$st->fetch(PDO::FETCH_ASSOC)?:[];
     $total=(int)($sesiones['total']??0);
+    $canceladas=(int)($sesiones['canceladas']??0);
+    $sesionesElegibles=max(0,$total-$canceladas);
 
     $asistencia=[
-        'disponible'=>$total>0,
+        'disponible'=>$sesionesElegibles>0,
         'marcas'=>null,
         'presentes'=>null,
         'ausencias_justificadas'=>null,
@@ -32,12 +34,12 @@ function dashboard_operacion_fecha(PDO $pdo,string $sedeId,string $fecha):array
         'cobertura'=>null,
     ];
 
-    if($total>0){
+    if($sesionesElegibles>0){
         $st=$pdo->prepare("SELECT aa.estado,COUNT(*) cantidad
             FROM asistencias aa
             INNER JOIN sesiones s ON s.id=aa.sesion_id
             INNER JOIN horarios h ON h.id=s.horario_id
-            WHERE s.fecha=:f AND h.sede_id=:s
+            WHERE s.fecha=:f AND h.sede_id=:s AND s.estado<>'CANCELADA'
             GROUP BY aa.estado");
         $st->execute([':f'=>$fecha,':s'=>$sedeId]);
         $porEstado=[
@@ -65,7 +67,8 @@ function dashboard_operacion_fecha(PDO $pdo,string $sedeId,string $fecha):array
         'sesiones_registradas'=>$total,
         'programadas'=>(int)($sesiones['programadas']??0),
         'realizadas'=>(int)($sesiones['realizadas']??0),
-        'canceladas'=>(int)($sesiones['canceladas']??0),
+        'canceladas'=>$canceladas,
+        'sesiones_elegibles_asistencia'=>$sesionesElegibles,
         'cerradas'=>(int)($sesiones['cerradas']??0),
         'asistencia'=>$asistencia,
         'alcance'=>'Solo sesiones ya registradas y atribuibles a la sede por horario; esta lectura no genera sesiones.',

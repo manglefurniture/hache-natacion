@@ -20,7 +20,7 @@ function centro_pendientes_compuesto_tipos_habilitados(bool $includeGlobalProspe
     return array_values(array_unique($tipos));
 }
 
-function centro_pendientes_compuesto_fuentes_activas(PDO $pdo, array $sede, bool $includeGlobalProspects = false): array
+function centro_pendientes_compuesto_fuentes_activas(PDO $pdo, array $sede, bool $includeGlobalProspects = false, ?DateTimeImmutable $referencia = null): array
 {
     $sedeId = (string)$sede['id'];
     $fuentes = centro_pendientes_fuentes_activas(
@@ -28,6 +28,7 @@ function centro_pendientes_compuesto_fuentes_activas(PDO $pdo, array $sede, bool
         $sedeId,
         (string)$sede['clave'],
         (string)$sede['nombre'],
+        $referencia,
     ) + centro_pendientes_continuidad_fuentes_activas(
         $pdo,
         $sedeId,
@@ -81,9 +82,9 @@ function centro_pendientes_compuesto_href_historico(string $tipo, string $alumno
  * continúa formando parte del total operativo, pero queda separado de los
  * asuntos todavía PENDIENTES. Los históricos resueltos no inflan el resumen.
  */
-function centro_pendientes_compuesto_resumen_activo(PDO $pdo, array $sede, bool $includeGlobalProspects = false): array
+function centro_pendientes_compuesto_resumen_activo(PDO $pdo, array $sede, bool $includeGlobalProspects = false, ?DateTimeImmutable $referencia = null): array
 {
-    $fuentes = centro_pendientes_compuesto_fuentes_activas($pdo, $sede, $includeGlobalProspects);
+    $fuentes = centro_pendientes_compuesto_fuentes_activas($pdo, $sede, $includeGlobalProspects, $referencia);
     $historico = centro_pendientes_compuesto_historico($pdo, (string)$sede['id'], $includeGlobalProspects);
     $resumen = [
         'total' => 0,
