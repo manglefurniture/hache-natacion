@@ -58,8 +58,8 @@ $api=file_get_contents(__DIR__.'/../api/configuracion.php')?:'';
 $page=file_get_contents(__DIR__.'/../public/configuracion.php')?:'';
 $alertsApi=file_get_contents(__DIR__.'/../api/alertas.php')?:'';
 alert_settings_expect(str_contains($api,'CONFIG_ALERTA_ACTUALIZADA')&&str_contains($api,"'anterior'=>\$before,'nuevo'=>\$after"),'Cada cambio real de alerta debe quedar auditado con antes y después.');
-alert_settings_expect(str_contains($api,"$alertRows = []")&&str_contains($api,'hache_internal_alert_config_rows($pdo)'),'Solo ADMIN debe recibir la superficie de configuración de alertas.');
+alert_settings_expect(str_contains($api,'$alertRows = []')&&str_contains($api,'hache_internal_alert_config_rows($pdo)'),'Solo ADMIN debe recibir la superficie de configuración de alertas.');
 alert_settings_expect(str_contains($page,'Alertas internas')&&str_contains($page,'d.alertas_internas'),'El back debe mostrar un bloque específico de alertas internas.');
-alert_settings_expect(str_contains($alertsApi,"$f5Settings=hache_internal_alert_settings($pdo)")&&str_contains($alertsApi,"$hours=(int)$f5Settings['prospect_followup_hours']"),'La presentación debe usar la misma configuración que la detección.');
+alert_settings_expect(str_contains($alertsApi,'$f5Settings=hache_internal_alert_settings($pdo)')&&str_contains($alertsApi,'$hours=(int)$f5Settings[\'prospect_followup_hours\']'),'La presentación debe usar la misma configuración que la detección.');
 
 echo "INTERNAL_ALERT_SETTINGS_REGRESSION_OK\n";
