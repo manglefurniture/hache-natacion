@@ -34,11 +34,12 @@ No se añade un umbral administrativo adicional: el hecho financiero verificable
 
 El Centro de alertas presenta un resumen por sede con:
 
-- cantidad de alumnos/relaciones con saldo pendiente;
+- cantidad de **alumnos únicos** con al menos un saldo;
+- cantidad de **relaciones alumno–curso** con saldo pendiente;
 - suma de los saldos verificables;
 - enlace al Centro de pendientes.
 
-La prioridad es `NEUTRA`, porque F5 no tiene aprobada una prioridad nueva para esta regla. El detalle aclara que solo se consideran pagos `VALIDO` del mismo alumno y curso.
+Un mismo alumno puede tener saldo en más de un intensivo histórico; por eso el resumen conserva ambos conteos y no llama “alumnos” al número de relaciones. La prioridad es `NEUTRA`, porque F5 no tiene aprobada una prioridad nueva para esta regla. El detalle aclara que solo se consideran pagos `VALIDO` del mismo alumno y curso.
 
 ## Compatibilidad
 
