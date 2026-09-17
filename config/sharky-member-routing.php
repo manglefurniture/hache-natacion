@@ -132,8 +132,8 @@ function hache_sharky_member_teacher_owned_event(PDO $pdo,array $teacher,?array 
  *
  * A Palapas record can still be recognized by its WhatsApp number, but Sharky
  * must not expose or operate payments, balances, absences or repositions while
- * that site is under administrative reconciliation. Class-today and secure
- * portal access stay available; payment, absence and reposition operations remain blocked.
+ * that site is under administrative reconciliation. The only self-service
+ * member capability left enabled is confirming whether today's class is on.
  */
 function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?bool
 {
@@ -158,7 +158,6 @@ function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?b
 
     $student=hache_sharky_member_student_context($pdo,$contact);
     if(($student['found']??false)!==true)return null;
-    if(hache_sharky_member_portal_requested((string)($event['text']??''),(string)($event['interactive_id']??'')))return null;
 
     $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);
     if(!is_resource($deliveryLock))return false;
@@ -184,7 +183,7 @@ function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?b
         // is not yet an active student. Never affirm a scheduled class for it.
         if(hache_sharky_member_pending_registration($student)){
             $body=($first!==''?'Hola, '.$first.' 😊. ':'').'Veo que tu inscripción en Palapas todavía está pendiente. Por ahora no puedo confirmar una clase activa para ti; el equipo de Hache puede revisar tu situación.';
-            $payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:portal','title'=>'Abrir PORTAL']]);
+            $payload=hache_sharky_whatsapp_text_payload($contact,$body);
             return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'palapas-pending');
         }
 
@@ -198,7 +197,7 @@ function hache_sharky_member_palapas_restricted_route(PDO $pdo,array $event): ?b
         }else{
             $body=($first!==''?'¡Hola, '.$first.'! 👋 ':'').'Por ahora desde Sharky en Palapas puedo ayudarte a confirmar si tienes clase hoy. Para cualquier otro tema, el equipo de Hache lo revisa contigo.';
         }
-        $payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:class_today','title'=>'Mi clase hoy'],['id'=>'member:portal','title'=>'Abrir PORTAL']]);
+        $payload=hache_sharky_member_buttons($contact,$body,[['id'=>'member:class_today','title'=>'Mi clase hoy']]);
         return hache_sharky_member_queue($pdo,$contact,$event,$state,$payload,'palapas-restricted-home');
     }catch(Throwable $e){
         hache_sharky_db_state_defer_cancel();
@@ -382,6 +381,17 @@ function hache_sharky_member_route_event(PDO $pdo,array $event,array $business=[
     if($palapas!==null){
         if($palapas===true)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'palapas');
         return $palapas;
+    }
+
+    // Portal is an explicit navigation request. Handle it before payment or
+    // absence flow ownership so a stale member flow cannot swallow the action.
+    if(hache_sharky_member_portal_requested((string)($event['text']??''),(string)($event['interactive_id']??''))){
+        $portalStudent=hache_sharky_member_student_context($pdo,$contact);
+        if(($portalStudent['found']??false)===true){
+            $handled=hache_sharky_member_student_fallback($pdo,$event);
+            if($handled)hache_sharky_member_brain_observe($pdo,$brainBeforeState,$event,'student');
+            return $handled;
+        }
     }
 
     $paymentResult=hache_sharky_member_payment_process_event($pdo,$event,$business);
