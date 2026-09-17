@@ -4,6 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/periodos-financieros.php';
+require_once __DIR__.'/../config/finanzas-obligaciones.php';
 require_once __DIR__.'/../config/dashboard-tiempo.php';
 require_once __DIR__.'/../config/centro-pendientes-compuesto.php';
 
@@ -39,9 +40,11 @@ try {
     $hoy=$tiempo['fecha'];
     $periodoVigente=$tiempo['periodo_vigente'];
 
-    // F2 conserva la autoridad de ingresos por periodo financiero.
+    // F2 conserva la autoridad de ingresos, obligaciones y saldos por periodo financiero.
     $facturacion=financiero_totales($pdo,$sede,$periodoVigente);
     $rangoPeriodo=$facturacion['rango']??financiero_rango($pdo,$sid,$periodoVigente);
+    $lecturaObligaciones=finanzas_obligaciones_periodo($pdo,$sede,$periodoVigente,false);
+    $saldosPeriodo=$lecturaObligaciones['resumen'];
 
     // Definición histórica del dashboard: no equivale a estado administrativo ni a derecho de acceso.
     $sqlActivos="SELECT COUNT(*) FROM (
@@ -104,6 +107,13 @@ try {
             'cantidad'=>(int)($facturacion['pagos_count']??0),
             'total'=>(float)($facturacion['total']??0),
         ],
+        'saldos_periodo'=>[
+            'obligaciones'=>(int)$saldosPeriodo['obligaciones'],
+            'total'=>(float)$saldosPeriodo['total'],
+            'pagado'=>(float)$saldosPeriodo['pagado'],
+            'saldo'=>(float)$saldosPeriodo['saldo'],
+            'con_saldo'=>(int)$saldosPeriodo['con_saldo'],
+        ],
         'alumnos_activos'=>$alumnos,
         'alumnos_pendientes'=>$alumnosPendientes,
         'mensualidades'=>[
@@ -125,6 +135,7 @@ try {
         'contratos'=>[
             'alumnos_activos'=>'Mensualidad PAGADA vigente o intensivo vigente con algún pago VALIDO, excluyendo BAJA; no equivale a derecho de acceso.',
             'facturacion'=>'F2: ingresos atribuidos al periodo financiero vigente según la regla de cada concepto.',
+            'saldos_periodo'=>'F2: suma de obligaciones registradas del periodo menos pagos VALIDOS; el detalle reconciliable vive en Finanzas internas.',
             'alertas_f5'=>'F5: causas activas compartidas con F1; los casos globales de prospectos solo se incluyen para ADMIN.',
             'centro_pendientes'=>'F1: causas activas separadas entre PENDIENTE y ATENDIDO; históricos resueltos no inflan el total operativo.',
         ],
