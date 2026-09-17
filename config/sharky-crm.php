@@ -6,13 +6,16 @@ require_once __DIR__.'/sharky-contact-book.php';
 
 function hache_sharky_crm_schema_ready(PDO $pdo): bool
 {
+    static $ready=[];
+    $key=spl_object_id($pdo);
+    if(($ready[$key]??false)===true)return true;
     try{
-        foreach(['sharky_contacts','sharky_message_receipts','sharky_outbox','sharky_action_audit','sharky_referrals','sharky_conversation_state'] as $table){
-            $st=$pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=:t');
-            $st->execute([':t'=>$table]);
-            if((int)$st->fetchColumn()!==1)return false;
-        }
-        return true;
+        $tables=['sharky_contacts','sharky_message_receipts','sharky_outbox','sharky_action_audit','sharky_referrals','sharky_conversation_state'];
+        $quoted="'".implode("','",$tables)."'";
+        $st=$pdo->query("SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ($quoted)");
+        $found=array_fill_keys(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)),true);
+        foreach($tables as $table)if(!isset($found[$table]))return false;
+        return $ready[$key]=true;
     }catch(Throwable $e){return false;}
 }
 
@@ -70,36 +73,50 @@ function hache_sharky_crm_human_program(?string $program): string
     };
 }
 
-function hache_sharky_crm_latest_referral(PDO $pdo,string $hash): ?array
+/** @return array{0:string,1:array<string,string>} */
+function hache_sharky_crm_hash_scope(array $hashes): array
 {
-    $st=$pdo->prepare('SELECT source_type,source_id,ctwa_clid,headline,body,captured_at FROM sharky_referrals WHERE contact_hash=:c ORDER BY captured_at DESC,id DESC LIMIT 1');
-    $st->execute([':c'=>$hash]);
-    $row=$st->fetch(PDO::FETCH_ASSOC);
-    return is_array($row)?$row:null;
+    $params=[];$parts=[];
+    foreach(array_values($hashes) as $i=>$hash){$key=':h'.$i;$parts[]=$key;$params[$key]=(string)$hash;}
+    return [implode(',',$parts),$params];
 }
 
-function hache_sharky_crm_current_state(PDO $pdo,string $hash): array
+function hache_sharky_crm_bulk_states(PDO $pdo,string $scope,array $params): array
 {
-    $st=$pdo->prepare('SELECT state_json,state_ciphertext,state_iv,state_tag,updated_at,expires_at FROM sharky_conversation_state WHERE contact_hash=:c AND expires_at>=NOW() LIMIT 1');
-    $st->execute([':c'=>$hash]);
-    $row=$st->fetch(PDO::FETCH_ASSOC);
-    return hache_sharky_crm_state_from_row(is_array($row)?$row:null);
+    $st=$pdo->prepare("SELECT contact_hash,state_json,state_ciphertext,state_iv,state_tag FROM sharky_conversation_state WHERE expires_at>=NOW() AND contact_hash IN ($scope)");
+    $st->execute($params);$out=[];
+    foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row)$out[(string)$row['contact_hash']]=hache_sharky_crm_state_from_row($row);
+    return $out;
 }
 
-function hache_sharky_crm_latest_registration(PDO $pdo,string $hash): ?array
+function hache_sharky_crm_bulk_referrals(PDO $pdo,string $scope,array $params): array
 {
-    $st=$pdo->prepare("SELECT action_type,status,alumno_id,created_at,completed_at FROM sharky_action_audit WHERE contact_hash=:c AND action_type IN ('register_intensive','register_regular') ORDER BY created_at DESC,id DESC LIMIT 1");
-    $st->execute([':c'=>$hash]);
-    $row=$st->fetch(PDO::FETCH_ASSOC);
-    return is_array($row)?$row:null;
+    $st=$pdo->prepare("SELECT contact_hash,source_type,source_id,ctwa_clid,headline,body,captured_at,id FROM sharky_referrals WHERE contact_hash IN ($scope) ORDER BY contact_hash,captured_at DESC,id DESC");
+    $st->execute($params);$out=[];
+    foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){$hash=(string)$row['contact_hash'];if(!isset($out[$hash]))$out[$hash]=$row;}
+    return $out;
 }
 
-function hache_sharky_crm_last_contact(PDO $pdo,string $hash,string $fallback): array
+function hache_sharky_crm_bulk_registrations(PDO $pdo,string $scope,array $params): array
 {
-    $st=$pdo->prepare('SELECT MAX(received_at) FROM sharky_message_receipts WHERE contact_hash=:c');
-    $st->execute([':c'=>$hash]);$inbound=(string)($st->fetchColumn()?:'');
-    $st=$pdo->prepare("SELECT MAX(sent_at) FROM sharky_outbox WHERE contact_hash=:c AND status='SENT'");
-    $st->execute([':c'=>$hash]);$outbound=(string)($st->fetchColumn()?:'');
+    // Cualquier alta COMPLETED conserva la conversión aunque exista después otro intento fallido/cancelado.
+    $st=$pdo->prepare("SELECT contact_hash,action_type,status,alumno_id,created_at,completed_at,id FROM sharky_action_audit WHERE contact_hash IN ($scope) AND action_type IN ('register_intensive','register_regular') ORDER BY contact_hash,(status='COMPLETED') DESC,created_at DESC,id DESC");
+    $st->execute($params);$out=[];
+    foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){$hash=(string)$row['contact_hash'];if(!isset($out[$hash]))$out[$hash]=$row;}
+    return $out;
+}
+
+function hache_sharky_crm_bulk_contact_times(PDO $pdo,string $scope,array $params,string $table,string $field,string $where=''): array
+{
+    if(!in_array($table,['sharky_message_receipts','sharky_outbox'],true)||!in_array($field,['received_at','sent_at'],true))return [];
+    $sql="SELECT contact_hash,MAX($field) last_at FROM $table WHERE contact_hash IN ($scope)".($where!==''?' AND '.$where:'').' GROUP BY contact_hash';
+    $st=$pdo->prepare($sql);$st->execute($params);$out=[];
+    foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row)$out[(string)$row['contact_hash']]=(string)($row['last_at']??'');
+    return $out;
+}
+
+function hache_sharky_crm_last_contact(string $inbound,string $outbound,string $fallback): array
+{
     $candidates=[];
     if($inbound!=='')$candidates[]=['at'=>$inbound,'direction'=>'ENTRANTE'];
     if($outbound!=='')$candidates[]=['at'=>$outbound,'direction'=>'SALIENTE'];
@@ -119,18 +136,25 @@ function hache_sharky_crm_list(PDO $pdo,int $limit=300): array
           ORDER BY c.last_seen_at DESC
           LIMIT ".$limit;
     $rows=$pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    if(!$rows)return [];
+    $hashes=array_map(static fn(array $row):string=>(string)$row['contact_hash'],$rows);
+    [$scope,$params]=hache_sharky_crm_hash_scope($hashes);
+    $states=hache_sharky_crm_bulk_states($pdo,$scope,$params);
+    $referrals=hache_sharky_crm_bulk_referrals($pdo,$scope,$params);
+    $registrations=hache_sharky_crm_bulk_registrations($pdo,$scope,$params);
+    $inbound=hache_sharky_crm_bulk_contact_times($pdo,$scope,$params,'sharky_message_receipts','received_at');
+    $outbound=hache_sharky_crm_bulk_contact_times($pdo,$scope,$params,'sharky_outbox','sent_at',"status='SENT'");
+
     $out=[];
     foreach($rows as $row){
         $hash=(string)$row['contact_hash'];
         $payload=hache_sharky_contact_book_decrypt($row)??[];
-        $state=hache_sharky_crm_current_state($pdo,$hash);
-        $referral=hache_sharky_crm_latest_referral($pdo,$hash);
-        $registration=hache_sharky_crm_latest_registration($pdo,$hash);
-        $source=hache_sharky_crm_source($state,$referral);
+        $state=$states[$hash]??[];$referral=$referrals[$hash]??null;$registration=$registrations[$hash]??null;
+        $source=hache_sharky_crm_source($state,is_array($referral)?$referral:null);
         $commercial=is_array($state['commercial_context']??null)?$state['commercial_context']:[];
         $program=in_array(($commercial['program']??null),['intensive','regular'],true)?(string)$commercial['program']:null;
         $sede=in_array(($commercial['sede_clave']??null),['MONTEVERDE','PALAPAS'],true)?(string)$commercial['sede_clave']:null;
-        $last=hache_sharky_crm_last_contact($pdo,$hash,(string)$row['last_seen_at']);
+        $last=hache_sharky_crm_last_contact((string)($inbound[$hash]??''),(string)($outbound[$hash]??''),(string)$row['last_seen_at']);
         $studentId=trim((string)($registration['alumno_id']??$row['alumno_id']??''));
         $name=trim((string)($payload['base_name']??''));
         if($name==='')$name=trim((string)($payload['managed_name']??''));
@@ -146,7 +170,7 @@ function hache_sharky_crm_list(PDO $pdo,int $limit=300): array
             'producto'=>$program,
             'producto_etiqueta'=>hache_sharky_crm_human_program($program),
             'sede'=>$sede,
-            'estado_crm'=>hache_sharky_crm_stage($state,$registration),
+            'estado_crm'=>hache_sharky_crm_stage($state,is_array($registration)?$registration:null),
             'registro_estado'=>$registration['status']??null,
             'registro_tipo'=>$registration['action_type']??null,
             'primer_contacto'=>(string)$row['first_seen_at'],
