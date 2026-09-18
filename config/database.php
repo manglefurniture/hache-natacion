@@ -74,6 +74,8 @@ if (str_starts_with($uri, '/api/')) {
         '/api/sesion.php',
         '/api/cambiar-password.php',
         '/api/auditoria.php',
+        // Telemetría interna: no es una acción administrativa y no debe inundar F8.
+        '/api/diagnostico.php',
         '/api/sharky.php',
         '/api/whatsapp-webhook.php',
         // RUM es anónimo y minimizado; no debe heredar la auditoría genérica que registra IP.
