@@ -135,6 +135,29 @@ f8_expect($studentEdit['before']['value']['inscripcion_historica_cubierta']===fa
 f8_expect(str_contains((string)$studentEdit['result']['detail'],'whatsapp'),'Debe informar qué campo PII cambió sin copiar sus valores.');
 f8_expect(!str_contains(json_encode($studentEdit,JSON_UNESCAPED_UNICODE),'5550000000'),'La proyección no debe inventar ni copiar un valor PII ausente.');
 
+$paymentInvalidation = hache_auditoria_evento_normalizar([
+    'id'=>'e-payment-invalidated',
+    'usuario_id'=>'u1',
+    'usuario_nombre'=>'admin',
+    'accion'=>'PAGO_INVALIDADO',
+    'entidad'=>'pago',
+    'entidad_id'=>'p1',
+    'detalle'=>json_encode([
+        'sede_id'=>'s1',
+        'estado_anterior'=>'VALIDO',
+        'estado_nuevo'=>'INVALIDADO',
+    ]),
+    'metodo'=>'POST',
+    'ruta'=>'/api/invalidar-pago.php',
+    'created_at'=>'2026-09-18 15:07:00',
+]);
+f8_expect($paymentInvalidation['module']==='finanzas'&&$paymentInvalidation['result']['level']==='confirmed','La invalidación durable debe proyectarse como cambio financiero confirmado.');
+f8_expect($paymentInvalidation['entity']['id']==='p1','Debe conservar el ID exacto del pago invalidado.');
+f8_expect($paymentInvalidation['before']['available']===true&&$paymentInvalidation['before']['value']['estado']==='VALIDO','Debe conservar el estado anterior real del pago.');
+f8_expect($paymentInvalidation['after']['available']===true&&$paymentInvalidation['after']['value']['estado']==='INVALIDADO','Debe conservar el estado nuevo real del pago.');
+f8_expect($paymentInvalidation['scope']['sede_known']===true&&$paymentInvalidation['scope']['sede_id']==='s1','Debe conservar la sede demostrada por la operación.');
+f8_expect($paymentInvalidation['coverage']['before_after']==='structured','La invalidación debe declarar before/after estructurado.');
+
 $events = [$generic,$history,$state];
 hache_auditoria_ordenar($events);
 f8_expect($events[0]['source_id']==='h1'&&$events[2]['source_id']==='e-http','La mezcla de fuentes debe ordenarse por timestamp real sin inventar correlación.');
