@@ -71,8 +71,8 @@ try{
     $pdo->prepare('INSERT INTO usuarios(id,usuario) VALUES(?,?)')->execute([$admin,'admin']);
     $pdo->prepare('INSERT INTO sedes(id,clave,nombre) VALUES(?,?,?)')->execute([$site,'MONTEVERDE','Monteverde']);
     $h=$pdo->prepare('INSERT INTO horarios(id,sede_id,hora_inicio,hora_fin) VALUES(?,?,?,?)');
-    $h->execute([$schedule,$site,'19:00:00','20:00:00']);
-    $h->execute([$otherSchedule,$site,'20:00:00','21:00:00']);
+    $h->execute([$schedule,$site,'07:00:00','08:00:00']);
+    $h->execute([$otherSchedule,$site,'08:00:00','09:00:00']);
     $p=$pdo->prepare('INSERT INTO profesores(id,nombre,activo) VALUES(?,?,?)');
     foreach([
         [$original1,'Original Uno',1],[$original2,'Original Dos',1],[$sub1,'Sustituto Uno',1],
