@@ -32,20 +32,28 @@ VALUES(
 -- open period for one of those rows, collapse only that synthetic baseline to
 -- a zero-length interval rather than inventing teaching history.
 UPDATE profesor_horario_vigencias v
-JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id
-JOIN profesores p ON p.id=ph.profesor_id
 SET v.vigente_hasta=v.vigente_desde,
     v.closed_by=NULL
-WHERE p.activo=0
-  AND v.vigente_hasta IS NULL
-  AND v.origen='F7_BASELINE';
+WHERE v.vigente_hasta IS NULL
+  AND v.origen='F7_BASELINE'
+  AND EXISTS(
+    SELECT 1
+    FROM profesor_horarios ph
+    JOIN profesores p ON p.id=ph.profesor_id
+    WHERE ph.id=v.profesor_horario_id
+      AND p.activo=0
+  );
 
 UPDATE profesor_horarios ph
-JOIN profesores p ON p.id=ph.profesor_id
 SET ph.activo=0,
     ph.updated_at=UTC_TIMESTAMP()
 WHERE ph.activo=1
-  AND p.activo=0;
+  AND EXISTS(
+    SELECT 1
+    FROM profesores p
+    WHERE p.id=ph.profesor_id
+      AND p.activo=0
+  );
 
 INSERT INTO profesor_horario_vigencias(
   id,profesor_horario_id,vigente_desde,vigente_hasta,origen,created_by,closed_by
