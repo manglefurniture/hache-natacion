@@ -31,17 +31,6 @@ VALUES(
 -- professor was already inactive. Existing erroneous baseline rows from an
 -- older F7.1 deploy are collapsed by the migration runner after these SQL
 -- statements, using primary-key updates to avoid broad locking.
-UPDATE profesor_horarios ph
-SET ph.activo=0,
-    ph.updated_at=UTC_TIMESTAMP()
-WHERE ph.activo=1
-  AND EXISTS(
-    SELECT 1
-    FROM profesores p
-    WHERE p.id=ph.profesor_id
-      AND p.activo=0
-  );
-
 INSERT INTO profesor_horario_vigencias(
   id,profesor_horario_id,vigente_desde,vigente_hasta,origen,created_by,closed_by
 )
