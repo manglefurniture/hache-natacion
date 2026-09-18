@@ -42,11 +42,21 @@ f8_phase_expect($history['coverage']['before_after']==='textual','Historial text
 f8_phase_expect($history['before']['available']===false&&$history['after']['available']===false,'No debe reconstruirse before/after desde texto histórico.');
 f8_phase_expect($history['entity']['reference_id']==='p1','Debe conservar referencia original de historial.');
 
-$events=[$known,$unknown,$history];
-$count=count($events);
-hache_auditoria_ordenar($events);
-f8_phase_expect(count($events)===$count,'La ordenación no debe deduplicar evidencias.');
-f8_phase_expect(count(array_unique(array_column($events,'id')))===$count,'Fuentes distintas deben conservar IDs independientes.');
+$correlatableAudit=hache_auditoria_evento_normalizar([
+    'id'=>'same-op','usuario_id'=>'u1','usuario_nombre'=>'admin',
+    'accion'=>'MODIFICAR','entidad'=>'pago','entidad_id'=>'p1',
+    'detalle'=>json_encode(['http_status'=>200]),
+    'metodo'=>'POST','ruta'=>'/api/editar-pago.php','created_at'=>'2026-09-18 10:02:00',
+]);
+$correlatableHistory=hache_auditoria_historial_normalizar([
+    'id'=>'same-op','alumno_id'=>'a1','tipo'=>'PAGO','fecha_hora'=>'2026-09-18 10:02:00',
+    'descripcion'=>'Edición de pago. Antes: $100. Después: $120.',
+    'usuario_id'=>'u1','usuario_nombre'=>'admin','referencia_tipo'=>'PAGO','referencia_id'=>'p1',
+]);
+$events=hache_auditoria_agregar([[$correlatableAudit],[$correlatableHistory]],100);
+f8_phase_expect(count($events)===2,'La agregación real debe conservar evidencias correlacionables de fuentes distintas.');
+f8_phase_expect($events[0]['source']!==$events[1]['source'],'La agregación no debe fusionar auditoria_eventos e historial por timestamp, actor o referencia coincidente.');
+f8_phase_expect(count(array_unique(array_column($events,'id')))===2,'Cada autoridad debe conservar su ID estable independiente.');
 
 $api=file_get_contents(__DIR__.'/../api/auditoria-unificada.php')?:'';
 $ui=file_get_contents(__DIR__.'/../public/auditoria.php')?:'';
@@ -54,6 +64,7 @@ f8_phase_expect(str_contains($api,"auth_require(['ADMIN'])"),'El backend F8 debe
 f8_phase_expect(str_contains($ui,"page_require(['ADMIN'])"),'La UI F8 debe permanecer ADMIN-only.');
 f8_phase_expect(str_contains($api,"'read_only'=>true"),'La API debe declarar lectura read-only.');
 f8_phase_expect(!preg_match('/\b(?:INSERT|UPDATE|DELETE|REPLACE)\b/i',$api),'La lectura F8 no debe escribir en fuentes de dominio.');
+f8_phase_expect(str_contains($api,'hache_auditoria_agregar([$events], $limit)'),'El endpoint debe usar el helper de agregación probado.');
 f8_phase_expect(str_contains($api,"'correlacion'=>'sin_heuristicas'"),'Debe declarar ausencia de correlación heurística.');
 f8_phase_expect(!str_contains($api,'contact_hash')&&!preg_match('/SELECT[^;]+\bip\b/is',$api),'La proyección no debe ampliar datos sensibles.');
 
