@@ -28,22 +28,9 @@ VALUES(
 );
 
 -- Reconcile legacy assignments that still appear active even though the
--- professor was already inactive. If the previous F7.1 baseline created an
--- open period for one of those rows, collapse only that synthetic baseline to
--- a zero-length interval rather than inventing teaching history.
-UPDATE profesor_horario_vigencias v
-SET v.vigente_hasta=v.vigente_desde,
-    v.closed_by=NULL
-WHERE v.vigente_hasta IS NULL
-  AND v.origen='F7_BASELINE'
-  AND EXISTS(
-    SELECT 1
-    FROM profesor_horarios ph
-    JOIN profesores p ON p.id=ph.profesor_id
-    WHERE ph.id=v.profesor_horario_id
-      AND p.activo=0
-  );
-
+-- professor was already inactive. Existing erroneous baseline rows from an
+-- older F7.1 deploy are collapsed by the migration runner after these SQL
+-- statements, using primary-key updates to avoid broad locking.
 UPDATE profesor_horarios ph
 SET ph.activo=0,
     ph.updated_at=UTC_TIMESTAMP()
