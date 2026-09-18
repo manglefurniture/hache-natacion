@@ -155,6 +155,41 @@ function hache_auditoria_evento_normalizar(array $row): array
             $scopeSede = trim((string)$detail['sede_id']);
             $scopeKnown = true;
         }
+    } elseif ($action === 'ASISTENCIA_CORREGIDA') {
+        $module = 'operacion';
+        $level = 'confirmed';
+        $resultCode = null;
+        $beforeValues = [];
+        $afterValues = [];
+        $redacted = [];
+        $changes = isset($detail['cambios']) && is_array($detail['cambios']) ? $detail['cambios'] : [];
+        foreach ($changes as $field => $change) {
+            if (!is_array($change)) {
+                continue;
+            }
+            if (array_key_exists('anterior', $change) || array_key_exists('nuevo', $change)) {
+                $beforeValues[(string)$field] = $change['anterior'] ?? null;
+                $afterValues[(string)$field] = $change['nuevo'] ?? null;
+            } elseif (($change['modificado'] ?? false) === true) {
+                $redacted[] = (string)$field;
+            }
+        }
+        if ($beforeValues || $afterValues) {
+            $before = hache_auditoria_valor(true, $beforeValues);
+            $after = hache_auditoria_valor(true, $afterValues);
+            $beforeAfter = 'structured';
+        }
+        $resultDetail = $redacted
+            ? 'Campos modificados con valores omitidos: '.implode(', ', $redacted)
+            : null;
+        if (isset($detail['sesion_id']) && trim((string)$detail['sesion_id']) !== '') {
+            $referenceType = 'sesion';
+            $referenceId = trim((string)$detail['sesion_id']);
+        }
+        if (isset($detail['sede_id']) && trim((string)$detail['sede_id']) !== '') {
+            $scopeSede = trim((string)$detail['sede_id']);
+            $scopeKnown = true;
+        }
     } elseif ($action === 'PAGO_INVALIDADO') {
         $module = 'finanzas';
         $level = 'confirmed';
