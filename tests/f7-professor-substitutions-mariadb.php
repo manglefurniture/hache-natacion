@@ -172,6 +172,7 @@ try{
     $api=(string)file_get_contents(dirname(__DIR__).'/api/profesor-sustituciones.php');
     f72_expect(str_contains($api,"auth_require(['ADMIN'])"),'La API de sustituciones debe permanecer ADMIN-only.');
     f72_expect(str_contains($api,"\$action==='REGISTRAR'")&&str_contains($api,"\$action==='ANULAR'"),'La API debe exponer registro y anulación explícitos.');
+    f72_expect(str_contains($api,"new DateTimeZone('America/Cancun')"),'El rango por defecto debe usar la fecha operativa de Cancún.');
     f72_expect(!str_contains($api,'profesor_cancelaciones'),'La API no debe inferir sustituciones desde cancelaciones.');
 
     $deploy=(string)file_get_contents(dirname(__DIR__).'/ops/production-readiness/deploy-hache-natacion');
