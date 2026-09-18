@@ -4,7 +4,7 @@
 **Base del diagnóstico F8.0:** `main` `a4c107fd8edff82872dbf2fe3ede6739d02fd136`  
 **Última cobertura funcional reflejada:** F8.4 completo hasta PR #349, desplegado en `26f02a9753fe7f95d0b28c6600efd21a841b930b`.  
 **Fecha:** 2026-09-18  
-**Estado del documento:** F8.0/F8.1 cerrados; F8.2/F8.3 desplegados; F8.4 completado; F8.5 en implementación.
+**Estado del documento:** F8.0/F8.1 cerrados; F8.2/F8.3 desplegados; F8.4 completado; F8.5 desplegado técnicamente y pendiente de evidencia operativa real.
 
 ## 1. Principios de P-08
 
@@ -162,6 +162,19 @@ El conjunto de regresiones F8 cubre explícitamente:
 
 `tests/f8-phase-evidence-regression.php` funciona como prueba agregada del contrato de cierre F8.5 y se ejecuta dentro de Quality.
 
+### Estado productivo F8.5
+
+- PR #350 integró la regresión agregada y el helper real de agregación sin deduplicación heurística.
+- Codex automático detectó un P2: la primera regresión solo probaba el ordenamiento y no el camino real de agregación. Se extrajo `hache_auditoria_agregar()`, el endpoint lo consume y la prueba usa dos evidencias deliberadamente correlacionables para demostrar que ambas sobreviven.
+- Quality del head corregido: #1714, exitoso.
+- Merge de PR #350: `e4ecf4217307b4aeefed77c1f6b0719ab95151ce`.
+- Quality de `main`: #1715, exitoso.
+- Deploy #317: exitoso; `.hache-deployed-sha` coincide exactamente con ese SHA y `/api/health.php` responde HTTP 200 / `ok:true`.
+- Verificación de acceso en producción: `/api/auditoria-unificada.php` sin sesión responde HTTP 401 y la UI `/auditoria.php` sin sesión redirige a autenticación, confirmando que la superficie no se abrió fuera de ADMIN.
+- La lectura directa de datos productivos desde el usuario `deploy-hache` no está permitida: `database.local.php` permanece protegido. No se ampliaron privilegios para forzar la evidencia.
+- Falta evidencia operativa de contenido con una sesión ADMIN real y casos post-cobertura disponibles. No se fabricarán eventos para cerrar F8.
+
+
 
 ## 6. Estado vigente de F8
 
@@ -171,5 +184,6 @@ El conjunto de regresiones F8 cubre explícitamente:
 - F8.2: **desplegado** — lectura ADMIN unificada read-only.
 - F8.3: **desplegado** — UI ADMIN mínima sobre el contrato F8.2.
 - F8.4: **terminado y desplegado** — PR #343–#349 integrados; matriz revalidada sin otros huecos de escritura administrativos importantes demostrados dentro del alcance F8.
-- F8.5: **en implementación** — regresión agregada del contrato preparada; la evidencia operativa real en producción sigue siendo obligatoria para el cierre.
-- F8 global: **En implementación**. No se marca Verificado sin evidencia real en producción conforme a F8.5/F8.6.
+- F8.5: **desplegado técnicamente, no verificado operativamente** — PR #350, Quality #1714/#1715 y Deploy #317 completados; falta comprobar contenido real con sesión ADMIN y casos post-cobertura.
+- F8.6: **pendiente** — no debe cerrarse ni marcar F8 Verificado hasta disponer de esa evidencia operativa real.
+- F8 global: **Desplegado, no Verificado**. El código comprometido está en producción, pero falta la comprobación operativa final.
