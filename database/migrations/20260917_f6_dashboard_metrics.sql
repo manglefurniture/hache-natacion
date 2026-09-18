@@ -34,15 +34,23 @@ CREATE TABLE IF NOT EXISTS sharky_prospect_opportunities (
   entry_source VARCHAR(30) NULL,
   sede_clave VARCHAR(20) NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+  conversion_action_hash CHAR(64) NULL,
   opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   closed_at DATETIME NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_sharky_prospect_origin (origin_message_hash),
+  UNIQUE KEY uq_sharky_prospect_conversion_action (conversion_action_hash),
   INDEX idx_sharky_prospect_contact (contact_hash,opened_at),
   INDEX idx_sharky_prospect_cohort (opened_at,status),
   INDEX idx_sharky_prospect_sede (opened_at,sede_clave),
   CONSTRAINT chk_sharky_prospect_status CHECK (status IN ('OPEN','CONVERTED','EXCLUDED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Existing F6 installations predate the conversion link. Keep the migration
+-- additive and idempotent without publishing prospect metrics yet.
+ALTER TABLE sharky_prospect_opportunities
+  ADD COLUMN IF NOT EXISTS conversion_action_hash CHAR(64) NULL AFTER status,
+  ADD UNIQUE INDEX IF NOT EXISTS uq_sharky_prospect_conversion_action (conversion_action_hash);
 
 INSERT IGNORE INTO configuracion(clave,valor,descripcion)
 VALUES

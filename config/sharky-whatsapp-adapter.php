@@ -1273,7 +1273,9 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
             if(($action['type']??'')==='human_takeover')$actionResult=['ok'=>true,'code'=>'HANDOFF','message'=>(string)$decision['message']];
             else{
                 $key=$messageId.'|'.(string)($action['type']??'').'|'.(string)($action['student_id']??$action['course_id']??'');
-                $actionResult=hache_sharky_execute_action($pdo,$contact,$action,$key,$context);
+                $actionContext=$context;
+                if(($action['type']??'')==='register_intensive')$actionContext['f6_opportunity_id']=(string)($state['commercial_context']['f6_opportunity_id']??'');
+                $actionResult=hache_sharky_execute_action($pdo,$contact,$action,$key,$actionContext);
                 $decision['message']=(string)($actionResult['message']??$decision['message']);
                 $decision['ui']=[];
             }

@@ -26,11 +26,13 @@ function f6_dashboard_metrics_schema_ready(PDO $pdo): bool
     $st=$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities'");
     if((int)$st->fetchColumn()!==1)return false;
 
-    $opportunityExpected=['id','contact_hash','origin_message_hash','entry_source','sede_clave','status','opened_at','closed_at','updated_at'];
+    $opportunityExpected=['id','contact_hash','origin_message_hash','entry_source','sede_clave','status','conversion_action_hash','opened_at','closed_at','updated_at'];
     $st=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' ORDER BY ordinal_position");
     if(array_values($st->fetchAll(PDO::FETCH_COLUMN))!==$opportunityExpected)return false;
 
     $st=$pdo->query("SELECT non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' AND index_name='uq_sharky_prospect_origin' LIMIT 1");
+    if((string)$st->fetchColumn()!=='0')return false;
+    $st=$pdo->query("SELECT non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' AND index_name='uq_sharky_prospect_conversion_action' LIMIT 1");
     if((string)$st->fetchColumn()!=='0')return false;
 
     $st=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_bajas_cobertura_desde','dashboard_asistencia_cobertura_desde') ORDER BY clave");

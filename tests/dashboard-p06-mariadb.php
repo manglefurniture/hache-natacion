@@ -31,6 +31,7 @@ try{
     $pdo->exec("CREATE TABLE usuarios(id CHAR(36) PRIMARY KEY) ENGINE=InnoDB");
     $pdo->exec("CREATE TABLE sesiones(id CHAR(36) PRIMARY KEY) ENGINE=InnoDB");
     $pdo->exec("CREATE TABLE configuracion(clave VARCHAR(100) PRIMARY KEY,valor VARCHAR(255) NOT NULL,descripcion TEXT NULL) ENGINE=InnoDB");
+    $pdo->exec("CREATE TABLE sharky_action_audit(idempotency_key CHAR(64) PRIMARY KEY,action_type VARCHAR(60) NOT NULL,contact_hash CHAR(64) NOT NULL,status VARCHAR(20) NOT NULL,completed_at DATETIME NULL) ENGINE=InnoDB");
 
     $sql=file_get_contents(dirname(__DIR__).'/database/migrations/20260917_f6_dashboard_metrics.sql');
     f6m_expect(is_string($sql),'No se pudo leer la migración F6.');
@@ -45,7 +46,7 @@ try{
 
     $opportunityColumns=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' ORDER BY ordinal_position")->fetchAll(PDO::FETCH_COLUMN);
     f6m_expect(
-        $opportunityColumns===['id','contact_hash','origin_message_hash','entry_source','sede_clave','status','opened_at','closed_at','updated_at'],
+        $opportunityColumns===['id','contact_hash','origin_message_hash','entry_source','sede_clave','status','conversion_action_hash','opened_at','closed_at','updated_at'],
         'Columnas inesperadas en la autoridad de oportunidades F6.'
     );
 
@@ -189,6 +190,49 @@ try{
     f6m_expect(
         $missingRequiresRetry,
         'Una oportunidad durable exacta que no pueda persistir sede debe exigir retry en vez de completar silenciosamente el turno.'
+    );
+
+    $auditKey=hash('sha256','wamid.f6.convert.001|register_regular');
+    $pdo->prepare("INSERT INTO sharky_action_audit(idempotency_key,action_type,contact_hash,status,completed_at) VALUES(?,'register_regular',?,'COMPLETED',UTC_TIMESTAMP())")
+        ->execute([$auditKey,$producerContact]);
+    f6m_expect(
+        hache_sharky_prospect_opportunity_link_completed_registration($pdo,$auditKey,$secondOpportunity),
+        'Una inscripción Sharky COMPLETED debe convertir únicamente la oportunidad exacta transportada por el estado.'
+    );
+    $q=$pdo->prepare('SELECT id,status,conversion_action_hash,closed_at FROM sharky_prospect_opportunities WHERE contact_hash=? ORDER BY opened_at,id');
+    $q->execute([$producerContact]);
+    $convertedRows=[];
+    foreach($q->fetchAll(PDO::FETCH_ASSOC) as $row)$convertedRows[(string)$row['id']]=$row;
+    f6m_expect(
+        ($convertedRows[$firstOpportunity]['status']??null)==='OPEN'
+        &&($convertedRows[$firstOpportunity]['conversion_action_hash']??null)===null,
+        'Convertir una oportunidad no debe cerrar otra oportunidad OPEN del mismo contacto.'
+    );
+    f6m_expect(
+        ($convertedRows[$secondOpportunity]['status']??null)==='CONVERTED'
+        &&($convertedRows[$secondOpportunity]['conversion_action_hash']??null)===$auditKey
+        &&trim((string)($convertedRows[$secondOpportunity]['closed_at']??''))!=='',
+        'La conversión debe conservar el hash del audit COMPLETED y el cierre durable.'
+    );
+    f6m_expect(
+        hache_sharky_prospect_opportunity_link_completed_registration($pdo,$auditKey,$secondOpportunity),
+        'Reconciliar la misma conversión COMPLETED debe ser idempotente.'
+    );
+    f6m_expect(
+        hache_sharky_prospect_opportunity_link_completed_registration($pdo,$auditKey,$firstOpportunity)===false,
+        'Una misma acción COMPLETED no debe convertir dos oportunidades del mismo contacto.'
+    );
+    f6m_expect(
+        (string)$pdo->query("SELECT status FROM sharky_prospect_opportunities WHERE id='{$firstOpportunity}'")->fetchColumn()==='OPEN',
+        'La unicidad del audit de conversión debe conservar intacta la otra oportunidad.'
+    );
+    f6m_expect(
+        hache_sharky_prospect_opportunity_link_completed_registration($pdo,$auditKey,'10000000-0000-0000-0000-000000000001')===false,
+        'El mismo audit no debe convertir una oportunidad de otro contacto.'
+    );
+    f6m_expect(
+        (string)$pdo->query("SELECT status FROM sharky_prospect_opportunities WHERE id='10000000-0000-0000-0000-000000000001'")->fetchColumn()==='OPEN',
+        'Un UUID no perteneciente al contacto del audit debe quedar intacto.'
     );
 
     $studentState=['identity'=>['kind'=>'student'],'commercial_context'=>['entry_source'=>'direct']];
