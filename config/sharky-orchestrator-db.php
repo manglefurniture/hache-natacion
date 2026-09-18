@@ -156,6 +156,8 @@ function hache_sharky_action_audit_pending_result(): array
 function hache_sharky_execute_action(PDO $pdo,string $contact,array $action,string $idempotencyKey,array $context=[]): array
 {
     $type=trim((string)($action['type']??''));$contactHash=hache_sharky_orchestrator_contact_hash($contact);$studentId=isset($action['student_id'])?trim((string)$action['student_id']):null;
+    $f6OpportunityId=strtolower(trim((string)($context['f6_opportunity_id']??'')));
+    if(preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/',$f6OpportunityId)!==1)$f6OpportunityId='';
     if($type==='')return ['ok'=>false,'code'=>'NO_ACTION','message'=>'No hay una acción válida para ejecutar.'];
 
     $existing=hache_sharky_action_status($pdo,$idempotencyKey);
@@ -173,7 +175,13 @@ function hache_sharky_execute_action(PDO $pdo,string $contact,array $action,stri
             if(!hache_sharky_action_recovery_reseal_completed($pdo,$idempotencyKey,'RECOVERED',$recovered,$message)){
                 throw new RuntimeException('Unable to reseal recovered Sharky registration result');
             }
+            if($f6OpportunityId!==''&&!hache_sharky_prospect_opportunity_link_completed_registration($pdo,hash('sha256',$idempotencyKey),$f6OpportunityId)){
+                throw new RuntimeException('Completed Sharky registration could not be reconciled with its F6 opportunity');
+            }
             return ['ok'=>true,'duplicate'=>true,'code'=>'RECOVERED','message'=>$message,'result'=>$recovered];
+        }
+        if($type==='register_intensive'&&$f6OpportunityId!==''&&!hache_sharky_prospect_opportunity_link_completed_registration($pdo,hash('sha256',$idempotencyKey),$f6OpportunityId)){
+            throw new RuntimeException('Completed Sharky registration could not be reconciled with its F6 opportunity');
         }
         return ['ok'=>true,'duplicate'=>true,'code'=>(string)($existing['result_code']??'ALREADY_COMPLETED'),'message'=>trim((string)($existing['result_message']??''))?:'Esta operación ya había sido procesada.','result'=>is_array($existing['result']??null)?$existing['result']:null];
     }
@@ -214,7 +222,7 @@ function hache_sharky_execute_action(PDO $pdo,string $contact,array $action,stri
             $code=(string)($result['code']??'CREATED');
             $recovered=($result['recovered']??false)===true||$code==='RECOVERED';
             $message='Listo. Tu registro fue recibido y quedó pendiente de confirmación/pago.';
-            if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,$recovered?'RECOVERED':$code,$result,$message,$ownerToken))return hache_sharky_action_audit_pending_result();
+            if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,$recovered?'RECOVERED':$code,$result,$message,$ownerToken,$f6OpportunityId!==''?$f6OpportunityId:null))return hache_sharky_action_audit_pending_result();
             return ['ok'=>true,'duplicate'=>$recovered,'code'=>$recovered?'RECOVERED':$code,'message'=>$message,'result'=>$result];
         }
         if($type==='human_takeover'){
