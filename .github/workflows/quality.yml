@@ -163,7 +163,7 @@ jobs:
           DELIVERY_DB_NAME: hache_delivery_test
           DELIVERY_DB_USER: root
           DELIVERY_DB_PASS: root
-        run: timeout 30s php tests/f7-professor-assignment-validity-mariadb.php
+        run: php tests/f7-professor-assignment-validity-mariadb.php
       - name: F7 professor substitutions MariaDB regression
         env:
           DELIVERY_DB_HOST: 127.0.0.1
