@@ -45,6 +45,13 @@ $recoveryHuman=strpos($worker,'hache_sharky_human_process_event($pdo,$event',$re
 sharky_entry_expect($recoveryProducer!==false&&$recoveryHuman!==false&&$recoveryProducer<$recoveryHuman,'Inbox recovery must cross the same opportunity boundary before completing generic Sharky processing.');
 sharky_entry_expect(str_contains($worker,'if(!hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null))return false;'),'Recovery producer failure must defer the inbox receipt instead of losing the opportunity.');
 
+$knownStudentBranch=strpos($opportunities,"if((\$identityBefore['found']??false)===true){");
+$deliveryLockPos=strpos($opportunities,'$deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);',$knownStudentBranch===false?0:$knownStudentBranch);
+sharky_entry_expect($knownStudentBranch!==false&&$deliveryLockPos!==false&&$knownStudentBranch<$deliveryLockPos,'Durable known-student identity must be handled before prospect creation.');
+$knownStudentBlock=substr($opportunities,$knownStudentBranch,$deliveryLockPos-$knownStudentBranch);
+sharky_entry_expect(str_contains($knownStudentBlock,'hache_sharky_prospect_opportunity_exclude_durable_student'),'Known students must close only their exact provisional F6 opportunity.');
+sharky_entry_expect(str_contains($knownStudentBlock,'return false;'),'Failure to persist known-student exclusion must leave the durable receipt pending for retry.');
+
 sharky_entry_expect(str_contains($opportunities,"\$state['commercial_context']['f6_opportunity_id']=\$opportunityId;"),'First-turn producer must keep the exact opportunity id only inside encrypted Sharky state.');
 sharky_entry_expect(str_contains($opportunities,'function hache_sharky_prospect_opportunity_enrich_sede'),'F6 must expose a narrow structured-venue enrichment helper.');
 sharky_entry_expect(str_contains($opportunities,"throw new RuntimeException('F6 opportunity storage unavailable for structured venue enrichment')"),'Unavailable venue storage must fail closed so the durable receipt can retry.');
