@@ -33,8 +33,8 @@ $server=new PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,[
 ]);
 
 try{
-    $server->exec("DROP DATABASE IF EXISTS \`{$db}\`");
-    $server->exec("CREATE DATABASE \`{$db}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $server->exec("DROP DATABASE IF EXISTS {$db}");
+    $server->exec("CREATE DATABASE {$db} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     $pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[
         PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
@@ -218,5 +218,5 @@ try{
 
     echo "F7_PROFESSOR_ACTIVITY_MARIADB_OK\n";
 }finally{
-    $server->exec("DROP DATABASE IF EXISTS \`{$db}\`");
+    $server->exec("DROP DATABASE IF EXISTS {$db}");
 }
