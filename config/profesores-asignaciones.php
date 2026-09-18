@@ -27,8 +27,10 @@ function hache_profesores_vigencias_schema_ready(PDO $pdo): bool
     }catch(Throwable $e){return false;}
 }
 
-function hache_profesores_reconciliar_baselines_inactivos(PDO $pdo): int
+function hache_profesores_reconciliar_inactivos(PDO $pdo): int
 {
+    $changed=0;
+
     $st=$pdo->query("SELECT v.id,v.vigente_desde
         FROM profesor_horario_vigencias v
         JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id
@@ -37,17 +39,33 @@ function hache_profesores_reconciliar_baselines_inactivos(PDO $pdo): int
           AND v.vigente_hasta IS NULL
           AND v.origen='F7_BASELINE'
         ORDER BY v.id");
-    $rows=$st->fetchAll(PDO::FETCH_ASSOC);
-    if(!$rows)return 0;
-
-    $update=$pdo->prepare("UPDATE profesor_horario_vigencias
-        SET vigente_hasta=:hasta,closed_by=NULL
-        WHERE id=:id AND vigente_hasta IS NULL AND origen='F7_BASELINE'");
-    $changed=0;
-    foreach($rows as $row){
-        $update->execute([':hasta'=>(string)$row['vigente_desde'],':id'=>(string)$row['id']]);
-        $changed+=$update->rowCount();
+    $baselines=$st->fetchAll(PDO::FETCH_ASSOC);
+    if($baselines){
+        $update=$pdo->prepare("UPDATE profesor_horario_vigencias
+            SET vigente_hasta=:hasta,closed_by=NULL
+            WHERE id=:id AND vigente_hasta IS NULL AND origen='F7_BASELINE'");
+        foreach($baselines as $row){
+            $update->execute([':hasta'=>(string)$row['vigente_desde'],':id'=>(string)$row['id']]);
+            $changed+=$update->rowCount();
+        }
     }
+
+    $st=$pdo->query("SELECT ph.id
+        FROM profesor_horarios ph
+        JOIN profesores p ON p.id=ph.profesor_id
+        WHERE ph.activo=1 AND p.activo=0
+        ORDER BY ph.id");
+    $assignmentIds=array_values(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)));
+    if($assignmentIds){
+        $update=$pdo->prepare("UPDATE profesor_horarios
+            SET activo=0,updated_at=UTC_TIMESTAMP()
+            WHERE id=:id AND activo=1");
+        foreach($assignmentIds as $assignmentId){
+            $update->execute([':id'=>$assignmentId]);
+            $changed+=$update->rowCount();
+        }
+    }
+
     return $changed;
 }
 
