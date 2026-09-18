@@ -90,17 +90,28 @@ function hache_profesores_cerrar_asignaciones_profesor(PDO $pdo,string $profesor
     if(!hache_profesores_vigencias_schema_ready($pdo)){
         throw new HacheProfesoresAssignmentException('Falta aplicar la migración F7.1 de profesores.',503);
     }
-    $st=$pdo->prepare('SELECT id FROM profesor_horarios WHERE profesor_id=:p AND activo=1 FOR UPDATE');
-    $st->execute([':p'=>$profesorId]);$ids=array_values(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)));
-    if(!$ids)return 0;
+    $owns=!$pdo->inTransaction();
+    if($owns)$pdo->beginTransaction();
+    try{
+        $st=$pdo->prepare('SELECT id FROM profesor_horarios WHERE profesor_id=:p AND activo=1 FOR UPDATE');
+        $st->execute([':p'=>$profesorId]);$ids=array_values(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)));
+        if(!$ids){
+            if($owns)$pdo->commit();
+            return 0;
+        }
 
-    $st=$pdo->prepare('UPDATE profesor_horarios SET activo=0,updated_at=UTC_TIMESTAMP() WHERE profesor_id=:p AND activo=1');
-    $st->execute([':p'=>$profesorId]);$changed=$st->rowCount();
+        $st=$pdo->prepare('UPDATE profesor_horarios SET activo=0,updated_at=UTC_TIMESTAMP() WHERE profesor_id=:p AND activo=1');
+        $st->execute([':p'=>$profesorId]);$changed=$st->rowCount();
 
-    $st=$pdo->prepare("UPDATE profesor_horario_vigencias v
-        JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id
-        SET v.vigente_hasta=UTC_TIMESTAMP(),v.closed_by=:u
-        WHERE ph.profesor_id=:p AND v.vigente_hasta IS NULL");
-    $st->execute([':u'=>$actorId,':p'=>$profesorId]);
-    return $changed;
+        $st=$pdo->prepare("UPDATE profesor_horario_vigencias v
+            JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id
+            SET v.vigente_hasta=UTC_TIMESTAMP(),v.closed_by=:u
+            WHERE ph.profesor_id=:p AND v.vigente_hasta IS NULL");
+        $st->execute([':u'=>$actorId,':p'=>$profesorId]);
+        if($owns)$pdo->commit();
+        return $changed;
+    }catch(Throwable $e){
+        if($owns&&$pdo->inTransaction())$pdo->rollBack();
+        throw $e;
+    }
 }
