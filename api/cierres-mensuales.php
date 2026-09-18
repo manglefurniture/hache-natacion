@@ -101,9 +101,43 @@ try{
 
         $pdo->beginTransaction();
         if(closedPeriod($pdo,(string)$site['id'],$nextPeriod)){$pdo->rollBack();out(['ok'=>false,'error'=>'No se puede modificar este periodo porque cambiaría el inicio de un mes siguiente ya cerrado.'],409);}
+        $periodDate=$period.'-01';
+        $nextPeriodDate=$nextPeriod.'-01';
+        $stmt=$pdo->prepare('SELECT id,periodo,fecha_inicio,fecha_cierre FROM periodos_financieros WHERE sede_id=:s AND periodo IN (:p1,:p2) FOR UPDATE');
+        $stmt->execute([':s'=>$site['id'],':p1'=>$periodDate,':p2'=>$nextPeriodDate]);
+        $periodosAntes=[];
+        foreach($stmt->fetchAll() as $filaPeriodo)$periodosAntes[(string)$filaPeriodo['periodo']]=$filaPeriodo;
         $stmt=$pdo->prepare('INSERT INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre,updated_by) VALUES(:s,:p,:i,:c,:u) ON DUPLICATE KEY UPDATE fecha_inicio=VALUES(fecha_inicio),fecha_cierre=VALUES(fecha_cierre),updated_by=VALUES(updated_by),updated_at=NOW()');
-        $stmt->execute([':s'=>$site['id'],':p'=>$period.'-01',':i'=>$currentRange['inicio'],':c'=>$close,':u'=>$user['id']]);
-        $stmt->execute([':s'=>$site['id'],':p'=>$nextPeriod.'-01',':i'=>$nextStart,':c'=>$nextRange['cierre'],':u'=>$user['id']]);
+        $stmt->execute([':s'=>$site['id'],':p'=>$periodDate,':i'=>$currentRange['inicio'],':c'=>$close,':u'=>$user['id']]);
+        $stmt->execute([':s'=>$site['id'],':p'=>$nextPeriodDate,':i'=>$nextStart,':c'=>$nextRange['cierre'],':u'=>$user['id']]);
+        $stmt=$pdo->prepare('SELECT id,periodo,fecha_inicio,fecha_cierre FROM periodos_financieros WHERE sede_id=:s AND periodo IN (:p1,:p2)');
+        $stmt->execute([':s'=>$site['id'],':p1'=>$periodDate,':p2'=>$nextPeriodDate]);
+        $periodosDespues=[];
+        foreach($stmt->fetchAll() as $filaPeriodo)$periodosDespues[(string)$filaPeriodo['periodo']]=$filaPeriodo;
+        $periodoDespues=$periodosDespues[$periodDate]??null;
+        $siguienteDespues=$periodosDespues[$nextPeriodDate]??null;
+        if(!$periodoDespues||!$siguienteDespues)throw new RuntimeException('No se pudo confirmar el rango financiero actualizado.');
+        $periodoAntes=$periodosAntes[$periodDate]??null;
+        $siguienteAntes=$periodosAntes[$nextPeriodDate]??null;
+        $detallePeriodo=[
+            'sede_id'=>(string)$site['id'],
+            'periodo'=>$periodDate,
+            'periodo_id'=>(string)$periodoDespues['id'],
+            'anterior'=>$periodoAntes
+                ? ['existia'=>true,'fecha_inicio'=>(string)$periodoAntes['fecha_inicio'],'fecha_cierre'=>(string)$periodoAntes['fecha_cierre']]
+                : ['existia'=>false],
+            'nuevo'=>['existia'=>true,'fecha_inicio'=>(string)$periodoDespues['fecha_inicio'],'fecha_cierre'=>(string)$periodoDespues['fecha_cierre']],
+            'siguiente_periodo'=>$nextPeriodDate,
+            'siguiente_periodo_id'=>(string)$siguienteDespues['id'],
+            'siguiente_anterior'=>$siguienteAntes
+                ? ['existia'=>true,'fecha_inicio'=>(string)$siguienteAntes['fecha_inicio'],'fecha_cierre'=>(string)$siguienteAntes['fecha_cierre']]
+                : ['existia'=>false],
+            'siguiente_nuevo'=>['existia'=>true,'fecha_inicio'=>(string)$siguienteDespues['fecha_inicio'],'fecha_cierre'=>(string)$siguienteDespues['fecha_cierre']],
+        ];
+        $detalleAudit=json_encode($detallePeriodo,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        if(!is_string($detalleAudit))throw new RuntimeException('No se pudo serializar el cambio de periodo financiero.');
+        $stmt=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta) VALUES(:uid,:un,'PERIODO_FINANCIERO_RANGO_ACTUALIZADO','periodo_financiero',:pid,:detalle,'POST','/api/cierres-mensuales.php')");
+        $stmt->execute([':uid'=>$user['id'],':un'=>$user['usuario']??null,':pid'=>$periodoDespues['id'],':detalle'=>$detalleAudit]);
         $pdo->commit();
         out(['ok'=>true,'mensaje'=>'Periodo financiero actualizado','rango'=>financiero_rango($pdo,(string)$site['id'],$period),'siguiente'=>financiero_rango($pdo,(string)$site['id'],$nextPeriod)]);
     }
