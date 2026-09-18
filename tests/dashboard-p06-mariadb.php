@@ -137,7 +137,7 @@ try{
     $keys=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde','dashboard_prospectos_cobertura_desde') ORDER BY clave")->fetchAll(PDO::FETCH_COLUMN);
     f6m_expect(
         $keys===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde'],
-        'Este micro-paso no debe declarar cobertura de prospectos antes de activar su escritura.'
+        'El productor no debe declarar cobertura publicable de prospectos antes de completar lifecycle y conversión.'
     );
 
     echo "F6_DASHBOARD_METRICS_MARIADB_OK\n";
