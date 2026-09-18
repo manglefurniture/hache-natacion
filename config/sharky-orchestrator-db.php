@@ -8,6 +8,7 @@ require_once __DIR__.'/sharky-identity-verification.php';
 require_once __DIR__.'/sharky-action-recovery.php';
 require_once __DIR__.'/sharky-start-authority.php';
 require_once __DIR__.'/sharky-registration-recovery.php';
+require_once __DIR__.'/sharky-prospect-opportunities.php';
 
 const HACHE_SHARKY_STATE_MAX_TTL = 345600;
 
@@ -124,7 +125,12 @@ function hache_sharky_db_state_save_now(PDO $pdo,string $contact,array $state,in
 {
     $ttl=max(HACHE_SHARKY_FLOW_TTL,min(HACHE_SHARKY_STATE_MAX_TTL,$ttl));
     if(!hache_sharky_db_state_ready($pdo))throw new RuntimeException('Sharky conversation state storage is unavailable');
-    $hash=hache_sharky_orchestrator_contact_hash($contact);$sealed=hache_sharky_db_state_encrypt($state);
+    $hash=hache_sharky_orchestrator_contact_hash($contact);
+    // F6 only enriches an already-created OPEN opportunity. It never creates a
+    // new prospect from a state save, so expired/pre-coverage conversations are
+    // not silently backfilled or duplicated.
+    hache_sharky_prospect_opportunity_sync_open($pdo,$hash,$state);
+    $sealed=hache_sharky_db_state_encrypt($state);
     $expires=(new DateTimeImmutable())->modify('+'.$ttl.' seconds')->format('Y-m-d H:i:s');
     try{
         hache_sharky_db_state_purge_expired($pdo);
