@@ -9,7 +9,8 @@ if (PHP_SAPI !== 'cli' && !$internalHttp) {
 }
 
 umask(0077);
-require_once __DIR__ . '/../config/sharky-delivery-status.php';\nrequire_once __DIR__ . '/../config/profesor-actividad-evidence.php';
+require_once __DIR__ . '/../config/sharky-delivery-status.php';
+require_once __DIR__ . '/../config/profesor-actividad-evidence.php';
 
 /** @return array{exists:bool,engine:?string} */
 function pr_table_state(PDO $pdo, string $table): array
