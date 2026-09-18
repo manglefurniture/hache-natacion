@@ -155,6 +155,36 @@ function hache_auditoria_evento_normalizar(array $row): array
             $scopeSede = trim((string)$detail['sede_id']);
             $scopeKnown = true;
         }
+    } elseif ($action === 'PERIODO_FINANCIERO_RANGO_ACTUALIZADO') {
+        $module = 'finanzas';
+        $level = 'confirmed';
+        $resultCode = null;
+        $resultDetail = null;
+        if (isset($detail['anterior']) && is_array($detail['anterior'])
+            && isset($detail['siguiente_anterior']) && is_array($detail['siguiente_anterior'])) {
+            $before = hache_auditoria_valor(true, [
+                'periodo' => $detail['anterior'],
+                'siguiente_periodo' => $detail['siguiente_anterior'],
+            ]);
+        }
+        if (isset($detail['nuevo']) && is_array($detail['nuevo'])
+            && isset($detail['siguiente_nuevo']) && is_array($detail['siguiente_nuevo'])) {
+            $after = hache_auditoria_valor(true, [
+                'periodo' => $detail['nuevo'],
+                'siguiente_periodo' => $detail['siguiente_nuevo'],
+            ]);
+        }
+        if ($before['available'] || $after['available']) {
+            $beforeAfter = 'structured';
+        }
+        if (isset($detail['siguiente_periodo_id']) && trim((string)$detail['siguiente_periodo_id']) !== '') {
+            $referenceType = 'periodo_financiero_siguiente';
+            $referenceId = trim((string)$detail['siguiente_periodo_id']);
+        }
+        if (isset($detail['sede_id']) && trim((string)$detail['sede_id']) !== '') {
+            $scopeSede = trim((string)$detail['sede_id']);
+            $scopeKnown = true;
+        }
     } elseif ($action === 'ASISTENCIA_CORREGIDA') {
         $module = 'operacion';
         $level = 'confirmed';
