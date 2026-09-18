@@ -18,7 +18,9 @@ function guided_first_button_ids(array $decision): array
 $now=1788883200;
 $pdo=new PDO('sqlite::memory:');
 $webhook=(string)file_get_contents(__DIR__.'/../public/api/whatsapp-orchestrator-lab.php');
-guided_first_ok(str_contains($webhook,'hache_sharky_entry_guided_first_prospect($state,(string)($event[\'text\']??\'\'),$now)'),'The real unmatched-number webhook must bootstrap prospect onboarding before the adapter runs.');
+$opportunities=(string)file_get_contents(__DIR__.'/../config/sharky-prospect-opportunities.php');
+guided_first_ok(str_contains($webhook,'hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,$identityBefore)'),'The real unmatched-number webhook must delegate first-turn preparation to the shared durable boundary.');
+guided_first_ok(str_contains($opportunities,'hache_sharky_entry_guided_first_prospect($state,(string)($event[\'text\']??\'\'),$now)'),'The shared durable boundary must bootstrap prospect onboarding before the adapter runs.');
 
 $fresh=hache_sharky_orchestrator_state(null,$now);
 $fresh['identity']=array_replace($fresh['identity'],['kind'=>'prospect','verified'=>false,'source'=>'whatsapp_unmatched']);

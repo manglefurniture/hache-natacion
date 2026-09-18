@@ -6,7 +6,7 @@ Fecha de actualización: 2026-09-17.
 
 F6 — Dashboard operativo permanece **En implementación**.
 
-La base actualmente integrada y comprobada en producción es `dce535040557d636b01be629f434af1151542b75` (PR #309). Esa versión ya contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia.
+La base actualmente integrada y comprobada en producción es `41a38479fe9bca83f32c53590062eda2ddbd9b0f` (PR #311). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, además del esquema durable todavía inerte para oportunidades.
 
 PR #310 **no se considera integrable como unidad**: mezcló prospectos, conversión, migración, Sharky, dashboard, pruebas y documentación, y la revisión automática encontró problemas reales de identidad/lifecycle e idempotencia. El cierre restante de P-06 se divide desde `main` en micro-pasos independientes.
 
@@ -25,28 +25,33 @@ Las decisiones de producto para el cierre restante siguen siendo:
 
 No se reconstruirá historia previa al inicio real de cobertura.
 
-## Micro-paso actual: autoridad de oportunidad, todavía inerte
+## Micro-paso actual: productor mínimo de oportunidades
 
-Este incremento añade únicamente el esquema durable `sharky_prospect_opportunities` y su verificación de migración.
+PR #311 dejó integrada y desplegada la autoridad durable `sharky_prospect_opportunities`. Este segundo micro-paso activa únicamente su productor en el punto ya existente donde un contacto desconocido pasa por primera vez a `prospect`.
 
-El esquema:
+Contrato del productor:
 
-- no guarda nombre, teléfono ni contenido de mensajes;
-- permite varias oportunidades para un mismo `contact_hash`;
-- usa `origin_message_hash` como frontera idempotente de origen para impedir duplicados por reintento;
-- conserva sede opcional y fuente opcional;
-- reserva estados `OPEN`, `CONVERTED` y `EXCLUDED`.
+- solo corre para el primer turno de un contacto no identificado que ya pasó los guards de grupo, echo, alumno conocido y profesor;
+- la misma frontera se ejecuta tanto en el procesamiento inmediato del webhook como en el recovery del inbox durable;
+- si el lock, el esquema o la escritura de la oportunidad fallan, el turno no se completa y queda pendiente para retry;
+- el contacto se enlaza únicamente mediante `contact_hash`;
+- el `message_id` de origen se transforma a SHA-256 antes de persistirse;
+- reintentar el mismo evento devuelve la misma oportunidad y no duplica filas;
+- un nuevo primer evento tras una conversación posterior puede abrir otra oportunidad para el mismo contacto;
+- la fuente estructurada `meta_ad`, `web`, `direct` o `referral` se conserva;
+- no se inventa sede en el primer turno.
 
-Este micro-paso **no**:
+Este micro-paso **todavía no**:
 
-- crea oportunidades desde Sharky;
-- decide todavía cuándo una conversación abre una oportunidad nueva o continúa una existente;
-- vincula oportunidades con alumnos o inscripciones;
-- calcula conversiones;
-- publica nuevas métricas en el dashboard;
-- crea `dashboard_prospectos_cobertura_desde`.
+- actualiza la sede de una oportunidad cuando se confirme después;
+- marca exclusiones posteriores;
+- vincula una inscripción `COMPLETED`;
+- calcula conversión;
+- publica prospectos/conversión en el dashboard;
+- crea `dashboard_prospectos_cobertura_desde`;
+- reconstruye oportunidades anteriores a la activación del productor.
 
-Por tanto, desplegar este esquema no inicia por sí solo la cobertura de prospectos y no cambia ninguna cifra operativa.
+Por tanto, la escritura es forward-only y sigue sin constituir por sí sola cobertura publicable del indicador.
 
 ## Cobertura vigente
 
@@ -70,7 +75,7 @@ Por tanto, desplegar este esquema no inicia por sí solo la cobertura de prospec
 | Mensualidades y avisos | `config/dashboard-indicadores.php` |
 | Operación diaria | `config/dashboard-operacion.php` |
 | P-06 alumnos/bajas/asistencia | `config/dashboard-p06.php` + cobertura persistida |
-| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` existe como esquema, todavía sin productor |
+| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` + productor del primer turno; dashboard aún sin cobertura publicable |
 | Fecha/hora | `config/dashboard-tiempo.php`, `America/Cancun` |
 
 ## Evidencia acumulada
@@ -80,8 +85,10 @@ Por tanto, desplegar este esquema no inicia por sí solo la cobertura de prospec
 | #300–#305 | Fuentes F1/F2/F5, operación, alumnos, intensivos y tiempo | Integrados y desplegados |
 | #307 | Cierre de hallazgos técnicos de F6 | Integrado y desplegado como `6d521421...` |
 | #309 | P-06: nuevos alumnos, bajas y asistencia | Integrado y producción comprobada en `dce535040557d636b01be629f434af1151542b75` |
+| #311 | P-06: autoridad durable inerte de oportunidades | Integrado, Quality y producción comprobados en `41a38479...` |
+| #312 | P-06: productor mínimo del primer turno prospecto | En revisión; sin conversión ni publicación de dashboard |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
 ## Criterio para continuar el cierre
 
-El micro-paso de esquema debe pasar Quality y revisión automática, integrarse a `main`, desplegarse mediante auto-deploy y verificarse. Solo después se define e implementa, en otro PR, el productor mínimo de oportunidades y su lifecycle; conversión y publicación en dashboard permanecen fuera de este incremento.
+El productor mínimo debe pasar Quality y revisión automática, integrarse a `main`, desplegarse mediante auto-deploy y verificarse sin alterar el funnel. Solo después se abordará otro micro-paso de lifecycle/enriquecimiento o vínculo de conversión; la publicación en dashboard permanece fuera de este incremento.

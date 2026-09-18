@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once dirname(__DIR__).'/config/sharky-prospect-opportunities.php';
+
 function f6m_expect(bool $ok,string $message): void
 {
     if(!$ok)throw new RuntimeException($message);
@@ -95,10 +97,47 @@ try{
     }
     f6m_expect($invalidStatusRejected,'El esquema debe rechazar estados de oportunidad no definidos.');
 
+    $producerContact=str_repeat('1',64);
+    $producerState=[
+        'identity'=>['kind'=>'prospect'],
+        'commercial_context'=>['entry_source'=>'web'],
+    ];
+    $originMessage='wamid.f6.prospect.001';
+    $firstOpportunity=hache_sharky_prospect_opportunity_open($pdo,$producerContact,$originMessage,$producerState);
+    f6m_expect(is_string($firstOpportunity)&&$firstOpportunity!=='','El primer turno prospecto debe abrir una oportunidad durable.');
+    $retryOpportunity=hache_sharky_prospect_opportunity_open($pdo,$producerContact,$originMessage,$producerState);
+    f6m_expect($retryOpportunity===$firstOpportunity,'Reintentar el mismo evento debe devolver la misma oportunidad.');
+    $originHash=hash('sha256',$originMessage);
+    $q=$pdo->prepare('SELECT contact_hash,origin_message_hash,entry_source,sede_clave,status FROM sharky_prospect_opportunities WHERE id=?');
+    $q->execute([$firstOpportunity]);
+    $produced=$q->fetch(PDO::FETCH_ASSOC);
+    f6m_expect(is_array($produced),'La oportunidad producida debe poder releerse.');
+    f6m_expect((string)$produced['contact_hash']===$producerContact,'La oportunidad debe conservar únicamente el hash del contacto.');
+    f6m_expect((string)$produced['origin_message_hash']===$originHash,'El evento de origen debe persistirse únicamente como SHA-256.');
+    f6m_expect((string)$produced['entry_source']==='web','La fuente estructurada del primer turno debe conservarse.');
+    f6m_expect($produced['sede_clave']===null,'El primer turno no debe inventar una sede todavía no confirmada.');
+    f6m_expect((string)$produced['status']==='OPEN','Una oportunidad recién abierta debe iniciar OPEN.');
+    f6m_expect(
+        (int)$pdo->query("SELECT COUNT(*) FROM sharky_prospect_opportunities WHERE origin_message_hash='{$originHash}'")->fetchColumn()===1,
+        'El mismo evento de origen no debe duplicar oportunidades.'
+    );
+
+    $secondOpportunity=hache_sharky_prospect_opportunity_open($pdo,$producerContact,'wamid.f6.prospect.002',$producerState);
+    f6m_expect(is_string($secondOpportunity)&&$secondOpportunity!==''&&$secondOpportunity!==$firstOpportunity,'Un nuevo primer evento debe poder representar otra oportunidad del mismo contacto.');
+    $q=$pdo->prepare('SELECT COUNT(*) FROM sharky_prospect_opportunities WHERE contact_hash=? AND status=\'OPEN\'');
+    $q->execute([$producerContact]);
+    f6m_expect((int)$q->fetchColumn()===2,'Oportunidades históricas distintas no deben colapsarse por contacto.');
+
+    $studentState=['identity'=>['kind'=>'student'],'commercial_context'=>['entry_source'=>'direct']];
+    f6m_expect(
+        hache_sharky_prospect_opportunity_open($pdo,str_repeat('2',64),'wamid.f6.student.001',$studentState)===null,
+        'Una identidad de alumno no debe abrir una oportunidad de prospecto.'
+    );
+
     $keys=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde','dashboard_prospectos_cobertura_desde') ORDER BY clave")->fetchAll(PDO::FETCH_COLUMN);
     f6m_expect(
         $keys===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde'],
-        'Este micro-paso no debe declarar cobertura de prospectos antes de activar su escritura.'
+        'El productor no debe declarar cobertura publicable de prospectos antes de completar lifecycle y conversión.'
     );
 
     echo "F6_DASHBOARD_METRICS_MARIADB_OK\n";
