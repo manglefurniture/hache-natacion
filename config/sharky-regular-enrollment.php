@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-commerce-flows.php';
 require_once __DIR__.'/sharky-action-recovery.php';
+require_once __DIR__.'/sharky-prospect-opportunities.php';
 require_once __DIR__.'/sharky-age-policy.php';
 
 const HACHE_SHARKY_REGULAR_FLOW_KIND='regular_enrollment';
@@ -193,6 +194,7 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
         $profile=strtolower(trim((string)($data['level_profile']??'')));
         $registrationAction=['sede_clave'=>$expected,'schedule_id'=>(string)($data['schedule_id']??''),'plan_id'=>(string)($data['plan_id']??''),'name'=>(string)($data['full_name']??''),'birthdate'=>(string)($data['birthdate']??''),'contact_phone'=>$contact,'level_profile'=>$profile];
         $idempotencyKey=$eventId.'|register_regular';$existing=hache_sharky_action_recovery_status($pdo,$idempotencyKey);$result=null;
+        $f6OpportunityId=hache_sharky_prospect_opportunity_state_id($state);
         $successMessage='Recibí tu inscripción a clases regulares. Ya tengo tu sede, plan y horario. Ahora te dejo con una persona del equipo para revisar contigo el pago de inscripción y mensualidad.';
         if(is_array($existing)&&(string)($existing['status']??'')==='COMPLETED'){
             $result=is_array($existing['result']??null)?$existing['result']:null;
@@ -213,11 +215,15 @@ function hache_sharky_regular_enrollment_process(PDO $pdo,array $event,array $bu
                     $result=hache_sharky_regular_registration_recover_locked($pdo,$contact,$registrationAction);if(!is_array($result))throw $registrationError;
                 }
                 $resultCode=(string)($result['code']??'CREATED');
-                if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,$resultCode,$result,$successMessage,$ownerToken)){hache_sharky_db_state_defer_cancel();return false;}
+                if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,true,$resultCode,$result,$successMessage,$ownerToken,$f6OpportunityId)){hache_sharky_db_state_defer_cancel();return false;}
             }catch(HacheSharkyBusinessException $registrationError){
                 if(!hache_sharky_action_recovery_finish($pdo,$idempotencyKey,false,$registrationError->codeName,null,$registrationError->getMessage(),$ownerToken)){hache_sharky_db_state_defer_cancel();return false;}
                 throw $registrationError;
             }
+        }
+        if($f6OpportunityId!==null&&!hache_sharky_prospect_opportunity_link_completed_registration($pdo,hash('sha256',$idempotencyKey),$f6OpportunityId)){
+            hache_sharky_db_state_defer_cancel();
+            return false;
         }
         if(!is_array($result))throw new RuntimeException('Regular enrollment completed without a recoverable result');
         $state=hache_sharky_orchestrator_clear_flow($state);unset($state['commercial_context']['meta_step']);$state['commercial_context']['age']=(new DateTimeImmutable((string)$data['birthdate']))->diff(new DateTimeImmutable(hache_sharky_lab_today()))->y;$state['commercial_context']['swim_level']=$profile;
