@@ -35,6 +35,7 @@ function hache_sharky_prospect_opportunity_sede(array $state): ?string
 
 function hache_sharky_prospect_opportunity_sync_open(PDO $pdo,string $contactHash,array $state): bool
 {
+    if(($state['identity']['kind']??'unknown')!=='prospect')return true;
     if(!hache_sharky_prospect_opportunity_schema_ready($pdo)||strlen($contactHash)!==64)return false;
     $source=hache_sharky_prospect_opportunity_source($state);
     $sede=hache_sharky_prospect_opportunity_sede($state);
