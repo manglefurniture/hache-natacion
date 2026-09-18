@@ -18,8 +18,8 @@ f8_financial_period_expect(str_contains($page,"['existia'=>false]"),'Debe conser
 f8_financial_period_expect(str_contains($page,"'PERIODO_FINANCIERO_RANGO_ACTUALIZADO','periodo_financiero',:pid"),'Debe usar un evento de dominio específico con el ID persistido del periodo.');
 f8_financial_period_expect(str_contains($page,"'siguiente_periodo_id'=>(string)\$siguienteDespues['id']"),'Debe conservar la referencia exacta al periodo siguiente afectado.');
 f8_financial_period_expect(str_contains($page,'$sinCambios=$periodoAntes&&$siguienteAntes'),'Debe detectar no-op solo cuando ambas filas persistidas existen.');
-f8_financial_period_expect(str_contains($page,"&&\(string\)\$periodoAntes\['fecha_cierre'\]===\$close"),'Debe comparar el cierre persistido con el solicitado.');
-f8_financial_period_expect(str_contains($page,"&&\(string\)\$siguienteAntes\['fecha_inicio'\]===\$nextStart"),'Debe comparar el inicio persistido del periodo siguiente.');
+f8_financial_period_expect(str_contains($page,"&&(string)\$periodoAntes['fecha_cierre']===\$close"),'Debe comparar el cierre persistido con el solicitado.');
+f8_financial_period_expect(str_contains($page,"&&(string)\$siguienteAntes['fecha_inicio']===\$nextStart"),'Debe comparar el inicio persistido del periodo siguiente.');
 f8_financial_period_expect(str_contains($page,"if(\$sinCambios){\n            \$pdo->commit();\n            out(['ok'=>true,'mensaje'=>'Periodo financiero sin cambios'"),'Un no-op debe terminar sin upsert ni evento confirmado.');
 
 $lockPos=strpos($page,'SELECT id,periodo,fecha_inicio,fecha_cierre FROM periodos_financieros WHERE sede_id=:s AND periodo IN (:p1,:p2) FOR UPDATE');
