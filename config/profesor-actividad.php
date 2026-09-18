@@ -162,21 +162,29 @@ function hache_profesor_actividad_contexto(PDO $pdo,string $desde,string $hasta,
             if($activeSubstitute!==null)$activeAsSubstitute++;
 
             $confirmed=null;$confirmationSource=null;$attributionNote=null;
-            if((string)$session['estado']==='CANCELADA'){
+            $sessionState=(string)$session['estado'];
+            $hasActiveRelation=$isAssigned||$incident!==null||$activeOriginal!==null||$activeSubstitute!==null;
+            if($sessionState==='CANCELADA'&&$hasActiveRelation){
                 $confirmed=false;$confirmationSource='SESION_CANCELADA';
+            }elseif($sessionState==='REALIZADA'){
+                if($incident!==null){
+                    $confirmed=false;$confirmationSource='PROFESOR_CANCELACION+SESION_REALIZADA';
+                }elseif($activeOriginal!==null){
+                    $confirmed=false;$confirmationSource='SUSTITUCION_EXPLICITA+SESION_REALIZADA';
+                }elseif($activeSubstitute!==null){
+                    $confirmed=true;$confirmationSource='SUSTITUCION_EXPLICITA+SESION_REALIZADA';
+                }elseif($isAssigned){
+                    $attributionNote='La sesión fue realizada y la asignación estaba vigente, pero no existe una marca positiva de asistencia del profesor; no se acredita como carga realizada.';
+                }
             }elseif($incident!==null){
-                $confirmed=false;$confirmationSource='PROFESOR_CANCELACION';
-            }elseif($activeOriginal!==null){
-                $confirmed=false;$confirmationSource='SUSTITUCION_EXPLICITA';
-            }elseif((string)$session['estado']==='REALIZADA'&&$activeSubstitute!==null){
-                $confirmed=true;$confirmationSource='SUSTITUCION_EXPLICITA+SESION_REALIZADA';
-            }elseif((string)$session['estado']==='REALIZADA'&&$isAssigned){
-                $attributionNote='La sesión fue realizada y la asignación estaba vigente, pero no existe una marca positiva de asistencia del profesor; no se acredita como carga realizada.';
+                $attributionNote='Existe una incidencia del profesor, pero la sesión aún no acredita carga realizada.';
+            }elseif($activeOriginal!==null||$activeSubstitute!==null){
+                $attributionNote='Existe una sustitución activa, pero la sesión aún no acredita carga realizada.';
             }
 
             if($confirmed===true){$confirmedSessions++;$confirmedMinutes+=$duration;}
             elseif($confirmed===false)$confirmedNotTaught++;
-            elseif((string)$session['estado']==='REALIZADA'&&$isAssigned)$pendingAttribution++;
+            elseif($sessionState==='REALIZADA'&&$isAssigned)$pendingAttribution++;
 
             $sources=['SESION'];
             if($isAssigned)$sources[]='ASIGNACION_DURABLE';
