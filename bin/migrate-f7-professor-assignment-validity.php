@@ -45,7 +45,7 @@ try{
         $sql=file_get_contents($root.'/database/migrations/20260918_f7_professor_assignment_validity.sql');
         if(!is_string($sql))throw new RuntimeException('No se pudo leer la migración F7.1.');
         foreach(f7_professor_assignment_split_sql($sql) as $statement)$pdo->exec($statement);
-        hache_profesores_reconciliar_baselines_inactivos($pdo);
+        hache_profesores_reconciliar_inactivos($pdo);
         if(!f7_professor_assignment_schema_ready($pdo))throw new RuntimeException('La verificación del esquema F7.1 falló.');
         fwrite(STDOUT,"F7_PROFESSOR_ASSIGNMENT_VALIDITY_MIGRATION_OK\n");
     }finally{
