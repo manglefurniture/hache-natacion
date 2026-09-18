@@ -35,7 +35,7 @@ P-08 queda resuelta con estas reglas:
 | Editar pago | finanzas | `historial` tipo `PAGO` en la misma transacción | sí | `fecha_hora` | pago | sí, durable en descripción | sí, durable en descripción | cambio confirmado | completa como evidencia textual | medio si se intenta parsear texto a estructura |
 | Invalidar pago | finanzas | fila de pago + evento `PAGO_INVALIDADO` desde PR #347 | sí | `invalidated_at` y `created_at` del evento | pago + sede | estado `VALIDO` de la fila bloqueada | estado `INVALIDADO` | cambio confirmado en la misma transacción | completa desde cobertura F8.4 | bajo si no se reconstruye historia previa |
 | Cerrar mes financiero | finanzas | `cierres_mensuales` | `cerrado_por` | `cerrado_at` | sede + periodo | no aplica como edición | snapshot del cierre | cambio confirmado | completa para creación del cierre | bajo |
-| Ajustar rango de periodo financiero | finanzas | `periodos_financieros.updated_by/updated_at` + audit HTTP | sí | sí | sede + periodo | no | estado vigente | cambio confirmado del estado vigente, sin snapshot anterior | parcial | alto para before |
+| Ajustar rango de periodo financiero | finanzas | filas bloqueadas de `periodos_financieros` + `PERIODO_FINANCIERO_RANGO_ACTUALIZADO` en PR #349 | sí, forward-only | `created_at` del evento + timestamps de fila | periodo principal + periodo siguiente + sede | snapshot exacto de ambas filas, incluida ausencia real | filas persistidas después del upsert | cambio confirmado en la misma transacción | completa desde cobertura F8.4 | bajo si no se reconstruye historia previa |
 | Cerrar sesión/clase | operación | `sesiones.cerrada_por`, `fecha_cierre`, estado + cobertura | sí | sí | sesión | no snapshot | REALIZADA/cerrada durable | cambio confirmado | completa para cierre | bajo |
 | Marcar/corregir asistencia | operación | alta en `asistencias`; correcciones con `ASISTENCIA_CORREGIDA` desde PR #348 | alta: `created_by`; corrección: actor del evento | timestamps de fila + `created_at` del evento | asistencia + sesión; alumno/sede conservados en evidencia | estado anterior real en correcciones; texto libre no duplicado | estado nuevo real; observación solo indica modificación | cambio confirmado en la misma transacción | completa para correcciones desde cobertura F8.4; historia previa permanece sin backfill | bajo si se respeta cobertura forward-only |
 | Alta de relación en intensivo | intensivos | `curso_intensivo_alumnos.created_by` y timestamps disponibles; corrección histórica además usa `historial` | sí para alta | sí | relación/alumno/curso | no aplica | relación durable | confirmado | completa para alta; mejor evidencia en corrección histórica | bajo |
@@ -55,8 +55,8 @@ Estado de los huecos demostrados de F8.4:
 - **cerrado forward-only — PR #345:** edición de perfil de profesor;
 - **cerrado forward-only — PR #346:** retiro de alumno de un intensivo;
 - **cerrado forward-only — PR #347:** invalidación de pago con snapshot durable del estado anterior;
-- **en cierre en PR #348:** correcciones de asistencia; conserva actor y estado before/after sin copiar observación libre;
-- **pendiente:** cambios de rango de periodo financiero conservan quién/cuándo del estado vigente, pero no el valor anterior.
+- **cerrado forward-only — PR #348:** correcciones de asistencia; conserva actor y estado before/after sin copiar observación libre;
+- **en cierre en PR #349:** cambios de rango de periodo financiero; captura las dos filas afectadas bajo bloqueo y conserva before/after exactos, incluida ausencia previa.
 
 Ninguno de estos cierres hace backfill: la historia previa a cada cobertura permanece explícitamente desconocida cuando la fuente no la guardó.
 
@@ -154,5 +154,5 @@ Antes de cerrar la fase debe existir evidencia automatizada y operativa de:
 - F8.1: **terminado**.
 - F8.2: **desplegado** — lectura ADMIN unificada read-only.
 - F8.3: **desplegado** — UI ADMIN mínima sobre el contrato F8.2.
-- F8.4: **en implementación incremental** — PR #343–#347 integrados; PR #348 cubre correcciones de asistencia y queda sujeto a Quality/revisión/merge/deploy.
+- F8.4: **en implementación incremental** — PR #343–#348 integrados; PR #349 cubre el rango de periodo financiero y queda sujeto a Quality/revisión/merge/deploy.
 - F8 global: **En implementación**. No se marca Verificado sin evidencia real en producción conforme a F8.5/F8.6.
