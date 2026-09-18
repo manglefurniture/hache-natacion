@@ -23,7 +23,28 @@ CREATE TABLE IF NOT EXISTS sesion_asistencia_cobertura (
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- P-06: one durable row per prospective participant/opportunity.
+-- Raw names and phone numbers stay out of this analytics ledger.
+CREATE TABLE IF NOT EXISTS sharky_prospect_opportunities (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  contact_hash CHAR(64) NOT NULL,
+  entry_source VARCHAR(30) NULL,
+  sede_clave VARCHAR(20) NULL,
+  status ENUM('OPEN','CONVERTED') NOT NULL DEFAULT 'OPEN',
+  open_slot TINYINT UNSIGNED NULL DEFAULT 1,
+  alumno_id CHAR(36) NULL,
+  created_at DATETIME NOT NULL,
+  converted_at DATETIME NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_sharky_prospect_open (contact_hash,open_slot),
+  UNIQUE KEY uq_sharky_prospect_student (alumno_id),
+  INDEX idx_sharky_prospect_cohort (created_at,status),
+  INDEX idx_sharky_prospect_sede (created_at,sede_clave),
+  CONSTRAINT fk_sharky_prospect_student FOREIGN KEY (alumno_id) REFERENCES alumnos(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT IGNORE INTO configuracion(clave,valor,descripcion)
 VALUES
   ('dashboard_bajas_cobertura_desde',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura fiable para bajas registradas por F6'),
-  ('dashboard_asistencia_cobertura_desde',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura persistida para porcentaje de asistencia F6');
+  ('dashboard_asistencia_cobertura_desde',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura persistida para porcentaje de asistencia F6'),
+  ('dashboard_prospectos_cobertura_desde',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura fiable para oportunidades y conversiones F6');
