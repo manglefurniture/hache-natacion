@@ -27,15 +27,21 @@ VALUES(
   'Inicio forward-only de vigencia durable de asignaciones de profesores F7'
 );
 
+-- Reconcile legacy assignments that still appear active even though the
+-- professor was already inactive. Existing erroneous baseline rows from an
+-- older F7.1 deploy are collapsed by the migration runner after these SQL
+-- statements, using primary-key updates to avoid broad locking.
 INSERT INTO profesor_horario_vigencias(
   id,profesor_horario_id,vigente_desde,vigente_hasta,origen,created_by,closed_by
 )
 SELECT
   UUID(),ph.id,CAST(cfg.valor AS DATETIME),NULL,'F7_BASELINE',NULL,NULL
 FROM profesor_horarios ph
+JOIN profesores p ON p.id=ph.profesor_id
 JOIN configuracion cfg
   ON cfg.clave='profesores_asignaciones_cobertura_desde'
 WHERE ph.activo=1
+  AND p.activo=1
   AND NOT EXISTS(
     SELECT 1 FROM configuracion
     WHERE clave='profesores_asignaciones_baseline_aplicado'

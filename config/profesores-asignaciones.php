@@ -23,6 +23,59 @@ function hache_profesores_vigencias_schema_ready(PDO $pdo): bool
     }catch(Throwable $e){return false;}
 }
 
+
+function hache_profesores_vigencias_invariantes_ready(PDO $pdo): bool
+{
+    try{
+        $st=$pdo->query("SELECT COUNT(*) FROM profesor_horarios ph JOIN profesores p ON p.id=ph.profesor_id WHERE ph.activo=1 AND p.activo=0");
+        if((int)$st->fetchColumn()!==0)return false;
+        $st=$pdo->query("SELECT COUNT(*) FROM profesor_horario_vigencias v JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id WHERE ph.activo=0 AND v.vigente_hasta IS NULL");
+        return (int)$st->fetchColumn()===0;
+    }catch(Throwable $e){return false;}
+}
+
+function hache_profesores_reconciliar_inactivos(PDO $pdo): int
+{
+    $changed=0;
+
+    $st=$pdo->query("SELECT v.id,v.vigente_desde
+        FROM profesor_horario_vigencias v
+        JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id
+        JOIN profesores p ON p.id=ph.profesor_id
+        WHERE p.activo=0
+          AND v.vigente_hasta IS NULL
+          AND v.origen='F7_BASELINE'
+        ORDER BY v.id");
+    $baselines=$st->fetchAll(PDO::FETCH_ASSOC);
+    if($baselines){
+        $update=$pdo->prepare("UPDATE profesor_horario_vigencias
+            SET vigente_hasta=:hasta,closed_by=NULL
+            WHERE id=:id AND vigente_hasta IS NULL AND origen='F7_BASELINE'");
+        foreach($baselines as $row){
+            $update->execute([':hasta'=>(string)$row['vigente_desde'],':id'=>(string)$row['id']]);
+            $changed+=$update->rowCount();
+        }
+    }
+
+    $st=$pdo->query("SELECT ph.id
+        FROM profesor_horarios ph
+        JOIN profesores p ON p.id=ph.profesor_id
+        WHERE ph.activo=1 AND p.activo=0
+        ORDER BY ph.id");
+    $assignmentIds=array_values(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN)));
+    if($assignmentIds){
+        $update=$pdo->prepare("UPDATE profesor_horarios
+            SET activo=0,updated_at=UTC_TIMESTAMP()
+            WHERE id=:id AND activo=1");
+        foreach($assignmentIds as $assignmentId){
+            $update->execute([':id'=>$assignmentId]);
+            $changed+=$update->rowCount();
+        }
+    }
+
+    return $changed;
+}
+
 function hache_profesores_vigencia_abrir(PDO $pdo,string $assignmentId,?string $actorId): void
 {
     $st=$pdo->prepare("INSERT INTO profesor_horario_vigencias(id,profesor_horario_id,vigente_desde,origen,created_by)

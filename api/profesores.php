@@ -14,7 +14,7 @@ function profesores_schema(PDO $pdo):bool{
  try{
   $st=$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('profesores','profesor_horarios')");
   if((int)$st->fetchColumn()!==2)return false;
-  return hache_profesores_vigencias_schema_ready($pdo);
+  return hache_profesores_vigencias_schema_ready($pdo)&&hache_profesores_vigencias_invariantes_ready($pdo);
  }catch(Throwable $e){return false;}
 }
 try{

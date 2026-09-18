@@ -46,20 +46,24 @@ try{
     $admin='00000000-0000-0000-0000-000000000001';
     $teacher1='00000000-0000-0000-0000-000000000010';
     $teacher2='00000000-0000-0000-0000-000000000011';
+    $legacyInactive='00000000-0000-0000-0000-000000000012';
     $schedule1='00000000-0000-0000-0000-000000000020';
     $schedule2='00000000-0000-0000-0000-000000000021';
     $assignment1='00000000-0000-0000-0000-000000000030';
     $assignment2='00000000-0000-0000-0000-000000000031';
+    $legacyAssignment='00000000-0000-0000-0000-000000000032';
 
     $pdo->prepare('INSERT INTO usuarios(id) VALUES(?)')->execute([$admin]);
-    $p=$pdo->prepare('INSERT INTO profesores(id,nombre,whatsapp,activo) VALUES(?,?,?,1)');
-    $p->execute([$teacher1,'Profe Uno','+529981112233']);
-    $p->execute([$teacher2,'Profe Dos','+529981112244']);
+    $p=$pdo->prepare('INSERT INTO profesores(id,nombre,whatsapp,activo) VALUES(?,?,?,?)');
+    $p->execute([$teacher1,'Profe Uno','+529981112233',1]);
+    $p->execute([$teacher2,'Profe Dos','+529981112244',1]);
+    $p->execute([$legacyInactive,'Profe Legacy Inactivo','+529981112255',0]);
     $h=$pdo->prepare('INSERT INTO horarios(id,activo) VALUES(?,1)');
     $h->execute([$schedule1]);$h->execute([$schedule2]);
     $a=$pdo->prepare('INSERT INTO profesor_horarios(id,profesor_id,horario_id,activo,created_by) VALUES(?,?,?,?,?)');
     $a->execute([$assignment1,$teacher1,$schedule1,1,$admin]);
     $a->execute([$assignment2,$teacher1,$schedule2,0,$admin]);
+    $a->execute([$legacyAssignment,$legacyInactive,$schedule1,1,$admin]);
 
     $sql=file_get_contents(dirname(__DIR__).'/database/migrations/20260918_f7_professor_assignment_validity.sql');
     f71_expect(is_string($sql),'No se pudo leer la migración F7.1.');
@@ -68,6 +72,8 @@ try{
     $statements=array_values(array_filter(array_map('trim',explode(';',$withoutComments)),static fn(string $s):bool=>$s!==''));
     foreach($statements as $statement)$pdo->exec($statement);
     foreach($statements as $statement)$pdo->exec($statement);
+
+    f71_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_horario_vigencias WHERE profesor_horario_id='{$legacyAssignment}'")->fetchColumn()===0,'Un profesor ya inactivo no debe recibir baseline F7.');
 
     $coverage=(string)$pdo->query("SELECT valor FROM configuracion WHERE clave='profesores_asignaciones_cobertura_desde'")->fetchColumn();
     f71_expect($coverage!=='','Debe existir un marcador durable de cobertura forward-only.');
@@ -79,7 +85,21 @@ try{
     f71_expect((string)$baseline['origen']==='F7_BASELINE'&&$baseline['created_by']===null&&$baseline['vigente_hasta']===null,'El baseline no debe inventar actor ni cierre histórico.');
 
     require_once dirname(__DIR__).'/config/profesores-asignaciones.php';
-    f71_expect(hache_profesores_vigencias_schema_ready($pdo),'El helper debe reconocer el esquema F7.1.');
+
+    f71_expect(hache_profesores_vigencias_schema_ready($pdo),'La estructura F7.1 debe estar lista antes de reconciliar datos legacy.');
+    f71_expect(!hache_profesores_vigencias_invariantes_ready($pdo),'Una asignación activa de profesor inactivo debe invalidar las invariantes operativas.');
+    f71_expect(hache_profesores_reconciliar_inactivos($pdo)===1,'La reparación debe desactivar exactamente la asignación legacy.');
+    f71_expect((int)$pdo->query("SELECT activo FROM profesor_horarios WHERE id='{$legacyAssignment}'")->fetchColumn()===0,'La asignación legacy debe quedar inactiva antes de continuar.');
+
+    $pdo->prepare("INSERT INTO profesor_horario_vigencias(id,profesor_horario_id,vigente_desde,origen) VALUES(UUID(),?,?, 'F7_BASELINE')")
+        ->execute([$legacyAssignment,$coverage]);
+    f71_expect(!hache_profesores_vigencias_invariantes_ready($pdo),'Un baseline abierto sobre asignación inactiva debe invalidar las invariantes operativas.');
+    f71_expect(hache_profesores_reconciliar_inactivos($pdo)===1,'La reparación debe cerrar exactamente el baseline sintético legacy.');
+    $legacyBaseline=$pdo->query("SELECT vigente_desde,vigente_hasta,origen FROM profesor_horario_vigencias WHERE profesor_horario_id='{$legacyAssignment}'")->fetch();
+    f71_expect(is_array($legacyBaseline)&&(string)$legacyBaseline['vigente_hasta']===(string)$legacyBaseline['vigente_desde'],'La reparación debe conservar la fila y colapsarla sin inventar historia.');
+    f71_expect(hache_profesores_reconciliar_inactivos($pdo)===0,'Repetir la reparación debe ser idempotente.');
+    f71_expect(hache_profesores_vigencias_schema_ready($pdo),'El helper debe reconocer la estructura F7.1 tras reparar.');
+    f71_expect(hache_profesores_vigencias_invariantes_ready($pdo),'Las invariantes F7.1 deben quedar limpias tras reparar.');
 
     hache_profesores_asignacion_set($pdo,$teacher1,$schedule1,false,$admin);
     f71_expect((int)$pdo->query("SELECT activo FROM profesor_horarios WHERE id='{$assignment1}'")->fetchColumn()===0,'Desasignar debe actualizar el estado actual.');
@@ -120,6 +140,7 @@ try{
     $api=(string)file_get_contents(dirname(__DIR__).'/api/profesores.php');
     f71_expect(str_contains($api,'hache_profesores_asignacion_set'),'La API debe usar la autoridad F7.1 al asignar o retirar horarios.');
     f71_expect(str_contains($api,'hache_profesores_cerrar_asignaciones_profesor'),'La inactivación del profesor debe cerrar su disponibilidad futura.');
+    f71_expect(str_contains($api,'hache_profesores_vigencias_invariantes_ready'),'La API debe rechazar estados legacy inconsistentes antes de operar.');
     f71_expect(!str_contains($api,'ON DUPLICATE KEY UPDATE activo=VALUES(activo)'),'La API ya no debe mutar asignaciones sin registrar vigencia.');
 
     $deploy=(string)file_get_contents(dirname(__DIR__).'/ops/production-readiness/deploy-hache-natacion');
@@ -127,5 +148,7 @@ try{
 
     echo "F7_PROFESSOR_ASSIGNMENT_VALIDITY_MARIADB_OK\n";
 }finally{
+    if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();
+    $pdo=null;
     $server->exec("DROP DATABASE IF EXISTS `{$db}`");
 }
