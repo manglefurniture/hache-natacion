@@ -27,15 +27,37 @@ VALUES(
   'Inicio forward-only de vigencia durable de asignaciones de profesores F7'
 );
 
+-- Reconcile legacy assignments that still appear active even though the
+-- professor was already inactive. If the previous F7.1 baseline created an
+-- open period for one of those rows, collapse only that synthetic baseline to
+-- a zero-length interval rather than inventing teaching history.
+UPDATE profesor_horario_vigencias v
+JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id
+JOIN profesores p ON p.id=ph.profesor_id
+SET v.vigente_hasta=v.vigente_desde,
+    v.closed_by=NULL
+WHERE p.activo=0
+  AND v.vigente_hasta IS NULL
+  AND v.origen='F7_BASELINE';
+
+UPDATE profesor_horarios ph
+JOIN profesores p ON p.id=ph.profesor_id
+SET ph.activo=0,
+    ph.updated_at=UTC_TIMESTAMP()
+WHERE ph.activo=1
+  AND p.activo=0;
+
 INSERT INTO profesor_horario_vigencias(
   id,profesor_horario_id,vigente_desde,vigente_hasta,origen,created_by,closed_by
 )
 SELECT
   UUID(),ph.id,CAST(cfg.valor AS DATETIME),NULL,'F7_BASELINE',NULL,NULL
 FROM profesor_horarios ph
+JOIN profesores p ON p.id=ph.profesor_id
 JOIN configuracion cfg
   ON cfg.clave='profesores_asignaciones_cobertura_desde'
 WHERE ph.activo=1
+  AND p.activo=1
   AND NOT EXISTS(
     SELECT 1 FROM configuracion
     WHERE clave='profesores_asignaciones_baseline_aplicado'
