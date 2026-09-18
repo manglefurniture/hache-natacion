@@ -19,9 +19,9 @@ $brain=(string)file_get_contents($root.'/config/sharky-brain-shadow-runtime.php'
 // verified=false so a later "soy alumno" can still enter the existing identity
 // verification flow instead of being treated as authenticated.
 sharky_entry_expect(str_contains($webhook,'function sharky_lab_assume_unmatched_prospect'),'Live webhook must own the unmatched-contact default.');
-sharky_entry_expect(str_contains($webhook,"'kind'=>'prospect'"),'Unmatched contacts must start as prospects.');
-sharky_entry_expect(str_contains($webhook,"'verified'=>false"),'Automatic prospect assumption must not become authentication.');
-sharky_entry_expect(str_contains($webhook,"'source'=>'whatsapp_unmatched'"),'Automatic prospect assumption must remain auditable.');
+sharky_entry_expect(str_contains($opportunities,"'kind'=>'prospect'"),'Shared unmatched-contact boundary must start unknown contacts as prospects.');
+sharky_entry_expect(str_contains($opportunities,"'verified'=>false"),'Automatic prospect assumption must not become authentication.');
+sharky_entry_expect(str_contains($opportunities,"'source'=>'whatsapp_unmatched'"),'Automatic prospect assumption must remain auditable.');
 sharky_entry_expect(strpos($webhook,'sharky_lab_assume_unmatched_prospect')<strpos($webhook,'hache_sharky_human_process_event'),'Prospect assumption must happen before the supervised general orchestrator runs.');
 sharky_entry_expect(str_contains($webhook,"require_once __DIR__.'/../../config/sharky-prospect-opportunities.php'"),'Live prospect entry must load the F6 opportunity producer.');
 $assumeStart=strpos($webhook,'function sharky_lab_assume_unmatched_prospect');
