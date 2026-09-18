@@ -107,6 +107,34 @@ $deletion = hache_auditoria_evento_normalizar([
 ]);
 f8_expect(!str_contains(json_encode($deletion, JSON_UNESCAPED_UNICODE), 'Nombre que no debe proyectarse'),'La proyección no debe copiar PII incidental del detalle crudo.');
 
+$studentEdit = hache_auditoria_evento_normalizar([
+    'id'=>'e-student-edit',
+    'usuario_id'=>'u1',
+    'usuario_nombre'=>'admin',
+    'accion'=>'ALUMNO_DATOS_ACTUALIZADOS',
+    'entidad'=>'alumno',
+    'entidad_id'=>'a1',
+    'detalle'=>json_encode([
+        'sede_id'=>'s1',
+        'cambios'=>[
+            'horario_preferido_id'=>['anterior'=>'h1','nuevo'=>'h2'],
+            'plan_actual_id'=>['anterior'=>null,'nuevo'=>'p1'],
+            'inscripcion_historica_cubierta'=>['anterior'=>false,'nuevo'=>true],
+            'whatsapp'=>['modificado'=>true,'valores_omitidos'=>'PII'],
+        ],
+    ]),
+    'metodo'=>'POST',
+    'ruta'=>'/public/editar-alumno.php',
+    'created_at'=>'2026-09-18 15:06:00',
+]);
+f8_expect($studentEdit['result']['level']==='confirmed','La edición administrativa durable debe proyectarse como cambio confirmado.');
+f8_expect($studentEdit['before']['available']===true&&$studentEdit['before']['value']['horario_preferido_id']==='h1','Debe conservar before operativo durable.');
+f8_expect($studentEdit['after']['available']===true&&$studentEdit['after']['value']['horario_preferido_id']==='h2','Debe conservar after operativo durable.');
+f8_expect($studentEdit['before']['value']['plan_actual_id']===null&&$studentEdit['after']['value']['plan_actual_id']==='p1','Los null reales deben conservarse sin convertirse en cero/falso.');
+f8_expect($studentEdit['before']['value']['inscripcion_historica_cubierta']===false&&$studentEdit['after']['value']['inscripcion_historica_cubierta']===true,'Los booleanos durables del toggle histórico deben conservarse sin reinterpretarlos.');
+f8_expect(str_contains((string)$studentEdit['result']['detail'],'whatsapp'),'Debe informar qué campo PII cambió sin copiar sus valores.');
+f8_expect(!str_contains(json_encode($studentEdit,JSON_UNESCAPED_UNICODE),'5550000000'),'La proyección no debe inventar ni copiar un valor PII ausente.');
+
 $events = [$generic,$history,$state];
 hache_auditoria_ordenar($events);
 f8_expect($events[0]['source_id']==='h1'&&$events[2]['source_id']==='e-http','La mezcla de fuentes debe ordenarse por timestamp real sin inventar correlación.');

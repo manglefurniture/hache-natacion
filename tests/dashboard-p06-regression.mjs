@@ -113,7 +113,7 @@ assert.match(studentsApi,/hache_alumno_estado_evento\(\$pdo,\$me/);
 assert.match(studentsApi,/'BAJA','ALUMNO_BAJA'/);
 assert.match(studentsApi,/'REACTIVACION','ALUMNO_REACTIVACION'/);
 assert.match(studentsApi,/\(string\)\$alumno\['estado_administrativo'\]!=='BAJA'/);
-assert.match(editStudent,/estado_administrativo FROM alumnos[\s\S]{0,120}FOR UPDATE/);
+assert.match(editStudent,/estado_administrativo(?:,observaciones)? FROM alumnos[\s\S]{0,120}FOR UPDATE/);
 assert.match(editStudent,/hache_alumno_estado_evento\(\$pdo,\$admin[\s\S]{0,120}'ALUMNO_BAJA'/);
 assert.match(editStudent,/hache_alumno_estado_evento\(\$pdo,\$admin[\s\S]{0,140}'ALUMNO_REACTIVACION'/);
 assert.match(api,/dashboard-p06\.php/);
