@@ -12,6 +12,7 @@ require_once __DIR__.'/../../config/sharky-inbox.php';
 require_once __DIR__.'/../../config/sharky-groups.php';
 require_once __DIR__.'/../../config/sharky-delivery-status.php';
 require_once __DIR__.'/../../config/notificaciones-email.php';
+require_once __DIR__.'/../../config/sharky-prospect-opportunities.php';
 
 function sharky_lab_json(int $status,array $body): never
 {
@@ -75,6 +76,10 @@ function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $ident
         if($referral)$state=hache_sharky_orchestrator_capture_referral($state,$referral);
         $state=hache_sharky_entry_guided_first_prospect($state,(string)($event['text']??''),$now);
         $state['updated_at']=$now;
+        // P-06 counts the prospective participant/opportunity, not the phone
+        // contact. One OPEN opportunity is created at the first unmatched entry
+        // and survives state expiry through a hash-only analytics ledger.
+        hache_sharky_prospect_opportunity_ensure($pdo,hache_sharky_orchestrator_contact_hash($contact),$state);
         hache_sharky_db_state_save($pdo,$contact,$state,86400);
     }catch(Throwable $e){
         error_log('[sharky-entry] No se pudo asumir prospecto para contacto no identificado.');
