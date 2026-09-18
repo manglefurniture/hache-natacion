@@ -23,6 +23,10 @@ function f6_dashboard_metrics_schema_ready(PDO $pdo): bool
     $st=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sesion_asistencia_cobertura' ORDER BY ordinal_position");
     if(array_values($st->fetchAll(PDO::FETCH_COLUMN))!==$expected)return false;
 
+    $opportunityExpected=['id','contact_hash','entry_source','sede_clave','status','open_slot','alumno_id','created_at','converted_at','updated_at'];
+    $st=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' ORDER BY ordinal_position");
+    if(array_values($st->fetchAll(PDO::FETCH_COLUMN))!==$opportunityExpected)return false;
+
     $st=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_bajas_cobertura_desde','dashboard_asistencia_cobertura_desde','dashboard_prospectos_cobertura_desde') ORDER BY clave");
     return array_values($st->fetchAll(PDO::FETCH_COLUMN))===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde','dashboard_prospectos_cobertura_desde'];
 }
