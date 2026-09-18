@@ -75,8 +75,10 @@ try {
     $sourceLimit = (int)$limit;
 
     if ($source === '' || $source === 'auditoria_eventos') {
-        $where = [];
-        $params = [];
+        // F8 es auditoría administrativa; la telemetría de diagnóstico conserva su propia tabla
+        // y sus eventos legacy no deben desplazar acciones administrativas del límite visible.
+        $where = ['(ruta IS NULL OR ruta<>:audit_noise_route)'];
+        $params = [':audit_noise_route'=>'/api/diagnostico.php'];
         if ($from) {
             $where[] = 'created_at>=:audit_from';
             $params[':audit_from'] = $from->format('Y-m-d 00:00:00');
@@ -144,6 +146,7 @@ try {
             'before_after'=>'solo_evidencia_durable',
             'sede'=>'sin_filtro_hasta_fuente_historica_segura',
             'correlacion'=>'sin_heuristicas',
+            'telemetria_excluida'=>['/api/diagnostico.php'],
         ],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
