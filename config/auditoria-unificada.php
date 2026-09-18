@@ -73,6 +73,8 @@ function hache_auditoria_evento_normalizar(array $row): array
     $scopeKnown = false;
     $history = 'native';
     $beforeAfter = 'none';
+    $referenceType = null;
+    $referenceId = null;
 
     if ($action === 'CONFIG_ALERTA_ACTUALIZADA') {
         $module = 'configuracion';
@@ -153,6 +155,35 @@ function hache_auditoria_evento_normalizar(array $row): array
             $scopeSede = trim((string)$detail['sede_id']);
             $scopeKnown = true;
         }
+    } elseif ($action === 'INTENSIVO_ALUMNO_RETIRADO') {
+        $module = 'intensivos';
+        $level = 'confirmed';
+        $resultCode = null;
+        $resultDetail = null;
+        if (array_key_exists('presente_anterior', $detail)) {
+            $beforeValue = ['presente' => (bool)$detail['presente_anterior']];
+            if (array_key_exists('alumno_id', $detail)) {
+                $beforeValue['alumno_id'] = $detail['alumno_id'];
+            }
+            if (array_key_exists('curso_intensivo_id', $detail)) {
+                $beforeValue['curso_intensivo_id'] = $detail['curso_intensivo_id'];
+            }
+            $before = hache_auditoria_valor(true, $beforeValue);
+        }
+        if (array_key_exists('presente_nuevo', $detail)) {
+            $after = hache_auditoria_valor(true, ['presente' => (bool)$detail['presente_nuevo']]);
+        }
+        if ($before['available'] || $after['available']) {
+            $beforeAfter = 'structured';
+        }
+        if (isset($detail['curso_intensivo_id']) && trim((string)$detail['curso_intensivo_id']) !== '') {
+            $referenceType = 'curso_intensivo';
+            $referenceId = trim((string)$detail['curso_intensivo_id']);
+        }
+        if (isset($detail['sede_id']) && trim((string)$detail['sede_id']) !== '') {
+            $scopeSede = trim((string)$detail['sede_id']);
+            $scopeKnown = true;
+        }
     } elseif ($action === 'PROFESOR_DATOS_ACTUALIZADOS') {
         $module = 'profesores';
         $level = 'confirmed';
@@ -205,8 +236,8 @@ function hache_auditoria_evento_normalizar(array $row): array
         'entity' => [
             'type' => $entity !== '' ? $entity : null,
             'id' => isset($row['entidad_id']) && trim((string)$row['entidad_id']) !== '' ? trim((string)$row['entidad_id']) : null,
-            'reference_type' => null,
-            'reference_id' => null,
+            'reference_type' => $referenceType,
+            'reference_id' => $referenceId,
         ],
         'before' => $before,
         'after' => $after,
