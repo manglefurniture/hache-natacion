@@ -25,5 +25,9 @@ if($pago['tipo']==='MENSUALIDAD'&&!empty($pago['mensualidad_id'])){
 }
 $stmt=$pdo->prepare("SELECT COUNT(*) FROM pagos WHERE alumno_id=:alumno AND estado='VALIDO'");$stmt->execute([':alumno'=>$pago['alumno_id']]);$validos=(int)$stmt->fetchColumn();
 regla_recalcular_alumno($pdo,(string)$pago['alumno_id']);
+$detalleAudit=json_encode(['sede_id'=>$sedeId,'estado_anterior'=>(string)$pago['estado'],'estado_nuevo'=>'INVALIDADO'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+if(!is_string($detalleAudit))throw new RuntimeException('No se pudo serializar la invalidación del pago.');
+$stmt=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta) VALUES(:uid,:un,'PAGO_INVALIDADO','pago',:pid,:detalle,'POST','/api/invalidar-pago.php')");
+$stmt->execute([':uid'=>$usuarioId,':un'=>$me['usuario']??null,':pid'=>$pagoId,':detalle'=>$detalleAudit]);
 $pdo->commit();echo json_encode(['ok'=>true,'mensaje'=>'Pago invalidado correctamente','pagos_validos_restantes'=>$validos],JSON_UNESCAPED_UNICODE);
 }catch(Throwable $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('[invalidar-pago] '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'No se pudo invalidar el pago'],JSON_UNESCAPED_UNICODE);}

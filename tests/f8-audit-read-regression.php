@@ -160,6 +160,29 @@ f8_expect($professorEdit['after']['available']===true&&$professorEdit['after']['
 f8_expect(str_contains((string)$professorEdit['result']['detail'],'nombre')&&str_contains((string)$professorEdit['result']['detail'],'whatsapp'),'Debe informar campos PII modificados sin copiar valores.');
 f8_expect(!str_contains(json_encode($professorEdit,JSON_UNESCAPED_UNICODE),'Profesor Secreto'),'La proyección no debe inventar ni copiar PII ausente.');
 
+$paymentInvalidation = hache_auditoria_evento_normalizar([
+    'id'=>'e-payment-invalidated',
+    'usuario_id'=>'u1',
+    'usuario_nombre'=>'admin',
+    'accion'=>'PAGO_INVALIDADO',
+    'entidad'=>'pago',
+    'entidad_id'=>'p1',
+    'detalle'=>json_encode([
+        'sede_id'=>'s1',
+        'estado_anterior'=>'VALIDO',
+        'estado_nuevo'=>'INVALIDADO',
+    ]),
+    'metodo'=>'POST',
+    'ruta'=>'/api/invalidar-pago.php',
+    'created_at'=>'2026-09-18 15:07:30',
+]);
+f8_expect($paymentInvalidation['module']==='finanzas'&&$paymentInvalidation['result']['level']==='confirmed','La invalidación durable debe proyectarse como cambio financiero confirmado.');
+f8_expect($paymentInvalidation['entity']['id']==='p1','Debe conservar el ID exacto del pago invalidado.');
+f8_expect($paymentInvalidation['before']['available']===true&&$paymentInvalidation['before']['value']['estado']==='VALIDO','Debe conservar el estado anterior real del pago.');
+f8_expect($paymentInvalidation['after']['available']===true&&$paymentInvalidation['after']['value']['estado']==='INVALIDADO','Debe conservar el estado nuevo real del pago.');
+f8_expect($paymentInvalidation['scope']['sede_known']===true&&$paymentInvalidation['scope']['sede_id']==='s1','Debe conservar la sede demostrada por la operación.');
+f8_expect($paymentInvalidation['coverage']['before_after']==='structured','La invalidación debe declarar before/after estructurado.');
+
 $intensiveRemoval = hache_auditoria_evento_normalizar([
     'id'=>'e-intensive-removal',
     'usuario_id'=>'u1',
