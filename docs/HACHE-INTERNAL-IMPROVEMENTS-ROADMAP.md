@@ -481,7 +481,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | 2026-09-17 | F6 Dashboard: integración incremental de autoridades y contratos seguros. | PR #300–#305; Quality post-merge #1540, #1545, #1547, #1549, #1551 y #1553; Deploy #266–#271; producción `f87f14d...`; evidencia en `F6-DASHBOARD-STATUS.md`. | Base funcional de F6 integrada; revisiones automáticas posteriores identificaron huecos técnicos adicionales antes del cierre. |
 | 2026-09-17 | F6 Dashboard: cierre de hallazgos técnicos publicados. | PR #307; Quality #1557 en PR y #1558 en `main`; Deploy #273; producción `6d521421...`; marcador, sintaxis PHP y health verificados. | Los indicadores ya publicados cumplen contrato/detalle reconciliable y los hilos técnicos de #300/#302/#305/#306 quedaron resueltos. |
 | 2026-09-17 | F6 P-06: nuevos alumnos, bajas y asistencia. | PR #309; `config/dashboard-p06.php`, cobertura persistida y regresión específica; producción comprobada en `dce535040557d636b01be629f434af1151542b75`. | Primer bloque de P-06 desplegado con cobertura explícita y sin inferir historia. |
-| 2026-09-17 | F6 P-06: unidad de prospecto y conversión por cohorte. | Rama `f6/p06-prospect-conversion`; ledger mínimo sin PII, conversión ligada a inscripción Sharky `COMPLETED`, métrica global ADMIN. | En implementación/revisión; no se considera desplegado hasta merge, auto-deploy y comprobación de producción. |
+| 2026-09-17 | F6 P-06: unidad de prospecto y conversión por cohorte. | PR #310; ledger mínimo sin PII, conversión ligada a inscripción Sharky `COMPLETED`, métrica global ADMIN. | En revisión; no se considera desplegado hasta merge, auto-deploy y comprobación de producción. |
 
 ### 12.2 Estado de las fases
 
