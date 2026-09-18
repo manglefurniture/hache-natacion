@@ -36,7 +36,8 @@ Contrato de este incremento:
 - `Ver otra sede` actualiza `sede_clave` sobre esa misma oportunidad, sin crear otra fila;
 - repetir la misma selección es idempotente;
 - `opened_at`, `entry_source` y `status` no cambian por confirmar sede;
-- conversaciones abiertas antes de este incremento, sin UUID interno, solo usan compatibilidad cuando existe exactamente una oportunidad `OPEN` para el contacto; si hay más de una, se falla sin adivinar;
+- conversaciones abiertas antes de este incremento, sin UUID interno, solo usan compatibilidad cuando existe exactamente una oportunidad `OPEN` para el contacto; si hay más de una, se omite el enriquecimiento sin adivinar ni bloquear el funnel;
+- fallos técnicos de esquema, lectura o escritura cuando existe una oportunidad durable identificable no completan silenciosamente el turno: la excepción conserva el recibo pendiente para retry;
 - texto libre, prefills y dudas laterales no enriquecen sede y continúan sin tener autoridad para seleccionarla.
 
 Este micro-paso **todavía no**:

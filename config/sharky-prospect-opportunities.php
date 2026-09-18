@@ -49,21 +49,17 @@ function hache_sharky_prospect_opportunity_state_id(array $state): ?string
 function hache_sharky_prospect_opportunity_resolve_open_id(PDO $pdo,string $contactHash,array $state): ?string
 {
     $stateId=hache_sharky_prospect_opportunity_state_id($state);
-    try{
-        if($stateId!==null){
-            $st=$pdo->prepare("SELECT id FROM sharky_prospect_opportunities WHERE id=:id AND contact_hash=:contact_hash AND status='OPEN' LIMIT 1");
-            $st->execute([':id'=>$stateId,':contact_hash'=>$contactHash]);
-            $id=trim((string)($st->fetchColumn()?:''));
-            return $id!==''?$id:null;
-        }
-
-        $st=$pdo->prepare("SELECT id FROM sharky_prospect_opportunities WHERE contact_hash=:contact_hash AND status='OPEN' ORDER BY opened_at DESC,id DESC LIMIT 2");
-        $st->execute([':contact_hash'=>$contactHash]);
-        $ids=array_values(array_filter(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN))));
-        return count($ids)===1?$ids[0]:null;
-    }catch(Throwable $e){
-        return null;
+    if($stateId!==null){
+        $st=$pdo->prepare("SELECT id FROM sharky_prospect_opportunities WHERE id=:id AND contact_hash=:contact_hash AND status='OPEN' LIMIT 1");
+        $st->execute([':id'=>$stateId,':contact_hash'=>$contactHash]);
+        $id=trim((string)($st->fetchColumn()?:''));
+        return $id!==''?$id:null;
     }
+
+    $st=$pdo->prepare("SELECT id FROM sharky_prospect_opportunities WHERE contact_hash=:contact_hash AND status='OPEN' ORDER BY opened_at DESC,id DESC LIMIT 2");
+    $st->execute([':contact_hash'=>$contactHash]);
+    $ids=array_values(array_filter(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN))));
+    return count($ids)===1?$ids[0]:null;
 }
 
 /**
@@ -77,18 +73,22 @@ function hache_sharky_prospect_opportunity_enrich_sede(PDO $pdo,string $contactH
     $contactHash=strtolower(trim($contactHash));
     $sede=hache_sharky_prospect_opportunity_sede($state);
     if($sede===null)return true;
-    if(
-        preg_match('/^[0-9a-f]{64}$/',$contactHash)!==1
-        ||!hache_sharky_prospect_opportunity_schema_ready($pdo)
-    )return false;
-
-    $id=hache_sharky_prospect_opportunity_resolve_open_id($pdo,$contactHash,$state);
-    if($id===null){
-        error_log('[sharky-opportunity] unable to identify one OPEN opportunity for venue enrichment');
-        return false;
+    if(preg_match('/^[0-9a-f]{64}$/',$contactHash)!==1)return false;
+    if(!hache_sharky_prospect_opportunity_schema_ready($pdo)){
+        throw new RuntimeException('F6 opportunity storage unavailable for structured venue enrichment');
     }
 
+    $stateId=hache_sharky_prospect_opportunity_state_id($state);
     try{
+        $id=hache_sharky_prospect_opportunity_resolve_open_id($pdo,$contactHash,$state);
+        if($id===null){
+            if($stateId!==null){
+                throw new RuntimeException('Expected OPEN opportunity is unavailable for structured venue enrichment');
+            }
+            error_log('[sharky-opportunity] ambiguous legacy OPEN opportunity; venue enrichment skipped without guessing');
+            return false;
+        }
+
         $st=$pdo->prepare("UPDATE sharky_prospect_opportunities
             SET sede_clave=:sede,updated_at=UTC_TIMESTAMP()
             WHERE id=:id AND contact_hash=:contact_hash AND status='OPEN'");
@@ -96,10 +96,13 @@ function hache_sharky_prospect_opportunity_enrich_sede(PDO $pdo,string $contactH
 
         $q=$pdo->prepare("SELECT sede_clave FROM sharky_prospect_opportunities WHERE id=:id AND contact_hash=:contact_hash AND status='OPEN' LIMIT 1");
         $q->execute([':id'=>$id,':contact_hash'=>$contactHash]);
-        return strtoupper(trim((string)($q->fetchColumn()?:'')))===$sede;
+        if(strtoupper(trim((string)($q->fetchColumn()?:'')))!==$sede){
+            throw new RuntimeException('Structured venue enrichment was not persisted');
+        }
+        return true;
     }catch(Throwable $e){
-        error_log('[sharky-opportunity] venue enrichment failed');
-        return false;
+        error_log('[sharky-opportunity] retryable venue enrichment failure');
+        throw new RuntimeException('Unable to persist structured opportunity venue',0,$e);
     }
 }
 

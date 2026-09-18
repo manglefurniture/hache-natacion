@@ -177,6 +177,20 @@ try{
         'Sin id durable, dos oportunidades OPEN del mismo contacto deben fallar sin adivinar cuál enriquecer.'
     );
 
+    $missingState=$producerState;
+    $missingState['commercial_context']['f6_opportunity_id']='ffffffff-ffff-ffff-ffff-ffffffffffff';
+    $missingState['commercial_context']['sede_clave']='PALAPAS';
+    $missingRequiresRetry=false;
+    try{
+        hache_sharky_prospect_opportunity_enrich_sede($pdo,$producerContact,$missingState);
+    }catch(RuntimeException){
+        $missingRequiresRetry=true;
+    }
+    f6m_expect(
+        $missingRequiresRetry,
+        'Una oportunidad durable exacta que no pueda persistir sede debe exigir retry en vez de completar silenciosamente el turno.'
+    );
+
     $studentState=['identity'=>['kind'=>'student'],'commercial_context'=>['entry_source'=>'direct']];
     f6m_expect(
         hache_sharky_prospect_opportunity_open($pdo,str_repeat('2',64),'wamid.f6.student.001',$studentState)===null,

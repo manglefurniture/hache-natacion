@@ -47,6 +47,13 @@ sharky_entry_expect(str_contains($worker,'if(!hache_sharky_prospect_opportunity_
 
 sharky_entry_expect(str_contains($opportunities,"\$state['commercial_context']['f6_opportunity_id']=\$opportunityId;"),'First-turn producer must keep the exact opportunity id only inside encrypted Sharky state.');
 sharky_entry_expect(str_contains($opportunities,'function hache_sharky_prospect_opportunity_enrich_sede'),'F6 must expose a narrow structured-venue enrichment helper.');
+sharky_entry_expect(str_contains($opportunities,"throw new RuntimeException('F6 opportunity storage unavailable for structured venue enrichment')"),'Unavailable venue storage must fail closed so the durable receipt can retry.');
+sharky_entry_expect(str_contains($opportunities,"throw new RuntimeException('Unable to persist structured opportunity venue',0,\$e)"),'Transient venue persistence failures must propagate instead of being reduced to a logged false.');
+$metaEnrichStart=strpos($metaFlow,'function hache_sharky_meta_enrich_opportunity_venue');
+$metaEnrichEnd=strpos($metaFlow,'function hache_sharky_meta_handle',$metaEnrichStart===false?0:$metaEnrichStart);
+sharky_entry_expect($metaEnrichStart!==false&&$metaEnrichEnd!==false,'Meta venue enrichment wrapper must remain bounded.');
+$metaEnrichBlock=substr($metaFlow,$metaEnrichStart,$metaEnrichEnd-$metaEnrichStart);
+sharky_entry_expect(!str_contains($metaEnrichBlock,'catch('),'Meta venue enrichment wrapper must not swallow retryable persistence exceptions.');
 sharky_entry_expect(str_contains($metaFlow,"require_once __DIR__.'/sharky-prospect-opportunities.php';"),'The closed Meta/web/direct funnel must load the venue-enrichment sidecar explicitly.');
 sharky_entry_expect(substr_count($metaFlow,'hache_sharky_meta_enrich_opportunity_venue($pdo,$state,$event);')===2,'Only canonical venue selection and Ver otra sede may trigger opportunity venue enrichment.');
 $venueStepPos=strpos($metaFlow,"if(\$step==='venue'){");
