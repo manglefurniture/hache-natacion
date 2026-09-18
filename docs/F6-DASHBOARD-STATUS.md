@@ -13,7 +13,7 @@ La base de producción comprobada antes de este incremento es `dce535040557d636b
 - **Nuevos alumnos:** alumno único cuya `fecha_inicio` cae dentro del periodo financiero visible. Una reactivación no crea un alta nueva porque no modifica `fecha_inicio`.
 - **Bajas:** solo eventos `ALUMNO_BAJA` registrados con cobertura fiable hacia delante. No se usa `updated_at` como fecha inferida.
 - **Asistencia porcentual:** solo sesiones `REALIZADA` no canceladas con snapshot persistido completo y un registro por cada alumno esperado. Sesiones incompletas quedan fuera del denominador.
-- **Prospecto:** una oportunidad/persona destinataria de las clases, no un número de WhatsApp. La implementación persiste una identidad técnica de oportunidad sin copiar nombre ni teléfono al ledger analítico. Los casos sin sede confirmada permanecen explícitos como `SIN_SEDE`.
+- **Prospecto:** una oportunidad/persona destinataria de las clases, no un número de WhatsApp. La implementación persiste una identidad técnica de oportunidad sin copiar nombre ni teléfono al ledger analítico. Los casos sin sede confirmada permanecen explícitos como `SIN_SEDE`. Si una identidad inicialmente no reconocida se verifica después como alumno existente, la oportunidad provisional queda `EXCLUDED` y no entra al denominador.
 - **Conversión:** cohorte de oportunidades creadas en el periodo que posteriormente alcanzan una inscripción completada por Sharky. Abrir un Flow, iniciar pago o enviar información no convierte. Una conversión posterior puede elevar la tasa de una cohorte histórica.
 
 No se hace backfill de prospectos anteriores al inicio de cobertura porque el estado conversacional histórico no permite reconstruir de forma fiable la persona/oportunidad destinataria.
