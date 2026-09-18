@@ -1,9 +1,10 @@
 # F8 — Auditoría interna de acciones administrativas
 
 **Fase:** F8 — Auditoría interna  
-**Base analizada:** `main` `a4c107fd8edff82872dbf2fe3ede6739d02fd136`  
+**Base del diagnóstico F8.0:** `main` `a4c107fd8edff82872dbf2fe3ede6739d02fd136`  
+**Última cobertura funcional reflejada:** F8.4, PR #348 (correcciones de asistencia; pendiente de integración al redactar este cambio).  
 **Fecha:** 2026-09-18  
-**Estado del documento:** F8.0 diagnóstico + F8.1 contrato mínimo.
+**Estado del documento:** F8.0/F8.1 cerrados; F8.2/F8.3 desplegados; F8.4 en implementación incremental.
 
 ## 1. Principios de P-08
 
@@ -29,17 +30,17 @@ P-08 queda resuelta con estas reglas:
 | Atender/resolver pendiente | F1/F5 | `pendientes_gestion` + eventos `PENDIENTE_ATENDIDO`/`PENDIENTE_RESUELTO` | sí, ID y nombre durable | `atendido_at`/`resuelto_at` y audit | pendiente/origen | no estructurado globalmente | sí, estado/nota durable | cambio confirmado | completa para gestión | bajo |
 | Baja/reactivación de alumno | alumnos | `historial` + `auditoria_eventos` específico | sí | `fecha_hora`/`created_at` | alumno | sí, `estado_anterior` | sí, `estado_nuevo` | cambio confirmado | completa | bajo |
 | Editar fecha de inicio de alumno | alumnos | `historial` vía `hache_admin_history` | sí | `fecha_hora` | alumno o curso intensivo | durable en descripción | durable en descripción | cambio confirmado | completa como evidencia textual | medio si se intenta parsear retrospectivamente |
-| Editar nombre/contacto/horario/plan desde ficha | alumnos | estado actual; no existe evento específico para esos campos | no durable para cada cambio | no durable para cada cambio | alumno actual | no | solo estado actual | no demostrable como evento | **ausente/parcial** | **alto** |
-| Cambio rápido de horario | alumnos | audit HTTP genérico + estado actual | actor técnico sí; actor de cambio no enlazado a entidad | audit HTTP | endpoint, sin ID de alumno en el audit | no | solo estado actual | técnico | parcial | **alto** |
+| Editar nombre/contacto/horario/plan desde ficha | alumnos | evento específico `ALUMNO_DATOS_ACTUALIZADOS` desde PR #343 | sí, forward-only | `created_at` del evento | alumno + sede cuando está demostrada | campos operativos estructurados; PII no duplicada | campos operativos estructurados; PII solo indica modificación | cambio confirmado en la transacción | completa desde cobertura F8.4 | bajo si no se reconstruye historia previa |
+| Cambio rápido de horario | alumnos | `ALUMNO_DATOS_ACTUALIZADOS` desde PR #344 | sí, forward-only | `created_at` del evento | alumno + sede | horario anterior real | horario nuevo real | cambio confirmado en la transacción | completa desde cobertura F8.4 | bajo si no se reconstruye historia previa |
 | Editar pago | finanzas | `historial` tipo `PAGO` en la misma transacción | sí | `fecha_hora` | pago | sí, durable en descripción | sí, durable en descripción | cambio confirmado | completa como evidencia textual | medio si se intenta parsear texto a estructura |
-| Invalidar pago | finanzas | `pagos.invalidated_by`, `invalidated_at`, estado/observación + audit HTTP | sí | sí | pago | no snapshot durable | estado invalidado durable | cambio confirmado por fila de pago | parcial | **alto** para el valor anterior |
+| Invalidar pago | finanzas | fila de pago + evento `PAGO_INVALIDADO` desde PR #347 | sí | `invalidated_at` y `created_at` del evento | pago + sede | estado `VALIDO` de la fila bloqueada | estado `INVALIDADO` | cambio confirmado en la misma transacción | completa desde cobertura F8.4 | bajo si no se reconstruye historia previa |
 | Cerrar mes financiero | finanzas | `cierres_mensuales` | `cerrado_por` | `cerrado_at` | sede + periodo | no aplica como edición | snapshot del cierre | cambio confirmado | completa para creación del cierre | bajo |
 | Ajustar rango de periodo financiero | finanzas | `periodos_financieros.updated_by/updated_at` + audit HTTP | sí | sí | sede + periodo | no | estado vigente | cambio confirmado del estado vigente, sin snapshot anterior | parcial | alto para before |
 | Cerrar sesión/clase | operación | `sesiones.cerrada_por`, `fecha_cierre`, estado + cobertura | sí | sí | sesión | no snapshot | REALIZADA/cerrada durable | cambio confirmado | completa para cierre | bajo |
-| Marcar/corregir asistencia | operación | `asistencias.created_by` en alta; updates no preservan actor de cada corrección + audit HTTP | alta sí; correcciones no fiables | timestamps de fila | sesión + alumno | no | estado actual | parcial | parcial | **alto** para correcciones |
+| Marcar/corregir asistencia | operación | alta en `asistencias`; correcciones con `ASISTENCIA_CORREGIDA` desde PR #348 | alta: `created_by`; corrección: actor del evento | timestamps de fila + `created_at` del evento | asistencia + sesión; alumno/sede conservados en evidencia | estado anterior real en correcciones; texto libre no duplicado | estado nuevo real; observación solo indica modificación | cambio confirmado en la misma transacción | completa para correcciones desde cobertura F8.4; historia previa permanece sin backfill | bajo si se respeta cobertura forward-only |
 | Alta de relación en intensivo | intensivos | `curso_intensivo_alumnos.created_by` y timestamps disponibles; corrección histórica además usa `historial` | sí para alta | sí | relación/alumno/curso | no aplica | relación durable | confirmado | completa para alta; mejor evidencia en corrección histórica | bajo |
-| Retiro de alumno de intensivo | intensivos | la relación se elimina; audit HTTP genérico queda sin referencia durable al registro eliminado | solo técnico | audit HTTP | endpoint | no | ausencia actual | no reconciliable como evento de dominio | **parcial/ausente** | **alto** |
-| Alta/edición/inactivación de profesor | profesores | `profesores.created_by` para alta; audit HTTP para edición; cierres de vigencia al inactivar | alta sí; edición de perfil no durable por cambio | timestamps de fuentes | profesor | no para perfil | estado actual / vigencias | parcial | parcial | alto para campos editados |
+| Retiro de alumno de intensivo | intensivos | evento `INTENSIVO_ALUMNO_RETIRADO` desde PR #346 | sí, forward-only | `created_at` del evento | relación eliminada + curso + alumno + sede | relación presente | relación ausente | cambio confirmado en la misma transacción | completa desde cobertura F8.4 | bajo si no se reconstruye historia previa |
+| Alta/edición/inactivación de profesor | profesores | `profesores.created_by` para alta; `PROFESOR_DATOS_ACTUALIZADOS` desde PR #345; vigencias F7 al inactivar | sí donde la fuente lo acredita | timestamps de fuentes + `created_at` del evento | profesor | `activo` estructurado; PII no duplicada | `activo` estructurado; PII solo indica modificación | cambio confirmado | completa para edición de perfil desde cobertura F8.4 | bajo si no se reconstruye historia previa |
 | Abrir/cerrar asignación de profesor | F7 | `profesor_horario_vigencias` | `created_by`/`closed_by`; baseline puede ser null deliberadamente | `vigente_desde`/`vigente_hasta` | asignación | no se inventa previo | vigencia durable | confirmado, forward-only | completa desde cobertura F7 | bajo si se respeta baseline |
 | Registrar/anular sustitución | F7 | `profesor_sustituciones` | `created_by`/`anulada_by` | `created_at`/`anulada_at` | sustitución + sesión + profesores | no estructurado como snapshot | estado/motivo durable | confirmado | completa desde cobertura F7 | bajo |
 | Cancelación/incidencia de profesor | F7/Sharky | `profesor_cancelaciones` con fuente y fecha | actor humano puede no existir; fuente sí | `created_at` | profesor + sesión | no | cancelación durable | confirmado como incidencia | parcial respecto a actor | medio |
@@ -47,15 +48,17 @@ P-08 queda resuelta con estas reglas:
 
 ### Huecos de escritura demostrados
 
-Los huecos siguientes quedan candidatos para F8.4; este diagnóstico **no los corrige todavía**:
+Estado de los huecos demostrados de F8.4:
 
-- edición de nombre, contacto, horario y plan del alumno desde la ficha;
-- cambio rápido de horario del alumno;
-- invalidación de pago carece de snapshot durable del estado anterior;
-- correcciones de asistencia no preservan de forma fiable el actor de cada actualización;
-- retiro de un alumno de un intensivo pierde la referencia durable de la relación eliminada;
-- edición de perfil de profesor no conserva before/after ni actor específico del cambio;
-- cambios de rango de periodo financiero conservan quién/cuándo del estado vigente, pero no el valor anterior.
+- **cerrado forward-only — PR #343:** edición administrativa del alumno desde la ficha;
+- **cerrado forward-only — PR #344:** cambio rápido de horario del alumno;
+- **cerrado forward-only — PR #345:** edición de perfil de profesor;
+- **cerrado forward-only — PR #346:** retiro de alumno de un intensivo;
+- **cerrado forward-only — PR #347:** invalidación de pago con snapshot durable del estado anterior;
+- **en cierre en PR #348:** correcciones de asistencia; conserva actor y estado before/after sin copiar observación libre;
+- **pendiente:** cambios de rango de periodo financiero conservan quién/cuándo del estado vigente, pero no el valor anterior.
+
+Ninguno de estos cierres hace backfill: la historia previa a cada cobertura permanece explícitamente desconocida cuando la fuente no la guardó.
 
 ## 3. Contrato mínimo F8.1
 
@@ -144,9 +147,12 @@ Antes de cerrar la fase debe existir evidencia automatizada y operativa de:
 - ausencia de deduplicación heurística;
 - ausencia de reconstrucción histórica o backfill.
 
-## 6. Estado tras F8.0/F8.1
+## 6. Estado vigente de F8
 
-- F8.0: **terminado documentalmente** en este incremento.
+- F8.0: **terminado**.
 - P-08: **resuelta** por el contrato anterior.
-- F8.1: **terminado documentalmente** en este incremento.
-- F8 global: **En análisis** hasta que el primer backend F8.2 entre en implementación.
+- F8.1: **terminado**.
+- F8.2: **desplegado** — lectura ADMIN unificada read-only.
+- F8.3: **desplegado** — UI ADMIN mínima sobre el contrato F8.2.
+- F8.4: **en implementación incremental** — PR #343–#347 integrados; PR #348 cubre correcciones de asistencia y queda sujeto a Quality/revisión/merge/deploy.
+- F8 global: **En implementación**. No se marca Verificado sin evidencia real en producción conforme a F8.5/F8.6.
