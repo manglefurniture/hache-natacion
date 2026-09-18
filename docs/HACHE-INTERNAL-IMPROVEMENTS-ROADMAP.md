@@ -330,7 +330,7 @@ Mostrar por separado carga prevista y realizada según las fuentes disponibles; 
 
 **Criterio de terminado.** Un profesor inactivo conserva ficha, referencias e historial; se distinguen asignación, sustitución e incidencia; carga tiene fuente y periodo; se verifican una clase con un docente, una compartida, una sustitución y una inactivación. Los casos sin historia suficiente se declaran sin reconstrucción ficticia.
 
-**Estado:** En implementación. F7.1 incorpora vigencia durable forward-only de asignaciones manteniendo `profesor_horarios` como estado actual; no reconstruye docencia pasada ni incorpora todavía sustituciones, incidencias, carga realizada o nueva UI.
+**Estado:** En implementación. F7.1 está desplegado y verificado técnicamente: incorpora vigencia durable forward-only de asignaciones manteniendo `profesor_horarios` como estado actual y sin reconstruir docencia pasada. Sustituciones, incidencias, carga realizada e historial/UI integrada continúan pendientes en micro-pasos posteriores.
 
 ### FASE 8 — Auditoría interna
 
@@ -494,6 +494,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 
 | 2026-09-18 | F6 P-06: séptimo micro-incremento, UI de prospectos/conversión. | PR #323; Quality #1631 en PR y #1632 en `main`; Deploy #288; producción `24ab9d28...`; marcador exacto, sintaxis PHP, UI/alcance ADMIN y health 200 verificados. | **Desplegado y verificado técnicamente** para este micro-alcance: la UI consume el contrato backend, no recalcula tasa/denominador, conserva SIN_SEDE/SIN_FUENTE y no hace backfill. |
 | 2026-09-18 | F6 Dashboard: verificación operativa de cierre. | Revisión dirigida en producción con sesión ADMIN y datos reales disponibles; el responsable operativo confirmó que los bloques y detalles revisados se veían correctos y no reportó discrepancias. No se fabricaron casos; los ajustes visuales móviles quedan fuera del cierre funcional. | **F6 pasa a Verificado** conforme al criterio de terminado y la convención de estados. |
+| 2026-09-18 | F7.1 Profesores: vigencia durable forward-only de asignaciones. | PR #326; Quality #1637 del PR exitoso; merge `b6c9a72f987b0c00b58c99198f0a45adc4e0fc08`. El deploy automático publicó exactamente ese SHA; por contrato de `.github/workflows/deploy.yml`, solo se ejecuta tras Quality exitoso de `main`. El deploy aplica `migrate-f7-professor-assignment-validity.php` antes de publicar `.hache-deployed-sha`; el marcador productivo coincidió, los tres PHP desplegados pasaron sintaxis y `/api/health.php` respondió HTTP 200 / `ok: true`. | **F7.1 queda desplegado y verificado técnicamente.** La cobertura empieza en el marcador F7, sin backfill; F7 completa permanece **En implementación**. Sustituciones, incidencias, carga realizada e historial integrado siguen fuera de este micro-paso. |
 
 ### 12.2 Estado de las fases
 
@@ -505,7 +506,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Desplegado | Alertas, F1, F2, proyección F4 y configuración F5 | Realizar verificación operativa dirigida en producción sobre casos reales disponibles; no fabricar datos para forzar escenarios. |
 | F6 Dashboard | Verificado | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18–D-22, lifecycle durable, lectura backend forward-only y UI ADMIN de prospectos/conversión | Fase cerrada. Mantener contratos y tratar cualquier ajuste visual futuro como cambio separado; F7 permanece como siguiente fase del roadmap cuando sea autorizada. |
-| F7 Profesores | En implementación | Profesores, horarios, cancelaciones y D-23 | Completar y verificar F7.1; después avanzar por micro-pasos a sustituciones, incidencias, carga e historial integrado. |
+| F7 Profesores | En implementación | Profesores, horarios, cancelaciones, D-23 y F7.1 forward-only | F7.1 cerrado. Siguiente micro-paso a definir sin iniciar automáticamente: sustituciones explícitas u otro hueco mínimo de F7. |
 | F8 Auditoría | Pendiente | Auditoría e historial existentes | Resolver P-08 mediante matriz de acciones relevantes. |
 | F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |
 
