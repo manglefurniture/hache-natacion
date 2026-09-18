@@ -11,6 +11,9 @@ const editStudent=fs.readFileSync(new URL('../public/editar-alumno.php',import.m
 const stateEvents=fs.readFileSync(new URL('../config/alumno-estado-eventos.php',import.meta.url),'utf8');
 const sessionsApi=fs.readFileSync(new URL('../api/sesiones.php',import.meta.url),'utf8');
 const page=fs.readFileSync(new URL('../public/dashboard.php',import.meta.url),'utf8');
+const dashboardInlineScript=page.match(/<script>([\s\S]*)<\/script>/)?.[1]||'';
+assert.ok(dashboardInlineScript,'El dashboard debe conservar su script inline.');
+new Function(dashboardInlineScript);
 const migration=fs.readFileSync(new URL('../database/migrations/20260917_f6_dashboard_metrics.sql',import.meta.url),'utf8');
 const migrationRunner=fs.readFileSync(new URL('../bin/migrate-f6-dashboard-metrics.php',import.meta.url),'utf8');
 const opportunities=fs.readFileSync(new URL('../config/sharky-prospect-opportunities.php',import.meta.url),'utf8');
@@ -129,6 +132,17 @@ assert.match(page,/Asistencia del periodo/);
 assert.match(page,/id="nuevos-alumnos"/);
 assert.match(page,/id="bajas-registradas"/);
 assert.match(page,/id="asistencia-periodo"/);
+assert.match(page,/id="prospectos-conversion"/);
+assert.match(page,/prospectosDisponible=d\.prospectos_conversion\?\.disponible===true/);
+assert.match(page,/d\.prospectos_conversion\?\.tasa_conversion/);
+assert.match(page,/prospectoBucketRows/);
+assert.match(page,/prospectoDetalleRows/);
+assert.match(page,/Global ADMIN/);
+assert.match(page,/cohorte forward-only/);
+assert.match(page,/SIN_SEDE/);
+assert.match(page,/SIN_FUENTE/);
+assert.match(page,/solo inscripción Sharky COMPLETED/);
+assert.doesNotMatch(page,/conversiones\s*\/\s*prospectos/);
 
 assert.match(migration,/CREATE TABLE IF NOT EXISTS sesion_asistencia_cobertura/);
 assert.match(migration,/dashboard_bajas_cobertura_desde/);
