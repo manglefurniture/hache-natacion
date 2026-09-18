@@ -49,49 +49,9 @@ function sharky_lab_identity_before(PDO $pdo,array $event): array
  * authentication: if the person later says they are already a student, the
  * existing identify_student verification flow remains available.
  */
-function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $identityBefore): void
+function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $identityBefore): bool
 {
-    if(($identityBefore['found']??false)===true)return;
-    if(trim((string)($event['group_id']??''))!=='')return;
-    if((string)($event['kind']??'')==='echo')return;
-    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
-    if($contact==='')return;
-
-    $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);
-    try{
-        $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
-        if(($teacher['found']??false)===true)return;
-        $state=hache_sharky_db_state_load($pdo,$contact);
-        if(($state['identity']['kind']??'unknown')!=='unknown')return;
-        $state['identity']=array_replace(is_array($state['identity']??null)?$state['identity']:[],[
-            'kind'=>'prospect',
-            'verified'=>false,
-            'source'=>'whatsapp_unmatched',
-            'student_id'=>null,
-            'name'=>null,
-            'sede_clave'=>null,
-            'status'=>null,
-        ]);
-        $now=time();
-        $referral=hache_sharky_orchestrator_referral($event,$now);
-        if($referral)$state=hache_sharky_orchestrator_capture_referral($state,$referral);
-        $state=hache_sharky_entry_guided_first_prospect($state,(string)($event['text']??''),$now);
-        $state['updated_at']=$now;
-
-        // F6 observes the exact first unmatched inbound event. The raw message
-        // id and phone never enter the ledger; both links are irreversible hashes.
-        hache_sharky_prospect_opportunity_open(
-            $pdo,
-            hache_sharky_orchestrator_contact_hash($contact),
-            (string)($event['id']??''),
-            $state
-        );
-        hache_sharky_db_state_save($pdo,$contact,$state,86400);
-    }catch(Throwable $e){
-        error_log('[sharky-entry] No se pudo asumir prospecto para contacto no identificado.');
-    }finally{
-        hache_sharky_lab_release_delivery_lock($deliveryLock);
-    }
+    return hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,$identityBefore);
 }
 
 /**
@@ -266,7 +226,7 @@ foreach($processing as $event){
         $member=hache_sharky_member_route_event($pdo,$event,$business);
         if($member!==null)continue;
     }
-    sharky_lab_assume_unmatched_prospect($pdo,$event,$identityBefore);
+    if(!sharky_lab_assume_unmatched_prospect($pdo,$event,$identityBefore))continue;
     $event=hache_sharky_language_prepare_event($pdo,$event);
     hache_sharky_human_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
     sharky_lab_notify_registration_transition($pdo,$event,$identityBefore);
