@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS profesor_sustituciones (
   CONSTRAINT fk_profesor_sustituciones_anulada_by FOREIGN KEY (anulada_by) REFERENCES usuarios(id) ON DELETE SET NULL,
   CONSTRAINT chk_profesor_sustituciones_distintos CHECK (profesor_original_id<>profesor_sustituto_id),
   CONSTRAINT chk_profesor_sustituciones_anulacion CHECK (
-    (estado='ACTIVA' AND anulada_at IS NULL AND anulada_by IS NULL AND motivo_anulacion IS NULL)
+    (estado='ACTIVA' AND anulada_at IS NULL AND motivo_anulacion IS NULL)
     OR
     (estado='ANULADA' AND anulada_at IS NOT NULL AND motivo_anulacion IS NOT NULL)
   )
