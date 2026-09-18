@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-orchestrator-store.php';
+require_once __DIR__.'/sharky-prospect-opportunities.php';
 
 const HACHE_SHARKY_ACTION_LEASE_SECONDS=180;
 
@@ -83,9 +84,23 @@ function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,boo
     }
     $json=$public===null?null:json_encode($public,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)$json=null;
     try{
+        $auditKey=hash('sha256',$idempotencyKey);
         $st=$pdo->prepare("UPDATE sharky_action_audit SET status=:s,result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=NOW(),lease_until=NULL,owner_token=NULL WHERE idempotency_key=:k AND status='PENDING' AND owner_token=:o");
-        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>hash('sha256',$idempotencyKey),':o'=>$ownerToken]);
-        return $st->rowCount()===1;
+        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>$auditKey,':o'=>$ownerToken]);
+        $finished=$st->rowCount()===1;
+        if($finished&&$ok&&is_array($result)&&trim((string)($result['student_id']??''))!==''){
+            $meta=$pdo->prepare("SELECT action_type,contact_hash FROM sharky_action_audit WHERE idempotency_key=:k AND status='COMPLETED' LIMIT 1");
+            $meta->execute([':k'=>$auditKey]);$audit=$meta->fetch(PDO::FETCH_ASSOC);
+            if(is_array($audit)&&in_array((string)($audit['action_type']??''),['register_intensive','register_regular'],true)){
+                if(!hache_sharky_prospect_opportunity_convert(
+                    $pdo,
+                    (string)($audit['contact_hash']??''),
+                    (string)$result['student_id'],
+                    isset($result['sede_clave'])?(string)$result['sede_clave']:null
+                ))error_log('[sharky-opportunity] completed registration had no linkable opportunity');
+            }
+        }
+        return $finished;
     }catch(Throwable $e){error_log('[sharky-action] finish failed');return false;}
 }
 
@@ -106,9 +121,23 @@ function hache_sharky_action_recovery_reseal_completed(PDO $pdo,string $idempote
     if($sealed===null)return false;
     $json=json_encode($public,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)return false;
     try{
+        $auditKey=hash('sha256',$idempotencyKey);
         $st=$pdo->prepare("UPDATE sharky_action_audit SET result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=COALESCE(completed_at,NOW()) WHERE idempotency_key=:k AND status='COMPLETED' AND delivery_queued_at IS NULL");
-        $st->execute([':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':m'=>mb_substr($message,0,500),':k'=>hash('sha256',$idempotencyKey)]);
-        return $st->rowCount()===1;
+        $st->execute([':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':m'=>mb_substr($message,0,500),':k'=>$auditKey]);
+        $resealed=$st->rowCount()===1;
+        if($resealed&&trim((string)($result['student_id']??''))!==''){
+            $meta=$pdo->prepare("SELECT action_type,contact_hash FROM sharky_action_audit WHERE idempotency_key=:k AND status='COMPLETED' LIMIT 1");
+            $meta->execute([':k'=>$auditKey]);$audit=$meta->fetch(PDO::FETCH_ASSOC);
+            if(is_array($audit)&&in_array((string)($audit['action_type']??''),['register_intensive','register_regular'],true)){
+                hache_sharky_prospect_opportunity_convert(
+                    $pdo,
+                    (string)($audit['contact_hash']??''),
+                    (string)$result['student_id'],
+                    isset($result['sede_clave'])?(string)$result['sede_clave']:null
+                );
+            }
+        }
+        return $resealed;
     }catch(Throwable $e){error_log('[sharky-action] completed result reseal failed');return false;}
 }
 
