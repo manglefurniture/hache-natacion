@@ -73,7 +73,6 @@ try{
     foreach($statements as $statement)$pdo->exec($statement);
     foreach($statements as $statement)$pdo->exec($statement);
 
-    f71_expect((int)$pdo->query("SELECT activo FROM profesor_horarios WHERE id='{$legacyAssignment}'")->fetchColumn()===0,'Una asignación legacy de profesor ya inactivo debe desactivarse al iniciar cobertura.');
     f71_expect((int)$pdo->query("SELECT COUNT(*) FROM profesor_horario_vigencias WHERE profesor_horario_id='{$legacyAssignment}'")->fetchColumn()===0,'Un profesor ya inactivo no debe recibir baseline F7.');
 
     $coverage=(string)$pdo->query("SELECT valor FROM configuracion WHERE clave='profesores_asignaciones_cobertura_desde'")->fetchColumn();
@@ -87,13 +86,17 @@ try{
 
     require_once dirname(__DIR__).'/config/profesores-asignaciones.php';
 
+    f71_expect(!hache_profesores_vigencias_schema_ready($pdo),'Una asignación activa de profesor inactivo debe invalidar el readiness.');
+    f71_expect(hache_profesores_reconciliar_inactivos($pdo)===1,'La reparación debe desactivar exactamente la asignación legacy.');
+    f71_expect((int)$pdo->query("SELECT activo FROM profesor_horarios WHERE id='{$legacyAssignment}'")->fetchColumn()===0,'La asignación legacy debe quedar inactiva antes de continuar.');
+
     $pdo->prepare("INSERT INTO profesor_horario_vigencias(id,profesor_horario_id,vigente_desde,origen) VALUES(UUID(),?,?, 'F7_BASELINE')")
         ->execute([$legacyAssignment,$coverage]);
     f71_expect(!hache_profesores_vigencias_schema_ready($pdo),'Un baseline abierto sobre asignación inactiva debe invalidar el readiness.');
-    f71_expect(hache_profesores_reconciliar_baselines_inactivos($pdo)===1,'La reparación debe cerrar exactamente el baseline sintético legacy.');
+    f71_expect(hache_profesores_reconciliar_inactivos($pdo)===1,'La reparación debe cerrar exactamente el baseline sintético legacy.');
     $legacyBaseline=$pdo->query("SELECT vigente_desde,vigente_hasta,origen FROM profesor_horario_vigencias WHERE profesor_horario_id='{$legacyAssignment}'")->fetch();
     f71_expect(is_array($legacyBaseline)&&(string)$legacyBaseline['vigente_hasta']===(string)$legacyBaseline['vigente_desde'],'La reparación debe conservar la fila y colapsarla sin inventar historia.');
-    f71_expect(hache_profesores_reconciliar_baselines_inactivos($pdo)===0,'Repetir la reparación debe ser idempotente.');
+    f71_expect(hache_profesores_reconciliar_inactivos($pdo)===0,'Repetir la reparación debe ser idempotente.');
     f71_expect(hache_profesores_vigencias_schema_ready($pdo),'El helper debe reconocer el esquema F7.1 y sus invariantes de actividad tras reparar.');
 
     hache_profesores_asignacion_set($pdo,$teacher1,$schedule1,false,$admin);
