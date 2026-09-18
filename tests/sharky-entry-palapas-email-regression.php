@@ -22,6 +22,18 @@ sharky_entry_expect(str_contains($webhook,"'kind'=>'prospect'"),'Unmatched conta
 sharky_entry_expect(str_contains($webhook,"'verified'=>false"),'Automatic prospect assumption must not become authentication.');
 sharky_entry_expect(str_contains($webhook,"'source'=>'whatsapp_unmatched'"),'Automatic prospect assumption must remain auditable.');
 sharky_entry_expect(strpos($webhook,'sharky_lab_assume_unmatched_prospect')<strpos($webhook,'hache_sharky_human_process_event'),'Prospect assumption must happen before the supervised general orchestrator runs.');
+sharky_entry_expect(str_contains($webhook,"require_once __DIR__.'/../../config/sharky-prospect-opportunities.php'"),'Live prospect entry must load the F6 opportunity producer.');
+$assumeStart=strpos($webhook,'function sharky_lab_assume_unmatched_prospect');
+$assumeEnd=strpos($webhook,'function sharky_lab_notify_registration_transition',$assumeStart?:0);
+sharky_entry_expect($assumeStart!==false&&$assumeEnd!==false,'Unmatched prospect entry block must remain bounded.');
+$assumeBlock=substr($webhook,$assumeStart,$assumeEnd-$assumeStart);
+$guidedPos=strpos($assumeBlock,'hache_sharky_entry_guided_first_prospect');
+$opportunityPos=strpos($assumeBlock,'hache_sharky_prospect_opportunity_open');
+$stateSavePos=strpos($assumeBlock,'hache_sharky_db_state_save');
+sharky_entry_expect($guidedPos!==false&&$opportunityPos!==false&&$stateSavePos!==false&&$guidedPos<$opportunityPos&&$opportunityPos<$stateSavePos,'Opportunity producer must observe the resolved first-entry source before the prospect state is saved.');
+sharky_entry_expect(str_contains($assumeBlock,"(string)(\$event['id']??'')"),'Opportunity idempotency must derive from the durable inbound message id.');
+sharky_entry_expect(str_contains($assumeBlock,'hache_sharky_orchestrator_contact_hash($contact)'),'Opportunity producer must receive only the contact hash, never the raw WhatsApp number.');
+
 
 // Sharky-created intensive registrations must reuse the same Resend alert only
 // after the transactional action has had a chance to commit.
