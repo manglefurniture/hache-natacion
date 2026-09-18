@@ -202,3 +202,89 @@ function dashboard_asistencia_periodo(PDO $pdo,string $sedeId,string $inicio,str
                 'cobertura_desde_utc'=>$coberturaUtc,'motivo'=>'La cobertura persistida de asistencia no está disponible.'];
     }
 }
+
+function dashboard_prospectos_conversion(PDO $pdo,string $inicio,string $fin): array
+{
+    $coberturaUtc=dashboard_p06_config_datetime_utc($pdo,'dashboard_prospectos_cobertura_desde');
+    if($coberturaUtc===null){
+        return ['disponible'=>false,'prospectos'=>null,'conversiones'=>null,'tasa'=>null,'cobertura_desde'=>null,'motivo'=>'Cobertura de oportunidades todavía no inicializada.'];
+    }
+
+    $coberturaLocal=dashboard_p06_utc_to_cancun($coberturaUtc);
+    [$desdePeriodo,$hasta]=dashboard_p06_period_bounds_utc($inicio,$fin);
+    $desde=max($desdePeriodo,$coberturaUtc);
+    if($desde>$hasta){
+        return [
+            'disponible'=>false,
+            'prospectos'=>null,
+            'conversiones'=>null,
+            'tasa'=>null,
+            'cobertura_desde'=>$coberturaLocal,
+            'cobertura_desde_utc'=>$coberturaUtc,
+            'motivo'=>'El periodo seleccionado es anterior al inicio de cobertura fiable de oportunidades.',
+        ];
+    }
+
+    try{
+        $st=$pdo->prepare("SELECT entry_source,COALESCE(sede_clave,'SIN_SEDE') sede_clave,status,alumno_id,created_at,converted_at
+            FROM sharky_prospect_opportunities
+            WHERE created_at BETWEEN :d AND :h
+            ORDER BY created_at,id");
+        $st->execute([':d'=>$desde,':h'=>$hasta]);
+
+        $prospectos=0;$conversiones=0;
+        $porSede=[
+            'MONTEVERDE'=>['prospectos'=>0,'conversiones'=>0,'tasa'=>null],
+            'PALAPAS'=>['prospectos'=>0,'conversiones'=>0,'tasa'=>null],
+            'SIN_SEDE'=>['prospectos'=>0,'conversiones'=>0,'tasa'=>null],
+        ];
+        $porFuente=[];
+        foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+            $prospectos++;
+            $sede=in_array((string)$row['sede_clave'],['MONTEVERDE','PALAPAS'],true)?(string)$row['sede_clave']:'SIN_SEDE';
+            $source=trim((string)($row['entry_source']??''));if($source==='')$source='sin_fuente';
+            if(!isset($porFuente[$source]))$porFuente[$source]=['prospectos'=>0,'conversiones'=>0,'tasa'=>null];
+            $porSede[$sede]['prospectos']++;
+            $porFuente[$source]['prospectos']++;
+            $converted=(string)($row['status']??'')==='CONVERTED'&&trim((string)($row['alumno_id']??''))!=='';
+            if($converted){
+                $conversiones++;
+                $porSede[$sede]['conversiones']++;
+                $porFuente[$source]['conversiones']++;
+            }
+        }
+        foreach($porSede as &$bucket)$bucket['tasa']=$bucket['prospectos']>0?round(($bucket['conversiones']/$bucket['prospectos'])*100,1):null;
+        unset($bucket);
+        foreach($porFuente as &$bucket)$bucket['tasa']=$bucket['prospectos']>0?round(($bucket['conversiones']/$bucket['prospectos'])*100,1):null;
+        unset($bucket);
+        ksort($porFuente);
+
+        return [
+            'disponible'=>true,
+            'prospectos'=>$prospectos,
+            'conversiones'=>$conversiones,
+            'tasa'=>$prospectos>0?round(($conversiones/$prospectos)*100,1):null,
+            'por_sede'=>$porSede,
+            'por_fuente'=>$porFuente,
+            'periodo'=>['inicio'=>$inicio,'fin'=>$fin],
+            'cohorte_desde'=>dashboard_p06_utc_to_cancun($desde),
+            'cohorte_desde_utc'=>$desde,
+            'cobertura_desde'=>$coberturaLocal,
+            'cobertura_desde_utc'=>$coberturaUtc,
+            'parcial'=>$desde>$desdePeriodo,
+            'unidad'=>'oportunidades_por_participante',
+            'conversion'=>'Inscripción completada por Sharky; abrir Flow o iniciar pago no convierte.',
+        ];
+    }catch(Throwable $e){
+        return [
+            'disponible'=>false,
+            'prospectos'=>null,
+            'conversiones'=>null,
+            'tasa'=>null,
+            'cobertura_desde'=>$coberturaLocal,
+            'cobertura_desde_utc'=>$coberturaUtc,
+            'motivo'=>'La cobertura persistida de oportunidades no está disponible.',
+        ];
+    }
+}
+
