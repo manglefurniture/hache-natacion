@@ -33,8 +33,11 @@ try{
     }
     $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
     if($method==='GET'){
-        $desde=profesor_sustituciones_fecha((string)($_GET['desde']??date('Y-m-d')),'Fecha inicial');
-        $hasta=profesor_sustituciones_fecha((string)($_GET['hasta']??date('Y-m-d',strtotime('+31 days'))),'Fecha final');
+        $operationalNow=new DateTimeImmutable('now',new DateTimeZone('America/Cancun'));
+        $defaultDesde=$operationalNow->format('Y-m-d');
+        $defaultHasta=$operationalNow->modify('+31 days')->format('Y-m-d');
+        $desde=profesor_sustituciones_fecha((string)($_GET['desde']??$defaultDesde),'Fecha inicial');
+        $hasta=profesor_sustituciones_fecha((string)($_GET['hasta']??$defaultHasta),'Fecha final');
         $d1=new DateTimeImmutable($desde);$d2=new DateTimeImmutable($hasta);
         $days=(int)$d1->diff($d2)->format('%r%a');
         if($days<0||$days>62)profesor_sustituciones_out(['ok'=>false,'error'=>'El rango debe estar entre 0 y 62 días.'],422);
