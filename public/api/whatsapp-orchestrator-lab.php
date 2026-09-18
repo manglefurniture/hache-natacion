@@ -12,6 +12,7 @@ require_once __DIR__.'/../../config/sharky-inbox.php';
 require_once __DIR__.'/../../config/sharky-groups.php';
 require_once __DIR__.'/../../config/sharky-delivery-status.php';
 require_once __DIR__.'/../../config/notificaciones-email.php';
+require_once __DIR__.'/../../config/sharky-prospect-opportunities.php';
 
 function sharky_lab_json(int $status,array $body): never
 {
@@ -56,6 +57,7 @@ function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $ident
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
     if($contact==='')return;
 
+    $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);
     try{
         $teacher=hache_sharky_member_teacher_by_whatsapp($pdo,$contact);
         if(($teacher['found']??false)===true)return;
@@ -75,9 +77,20 @@ function sharky_lab_assume_unmatched_prospect(PDO $pdo,array $event,array $ident
         if($referral)$state=hache_sharky_orchestrator_capture_referral($state,$referral);
         $state=hache_sharky_entry_guided_first_prospect($state,(string)($event['text']??''),$now);
         $state['updated_at']=$now;
+
+        // F6 observes the exact first unmatched inbound event. The raw message
+        // id and phone never enter the ledger; both links are irreversible hashes.
+        hache_sharky_prospect_opportunity_open(
+            $pdo,
+            hache_sharky_orchestrator_contact_hash($contact),
+            (string)($event['id']??''),
+            $state
+        );
         hache_sharky_db_state_save($pdo,$contact,$state,86400);
     }catch(Throwable $e){
         error_log('[sharky-entry] No se pudo asumir prospecto para contacto no identificado.');
+    }finally{
+        hache_sharky_lab_release_delivery_lock($deliveryLock);
     }
 }
 
