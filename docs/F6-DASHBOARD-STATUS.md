@@ -6,7 +6,7 @@ Fecha de actualización: 2026-09-17.
 
 F6 — Dashboard operativo permanece **En implementación**.
 
-La base actualmente integrada y comprobada en producción es `c7178291e5f30a00d58bc09d7586c8b471a8ea2f` (PR #320, sobre PR #318). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable de oportunidades, el productor mínimo del primer turno, el enriquecimiento estructurado de sede con retry durable, el vínculo verificable con una inscripción Sharky `COMPLETED`, la exclusión exacta de oportunidades provisionales cuando identidad durable demuestra que el contacto ya es alumno existente y el fail-closed del lookup de identidad live.
+La base actualmente integrada y comprobada en producción es `899659598f9c518a53248b6f5e6cc707403658d2` (PR #321). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable y lifecycle de oportunidades, sede estructurada, conversión exacta por inscripción Sharky `COMPLETED`, exclusión de alumno existente, fail-closed del lookup live y la primera lectura backend reconciliable de prospectos/conversiones con cobertura forward-only.
 
 PR #310 **no se considera integrable como unidad**: mezcló prospectos, conversión, migración, Sharky, dashboard, pruebas y documentación, y la revisión automática encontró problemas reales de identidad/lifecycle e idempotencia. El cierre restante de P-06 se divide desde `main` en micro-pasos independientes.
 
@@ -91,7 +91,7 @@ Codex automático detectó un P1 real en la primera versión del PR: member rout
 Producción quedó comprobada en `c7178291e5f30a00d58bc09d7586c8b471a8ea2f`: marcador de deploy exacto, sintaxis PHP correcta, sentinel live y fail-closed presentes, reconciliación live activa y health de `hnatacion.com` correcto. `dashboard_prospectos_cobertura_desde` continúa ausente deliberadamente.
 
 
-## Micro-paso en revisión: cobertura forward-only y lectura backend
+## Micro-paso cerrado: cobertura forward-only y lectura backend
 
 PR #321 implementa el primer consumidor publicable del ledger de oportunidades sin añadir UI ni reconstruir historia previa.
 
@@ -108,7 +108,7 @@ Contrato de este incremento:
 - el runner F6 exige el nuevo marcador para impedir que un despliegue parcial publique la lectura sin frontera de cobertura;
 - no cambia el productor, lifecycle, funnel, Brain, Flow, pagos, takeover ni mensajes de Sharky.
 
-Al crear este registro, PR #321 permanece sujeto a Quality y revisión automática. Integración, despliegue y verificación de producción deben registrarse por separado antes de considerar cerrado el micro-paso.
+PR #321 quedó integrado como `899659598f9c518a53248b6f5e6cc707403658d2`. Quality #1625 pasó en el PR y Quality #1626 pasó después del merge en `main`; la revisión automática no dejó hallazgos pendientes. Deploy automático #286 publicó ese mismo SHA y reportó `F6_DASHBOARD_METRICS_MIGRATION_OK`, verificación que ahora exige también `dashboard_prospectos_cobertura_desde`. En producción, `.hache-deployed-sha` coincide exactamente con el SHA integrado, `config/dashboard-p06.php` y `api/dashboard.php` pasan sintaxis PHP y `/api/health.php` responde `ok: true` con HTTP 200. No se amplió el acceso de `deploy-hache` a credenciales de MariaDB para realizar esta verificación.
 
 ## Cobertura vigente
 
@@ -120,6 +120,7 @@ Al crear este registro, PR #321 permanece sujeto a Quality y revisión automáti
 - **Operación del día:** lectura pura de sesiones y marcas; canceladas excluidas de asistencia.
 - **Intensivos y avisos:** contratos existentes, sin reconciliar ni escribir estados al consultar.
 - **Nuevos alumnos, bajas y asistencia de periodo:** implementados en PR #309 con cobertura explícita.
+- **Prospectos/conversión (backend ADMIN):** lectura forward-only por cohorte de apertura, sede y fuente desde `dashboard_prospectos_cobertura_desde`; `EXCLUDED` queda fuera y todavía no existe UI.
 
 ## Autoridades y límites
 
@@ -132,7 +133,7 @@ Al crear este registro, PR #321 permanece sujeto a Quality y revisión automáti
 | Mensualidades y avisos | `config/dashboard-indicadores.php` |
 | Operación diaria | `config/dashboard-operacion.php` |
 | P-06 alumnos/bajas/asistencia | `config/dashboard-p06.php` + cobertura persistida |
-| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` + productor del primer turno + sede estructurada + vínculo exacto a inscripción `COMPLETED`; dashboard aún sin cobertura publicable |
+| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` + lifecycle durable + `dashboard_prospectos_cobertura_desde` + `dashboard_prospectos_conversion()`; lectura backend ADMIN ya publicable, UI aún pendiente |
 | Fecha/hora | `config/dashboard-tiempo.php`, `America/Cancun` |
 
 ## Evidencia acumulada
@@ -148,8 +149,9 @@ Al crear este registro, PR #321 permanece sujeto a Quality y revisión automáti
 | #316 | P-06: vínculo exacto oportunidad → inscripción Sharky `COMPLETED` | Integrado y producción comprobada en `6d31f9a7...`; Quality del head exitoso; P2 automático sobre doble conversión cubierto por índice único + regresión y resuelto antes del merge; esquema, marcador y health verificados |
 | #318 | P-06: excluir oportunidad provisional de alumno existente | Integrado y producción comprobada en `d334ce5d...`; Quality exitoso; P1 automático por retorno temprano de member routing corregido y resuelto antes del merge; live/recovery, marcador y health verificados |
 | #320 | P-06: fail-closed ante error de lookup de identidad live | Integrado y producción comprobada en `c7178291...`; Quality exitoso y revisión automática sin nuevos hallazgos; sentinel `lookup_failed`, retry y health verificados |
+| #321 | P-06: cobertura forward-only y lectura backend por cohorte/sede/fuente | Integrado y producción comprobada en `89965959...`; Quality #1625/#1626, Deploy #286, `F6_DASHBOARD_METRICS_MIGRATION_OK`, marcador exacto, sintaxis PHP y health 200 verificados; sin UI ni backfill |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
 ## Criterio para continuar el cierre
 
-El lifecycle mínimo acordado para oportunidades ya cubre creación durable, sede estructurada, conversión `COMPLETED` y exclusión exacta de alumno existente. El siguiente micro-paso puede declarar cobertura **forward-only** desde su despliegue y añadir una lectura backend reconciliable de prospectos/conversiones por cohorte, sede y fuente. No debe hacer backfill, reutilizar historia previa ni publicar todavía una UI si el contrato backend no ha pasado primero sus pruebas de detalle/denominador.
+El lifecycle y la lectura backend reconciliable de oportunidades ya están desplegados con cobertura **forward-only**. El siguiente micro-paso puede añadir únicamente la UI de prospectos/conversión consumiendo este contrato ya probado, sin backfill, sin recalcular el denominador en frontend y sin modificar productor, lifecycle o reglas de Sharky.
