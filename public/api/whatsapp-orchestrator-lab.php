@@ -213,6 +213,7 @@ usort($processing,static function(array $a,array $b):int{
 foreach($processing as $event){
     if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
     $identityBefore=sharky_lab_identity_before($pdo,$event);
+    if(!hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,$identityBefore))continue;
     if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){
         hache_sharky_regular_enrollment_process($pdo,$event,$business,$minAge,$maxAge);
         continue;
