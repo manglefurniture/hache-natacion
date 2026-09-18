@@ -106,7 +106,9 @@ try{
     f72_expect(hache_profesor_sustituciones_schema_ready($pdo),'El helper debe reconocer el esquema F7.2.');
     f72_expect((int)$pdo->query('SELECT COUNT(*) FROM profesor_sustituciones')->fetchColumn()===0,'La migración no debe inventar sustituciones.');
     $coverage=(string)$pdo->query("SELECT valor FROM configuracion WHERE clave='profesores_sustituciones_cobertura_desde'")->fetchColumn();
-    f72_expect($coverage!==''&&$coverage<'2099-01-10 19:00:00','El marcador debe preceder al fixture futuro.');
+    f72_expect($coverage!=='','Debe existir un marcador forward-only.');
+    f72_expect(hache_profesor_sesion_inicio_utc('2099-01-10','07:00:00')==='2099-01-10 12:00:00','La hora operativa de Cancún debe normalizarse a UTC.');
+    $pdo->prepare("UPDATE configuracion SET valor='2099-01-10 11:30:00' WHERE clave='profesores_sustituciones_cobertura_desde'")->execute();
 
     $id1=hache_profesor_sustitucion_registrar($pdo,$session1,$original1,$sub1,'Cobertura por ausencia',$admin);
     f72_expect($id1!=='','Debe registrar la sustitución explícita.');
@@ -161,7 +163,7 @@ try{
     f72_expect(count($sessionMap[$session1]['profesores_asignados']??[])===3,'La lectura debe mostrar los profesores originalmente asignados, incluida co-docencia.');
     f72_expect(count($ctx['sustituciones'])===4,'La lectura debe conservar activas y anuladas para trazabilidad.');
 
-    $pdo->prepare("UPDATE configuracion SET valor='2099-01-11 00:00:00' WHERE clave='profesores_sustituciones_cobertura_desde'")->execute();
+    $pdo->prepare("UPDATE configuracion SET valor='2099-01-10 12:30:00' WHERE clave='profesores_sustituciones_cobertura_desde'")->execute();
     f72_throws(
         fn()=>hache_profesor_sustitucion_registrar($pdo,$session1,$original1,$sub1,'Antes de cobertura',$admin),
         'fuera de la cobertura',409
@@ -169,7 +171,7 @@ try{
 
     $api=(string)file_get_contents(dirname(__DIR__).'/api/profesor-sustituciones.php');
     f72_expect(str_contains($api,"auth_require(['ADMIN'])"),'La API de sustituciones debe permanecer ADMIN-only.');
-    f72_expect(str_contains($api,"$action==='REGISTRAR'")&&str_contains($api,"$action==='ANULAR'"),'La API debe exponer registro y anulación explícitos.');
+    f72_expect(str_contains($api,"\$action==='REGISTRAR'")&&str_contains($api,"\$action==='ANULAR'"),'La API debe exponer registro y anulación explícitos.');
     f72_expect(!str_contains($api,'profesor_cancelaciones'),'La API no debe inferir sustituciones desde cancelaciones.');
 
     $deploy=(string)file_get_contents(dirname(__DIR__).'/ops/production-readiness/deploy-hache-natacion');
