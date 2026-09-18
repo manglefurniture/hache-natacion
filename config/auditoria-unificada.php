@@ -414,3 +414,20 @@ function hache_auditoria_ordenar(array &$events): void
         return strcmp((string)($b['id'] ?? ''), (string)($a['id'] ?? ''));
     });
 }
+
+function hache_auditoria_agregar(array $groups, int $limit): array
+{
+    $events = [];
+    foreach ($groups as $group) {
+        if (!is_array($group)) {
+            continue;
+        }
+        foreach ($group as $event) {
+            if (is_array($event)) {
+                $events[] = $event;
+            }
+        }
+    }
+    hache_auditoria_ordenar($events);
+    return count($events) > $limit ? array_slice($events, 0, $limit) : $events;
+}
