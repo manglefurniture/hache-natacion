@@ -121,6 +121,11 @@ assert.match(opportunities,/status='COMPLETED'/);
 assert.match(opportunities,/action_type IN \('register_intensive','register_regular'\)/);
 assert.match(opportunities,/WHERE id=:id[\s\S]{0,120}contact_hash=:contact_hash/);
 assert.match(opportunities,/conversion_action_hash=:audit/);
+assert.match(opportunities,/function hache_sharky_prospect_opportunity_exclude_durable_student/);
+assert.match(opportunities,/status='EXCLUDED'/);
+assert.match(opportunities,/conversion_action_hash IS NULL/);
+assert.match(opportunities,/hache_sharky_prospect_opportunity_state_id\(\$state\)/);
+assert.match(opportunities,/durable student exclusion failed; receipt remains pending/);
 assert.doesNotMatch(opportunities,/alumno_id/);
 
 assert.match(actionRecovery,/\?string \$f6OpportunityId=null/);
@@ -131,6 +136,8 @@ assert.match(actionRecovery,/commit\(\)/);
 assert.match(orchestratorDb,/f6_opportunity_id/);
 assert.match(orchestratorDb,/hache_sharky_action_recovery_finish\([\s\S]{0,300}\$f6OpportunityId/);
 assert.match(whatsappAdapter,/\$actionContext\['f6_opportunity_id'\]/);
+assert.match(whatsappAdapter,/\$context\['verification'\]\['verified'\]/);
+assert.match(whatsappAdapter,/hache_sharky_prospect_opportunity_exclude_durable_student\(\$pdo,\$contactHash,\$state,\$context\['verification'\]\)/);
 assert.match(regularEnrollment,/hache_sharky_prospect_opportunity_state_id\(\$state\)/);
 assert.match(regularEnrollment,/hache_sharky_prospect_opportunity_link_completed_registration/);
 

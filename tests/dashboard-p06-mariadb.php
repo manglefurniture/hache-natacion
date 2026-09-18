@@ -235,6 +235,60 @@ try{
         'Un UUID no perteneciente al contacto del audit debe quedar intacto.'
     );
 
+    $existingStudentState=$producerState;
+    $existingStudentState['commercial_context']['f6_opportunity_id']=$firstOpportunity;
+    $existingStudentEvidence=['found'=>true,'student_id'=>'student-existing-001'];
+    f6m_expect(
+        hache_sharky_prospect_opportunity_exclude_durable_student($pdo,$producerContact,$existingStudentState,$existingStudentEvidence),
+        'Una identidad durable de alumno existente debe excluir únicamente su oportunidad OPEN exacta.'
+    );
+    $q=$pdo->prepare('SELECT status,conversion_action_hash,closed_at FROM sharky_prospect_opportunities WHERE id=?');
+    $q->execute([$firstOpportunity]);
+    $excluded=$q->fetch(PDO::FETCH_ASSOC);
+    f6m_expect(
+        is_array($excluded)
+        &&(string)$excluded['status']==='EXCLUDED'
+        &&$excluded['conversion_action_hash']===null
+        &&trim((string)($excluded['closed_at']??''))!=='',
+        'La exclusión por alumno existente debe cerrar la oportunidad sin convertirla ni persistir identidad del alumno.'
+    );
+    f6m_expect(
+        hache_sharky_prospect_opportunity_exclude_durable_student($pdo,$producerContact,$existingStudentState,$existingStudentEvidence),
+        'Repetir la misma exclusión durable debe ser idempotente.'
+    );
+    f6m_expect(
+        (string)$pdo->query("SELECT status FROM sharky_prospect_opportunities WHERE id='{$secondOpportunity}'")->fetchColumn()==='CONVERTED',
+        'Excluir una oportunidad OPEN no debe degradar una conversión ya confirmada.'
+    );
+
+    $legacyOpen=hache_sharky_prospect_opportunity_open($pdo,$producerContact,'wamid.f6.prospect.legacy-open',$producerState);
+    f6m_expect(is_string($legacyOpen)&&$legacyOpen!=='','Debe existir una oportunidad OPEN para comprobar el caso sin UUID.');
+    f6m_expect(
+        hache_sharky_prospect_opportunity_exclude_durable_student($pdo,$producerContact,$producerState,$existingStudentEvidence),
+        'Una identidad durable sin UUID F6 debe omitir la exclusión sin adivinar por contacto.'
+    );
+    f6m_expect(
+        (string)$pdo->query("SELECT status FROM sharky_prospect_opportunities WHERE id='{$legacyOpen}'")->fetchColumn()==='OPEN',
+        'Sin UUID exacto, una oportunidad OPEN no debe excluirse por fallback de contacto.'
+    );
+
+    $mismatchedStudentState=$producerState;
+    $mismatchedStudentState['commercial_context']['f6_opportunity_id']=$legacyOpen;
+    $mismatchRequiresRetry=false;
+    try{
+        hache_sharky_prospect_opportunity_exclude_durable_student($pdo,str_repeat('9',64),$mismatchedStudentState,['verified'=>true,'student_id'=>'student-existing-002']);
+    }catch(RuntimeException){
+        $mismatchRequiresRetry=true;
+    }
+    f6m_expect(
+        $mismatchRequiresRetry,
+        'Un UUID exacto que no pertenece al contacto durable debe exigir retry y no cerrar otra oportunidad.'
+    );
+    f6m_expect(
+        (string)$pdo->query("SELECT status FROM sharky_prospect_opportunities WHERE id='{$legacyOpen}'")->fetchColumn()==='OPEN',
+        'El fallo de identidad/contacto no debe mutar la oportunidad OPEN.'
+    );
+
     $studentState=['identity'=>['kind'=>'student'],'commercial_context'=>['entry_source'=>'direct']];
     f6m_expect(
         hache_sharky_prospect_opportunity_open($pdo,str_repeat('2',64),'wamid.f6.student.001',$studentState)===null,

@@ -76,6 +76,7 @@ try{
             hache_sharky_metric_increment('messages_skipped_group');
             return hache_sharky_orchestrator_mark_processed($pdo,$messageId);
         }
+        if(!hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,null))return false;
         if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){
             return hache_sharky_regular_enrollment_process($pdo,$event,$business,$minAge,$maxAge);
         }

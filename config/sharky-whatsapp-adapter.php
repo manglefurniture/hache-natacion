@@ -1074,6 +1074,11 @@ function hache_sharky_whatsapp_process(PDO $pdo,array $event,callable $conversat
         $context=hache_sharky_whatsapp_context($pdo,$contact,$extraContext);
         $context['contact']=$contact;
         $context['previous_user_text']=trim((string)($state['last_user_text']??''));
+        if(($context['verification']['verified']??false)===true){
+            if(!hache_sharky_prospect_opportunity_exclude_durable_student($pdo,$contactHash,$state,$context['verification'])){
+                throw new RuntimeException('Unable to exclude verified existing student from F6 opportunity');
+            }
+        }
         $state=hache_sharky_whatsapp_resume_verified_state($state,$context,(int)$context['now']);
         $state=hache_sharky_orchestrator_expire_flow($state,(int)$context['now']);
         $state=hache_sharky_whatsapp_reconcile_qualification_context($state);
