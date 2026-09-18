@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/sharky-orchestrator-store.php';
+require_once __DIR__.'/sharky-prospect-opportunities.php';
 
 const HACHE_SHARKY_ACTION_LEASE_SECONDS=180;
 
@@ -73,7 +74,7 @@ function hache_sharky_action_recovery_claim(PDO $pdo,string $idempotencyKey,stri
     }catch(Throwable $e){error_log('[sharky-action] claim failed');return false;}
 }
 
-function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,bool $ok,string $resultCode,?array $result=null,string $message='',?string $ownerToken=null): bool
+function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,bool $ok,string $resultCode,?array $result=null,string $message='',?string $ownerToken=null,?string $f6OpportunityId=null): bool
 {
     if(!hache_sharky_orchestrator_store_ready($pdo)||!is_string($ownerToken)||$ownerToken==='')return false;
     $public=$result;$sealed=null;
@@ -82,11 +83,36 @@ function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,boo
         unset($public['temporary_password']);
     }
     $json=$public===null?null:json_encode($public,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);if($json===false)$json=null;
+    $auditKey=hash('sha256',$idempotencyKey);
+    $f6OpportunityId=strtolower(trim((string)$f6OpportunityId));
+    $linkOpportunityId=preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/',$f6OpportunityId)===1?$f6OpportunityId:null;
+    $startedTransaction=false;
     try{
+        if($ok&&$linkOpportunityId!==null&&!$pdo->inTransaction()){
+            $pdo->beginTransaction();
+            $startedTransaction=true;
+        }
+
         $st=$pdo->prepare("UPDATE sharky_action_audit SET status=:s,result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=NOW(),lease_until=NULL,owner_token=NULL WHERE idempotency_key=:k AND status='PENDING' AND owner_token=:o");
-        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>hash('sha256',$idempotencyKey),':o'=>$ownerToken]);
-        return $st->rowCount()===1;
-    }catch(Throwable $e){error_log('[sharky-action] finish failed');return false;}
+        $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>$auditKey,':o'=>$ownerToken]);
+        if($st->rowCount()!==1){
+            if($startedTransaction&&$pdo->inTransaction())$pdo->rollBack();
+            return false;
+        }
+
+        if($ok&&$linkOpportunityId!==null&&!hache_sharky_prospect_opportunity_link_completed_registration($pdo,$auditKey,$linkOpportunityId)){
+            if($startedTransaction&&$pdo->inTransaction())$pdo->rollBack();
+            error_log('[sharky-action] completed registration could not be linked to its F6 opportunity');
+            return false;
+        }
+
+        if($startedTransaction)$pdo->commit();
+        return true;
+    }catch(Throwable $e){
+        if($startedTransaction&&$pdo->inTransaction())$pdo->rollBack();
+        error_log('[sharky-action] finish failed');
+        return false;
+    }
 }
 
 /**
