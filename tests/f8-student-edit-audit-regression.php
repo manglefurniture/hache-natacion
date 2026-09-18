@@ -20,6 +20,7 @@ $before=[
     'correo'=>'antes@example.test',
     'horario_preferido_id'=>'h1',
     'plan_actual_id'=>null,
+    'inscripcion_historica_cubierta'=>false,
     'observaciones'=>'Nota anterior',
 ];
 $after=[
@@ -29,6 +30,7 @@ $after=[
     'correo'=>'nuevo@example.test',
     'horario_preferido_id'=>'h2',
     'plan_actual_id'=>'p1',
+    'inscripcion_historica_cubierta'=>true,
     'observaciones'=>'Nota nueva',
 ];
 
@@ -39,6 +41,8 @@ f8_student_expect(($detail['cambios']['horario_preferido_id']['anterior']??null)
 f8_student_expect(($detail['cambios']['horario_preferido_id']['nuevo']??null)==='h2','Horario debe guardar after.');
 f8_student_expect(array_key_exists('anterior',$detail['cambios']['plan_actual_id'])&&$detail['cambios']['plan_actual_id']['anterior']===null,'Plan debe conservar null real como before.');
 f8_student_expect(($detail['cambios']['plan_actual_id']['nuevo']??null)==='p1','Plan debe guardar after.');
+f8_student_expect(array_key_exists('anterior',$detail['cambios']['inscripcion_historica_cubierta'])&&$detail['cambios']['inscripcion_historica_cubierta']['anterior']===false,'Inscripción histórica debe conservar false real como before.');
+f8_student_expect(array_key_exists('nuevo',$detail['cambios']['inscripcion_historica_cubierta'])&&$detail['cambios']['inscripcion_historica_cubierta']['nuevo']===true,'Inscripción histórica debe conservar true real como after.');
 
 $json=json_encode($detail,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 foreach(['Nombre anterior','Nombre nuevo','5211111111111','5222222222222','antes@example.test','nuevo@example.test','Nota anterior','Nota nueva','1990-01-01','1991-02-02'] as $pii){
@@ -54,6 +58,8 @@ f8_student_expect($same===null,'Guardar sin cambios no debe crear un evento arti
 
 $page=file_get_contents(__DIR__.'/../public/editar-alumno.php')?:'';
 f8_student_expect(str_contains($page,'SELECT id,nombre,fecha_nacimiento,whatsapp,correo,sede_id,horario_preferido_id,plan_actual_id,fecha_inicio,estado_administrativo,observaciones FROM alumnos'),'El snapshot bloqueado debe incluir los campos que se comparan.');
+f8_student_expect(str_contains($page,'SELECT inscripcion_historica_cubierta FROM alumno_reglas_negocio WHERE alumno_id=:a LIMIT 1 FOR UPDATE'),'El toggle histórico debe leerse bajo bloqueo dentro de la transacción.');
+f8_student_expect(str_contains($page,"'inscripcion_historica_cubierta'=>\$historica"),'El snapshot after debe incluir el valor histórico realmente solicitado.');
 f8_student_expect(str_contains($page,"hache_alumno_edicion_evento(\$pdo,\$admin,\$actual,\$despuesAudit,\$sedeId,'/public/editar-alumno.php')"),'La edición debe persistir su evento F8.');
 $updatePos=strpos($page,'UPDATE alumnos SET');
 $auditPos=strpos($page,'hache_alumno_edicion_evento(');

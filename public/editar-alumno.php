@@ -34,6 +34,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     try{
         regla_bloquear_identidades_alumnos($pdo);
         $st=$pdo->prepare("SELECT id,nombre,fecha_nacimiento,whatsapp,correo,sede_id,horario_preferido_id,plan_actual_id,fecha_inicio,estado_administrativo,observaciones FROM alumnos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$id,':s'=>$sedeId]);$actual=$st->fetch();if(!$actual){$pdo->rollBack();http_response_code(404);exit('Alumno no encontrado en la sede activa.');}
+        $stHistorica=$pdo->prepare("SELECT inscripcion_historica_cubierta FROM alumno_reglas_negocio WHERE alumno_id=:a LIMIT 1 FOR UPDATE");$stHistorica->execute([':a'=>$id]);$historicaAnteriorRaw=$stHistorica->fetchColumn();$actual['inscripcion_historica_cubierta']=$historicaAnteriorRaw===false?false:(bool)$historicaAnteriorRaw;
         $dup=$pdo->prepare("SELECT nombre FROM alumnos WHERE whatsapp=:w AND id<>:id LIMIT 1");$dup->execute([':w'=>$whatsapp,':id'=>$id]);if($x=$dup->fetch()){$pdo->rollBack();exit('Ese WhatsApp ya pertenece a '.htmlspecialchars($x['nombre'],ENT_QUOTES,'UTF-8').'.');}
         if($horario){$st=$pdo->prepare("SELECT activo FROM horarios WHERE id=:id AND sede_id=:s AND regular=1 LIMIT 1 FOR UPDATE");$st->execute([':id'=>$horario,':s'=>$actual['sede_id']]);$activo=$st->fetchColumn();if($activo===false||(!(bool)$activo&&(string)$actual['horario_preferido_id']!==$horario)){$pdo->rollBack();exit('El horario seleccionado no pertenece a la sede del alumno o ya no está disponible.');}}
         if($plan){$st=$pdo->prepare("SELECT activo FROM planes WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$plan,':s'=>$actual['sede_id']]);$activo=$st->fetchColumn();if($activo===false||(!(bool)$activo&&(string)$actual['plan_actual_id']!==$plan)){$pdo->rollBack();exit('El plan seleccionado no pertenece a la sede del alumno o ya no está disponible.');}}
@@ -58,6 +59,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             'correo'=>$correo!==''?$correo:null,
             'horario_preferido_id'=>$horario,
             'plan_actual_id'=>$plan,
+            'inscripcion_historica_cubierta'=>$historica,
             'observaciones'=>$obs!==''?$obs:null,
         ];
         hache_alumno_edicion_evento($pdo,$admin,$actual,$despuesAudit,$sedeId,'/public/editar-alumno.php');

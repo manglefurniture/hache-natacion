@@ -77,6 +77,14 @@ function hache_alumno_edicion_detalle(array $antes,array $despues,string $sedeId
         }
     }
 
+    if(array_key_exists('inscripcion_historica_cubierta',$antes)&&array_key_exists('inscripcion_historica_cubierta',$despues)){
+        $anterior=(bool)$antes['inscripcion_historica_cubierta'];
+        $nuevo=(bool)$despues['inscripcion_historica_cubierta'];
+        if($anterior!==$nuevo){
+            $cambios['inscripcion_historica_cubierta']=['anterior'=>$anterior,'nuevo'=>$nuevo];
+        }
+    }
+
     foreach(['nombre','fecha_nacimiento','whatsapp','correo','observaciones'] as $campo){
         $anterior=$normalizar($antes[$campo]??null);
         $nuevo=$normalizar($despues[$campo]??null);
