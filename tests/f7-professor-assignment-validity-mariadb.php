@@ -160,6 +160,8 @@ try{
     echo "F7_PROFESSOR_ASSIGNMENT_VALIDITY_MARIADB_OK\n";
 }finally{
     f71_mark('before-drop');
+    if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();
+    $pdo=null;
     $server->exec("DROP DATABASE IF EXISTS `{$db}`");
     f71_mark('after-drop');
 }
