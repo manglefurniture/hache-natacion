@@ -6,7 +6,7 @@ Fecha de actualización: 2026-09-17.
 
 F6 — Dashboard operativo permanece **En implementación**.
 
-La base actualmente integrada y comprobada en producción es `6d31f9a7bdca13f7b06d534426c9ab5c76fc3bae` (PR #316). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable de oportunidades, el productor mínimo del primer turno, el enriquecimiento estructurado de sede con retry durable y el vínculo verificable con una inscripción Sharky `COMPLETED`.
+La base actualmente integrada y comprobada en producción es `c7178291e5f30a00d58bc09d7586c8b471a8ea2f` (PR #320, sobre PR #318). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable de oportunidades, el productor mínimo del primer turno, el enriquecimiento estructurado de sede con retry durable, el vínculo verificable con una inscripción Sharky `COMPLETED`, la exclusión exacta de oportunidades provisionales cuando identidad durable demuestra que el contacto ya es alumno existente y el fail-closed del lookup de identidad live.
 
 PR #310 **no se considera integrable como unidad**: mezcló prospectos, conversión, migración, Sharky, dashboard, pruebas y documentación, y la revisión automática encontró problemas reales de identidad/lifecycle e idempotencia. El cierre restante de P-06 se divide desde `main` en micro-pasos independientes.
 
@@ -68,9 +68,27 @@ Producción quedó comprobada en `6d31f9a7bdca13f7b06d534426c9ab5c76fc3bae`: el 
 
 Este micro-paso **todavía no**:
 
-- cierra como `EXCLUDED` una oportunidad provisional cuando la identidad durable demuestra que el contacto no debe contarse como prospecto;
 - publica prospectos o conversión en el dashboard;
 - declara cobertura histórica anterior al productor durable.
+
+## Micro-paso cerrado: exclusión de alumno existente
+
+PR #318 cerró el hueco mínimo de lifecycle acordado después del vínculo de conversión: una oportunidad provisional `OPEN` deja de contar como prospecto cuando identidad durable demuestra que el contacto ya corresponde a un alumno existente.
+
+Contrato de este incremento:
+
+- la exclusión exige el UUID exacto `f6_opportunity_id` conservado en el estado cifrado; no existe fallback por contacto;
+- el `student_id` solo sirve como evidencia de identidad y no se persiste en el ledger F6;
+- la fila pasa de `OPEN` a `EXCLUDED`, conserva `conversion_action_hash=NULL` y fija `closed_at`;
+- una oportunidad ya `CONVERTED` no se degrada;
+- repetir la reconciliación es idempotente;
+- la reconciliación corre antes de los retornos tempranos de member routing tanto en live como en recovery; la verificación durable también usa la misma exclusión exacta;
+- si existe un UUID exacto pero el almacenamiento/contacto no puede reconciliarse, el recibo permanece pendiente para retry en vez de completar silenciosamente;
+- conversaciones previas sin UUID F6 no se excluyen por adivinanza.
+
+Codex automático detectó un P1 real en la primera versión del PR: member routing podía devolver antes de llegar a la exclusión. Se corrigió en PR #318 moviendo la reconciliación durable antes de member/commerce routing en live y recovery. La revisión automática posterior de esta documentación detectó un segundo P1 real: `sharky_lab_identity_before()` convertía una excepción de consulta en un falso `found=false`. PR #320 añadió un sentinel `lookup_failed` y obliga a la reconciliación pre-routing a devolver retry en ese caso, evitando que un fallo técnico se confunda con un unmatched válido.
+
+Producción quedó comprobada en `c7178291e5f30a00d58bc09d7586c8b471a8ea2f`: marcador de deploy exacto, sintaxis PHP correcta, sentinel live y fail-closed presentes, reconciliación live activa y health de `hnatacion.com` correcto. `dashboard_prospectos_cobertura_desde` continúa ausente deliberadamente.
 
 ## Cobertura vigente
 
@@ -108,8 +126,10 @@ Este micro-paso **todavía no**:
 | #312 | P-06: productor mínimo del primer turno prospecto | Integrado y producción comprobada en `4bdd3acd...`; Quality #1598/#1599, Deploy #277; 2 P1 automáticos corregidos/resueltos |
 | #314 | P-06: enriquecer sede estructurada en la oportunidad `OPEN` | Integrado y producción comprobada en `6060e2a...`; Quality #1602/#1603 en PR y #1604 en `main`; Deploy #279; P1 automático de retry corregido y resuelto |
 | #316 | P-06: vínculo exacto oportunidad → inscripción Sharky `COMPLETED` | Integrado y producción comprobada en `6d31f9a7...`; Quality del head exitoso; P2 automático sobre doble conversión cubierto por índice único + regresión y resuelto antes del merge; esquema, marcador y health verificados |
+| #318 | P-06: excluir oportunidad provisional de alumno existente | Integrado y producción comprobada en `d334ce5d...`; Quality exitoso; P1 automático por retorno temprano de member routing corregido y resuelto antes del merge; live/recovery, marcador y health verificados |
+| #320 | P-06: fail-closed ante error de lookup de identidad live | Integrado y producción comprobada en `c7178291...`; Quality exitoso y revisión automática sin nuevos hallazgos; sentinel `lookup_failed`, retry y health verificados |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
 ## Criterio para continuar el cierre
 
-El vínculo verificable con una inscripción Sharky `COMPLETED` quedó integrado, desplegado y verificado técnicamente sin cambiar el funnel ni publicar métricas. El siguiente micro-paso debe cerrar el hueco mínimo de lifecycle antes de declarar cobertura: una oportunidad provisional que después queda identificada de forma durable como alumno existente no puede permanecer como prospecto `OPEN`. Ese paso debe usar identidad comprobada y el UUID exacto, sin inventar otras exclusiones ni hacer backfill. Solo después corresponde declarar cobertura forward-only y añadir la lectura de prospectos/conversión al dashboard.
+El lifecycle mínimo acordado para oportunidades ya cubre creación durable, sede estructurada, conversión `COMPLETED` y exclusión exacta de alumno existente. El siguiente micro-paso puede declarar cobertura **forward-only** desde su despliegue y añadir una lectura backend reconciliable de prospectos/conversiones por cohorte, sede y fuente. No debe hacer backfill, reutilizar historia previa ni publicar todavía una UI si el contrato backend no ha pasado primero sus pruebas de detalle/denominador.
