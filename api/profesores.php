@@ -3,7 +3,8 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
-require_once __DIR__.'/../config/telefono.php';\nrequire_once __DIR__.'/../config/profesores-asignaciones.php';
+require_once __DIR__.'/../config/telefono.php';
+require_once __DIR__.'/../config/profesores-asignaciones.php';
 $me=auth_require(['ADMIN']);
 $config=require __DIR__.'/../config/database.php';
 $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
