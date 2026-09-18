@@ -53,7 +53,7 @@ El ledger de oportunidades no sustituye el CRM ni el estado conversacional y no 
 | #300–#305 | Fuentes F1/F2/F5, operación, alumnos, intensivos y tiempo | Integrados y desplegados |
 | #307 | Cierre de hallazgos técnicos de F6 | Integrado y desplegado como `6d521421...` |
 | #309 | P-06: nuevos alumnos, bajas y asistencia | Integrado; producción comprobada en `dce535040557d636b01be629f434af1151542b75` |
-| Incremento actual | P-06: oportunidad/persona y conversión por cohorte | En revisión antes de merge/deploy |
+| #310 | P-06: oportunidad/persona y conversión por cohorte | En revisión antes de merge/deploy |
 
 La producción fue comprobada sobre `dce535040557d636b01be629f434af1151542b75`: el marcador desplegado coincide y el health público responde `ok: true`.
 
