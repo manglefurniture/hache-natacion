@@ -34,12 +34,18 @@ try{
     f6m_expect(is_string($sql),'No se pudo leer la migración F6.');
     $withoutComments=preg_replace('/^\s*--.*$/m','',$sql);
     f6m_expect(is_string($withoutComments),'No se pudo normalizar la migración F6.');
-    foreach(array_values(array_filter(array_map('trim',explode(';',$withoutComments)),static fn(string $s):bool=>$s!=='')) as $statement){
-        $pdo->exec($statement);
-    }
+    $statements=array_values(array_filter(array_map('trim',explode(';',$withoutComments)),static fn(string $s):bool=>$s!==''));
+    foreach($statements as $statement)$pdo->exec($statement);
+    foreach($statements as $statement)$pdo->exec($statement);
 
     $columns=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sesion_asistencia_cobertura' ORDER BY ordinal_position")->fetchAll(PDO::FETCH_COLUMN);
     f6m_expect($columns===['sesion_id','expected_count','marked_count','present_count','justified_count','unjustified_count','complete','captured_by','captured_at'],'Columnas inesperadas en snapshot F6.');
+
+    $opportunityColumns=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' ORDER BY ordinal_position")->fetchAll(PDO::FETCH_COLUMN);
+    f6m_expect(
+        $opportunityColumns===['id','contact_hash','origin_message_hash','entry_source','sede_clave','status','opened_at','closed_at','updated_at'],
+        'Columnas inesperadas en la autoridad de oportunidades F6.'
+    );
 
     $uid='00000000-0000-0000-0000-000000000001';
     $sid='00000000-0000-0000-0000-000000000002';
@@ -58,8 +64,42 @@ try{
     }
     f6m_expect($invalidRejected,'El CHECK debe rechazar un numerador incompatible con el denominador.');
 
-    $keys=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde') ORDER BY clave")->fetchAll(PDO::FETCH_COLUMN);
-    f6m_expect($keys===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde'],'Faltan marcadores de inicio de cobertura.');
+    $contactHash=str_repeat('a',64);
+    $origin1=str_repeat('b',64);
+    $origin2=str_repeat('c',64);
+    $insert=$pdo->prepare("INSERT INTO sharky_prospect_opportunities(id,contact_hash,origin_message_hash,entry_source,sede_clave,status,opened_at) VALUES(?,?,?,?,?,'OPEN','2026-09-17 12:00:00')");
+    $insert->execute(['10000000-0000-0000-0000-000000000001',$contactHash,$origin1,'direct',null]);
+    $insert->execute(['10000000-0000-0000-0000-000000000002',$contactHash,$origin2,'direct','MONTEVERDE']);
+    f6m_expect(
+        (int)$pdo->query("SELECT COUNT(*) FROM sharky_prospect_opportunities WHERE contact_hash='{$contactHash}'")->fetchColumn()===2,
+        'Un mismo contacto debe poder representar oportunidades distintas.'
+    );
+
+    $duplicateOriginRejected=false;
+    try{
+        $insert->execute(['10000000-0000-0000-0000-000000000003',str_repeat('d',64),$origin1,'web',null]);
+    }catch(PDOException){
+        $duplicateOriginRejected=true;
+    }
+    f6m_expect($duplicateOriginRejected,'El evento de origen debe ser idempotente y no abrir dos oportunidades.');
+
+    $invalidStatusRejected=false;
+    try{
+        $pdo->prepare("INSERT INTO sharky_prospect_opportunities(id,contact_hash,origin_message_hash,status) VALUES(?,?,?,'UNKNOWN')")->execute([
+            '10000000-0000-0000-0000-000000000004',
+            str_repeat('e',64),
+            str_repeat('f',64),
+        ]);
+    }catch(PDOException){
+        $invalidStatusRejected=true;
+    }
+    f6m_expect($invalidStatusRejected,'El esquema debe rechazar estados de oportunidad no definidos.');
+
+    $keys=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde','dashboard_prospectos_cobertura_desde') ORDER BY clave")->fetchAll(PDO::FETCH_COLUMN);
+    f6m_expect(
+        $keys===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde'],
+        'Este micro-paso no debe declarar cobertura de prospectos antes de activar su escritura.'
+    );
 
     echo "F6_DASHBOARD_METRICS_MARIADB_OK\n";
 }finally{
