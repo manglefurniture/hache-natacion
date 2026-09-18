@@ -107,6 +107,17 @@ try{
         $stmt->execute([':s'=>$site['id'],':p1'=>$periodDate,':p2'=>$nextPeriodDate]);
         $periodosAntes=[];
         foreach($stmt->fetchAll() as $filaPeriodo)$periodosAntes[(string)$filaPeriodo['periodo']]=$filaPeriodo;
+        $periodoAntes=$periodosAntes[$periodDate]??null;
+        $siguienteAntes=$periodosAntes[$nextPeriodDate]??null;
+        $sinCambios=$periodoAntes&&$siguienteAntes
+            &&(string)$periodoAntes['fecha_inicio']===(string)$currentRange['inicio']
+            &&(string)$periodoAntes['fecha_cierre']===$close
+            &&(string)$siguienteAntes['fecha_inicio']===$nextStart
+            &&(string)$siguienteAntes['fecha_cierre']===(string)$nextRange['cierre'];
+        if($sinCambios){
+            $pdo->commit();
+            out(['ok'=>true,'mensaje'=>'Periodo financiero sin cambios','rango'=>$currentRange,'siguiente'=>$nextRange]);
+        }
         $stmt=$pdo->prepare('INSERT INTO periodos_financieros(sede_id,periodo,fecha_inicio,fecha_cierre,updated_by) VALUES(:s,:p,:i,:c,:u) ON DUPLICATE KEY UPDATE fecha_inicio=VALUES(fecha_inicio),fecha_cierre=VALUES(fecha_cierre),updated_by=VALUES(updated_by),updated_at=NOW()');
         $stmt->execute([':s'=>$site['id'],':p'=>$periodDate,':i'=>$currentRange['inicio'],':c'=>$close,':u'=>$user['id']]);
         $stmt->execute([':s'=>$site['id'],':p'=>$nextPeriodDate,':i'=>$nextStart,':c'=>$nextRange['cierre'],':u'=>$user['id']]);
@@ -117,8 +128,6 @@ try{
         $periodoDespues=$periodosDespues[$periodDate]??null;
         $siguienteDespues=$periodosDespues[$nextPeriodDate]??null;
         if(!$periodoDespues||!$siguienteDespues)throw new RuntimeException('No se pudo confirmar el rango financiero actualizado.');
-        $periodoAntes=$periodosAntes[$periodDate]??null;
-        $siguienteAntes=$periodosAntes[$nextPeriodDate]??null;
         $detallePeriodo=[
             'sede_id'=>(string)$site['id'],
             'periodo'=>$periodDate,
