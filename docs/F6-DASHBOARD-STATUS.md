@@ -6,7 +6,7 @@ Fecha de actualización: 2026-09-17.
 
 F6 — Dashboard operativo permanece **En implementación**.
 
-La base actualmente integrada y comprobada en producción es `41a38479fe9bca83f32c53590062eda2ddbd9b0f` (PR #311). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, además del esquema durable todavía inerte para oportunidades.
+La base actualmente integrada y comprobada en producción es `4bdd3acd080b75e94ba309d5e97af1319f7203d1` (PR #312). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable de oportunidades y el productor mínimo del primer turno con recovery y retry.
 
 PR #310 **no se considera integrable como unidad**: mezcló prospectos, conversión, migración, Sharky, dashboard, pruebas y documentación, y la revisión automática encontró problemas reales de identidad/lifecycle e idempotencia. El cierre restante de P-06 se divide desde `main` en micro-pasos independientes.
 
@@ -86,9 +86,9 @@ Por tanto, la escritura es forward-only y sigue sin constituir por sí sola cobe
 | #307 | Cierre de hallazgos técnicos de F6 | Integrado y desplegado como `6d521421...` |
 | #309 | P-06: nuevos alumnos, bajas y asistencia | Integrado y producción comprobada en `dce535040557d636b01be629f434af1151542b75` |
 | #311 | P-06: autoridad durable inerte de oportunidades | Integrado, Quality y producción comprobados en `41a38479...` |
-| #312 | P-06: productor mínimo del primer turno prospecto | En revisión; sin conversión ni publicación de dashboard |
+| #312 | P-06: productor mínimo del primer turno prospecto | Integrado y producción comprobada en `4bdd3acd...`; Quality #1598/#1599, Deploy #277; 2 P1 automáticos corregidos/resueltos |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
 ## Criterio para continuar el cierre
 
-El productor mínimo debe pasar Quality y revisión automática, integrarse a `main`, desplegarse mediante auto-deploy y verificarse sin alterar el funnel. Solo después se abordará otro micro-paso de lifecycle/enriquecimiento o vínculo de conversión; la publicación en dashboard permanece fuera de este incremento.
+El productor mínimo quedó integrado, desplegado y verificado técnicamente sin alterar el funnel. El siguiente incremento deberá tratar de forma separada el lifecycle/enriquecimiento o el vínculo verificable de conversión; la publicación de prospectos/conversión en dashboard permanece fuera hasta contar con cobertura suficiente.
