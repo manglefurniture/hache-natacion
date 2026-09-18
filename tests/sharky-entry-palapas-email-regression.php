@@ -40,17 +40,31 @@ sharky_entry_expect(str_contains($opportunities,"(string)(\$event['id']??'')"),'
 sharky_entry_expect(str_contains($opportunities,'hache_sharky_orchestrator_contact_hash($contact)'),'Opportunity producer must receive only the contact hash, never the raw WhatsApp number.');
 sharky_entry_expect(str_contains($opportunities,'if($opportunityId===null)')&&str_contains($opportunities,'return false;'),'Opportunity persistence failure must fail closed so the receipt is retried.');
 sharky_entry_expect(str_contains($worker,"require_once __DIR__.'/../config/sharky-prospect-opportunities.php'"),'Inbox recovery must load the shared opportunity producer.');
-$recoveryProducer=strpos($worker,'hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null)');
+$recoveryReconcile=strpos($worker,'hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,null)');
+$recoveryMember=strpos($worker,'hache_sharky_member_route_event($pdo,$event,$business)',$recoveryReconcile===false?0:$recoveryReconcile);
+$recoveryProducer=strpos($worker,'hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null)',$recoveryMember===false?0:$recoveryMember);
 $recoveryHuman=strpos($worker,'hache_sharky_human_process_event($pdo,$event',$recoveryProducer===false?0:$recoveryProducer);
-sharky_entry_expect($recoveryProducer!==false&&$recoveryHuman!==false&&$recoveryProducer<$recoveryHuman,'Inbox recovery must cross the same opportunity boundary before completing generic Sharky processing.');
+sharky_entry_expect($recoveryReconcile!==false&&$recoveryMember!==false&&$recoveryReconcile<$recoveryMember,'Inbox recovery must reconcile durable student identity before member routing can return early.');
+sharky_entry_expect($recoveryProducer!==false&&$recoveryHuman!==false&&$recoveryProducer<$recoveryHuman,'Inbox recovery must cross the prospect-creation boundary before completing generic Sharky processing.');
+sharky_entry_expect(str_contains($worker,'if(!hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,null))return false;'),'Recovery exclusion failure must defer the inbox receipt.');
 sharky_entry_expect(str_contains($worker,'if(!hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null))return false;'),'Recovery producer failure must defer the inbox receipt instead of losing the opportunity.');
+
+$liveReconcile=strpos($webhook,'hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,$identityBefore)');
+$liveMember=strpos($webhook,'hache_sharky_member_route_event($pdo,$event,$business)',$liveReconcile===false?0:$liveReconcile);
+sharky_entry_expect($liveReconcile!==false&&$liveMember!==false&&$liveReconcile<$liveMember,'Live webhook must reconcile durable student identity before member routing can continue early.');
+
+$reconcileStart=strpos($opportunities,'function hache_sharky_prospect_opportunity_reconcile_durable_student');
+$reconcileEnd=strpos($opportunities,'function hache_sharky_prospect_opportunity_resolve_open_id',$reconcileStart===false?0:$reconcileStart);
+sharky_entry_expect($reconcileStart!==false&&$reconcileEnd!==false,'Durable student reconciliation helper must remain bounded.');
+$reconcileBlock=substr($opportunities,$reconcileStart,$reconcileEnd-$reconcileStart);
+sharky_entry_expect(str_contains($reconcileBlock,'hache_sharky_prospect_opportunity_exclude_durable_student'),'Pre-routing reconciliation must delegate to the exact-UUID exclusion helper.');
+sharky_entry_expect(str_contains($reconcileBlock,'return false;'),'Pre-routing identity/exclusion failures must remain retryable.');
 
 $knownStudentBranch=strpos($opportunities,"if((\$identityBefore['found']??false)===true){");
 $deliveryLockPos=strpos($opportunities,'$deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);',$knownStudentBranch===false?0:$knownStudentBranch);
 sharky_entry_expect($knownStudentBranch!==false&&$deliveryLockPos!==false&&$knownStudentBranch<$deliveryLockPos,'Durable known-student identity must be handled before prospect creation.');
 $knownStudentBlock=substr($opportunities,$knownStudentBranch,$deliveryLockPos-$knownStudentBranch);
-sharky_entry_expect(str_contains($knownStudentBlock,'hache_sharky_prospect_opportunity_exclude_durable_student'),'Known students must close only their exact provisional F6 opportunity.');
-sharky_entry_expect(str_contains($knownStudentBlock,'return false;'),'Failure to persist known-student exclusion must leave the durable receipt pending for retry.');
+sharky_entry_expect(str_contains($knownStudentBlock,'hache_sharky_prospect_opportunity_reconcile_durable_student'),'Known students reaching prospect preparation must reuse pre-routing reconciliation.');
 
 sharky_entry_expect(str_contains($opportunities,"\$state['commercial_context']['f6_opportunity_id']=\$opportunityId;"),'First-turn producer must keep the exact opportunity id only inside encrypted Sharky state.');
 sharky_entry_expect(str_contains($opportunities,'function hache_sharky_prospect_opportunity_enrich_sede'),'F6 must expose a narrow structured-venue enrichment helper.');
