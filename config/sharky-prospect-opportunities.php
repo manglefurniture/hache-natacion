@@ -40,6 +40,77 @@ function hache_sharky_prospect_opportunity_state_id(array $state): ?string
     return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/',$id)===1?$id:null;
 }
 
+function hache_sharky_prospect_opportunity_conversion_schema_ready(PDO $pdo): bool
+{
+    try{
+        $st=$pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' AND column_name='conversion_action_hash'");
+        return (int)$st->fetchColumn()===1;
+    }catch(Throwable $e){
+        return false;
+    }
+}
+
+/**
+ * Link one exact F6 opportunity to one durable Sharky registration action.
+ *
+ * The audit row is the authority for conversion: only a COMPLETED
+ * register_intensive/register_regular action can close an opportunity. The
+ * opportunity UUID is mandatory so multiple OPEN opportunities for the same
+ * contact are never guessed or collapsed.
+ */
+function hache_sharky_prospect_opportunity_link_completed_registration(PDO $pdo,string $auditKey,string $opportunityId): bool
+{
+    $auditKey=strtolower(trim($auditKey));
+    $opportunityId=strtolower(trim($opportunityId));
+    if(
+        preg_match('/^[0-9a-f]{64}$/',$auditKey)!==1
+        ||preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/',$opportunityId)!==1
+        ||!hache_sharky_prospect_opportunity_conversion_schema_ready($pdo)
+    )return false;
+
+    try{
+        $meta=$pdo->prepare("SELECT contact_hash FROM sharky_action_audit
+            WHERE idempotency_key=:audit
+              AND status='COMPLETED'
+              AND action_type IN ('register_intensive','register_regular')
+            LIMIT 1");
+        $meta->execute([':audit'=>$auditKey]);
+        $contactHash=strtolower(trim((string)($meta->fetchColumn()?:'')));
+        if(preg_match('/^[0-9a-f]{64}$/',$contactHash)!==1)return false;
+
+        $st=$pdo->prepare("UPDATE sharky_prospect_opportunities
+            SET status='CONVERTED',
+                conversion_action_hash=:audit,
+                closed_at=COALESCE(closed_at,UTC_TIMESTAMP()),
+                updated_at=UTC_TIMESTAMP()
+            WHERE id=:id
+              AND contact_hash=:contact_hash
+              AND (
+                (status='OPEN' AND conversion_action_hash IS NULL)
+                OR (status='CONVERTED' AND conversion_action_hash=:same_audit)
+              )");
+        $st->execute([
+            ':audit'=>$auditKey,
+            ':same_audit'=>$auditKey,
+            ':id'=>$opportunityId,
+            ':contact_hash'=>$contactHash,
+        ]);
+
+        $check=$pdo->prepare("SELECT status,conversion_action_hash
+            FROM sharky_prospect_opportunities
+            WHERE id=:id AND contact_hash=:contact_hash
+            LIMIT 1");
+        $check->execute([':id'=>$opportunityId,':contact_hash'=>$contactHash]);
+        $row=$check->fetch(PDO::FETCH_ASSOC);
+        return is_array($row)
+            &&(string)($row['status']??'')==='CONVERTED'
+            &&hash_equals($auditKey,strtolower(trim((string)($row['conversion_action_hash']??''))));
+    }catch(Throwable $e){
+        error_log('[sharky-opportunity] completed registration link failed');
+        return false;
+    }
+}
+
 /**
  * Resolve the OPEN opportunity represented by the current encrypted Sharky
  * state. Conversations created before this micro-step may lack the internal id;
