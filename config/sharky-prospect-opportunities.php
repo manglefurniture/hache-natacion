@@ -167,6 +167,44 @@ function hache_sharky_prospect_opportunity_exclude_durable_student(PDO $pdo,stri
 }
 
 /**
+ * Reconcile a durable existing-student identity before any member/commerce
+ * router can finish the inbound event without reaching the generic adapter.
+ *
+ * This function never creates an opportunity. Unknown contacts are a no-op;
+ * only durable student evidence can close the exact UUID already in state.
+ */
+function hache_sharky_prospect_opportunity_reconcile_durable_student(PDO $pdo,array $event,?array $identityEvidence=null): bool
+{
+    if(trim((string)($event['group_id']??''))!=='')return true;
+    if((string)($event['kind']??'')==='echo')return true;
+
+    $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
+    if($contact==='')return true;
+
+    if($identityEvidence===null){
+        try{$identityEvidence=hache_sharky_business_identity_by_whatsapp($pdo,$contact);}
+        catch(Throwable $e){
+            error_log('[sharky-opportunity] durable identity lookup failed before routing');
+            return false;
+        }
+    }
+    if(($identityEvidence['found']??false)!==true)return true;
+
+    try{
+        $state=hache_sharky_db_state_load($pdo,$contact);
+        return hache_sharky_prospect_opportunity_exclude_durable_student(
+            $pdo,
+            hache_sharky_orchestrator_contact_hash($contact),
+            $state,
+            $identityEvidence
+        );
+    }catch(Throwable $e){
+        error_log('[sharky-opportunity] durable student exclusion failed; receipt remains pending');
+        return false;
+    }
+}
+
+/**
  * Resolve the OPEN opportunity represented by the current encrypted Sharky
  * state. Conversations created before this micro-step may lack the internal id;
  * in that compatibility case we only proceed when exactly one OPEN opportunity
@@ -296,18 +334,7 @@ function hache_sharky_prospect_opportunity_prepare_unmatched(PDO $pdo,array $eve
         catch(Throwable $e){return false;}
     }
     if(($identityBefore['found']??false)===true){
-        try{
-            $state=hache_sharky_db_state_load($pdo,$contact);
-            return hache_sharky_prospect_opportunity_exclude_durable_student(
-                $pdo,
-                hache_sharky_orchestrator_contact_hash($contact),
-                $state,
-                $identityBefore
-            );
-        }catch(Throwable $e){
-            error_log('[sharky-opportunity] durable student exclusion failed; receipt remains pending');
-            return false;
-        }
+        return hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,$identityBefore);
     }
 
     $deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);
