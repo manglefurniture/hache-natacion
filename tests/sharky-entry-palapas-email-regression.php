@@ -25,6 +25,11 @@ sharky_entry_expect(str_contains($opportunities,"'verified'=>false"),'Automatic 
 sharky_entry_expect(str_contains($opportunities,"'source'=>'whatsapp_unmatched'"),'Automatic prospect assumption must remain auditable.');
 sharky_entry_expect(strpos($webhook,'sharky_lab_assume_unmatched_prospect')<strpos($webhook,'hache_sharky_human_process_event'),'Prospect assumption must happen before the supervised general orchestrator runs.');
 sharky_entry_expect(str_contains($webhook,"require_once __DIR__.'/../../config/sharky-prospect-opportunities.php'"),'Live prospect entry must load the F6 opportunity producer.');
+$identityBeforeStart=strpos($webhook,'function sharky_lab_identity_before');
+$identityBeforeEnd=strpos($webhook,'function sharky_lab_assume_unmatched_prospect',$identityBeforeStart===false?0:$identityBeforeStart);
+sharky_entry_expect($identityBeforeStart!==false&&$identityBeforeEnd!==false,'Live identity-before helper must remain bounded.');
+$identityBeforeBlock=substr($webhook,$identityBeforeStart,$identityBeforeEnd-$identityBeforeStart);
+sharky_entry_expect(str_contains($identityBeforeBlock,"'lookup_failed'=>true"),'Live identity lookup errors must remain distinguishable from a valid unmatched contact.');
 $assumeStart=strpos($webhook,'function sharky_lab_assume_unmatched_prospect');
 $assumeEnd=strpos($webhook,'function sharky_lab_notify_registration_transition',$assumeStart?:0);
 sharky_entry_expect($assumeStart!==false&&$assumeEnd!==false,'Unmatched prospect entry wrapper must remain bounded.');
@@ -58,6 +63,7 @@ $reconcileEnd=strpos($opportunities,'function hache_sharky_prospect_opportunity_
 sharky_entry_expect($reconcileStart!==false&&$reconcileEnd!==false,'Durable student reconciliation helper must remain bounded.');
 $reconcileBlock=substr($opportunities,$reconcileStart,$reconcileEnd-$reconcileStart);
 sharky_entry_expect(str_contains($reconcileBlock,'hache_sharky_prospect_opportunity_exclude_durable_student'),'Pre-routing reconciliation must delegate to the exact-UUID exclusion helper.');
+sharky_entry_expect(str_contains($reconcileBlock,"\$identityEvidence['lookup_failed']"),'A live lookup-failure sentinel must fail closed before any router can consume the event.');
 sharky_entry_expect(str_contains($reconcileBlock,'return false;'),'Pre-routing identity/exclusion failures must remain retryable.');
 
 $knownStudentBranch=strpos($opportunities,"if((\$identityBefore['found']??false)===true){");

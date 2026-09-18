@@ -181,6 +181,10 @@ function hache_sharky_prospect_opportunity_reconcile_durable_student(PDO $pdo,ar
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
     if($contact==='')return true;
 
+    if(($identityEvidence['lookup_failed']??false)===true){
+        error_log('[sharky-opportunity] durable identity lookup failed before routing');
+        return false;
+    }
     if($identityEvidence===null){
         try{$identityEvidence=hache_sharky_business_identity_by_whatsapp($pdo,$contact);}
         catch(Throwable $e){
