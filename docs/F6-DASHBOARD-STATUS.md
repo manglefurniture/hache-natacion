@@ -25,33 +25,31 @@ Las decisiones de producto para el cierre restante siguen siendo:
 
 No se reconstruirá historia previa al inicio real de cobertura.
 
-## Micro-paso actual: productor mínimo de oportunidades
+## Micro-paso actual: enriquecimiento estructurado de sede
 
-PR #311 dejó integrada y desplegada la autoridad durable `sharky_prospect_opportunities`. Este segundo micro-paso activa únicamente su productor en el punto ya existente donde un contacto desconocido pasa por primera vez a `prospect`.
+PR #311 dejó la autoridad durable y PR #312 activó el productor mínimo del primer turno. Este tercer micro-paso se limita a enriquecer la misma oportunidad `OPEN` cuando Sharky ya tiene una sede confirmada por los controles estructurados del funnel.
 
-Contrato del productor:
+Contrato de este incremento:
 
-- solo corre para el primer turno de un contacto no identificado que ya pasó los guards de grupo, echo, alumno conocido y profesor;
-- la misma frontera se ejecuta tanto en el procesamiento inmediato del webhook como en el recovery del inbox durable;
-- si el lock, el esquema o la escritura de la oportunidad fallan, el turno no se completa y queda pendiente para retry;
-- el contacto se enlaza únicamente mediante `contact_hash`;
-- el `message_id` de origen se transforma a SHA-256 antes de persistirse;
-- reintentar el mismo evento devuelve la misma oportunidad y no duplica filas;
-- un nuevo primer evento tras una conversación posterior puede abrir otra oportunidad para el mismo contacto;
-- la fuente estructurada `meta_ad`, `web`, `direct` o `referral` se conserva;
-- no se inventa sede en el primer turno.
+- el productor conserva en el estado cifrado de Sharky el UUID interno de la oportunidad creada; no agrega teléfono, nombre ni contenido del mensaje;
+- `meta:venue:monteverde` y `meta:venue:palapas` pueden persistir únicamente `MONTEVERDE` o `PALAPAS`;
+- `Ver otra sede` actualiza `sede_clave` sobre esa misma oportunidad, sin crear otra fila;
+- repetir la misma selección es idempotente;
+- `opened_at`, `entry_source` y `status` no cambian por confirmar sede;
+- conversaciones abiertas antes de este incremento, sin UUID interno, solo usan compatibilidad cuando existe exactamente una oportunidad `OPEN` para el contacto; si hay más de una, se omite el enriquecimiento sin adivinar ni bloquear el funnel;
+- fallos técnicos de esquema, lectura o escritura cuando existe una oportunidad durable identificable no completan silenciosamente el turno: la excepción conserva el recibo pendiente para retry;
+- texto libre, prefills y dudas laterales no enriquecen sede y continúan sin tener autoridad para seleccionarla.
 
 Este micro-paso **todavía no**:
 
-- actualiza la sede de una oportunidad cuando se confirme después;
 - marca exclusiones posteriores;
 - vincula una inscripción `COMPLETED`;
 - calcula conversión;
 - publica prospectos/conversión en el dashboard;
 - crea `dashboard_prospectos_cobertura_desde`;
-- reconstruye oportunidades anteriores a la activación del productor.
+- reconstruye oportunidades anteriores a la cobertura durable.
 
-Por tanto, la escritura es forward-only y sigue sin constituir por sí sola cobertura publicable del indicador.
+Por tanto, la escritura continúa siendo forward-only y todavía no constituye cobertura publicable del indicador.
 
 ## Cobertura vigente
 
@@ -87,8 +85,9 @@ Por tanto, la escritura es forward-only y sigue sin constituir por sí sola cobe
 | #309 | P-06: nuevos alumnos, bajas y asistencia | Integrado y producción comprobada en `dce535040557d636b01be629f434af1151542b75` |
 | #311 | P-06: autoridad durable inerte de oportunidades | Integrado, Quality y producción comprobados en `41a38479...` |
 | #312 | P-06: productor mínimo del primer turno prospecto | Integrado y producción comprobada en `4bdd3acd...`; Quality #1598/#1599, Deploy #277; 2 P1 automáticos corregidos/resueltos |
+| Este micro-paso | P-06: enriquecer sede estructurada en la oportunidad `OPEN` | En implementación desde `main` `188ef09d...`; sin conversión ni publicación de dashboard |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
 ## Criterio para continuar el cierre
 
-El productor mínimo quedó integrado, desplegado y verificado técnicamente sin alterar el funnel. El siguiente incremento deberá tratar de forma separada el lifecycle/enriquecimiento o el vínculo verificable de conversión; la publicación de prospectos/conversión en dashboard permanece fuera hasta contar con cobertura suficiente.
+Este incremento debe pasar Quality y revisión automática, integrarse desde su rama aislada, desplegarse mediante auto-deploy y verificarse sin cambiar el funnel. Después se abordará por separado el vínculo verificable de una inscripción `COMPLETED`; la publicación de prospectos/conversión en dashboard permanece fuera hasta contar con cobertura suficiente.
