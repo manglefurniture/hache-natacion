@@ -160,6 +160,35 @@ f8_expect($professorEdit['after']['available']===true&&$professorEdit['after']['
 f8_expect(str_contains((string)$professorEdit['result']['detail'],'nombre')&&str_contains((string)$professorEdit['result']['detail'],'whatsapp'),'Debe informar campos PII modificados sin copiar valores.');
 f8_expect(!str_contains(json_encode($professorEdit,JSON_UNESCAPED_UNICODE),'Profesor Secreto'),'La proyección no debe inventar ni copiar PII ausente.');
 
+$attendanceCorrection = hache_auditoria_evento_normalizar([
+    'id'=>'e-attendance-correction',
+    'usuario_id'=>'u1',
+    'usuario_nombre'=>'admin',
+    'accion'=>'ASISTENCIA_CORREGIDA',
+    'entidad'=>'asistencia',
+    'entidad_id'=>'as1',
+    'detalle'=>json_encode([
+        'sede_id'=>'s1',
+        'sesion_id'=>'se1',
+        'alumno_id'=>'a1',
+        'cambios'=>[
+            'estado'=>['anterior'=>'PRESENTE','nuevo'=>'AUSENTE_JUSTIFICADA'],
+            'observacion'=>['modificado'=>true,'valores_omitidos'=>'contenido_libre'],
+        ],
+    ]),
+    'metodo'=>'POST',
+    'ruta'=>'/api/sesiones.php',
+    'created_at'=>'2026-09-18 15:07:15',
+]);
+f8_expect($attendanceCorrection['module']==='operacion'&&$attendanceCorrection['result']['level']==='confirmed','La corrección durable de asistencia debe proyectarse como cambio confirmado.');
+f8_expect($attendanceCorrection['entity']['id']==='as1','Debe conservar el ID exacto de la asistencia corregida.');
+f8_expect($attendanceCorrection['entity']['reference_type']==='sesion'&&$attendanceCorrection['entity']['reference_id']==='se1','Debe conservar la referencia exacta a la sesión.');
+f8_expect($attendanceCorrection['before']['available']===true&&$attendanceCorrection['before']['value']['estado']==='PRESENTE','Debe conservar el estado anterior real.');
+f8_expect($attendanceCorrection['after']['available']===true&&$attendanceCorrection['after']['value']['estado']==='AUSENTE_JUSTIFICADA','Debe conservar el estado nuevo real.');
+f8_expect(str_contains((string)$attendanceCorrection['result']['detail'],'observacion'),'Debe indicar que la observación cambió sin copiar su contenido.');
+f8_expect(!str_contains(json_encode($attendanceCorrection,JSON_UNESCAPED_UNICODE),'Nota privada'),'No debe inventar ni proyectar contenido libre ausente.');
+f8_expect($attendanceCorrection['scope']['sede_known']===true&&$attendanceCorrection['scope']['sede_id']==='s1','Debe conservar la sede demostrada por la operación.');
+
 $paymentInvalidation = hache_auditoria_evento_normalizar([
     'id'=>'e-payment-invalidated',
     'usuario_id'=>'u1',
