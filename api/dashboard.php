@@ -59,6 +59,10 @@ try {
     $nuevosAlumnos=dashboard_nuevos_alumnos($pdo,$sid,$periodoInicio,$periodoFin);
     $bajasRegistradas=dashboard_bajas_registradas($pdo,$sid,$periodoInicio,$periodoFin);
     $asistenciaPeriodo=dashboard_asistencia_periodo($pdo,$sid,$periodoInicio,$periodoFin);
+    // Prospectos/conversión son CRM global y conservan el permiso ADMIN vigente.
+    $prospectosConversion=(string)($me['rol']??'')==='ADMIN'
+        ?dashboard_prospectos_conversion($pdo,$periodoInicio,$periodoFin)
+        :['disponible'=>false,'prospectos'=>null,'conversiones'=>null,'tasa'=>null,'motivo'=>'Disponible únicamente para ADMIN.'];
 
     // Definición histórica del dashboard, ahora con el mismo detalle reconciliable.
     // No equivale a estado administrativo ni a derecho de acceso.
@@ -124,6 +128,7 @@ try {
         'nuevos_alumnos'=>$nuevosAlumnos,
         'bajas_registradas'=>$bajasRegistradas,
         'asistencia_periodo'=>$asistenciaPeriodo,
+        'prospectos_conversion'=>$prospectosConversion,
         'mensualidades'=>$mens,
         'intensivos'=>$intensivos,
         'intensivos_detalle'=>$intensivosActivos,
@@ -145,6 +150,7 @@ try {
             'nuevos_alumnos'=>'Alumno único cuya fecha_inicio cae dentro del periodo financiero visible. Una reactivación no modifica fecha_inicio y no crea un alta nueva.',
             'bajas_registradas'=>'Eventos ALUMNO_BAJA registrados desde el inicio explícito de cobertura F6; no se reconstruyen bajas históricas desde updated_at.',
             'asistencia_periodo'=>'Porcentaje calculado solo con sesiones REALIZADA no canceladas cuya cobertura persistida al cierre demuestra una marca por cada alumno con derecho a clase. Sesiones incompletas o sin snapshot quedan fuera.',
+            'prospectos_conversion'=>'Cohorte global ADMIN de oportunidades/personas destinatarias creada dentro del periodo visible y desde el inicio de cobertura. Conversión exige inscripción COMPLETED; abrir Flow o iniciar pago no cuenta. SIN_SEDE permanece explícito. La conversión de una cohorte histórica puede aumentar después si la inscripción se completa más tarde.',
             'facturacion'=>'F2: ingresos atribuidos al periodo financiero vigente según la regla de cada concepto.',
             'saldos_periodo'=>'F2: suma de obligaciones registradas del periodo menos pagos VALIDOS; el detalle reconciliable vive en Finanzas internas.',
             'mensualidades'=>'Registros de mensualidad PAGADA cuya vigencia contiene la fecha operativa; cantidad y total monetario salen exactamente de las filas expuestas.',
