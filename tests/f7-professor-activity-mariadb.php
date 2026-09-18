@@ -90,6 +90,7 @@ try{
     $s3='00000000-0000-0000-0000-000000000033';
     $s4='00000000-0000-0000-0000-000000000034';
     $s5='00000000-0000-0000-0000-000000000035';
+    $s6='00000000-0000-0000-0000-000000000036';
 
     $pdo->prepare('INSERT INTO usuarios(id,usuario) VALUES(?,?)')->execute([$admin,'admin']);
     $pdo->prepare('INSERT INTO configuracion(clave,valor) VALUES(?,?),(?,?),(?,?)')->execute([
@@ -120,9 +121,12 @@ try{
     $s->execute([$s3,'2099-01-12',$h1,'REALIZADA',1]);
     $s->execute([$s4,'2099-01-13',$h1,'CANCELADA',1]);
     $s->execute([$s5,'2099-01-14',$h2,'REALIZADA',1]);
+    $s->execute([$s6,'2099-01-15',$h1,'PROGRAMADA',0]);
 
     $pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,created_at) VALUES(UUID(),?,?,?,'SHARKY','2099-01-12 10:00:00')")
         ->execute([$b,$s3,'No disponible']);
+    $pdo->prepare("INSERT INTO profesor_cancelaciones(id,profesor_id,sesion_id,motivo,source,created_at) VALUES(UUID(),?,?,?,'BACKEND','2099-01-14 10:00:00')")
+        ->execute([$b,$s6,'Aviso futuro']);
 
     $subInsert=$pdo->prepare("INSERT INTO profesor_sustituciones(
         id,sesion_id,profesor_original_id,profesor_sustituto_id,motivo,origen,estado,created_by,created_at,anulada_by,anulada_at,motivo_anulacion
@@ -133,6 +137,10 @@ try{
     ]);
     $subInsert->execute([
         '20000000-0000-0000-0000-000000000002',$s2,$a,$sub,'Cobertura confirmada','ACTIVA',$admin,'2099-01-11 09:00:00',
+        null,null,null,
+    ]);
+    $subInsert->execute([
+        '20000000-0000-0000-0000-000000000003',$s6,$a,$sub,'Cobertura programada','ACTIVA',$admin,'2099-01-14 10:05:00',
         null,null,null,
     ]);
 
@@ -146,7 +154,7 @@ try{
         'cancelaciones'=>(int)$pdo->query('SELECT COUNT(*) FROM profesor_cancelaciones')->fetchColumn(),
         'sesiones'=>(int)$pdo->query('SELECT COUNT(*) FROM sesiones')->fetchColumn(),
     ];
-    $ctx=hache_profesor_actividad_contexto($pdo,'2099-01-10','2099-01-14');
+    $ctx=hache_profesor_actividad_contexto($pdo,'2099-01-10','2099-01-15');
     $after=[
         'vigencias'=>(int)$pdo->query('SELECT COUNT(*) FROM profesor_horario_vigencias')->fetchColumn(),
         'sustituciones'=>(int)$pdo->query('SELECT COUNT(*) FROM profesor_sustituciones')->fetchColumn(),
@@ -160,27 +168,27 @@ try{
     f74_expect(count($ctx['profesores']??[])===4,'Debe conservar también profesores inactivos.');
 
     $pa=f74_prof($ctx,$a);
-    f74_expect((int)$pa['carga_prevista']['sesiones']===4&&(int)$pa['carga_prevista']['minutos']===240,'Profe A debe tener cuatro sesiones previstas por vigencia durable.');
+    f74_expect((int)$pa['carga_prevista']['sesiones']===5&&(int)$pa['carga_prevista']['minutos']===300,'Profe A debe tener cinco sesiones previstas por vigencia durable.');
     f74_expect((int)$pa['carga_realizada']['sesiones_confirmadas']===0,'Una sesión REALIZADA y asignada no debe inventar que el profesor la impartió.');
     f74_expect((int)$pa['carga_realizada']['sesiones_realizadas_sin_atribucion']===2,'Las sesiones realizadas sin evidencia positiva deben quedar sin atribución.');
     f74_expect((int)$pa['carga_realizada']['sesiones_confirmadas_no_impartidas']===2,'Sustitución explícita y sesión cancelada deben acreditar no impartición.');
-    f74_expect((int)$pa['sustituciones_activas']['como_original']===1,'Solo la sustitución activa debe contar como sustitución vigente del original.');
+    f74_expect((int)$pa['sustituciones_activas']['como_original']===2,'Las sustituciones activas deben conservarse aunque una sesión siga programada.');
 
     $aS2=f74_session($pa,$s2);
-    f74_expect($aS2['imparticion_confirmada']===false&&$aS2['fuente_imparticion']==='SUSTITUCION_EXPLICITA','El original sustituido no debe acreditarse como quien impartió.');
+    f74_expect($aS2['imparticion_confirmada']===false&&$aS2['fuente_imparticion']==='SUSTITUCION_EXPLICITA+SESION_REALIZADA','El original sustituido no debe acreditarse como quien impartió una sesión realizada.');
     f74_expect($aS2['docencia_compartida']===true,'La sesión debe conservar que existían varios docentes asignados.');
 
     $pb=f74_prof($ctx,$b);
-    f74_expect((int)$pb['carga_prevista']['sesiones']===4,'El co-docente debe mantener su propia carga prevista sin colapsarse con Profe A.');
-    f74_expect((int)$pb['incidencias']===1,'La indisponibilidad del profesor debe aparecer como incidencia.');
+    f74_expect((int)$pb['carga_prevista']['sesiones']===5,'El co-docente debe mantener su propia carga prevista sin colapsarse con Profe A.');
+    f74_expect((int)$pb['incidencias']===2,'Las incidencias realizadas y futuras deben aparecer sin confundirse con carga realizada.');
     $bS3=f74_session($pb,$s3);
-    f74_expect($bS3['imparticion_confirmada']===false&&$bS3['fuente_imparticion']==='PROFESOR_CANCELACION','La incidencia debe acreditar que ese profesor no impartió la clase.');
+    f74_expect($bS3['imparticion_confirmada']===false&&$bS3['fuente_imparticion']==='PROFESOR_CANCELACION+SESION_REALIZADA','La incidencia sobre sesión realizada debe acreditar que ese profesor no impartió la clase.');
     f74_expect((string)$bS3['incidencia']['motivo']==='No disponible','La incidencia debe conservar su motivo.');
 
     $ps=f74_prof($ctx,$sub);
     f74_expect((int)$ps['carga_prevista']['sesiones']===0,'Una sustitución no debe convertirse en asignación regular.');
     f74_expect((int)$ps['carga_realizada']['sesiones_confirmadas']===1&&(int)$ps['carga_realizada']['minutos_confirmados']===60,'La sustitución activa sobre sesión REALIZADA sí debe acreditar carga realizada.');
-    f74_expect((int)$ps['sustituciones_activas']['como_sustituto']===1,'Debe contar solo la sustitución activa como sustituto.');
+    f74_expect((int)$ps['sustituciones_activas']['como_sustituto']===2,'Debe conservar también la sustitución activa de una sesión futura sin acreditarla como realizada.');
     $subS1=f74_session($ps,$s1);
     f74_expect($subS1['imparticion_confirmada']===null,'Una sustitución anulada debe conservar historia sin atribuir docencia.');
     f74_expect(count($subS1['sustituciones'])===1&&$subS1['sustituciones'][0]['estado']==='ANULADA','La historia anulada debe seguir visible.');
@@ -192,7 +200,14 @@ try{
     f74_expect((int)$pi['carga_prevista']['sesiones']===1&&(int)$pi['carga_prevista']['minutos']===45,'La inactivación posterior no debe borrar una asignación histórica cubierta por vigencia.');
     f74_expect((int)$pi['carga_realizada']['sesiones_realizadas_sin_atribucion']===1,'Tampoco debe inventarse que el profesor inactivo impartió su sesión histórica.');
 
-    $only=hache_profesor_actividad_contexto($pdo,'2099-01-10','2099-01-14',$sub);
+    $aS6=f74_session($pa,$s6);
+    f74_expect($aS6['imparticion_confirmada']===null&&str_contains((string)$aS6['nota_atribucion'],'aún no acredita'),'Una sustitución programada no debe inflar carga realizada antes de cerrar la sesión.');
+    $bS6=f74_session($pb,$s6);
+    f74_expect($bS6['imparticion_confirmada']===null&&str_contains((string)$bS6['nota_atribucion'],'aún no acredita'),'Una incidencia futura no debe convertirse en no impartición realizada antes de tiempo.');
+    $subS6=f74_session($ps,$s6);
+    f74_expect($subS6['imparticion_confirmada']===null,'El sustituto programado solo se acredita cuando la sesión queda REALIZADA.');
+
+    $only=hache_profesor_actividad_contexto($pdo,'2099-01-10','2099-01-15',$sub);
     f74_expect(count($only['profesores']??[])===1&&(string)$only['profesores'][0]['id']===$sub,'El filtro por profesor debe limitar la lectura sin alterar la autoridad.');
 
     $api=(string)file_get_contents(dirname(__DIR__).'/api/profesor-actividad.php');
