@@ -219,6 +219,14 @@ try{
         'Reconciliar la misma conversión COMPLETED debe ser idempotente.'
     );
     f6m_expect(
+        hache_sharky_prospect_opportunity_link_completed_registration($pdo,$auditKey,$firstOpportunity)===false,
+        'Una misma acción COMPLETED no debe convertir dos oportunidades del mismo contacto.'
+    );
+    f6m_expect(
+        (string)$pdo->query("SELECT status FROM sharky_prospect_opportunities WHERE id='{$firstOpportunity}'")->fetchColumn()==='OPEN',
+        'La unicidad del audit de conversión debe conservar intacta la otra oportunidad.'
+    );
+    f6m_expect(
         hache_sharky_prospect_opportunity_link_completed_registration($pdo,$auditKey,'10000000-0000-0000-0000-000000000001')===false,
         'El mismo audit no debe convertir una oportunidad de otro contacto.'
     );
