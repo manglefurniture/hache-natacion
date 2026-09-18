@@ -122,10 +122,7 @@ try {
         }
     }
 
-    hache_auditoria_ordenar($events);
-    if (count($events) > $limit) {
-        $events = array_slice($events, 0, $limit);
-    }
+    $events = hache_auditoria_agregar([$events], $limit);
 
     $returnedSources = [];
     foreach ($events as $event) {

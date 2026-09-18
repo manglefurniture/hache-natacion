@@ -2,9 +2,9 @@
 
 **Fase:** F8 — Auditoría interna  
 **Base del diagnóstico F8.0:** `main` `a4c107fd8edff82872dbf2fe3ede6739d02fd136`  
-**Última cobertura funcional reflejada:** F8.4, PR #348 (correcciones de asistencia; pendiente de integración al redactar este cambio).  
+**Última cobertura funcional reflejada:** F8.4 completo hasta PR #349, desplegado en `26f02a9753fe7f95d0b28c6600efd21a841b930b`.  
 **Fecha:** 2026-09-18  
-**Estado del documento:** F8.0/F8.1 cerrados; F8.2/F8.3 desplegados; F8.4 en implementación incremental.
+**Estado del documento:** F8.0/F8.1 cerrados; F8.2/F8.3 desplegados; F8.4 completado; F8.5 en implementación.
 
 ## 1. Principios de P-08
 
@@ -56,7 +56,7 @@ Estado de los huecos demostrados de F8.4:
 - **cerrado forward-only — PR #346:** retiro de alumno de un intensivo;
 - **cerrado forward-only — PR #347:** invalidación de pago con snapshot durable del estado anterior;
 - **cerrado forward-only — PR #348:** correcciones de asistencia; conserva actor y estado before/after sin copiar observación libre;
-- **en cierre en PR #349:** cambios de rango de periodo financiero; captura las dos filas afectadas bajo bloqueo y conserva before/after exactos, incluida ausencia previa.
+- **cerrado forward-only — PR #349:** cambios de rango de periodo financiero; captura las dos filas afectadas bajo bloqueo, conserva before/after exactos y no genera historia falsa en guardados sin cambios.
 
 Ninguno de estos cierres hace backfill: la historia previa a cada cobertura permanece explícitamente desconocida cuando la fuente no la guardó.
 
@@ -147,6 +147,22 @@ Antes de cerrar la fase debe existir evidencia automatizada y operativa de:
 - ausencia de deduplicación heurística;
 - ausencia de reconstrucción histórica o backfill.
 
+### Evidencia automatizada F8.5
+
+El conjunto de regresiones F8 cubre explícitamente:
+- before/after durable y before desconocido conservado como `null`;
+- actor conocido y desconocido;
+- timestamp y semántica de resultado;
+- entidad/referencia exacta;
+- separación entre resultado técnico y cambio confirmado;
+- ADMIN-only en backend y UI;
+- convivencia con `historial` textual sin parseo retrospectivo;
+- ausencia de deduplicación/correlación heurística;
+- ausencia de reconstrucción histórica, backfill y ampliación de datos sensibles.
+
+`tests/f8-phase-evidence-regression.php` funciona como prueba agregada del contrato de cierre F8.5 y se ejecuta dentro de Quality.
+
+
 ## 6. Estado vigente de F8
 
 - F8.0: **terminado**.
@@ -154,5 +170,6 @@ Antes de cerrar la fase debe existir evidencia automatizada y operativa de:
 - F8.1: **terminado**.
 - F8.2: **desplegado** — lectura ADMIN unificada read-only.
 - F8.3: **desplegado** — UI ADMIN mínima sobre el contrato F8.2.
-- F8.4: **en implementación incremental** — PR #343–#348 integrados; PR #349 cubre el rango de periodo financiero y queda sujeto a Quality/revisión/merge/deploy.
+- F8.4: **terminado y desplegado** — PR #343–#349 integrados; matriz revalidada sin otros huecos de escritura administrativos importantes demostrados dentro del alcance F8.
+- F8.5: **en implementación** — regresión agregada del contrato preparada; la evidencia operativa real en producción sigue siendo obligatoria para el cierre.
 - F8 global: **En implementación**. No se marca Verificado sin evidencia real en producción conforme a F8.5/F8.6.
