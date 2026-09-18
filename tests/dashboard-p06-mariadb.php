@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__).'/config/sharky-prospect-opportunities.php';
+require_once dirname(__DIR__).'/config/dashboard-p06.php';
 
 function f6m_expect(bool $ok,string $message): void
 {
@@ -97,6 +98,24 @@ try{
         $invalidStatusRejected=true;
     }
     f6m_expect($invalidStatusRejected,'El esquema debe rechazar estados de oportunidad no definidos.');
+
+    $pdo->prepare("UPDATE configuracion SET valor='2026-09-17 18:00:00' WHERE clave='dashboard_prospectos_cobertura_desde'")->execute();
+    $readInsert=$pdo->prepare("INSERT INTO sharky_prospect_opportunities(id,contact_hash,origin_message_hash,entry_source,sede_clave,status,conversion_action_hash,opened_at,closed_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)");
+    $readInsert->execute(['20000000-0000-0000-0000-000000000001',str_repeat('3',64),str_repeat('4',64),'direct',null,'OPEN',null,'2026-09-17 18:10:00',null,'2026-09-17 18:10:00']);
+    $readInsert->execute(['20000000-0000-0000-0000-000000000002',str_repeat('5',64),str_repeat('6',64),'web','MONTEVERDE','CONVERTED',str_repeat('7',64),'2026-09-17 19:00:00','2026-09-18 01:00:00','2026-09-18 01:00:00']);
+    $readInsert->execute(['20000000-0000-0000-0000-000000000003',str_repeat('8',64),str_repeat('9',64),'meta_ad','PALAPAS','EXCLUDED',null,'2026-09-17 20:00:00','2026-09-17 20:05:00','2026-09-17 20:05:00']);
+    $read=dashboard_prospectos_conversion($pdo,'2026-09-17','2026-09-17');
+    f6m_expect(($read['disponible']??false)===true,'La lectura de prospectos debe quedar disponible desde el marcador forward-only.');
+    f6m_expect((int)($read['prospectos']??-1)===2,'El denominador debe incluir OPEN+CONVERTED y excluir EXCLUDED.');
+    f6m_expect((int)($read['conversiones']??-1)===1,'La lectura debe contar conversiones reconciliables de la cohorte.');
+    f6m_expect(($read['por_sede']['SIN_SEDE']['prospectos']??0)===1,'La sede desconocida debe permanecer SIN_SEDE.');
+    f6m_expect(($read['por_sede']['MONTEVERDE']['conversiones']??0)===1,'La conversión debe conservar su sede estructurada.');
+    f6m_expect(($read['por_fuente']['direct']['prospectos']??0)===1&&($read['por_fuente']['web']['conversiones']??0)===1,'La lectura debe desglosar por fuente.');
+    f6m_expect(($read['por_cohorte']['2026-09-17']['prospectos']??0)===2,'La lectura debe reconciliar la cohorte por fecha local de apertura.');
+    foreach(($read['rows']??[]) as $row){
+        f6m_expect(!array_key_exists('contact_hash',$row),'El detalle reconciliable no debe exponer hashes de contacto.');
+        f6m_expect(!array_key_exists('conversion_action_hash',$row),'El detalle reconciliable no debe exponer hashes de acciones.');
+    }
 
     $producerContact=str_repeat('1',64);
     $producerState=[
@@ -297,8 +316,8 @@ try{
 
     $keys=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde','dashboard_prospectos_cobertura_desde') ORDER BY clave")->fetchAll(PDO::FETCH_COLUMN);
     f6m_expect(
-        $keys===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde'],
-        'El productor no debe declarar cobertura publicable de prospectos antes de completar lifecycle y conversión.'
+        $keys===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde','dashboard_prospectos_cobertura_desde'],
+        'F6 debe conservar los tres marcadores de cobertura forward-only ya publicados.'
     );
 
     echo "F6_DASHBOARD_METRICS_MARIADB_OK\n";

@@ -90,6 +90,26 @@ Codex automático detectó un P1 real en la primera versión del PR: member rout
 
 Producción quedó comprobada en `c7178291e5f30a00d58bc09d7586c8b471a8ea2f`: marcador de deploy exacto, sintaxis PHP correcta, sentinel live y fail-closed presentes, reconciliación live activa y health de `hnatacion.com` correcto. `dashboard_prospectos_cobertura_desde` continúa ausente deliberadamente.
 
+
+## Micro-paso en revisión: cobertura forward-only y lectura backend
+
+PR #321 implementa el primer consumidor publicable del ledger de oportunidades sin añadir UI ni reconstruir historia previa.
+
+Contrato de este incremento:
+
+- `dashboard_prospectos_cobertura_desde` se crea con `INSERT IGNORE` al desplegar este micro-paso; por tanto, ninguna oportunidad abierta antes de ese instante entra en la métrica publicada;
+- la cohorte se determina por `opened_at` dentro del periodo consultado y nunca por la fecha de conversión;
+- solo `OPEN` y `CONVERTED` forman el denominador; `EXCLUDED` queda fuera;
+- una cohorte puede aumentar su número de conversiones después, cuando una inscripción Sharky exacta llegue a `COMPLETED`;
+- `SIN_SEDE` se conserva cuando todavía no existe sede estructurada y la fuente se mantiene separada;
+- el backend devuelve total, tasa, desglose por cohorte diaria, sede y fuente, más filas reconciliables por UUID de oportunidad;
+- el detalle no expone nombre, teléfono, `contact_hash` ni `conversion_action_hash`;
+- la lectura es global y exclusiva de ADMIN, igual que el alcance comercial ya acordado;
+- el runner F6 exige el nuevo marcador para impedir que un despliegue parcial publique la lectura sin frontera de cobertura;
+- no cambia el productor, lifecycle, funnel, Brain, Flow, pagos, takeover ni mensajes de Sharky.
+
+Al crear este registro, PR #321 permanece sujeto a Quality y revisión automática. Integración, despliegue y verificación de producción deben registrarse por separado antes de considerar cerrado el micro-paso.
+
 ## Cobertura vigente
 
 - **Contexto operativo:** sede autorizada, fecha `America/Cancun`, periodo financiero vigente y hora de actualización.
