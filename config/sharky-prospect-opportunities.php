@@ -33,9 +33,30 @@ function hache_sharky_prospect_opportunity_sede(array $state): ?string
     return in_array($sede,['MONTEVERDE','PALAPAS'],true)?$sede:null;
 }
 
+function hache_sharky_prospect_opportunity_exclude_open(PDO $pdo,string $contactHash,string $reason='EXISTING_STUDENT'): bool
+{
+    if(!hache_sharky_prospect_opportunity_schema_ready($pdo)||strlen($contactHash)!==64)return false;
+    try{
+        $st=$pdo->prepare("UPDATE sharky_prospect_opportunities
+            SET status='EXCLUDED',
+                open_slot=NULL,
+                excluded_at=COALESCE(excluded_at,UTC_TIMESTAMP()),
+                excluded_reason=COALESCE(excluded_reason,:reason),
+                updated_at=UTC_TIMESTAMP()
+            WHERE contact_hash=:contact_hash AND open_slot=1");
+        $st->execute([':reason'=>mb_substr($reason,0,40),':contact_hash'=>$contactHash]);
+        return true;
+    }catch(Throwable $e){
+        error_log('[sharky-opportunity] exclusion failed');
+        return false;
+    }
+}
+
 function hache_sharky_prospect_opportunity_sync_open(PDO $pdo,string $contactHash,array $state): bool
 {
-    if(($state['identity']['kind']??'unknown')!=='prospect')return true;
+    $kind=(string)($state['identity']['kind']??'unknown');
+    if($kind==='student')return hache_sharky_prospect_opportunity_exclude_open($pdo,$contactHash);
+    if($kind!=='prospect')return true;
     if(!hache_sharky_prospect_opportunity_schema_ready($pdo)||strlen($contactHash)!==64)return false;
     $source=hache_sharky_prospect_opportunity_source($state);
     $sede=hache_sharky_prospect_opportunity_sede($state);
