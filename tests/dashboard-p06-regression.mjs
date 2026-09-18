@@ -13,6 +13,11 @@ const sessionsApi=fs.readFileSync(new URL('../api/sesiones.php',import.meta.url)
 const page=fs.readFileSync(new URL('../public/dashboard.php',import.meta.url),'utf8');
 const migration=fs.readFileSync(new URL('../database/migrations/20260917_f6_dashboard_metrics.sql',import.meta.url),'utf8');
 const migrationRunner=fs.readFileSync(new URL('../bin/migrate-f6-dashboard-metrics.php',import.meta.url),'utf8');
+const opportunities=fs.readFileSync(new URL('../config/sharky-prospect-opportunities.php',import.meta.url),'utf8');
+const actionRecovery=fs.readFileSync(new URL('../config/sharky-action-recovery.php',import.meta.url),'utf8');
+const orchestratorDb=fs.readFileSync(new URL('../config/sharky-orchestrator-db.php',import.meta.url),'utf8');
+const whatsappAdapter=fs.readFileSync(new URL('../config/sharky-whatsapp-adapter.php',import.meta.url),'utf8');
+const regularEnrollment=fs.readFileSync(new URL('../config/sharky-regular-enrollment.php',import.meta.url),'utf8');
 const deploy=fs.readFileSync(new URL('../ops/production-readiness/deploy-hache-natacion',import.meta.url),'utf8');
 
 assert.match(helper,/function dashboard_nuevos_alumnos/);
@@ -105,7 +110,30 @@ assert.match(migration,/dashboard_asistencia_cobertura_desde/);
 assert.match(migration,/present_count INT UNSIGNED/);
 assert.match(migration,/marked_count=present_count\+justified_count\+unjustified_count/);
 assert.match(migration,/UTC_TIMESTAMP\(\)/);
+assert.match(migration,/conversion_action_hash CHAR\(64\) NULL/);
+assert.match(migration,/ADD COLUMN IF NOT EXISTS conversion_action_hash/);
+assert.doesNotMatch(migration,/dashboard_prospectos_cobertura_desde/);
+assert.match(migrationRunner,/conversion_action_hash/);
 assert.match(migrationRunner,/F6_DASHBOARD_METRICS_MIGRATION_OK/);
+
+assert.match(opportunities,/function hache_sharky_prospect_opportunity_link_completed_registration/);
+assert.match(opportunities,/status='COMPLETED'/);
+assert.match(opportunities,/action_type IN \('register_intensive','register_regular'\)/);
+assert.match(opportunities,/WHERE id=:id[\s\S]{0,120}contact_hash=:contact_hash/);
+assert.match(opportunities,/conversion_action_hash=:audit/);
+assert.doesNotMatch(opportunities,/alumno_id/);
+
+assert.match(actionRecovery,/\?string \$f6OpportunityId=null/);
+assert.match(actionRecovery,/beginTransaction\(\)/);
+assert.match(actionRecovery,/hache_sharky_prospect_opportunity_link_completed_registration/);
+assert.match(actionRecovery,/rollBack\(\)/);
+assert.match(actionRecovery,/commit\(\)/);
+assert.match(orchestratorDb,/f6_opportunity_id/);
+assert.match(orchestratorDb,/hache_sharky_action_recovery_finish\([\s\S]{0,300}\$f6OpportunityId/);
+assert.match(whatsappAdapter,/\$actionContext\['f6_opportunity_id'\]/);
+assert.match(regularEnrollment,/hache_sharky_prospect_opportunity_state_id\(\$state\)/);
+assert.match(regularEnrollment,/hache_sharky_prospect_opportunity_link_completed_registration/);
+
 assert.match(deploy,/migrate-f6-dashboard-metrics\.php/);
 
-console.log('dashboard P-06 lifecycle and attendance regression: OK');
+console.log('dashboard P-06 lifecycle, attendance and conversion-link regression: OK');
