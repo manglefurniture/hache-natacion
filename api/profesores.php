@@ -41,11 +41,22 @@ try{
     $st=$pdo->prepare("INSERT INTO profesores(id,nombre,whatsapp,correo,activo,created_by) VALUES(:id,:n,:w,:c,:a,:u)");
     $st->execute([':id'=>$id,':n'=>$name,':w'=>$phone,':c'=>$email!==''?$email:null,':a'=>$active,':u'=>$me['id']]);
    }else{
-    $lock=$pdo->prepare('SELECT id FROM profesores WHERE id=:id LIMIT 1 FOR UPDATE');$lock->execute([':id'=>$id]);
-    if(!$lock->fetchColumn())throw new HacheProfesoresAssignmentException('Profesor no encontrado.',404);
+    $lock=$pdo->prepare('SELECT id,nombre,whatsapp,correo,activo FROM profesores WHERE id=:id LIMIT 1 FOR UPDATE');$lock->execute([':id'=>$id]);$actual=$lock->fetch();
+    if(!$actual)throw new HacheProfesoresAssignmentException('Profesor no encontrado.',404);
     $st=$pdo->prepare("UPDATE profesores SET nombre=:n,whatsapp=:w,correo=:c,activo=:a WHERE id=:id");
     $st->execute([':n'=>$name,':w'=>$phone,':c'=>$email!==''?$email:null,':a'=>$active,':id'=>$id]);
     if($active===0)hache_profesores_cerrar_asignaciones_profesor($pdo,$id,(string)$me['id']);
+    $cambios=[];
+    if((int)$actual['activo']!==$active)$cambios['activo']=['anterior'=>(bool)$actual['activo'],'nuevo'=>(bool)$active];
+    if((string)$actual['nombre']!==$name)$cambios['nombre']=['modificado'=>true,'valores_omitidos'=>'PII'];
+    if((string)$actual['whatsapp']!==$phone)$cambios['whatsapp']=['modificado'=>true,'valores_omitidos'=>'PII'];
+    if((string)($actual['correo']??'')!==$email)$cambios['correo']=['modificado'=>true,'valores_omitidos'=>'PII'];
+    if($cambios){
+     $detalle=json_encode(['cambios'=>$cambios],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+     if(!is_string($detalle))throw new RuntimeException('No se pudo serializar la edición del profesor.');
+     $st=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta) VALUES(:uid,:un,'PROFESOR_DATOS_ACTUALIZADOS','profesor',:pid,:detalle,'POST','/api/profesores.php')");
+     $st->execute([':uid'=>$me['id'],':un'=>$me['usuario']??null,':pid'=>$id,':detalle'=>$detalle]);
+    }
    }
    $pdo->commit();
   }catch(Throwable $e){
