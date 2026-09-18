@@ -1,12 +1,12 @@
 # F6 — Estado del Dashboard operativo
 
-Fecha de actualización: 2026-09-17.
+Fecha de actualización: 2026-09-18.
 
 ## Estado
 
-F6 — Dashboard operativo permanece **En implementación**.
+F6 — Dashboard operativo queda **Desplegado**. El alcance funcional comprometido está integrado; para pasar a **Verificado** falta la comprobación operativa dirigida del dashboard con sesión ADMIN y datos reales disponibles.
 
-La base actualmente integrada y comprobada en producción es `899659598f9c518a53248b6f5e6cc707403658d2` (PR #321). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable y lifecycle de oportunidades, sede estructurada, conversión exacta por inscripción Sharky `COMPLETED`, exclusión de alumno existente, fail-closed del lookup live y la primera lectura backend reconciliable de prospectos/conversiones con cobertura forward-only.
+La base funcional actualmente integrada y comprobada en producción es `24ab9d28fb1118123230a3af859d9b1f3844f7ee` (PR #323). Incluye las definiciones de alumnos/bajas/asistencia, lifecycle durable de oportunidades, conversión exacta, cobertura forward-only y la UI ADMIN de prospectos/conversiones por cohorte, sede y fuente.
 
 PR #310 **no se considera integrable como unidad**: mezcló prospectos, conversión, migración, Sharky, dashboard, pruebas y documentación, y la revisión automática encontró problemas reales de identidad/lifecycle e idempotencia. El cierre restante de P-06 se divide desde `main` en micro-pasos independientes.
 
@@ -16,9 +16,9 @@ PR #310 **no se considera integrable como unidad**: mezcló prospectos, conversi
 - **Bajas:** solo eventos `ALUMNO_BAJA` registrados con cobertura fiable hacia delante. No se usa `updated_at` como fecha inferida.
 - **Asistencia porcentual:** solo sesiones `REALIZADA` no canceladas con snapshot persistido completo y un registro por cada alumno esperado. Sesiones incompletas quedan fuera del denominador.
 
-## Cierre restante de P-06
+## Contrato final de P-06
 
-Las decisiones de producto para el cierre restante siguen siendo:
+Las decisiones de producto aplicadas al cierre son:
 
 - **Prospecto:** la unidad objetivo es una oportunidad/persona destinataria de las clases, no el número de WhatsApp. Los casos sin sede confirmada deben conservarse como `SIN_SEDE`.
 - **Conversión:** una conversión requiere una inscripción Sharky `COMPLETED`; abrir un Flow, enviar información o iniciar pago no son conversiones. La cohorte se define por la apertura de la oportunidad y puede convertirse después.
@@ -110,7 +110,7 @@ Contrato de este incremento:
 
 PR #321 quedó integrado como `899659598f9c518a53248b6f5e6cc707403658d2`. Quality #1625 pasó en el PR y Quality #1626 pasó después del merge en `main`; la revisión automática no dejó hallazgos pendientes. Deploy automático #286 publicó ese mismo SHA y reportó `F6_DASHBOARD_METRICS_MIGRATION_OK`, verificación que ahora exige también `dashboard_prospectos_cobertura_desde`. En producción, `.hache-deployed-sha` coincide exactamente con el SHA integrado, `config/dashboard-p06.php` y `api/dashboard.php` pasan sintaxis PHP y `/api/health.php` responde `ok: true` con HTTP 200. No se amplió el acceso de `deploy-hache` a credenciales de MariaDB para realizar esta verificación.
 
-## Micro-paso en revisión: UI de prospectos y conversión
+## Micro-paso cerrado: UI de prospectos y conversión
 
 PR #323 consume únicamente el contrato backend `prospectos_conversion` ya verificado. No añade otra autoridad ni recalcula métricas.
 
@@ -124,7 +124,7 @@ Contrato del incremento:
 - no cambia API, productor, lifecycle, funnel, Brain, Flow, pagos, takeover ni reglas comerciales de Sharky;
 - la regresión P-06 valida sintaxis del JavaScript inline y el consumo del contrato backend.
 
-PR #323 permanece sujeto a Quality y revisión automática. Integración, deploy y producción siguen siendo hitos separados.
+PR #323 quedó integrado como `24ab9d28fb1118123230a3af859d9b1f3844f7ee`. Quality #1631 pasó en el PR y Quality #1632 pasó después del merge en `main`; no quedaron hallazgos automáticos. Deploy automático #288 publicó ese mismo SHA. En producción, `.hache-deployed-sha` coincide exactamente, `public/dashboard.php` pasa sintaxis PHP, el bloque `prospectos-conversion` y su alcance `global ADMIN` están presentes y `/api/health.php` responde `ok: true` con HTTP 200. Además, una prueba de render aislada comprobó que ADMIN ve la sección/tasa/SIN_SEDE y que VERIFICADOR no renderiza las tarjetas ni la sección comercial.
 
 ## Cobertura vigente
 
@@ -136,7 +136,7 @@ PR #323 permanece sujeto a Quality y revisión automática. Integración, deploy
 - **Operación del día:** lectura pura de sesiones y marcas; canceladas excluidas de asistencia.
 - **Intensivos y avisos:** contratos existentes, sin reconciliar ni escribir estados al consultar.
 - **Nuevos alumnos, bajas y asistencia de periodo:** implementados en PR #309 con cobertura explícita.
-- **Prospectos/conversión (backend ADMIN):** lectura forward-only por cohorte de apertura, sede y fuente desde `dashboard_prospectos_cobertura_desde`; `EXCLUDED` queda fuera y todavía no existe UI.
+- **Prospectos/conversión (ADMIN):** lectura y UI forward-only por cohorte de apertura, sede y fuente desde `dashboard_prospectos_cobertura_desde`; `EXCLUDED` queda fuera y el frontend no recalcula la tasa.
 
 ## Autoridades y límites
 
@@ -149,7 +149,7 @@ PR #323 permanece sujeto a Quality y revisión automática. Integración, deploy
 | Mensualidades y avisos | `config/dashboard-indicadores.php` |
 | Operación diaria | `config/dashboard-operacion.php` |
 | P-06 alumnos/bajas/asistencia | `config/dashboard-p06.php` + cobertura persistida |
-| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` + lifecycle durable + `dashboard_prospectos_cobertura_desde` + `dashboard_prospectos_conversion()`; lectura backend ADMIN ya publicable, UI aún pendiente |
+| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` + lifecycle durable + `dashboard_prospectos_cobertura_desde` + `dashboard_prospectos_conversion()`; lectura backend y UI ADMIN desplegadas, sin backfill |
 | Fecha/hora | `config/dashboard-tiempo.php`, `America/Cancun` |
 
 ## Evidencia acumulada
@@ -166,8 +166,9 @@ PR #323 permanece sujeto a Quality y revisión automática. Integración, deploy
 | #318 | P-06: excluir oportunidad provisional de alumno existente | Integrado y producción comprobada en `d334ce5d...`; Quality exitoso; P1 automático por retorno temprano de member routing corregido y resuelto antes del merge; live/recovery, marcador y health verificados |
 | #320 | P-06: fail-closed ante error de lookup de identidad live | Integrado y producción comprobada en `c7178291...`; Quality exitoso y revisión automática sin nuevos hallazgos; sentinel `lookup_failed`, retry y health verificados |
 | #321 | P-06: cobertura forward-only y lectura backend por cohorte/sede/fuente | Integrado y producción comprobada en `89965959...`; Quality #1625/#1626, Deploy #286, `F6_DASHBOARD_METRICS_MIGRATION_OK`, marcador exacto, sintaxis PHP y health 200 verificados; sin UI ni backfill |
+| #323 | P-06: UI ADMIN de prospectos/conversión | Integrado y producción comprobada en `24ab9d28...`; Quality #1631/#1632, Deploy #288, marcador exacto, sintaxis PHP, bloque UI/alcance ADMIN y health 200 verificados; sin backfill ni cálculo paralelo |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
-## Criterio para continuar el cierre
+## Criterio para cierre de fase
 
-El lifecycle y la lectura backend reconciliable de oportunidades ya están desplegados con cobertura **forward-only**. El siguiente micro-paso puede añadir únicamente la UI de prospectos/conversión consumiendo este contrato ya probado, sin backfill, sin recalcular el denominador en frontend y sin modificar productor, lifecycle o reglas de Sharky.
+No queda otro micro-paso funcional comprometido en F6. Para cambiar la fase de **Desplegado** a **Verificado** debe realizarse una comprobación operativa dirigida con sesión ADMIN y datos reales disponibles: que las cifras visibles se expliquen por sus detalles bajo el periodo/sede aplicables, que los datos incompletos sigan mostrándose como desconocidos o fuera de cobertura y que la sección global de prospectos respete su frontera forward-only. No se fabricarán registros para forzar escenarios. Cualquier hallazgo real se tratará como corrección separada antes de marcar F6 como Verificado.

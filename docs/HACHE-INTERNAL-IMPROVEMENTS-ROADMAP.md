@@ -4,8 +4,8 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Última base comprobada para esta actualización:** `main`, commit `899659598f9c518a53248b6f5e6cc707403658d2`.  
-**Estado del roadmap en esta actualización:** Fase 6 **En implementación**; P-06 ya dispone de lifecycle durable y lectura backend reconciliable con cobertura forward-only desplegada. La UI de prospectos/conversión permanece como siguiente micro-paso separado.  
+**Última base comprobada para esta actualización:** `main`, commit `24ab9d28fb1118123230a3af859d9b1f3844f7ee`.  
+**Estado del roadmap en esta actualización:** Fase 6 **Desplegado**; el alcance funcional comprometido, incluida la UI ADMIN de prospectos/conversión, está integrado en producción. Falta la comprobación operativa dirigida exigida para pasar la fase a **Verificado**.  
 **Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
 ## 1. Propósito
@@ -306,7 +306,7 @@ Una ausencia consecutiva debe basarse en clases aplicables y marcas válidas, di
 
 **Criterio de terminado.** Cada indicador publicado tiene contrato documentado y un detalle reconciliable; se comprueban sedes, límites del periodo, alumnos con varios pagos y datos incompletos. Las cifras existentes preservan su significado o cuentan con una decisión explícita de cambio y comparación antes/después. Indicadores sin fuente suficiente permanecen pendientes, sin valores ficticios.
 
-**Estado:** **En implementación.** PR #300–#307 integraron y desplegaron fuentes reconciliables de F1/F2/F5, operación diaria en lectura pura, alumnos activos, intensivos activos, mensualidades pagadas, avisos de ausencia, sede y contexto temporal, preservando los contratos previos. #307 cerró los hallazgos técnicos pendientes de revisión automática sobre fecha operativa, cancelaciones, sesiones programadas, zona horaria y detalle reconciliable. PR #309 implementó las definiciones P-06 de nuevos alumnos, bajas y asistencia. PR #311, #312 y #314 añadieron autoridad durable, productor y enriquecimiento estructurado de sede; PR #316 vinculó una oportunidad exacta con una inscripción Sharky realmente `COMPLETED`, con unicidad por acción y reconciliación durable; PR #318 excluye de forma exacta oportunidades provisionales cuando identidad durable demuestra que el contacto ya es alumno existente, sin fallback ni PII en F6; PR #320 completa esa frontera haciendo fail-closed el error de lookup de identidad live para que no se confunda con un unmatched válido. D-18–D-21 gobiernan esta implementación; el siguiente paso es declarar cobertura forward-only y construir primero la lectura backend reconciliable antes de publicar UI. La evidencia y los límites actuales están en [F6-DASHBOARD-STATUS.md](F6-DASHBOARD-STATUS.md).
+**Estado:** **Desplegado.** PR #300–#309 integraron las lecturas y contratos reconciliables del dashboard; PR #311–#320 completaron autoridad/lifecycle durable de oportunidades y conversión exacta; PR #321 declaró cobertura forward-only y lectura backend reconciliable; PR #323 añadió la UI ADMIN consumiendo ese contrato sin recalcular métricas ni hacer backfill. D-18–D-22 gobiernan P-06. El alcance funcional comprometido de F6 está integrado y desplegado. Para pasar a **Verificado** falta la comprobación operativa dirigida con sesión ADMIN y datos reales disponibles conforme al criterio de terminado; no se fabricarán datos para forzar escenarios. La evidencia y límites están en [F6-DASHBOARD-STATUS.md](F6-DASHBOARD-STATUS.md).
 
 ### FASE 7 — Gestión interna de profesores
 
@@ -492,7 +492,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 
 | 2026-09-17 | F6 P-06: sexto micro-incremento, cobertura forward-only y lectura backend reconciliable. | PR #321; Quality #1625 en PR y #1626 en `main`; Deploy #286; producción `89965959...`; `F6_DASHBOARD_METRICS_MIGRATION_OK`, marcador exacto, sintaxis PHP y health 200 verificados. | **Desplegado y verificado técnicamente** para este micro-alcance: lectura ADMIN por cohorte/sede/fuente, detalle sin PII/hashes, `EXCLUDED` fuera del denominador y sin backfill. La UI queda para un micro-paso posterior. |
 
-| 2026-09-18 | F6 P-06: séptimo micro-incremento, UI de prospectos/conversión. | PR #323 en revisión; UI ADMIN consume el contrato backend ya desplegado, muestra cohorte/sede/fuente y detalle sin PII; sin API, migración, backfill ni reglas nuevas. | La UI no recalcula denominador ni tasa; Quality, revisión, merge, deploy y verificación siguen separados. |
+| 2026-09-18 | F6 P-06: séptimo micro-incremento, UI de prospectos/conversión. | PR #323; Quality #1631 en PR y #1632 en `main`; Deploy #288; producción `24ab9d28...`; marcador exacto, sintaxis PHP, UI/alcance ADMIN y health 200 verificados. | **Desplegado y verificado técnicamente** para este micro-alcance: la UI consume el contrato backend, no recalcula tasa/denominador, conserva SIN_SEDE/SIN_FUENTE y no hace backfill. |
 
 ### 12.2 Estado de las fases
 
@@ -503,7 +503,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Desplegado | Alertas, F1, F2, proyección F4 y configuración F5 | Realizar verificación operativa dirigida en producción sobre casos reales disponibles; no fabricar datos para forzar escenarios. |
-| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18/D-19/D-20/D-21/D-22, lifecycle durable y lectura backend forward-only de prospectos/conversión desplegados | Completar Quality/revisión de PR #323 y, si queda integrado/desplegado/verificado, evaluar el criterio de cierre de F6 sin ampliar alcance. |
+| F6 Dashboard | Desplegado | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18–D-22, lifecycle durable, lectura backend forward-only y UI ADMIN de prospectos/conversión | Realizar verificación operativa dirigida en producción sobre datos reales disponibles; si cumple el criterio de terminado, marcar F6 Verificado. No fabricar casos. |
 | F7 Profesores | Pendiente | Profesores, horarios y cancelaciones | Resolver P-07 y preservar historial. |
 | F8 Auditoría | Pendiente | Auditoría e historial existentes | Resolver P-08 mediante matriz de acciones relevantes. |
 | F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |
