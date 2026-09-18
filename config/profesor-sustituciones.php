@@ -10,6 +10,17 @@ final class HacheProfesorSustitucionException extends RuntimeException
     }
 }
 
+function hache_profesor_sesion_inicio_utc(string $fecha,string $hora): string
+{
+    $local=DateTimeImmutable::createFromFormat(
+        '!Y-m-d H:i:s',
+        trim($fecha).' '.trim($hora),
+        new DateTimeZone('America/Cancun')
+    );
+    if(!$local)throw new HacheProfesorSustitucionException('La sesión tiene una fecha u hora inválida.',500);
+    return $local->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+}
+
 function hache_profesor_sustituciones_schema_ready(PDO $pdo): bool
 {
     try{
@@ -37,8 +48,7 @@ function hache_profesor_sustitucion_registrar(PDO $pdo,string $sesionId,string $
     $owns=!$pdo->inTransaction();
     if($owns)$pdo->beginTransaction();
     try{
-        $st=$pdo->prepare("SELECT se.id,se.fecha,se.estado,se.cerrada,se.horario_id,h.hora_inicio,h.hora_fin,h.sede_id,
-            CONCAT(se.fecha,' ',h.hora_inicio) sesion_inicio
+        $st=$pdo->prepare("SELECT se.id,se.fecha,se.estado,se.cerrada,se.horario_id,h.hora_inicio,h.hora_fin,h.sede_id
             FROM sesiones se
             JOIN horarios h ON h.id=se.horario_id
             WHERE se.id=:s LIMIT 1 FOR UPDATE");
@@ -46,8 +56,9 @@ function hache_profesor_sustitucion_registrar(PDO $pdo,string $sesionId,string $
         if(!is_array($sesion))throw new HacheProfesorSustitucionException('Sesión no encontrada.',404);
         if((string)$sesion['estado']==='CANCELADA')throw new HacheProfesorSustitucionException('No se puede registrar una sustitución sobre una sesión cancelada.',409);
 
+        $sesionInicioUtc=hache_profesor_sesion_inicio_utc((string)$sesion['fecha'],(string)$sesion['hora_inicio']);
         $coverage=(string)$pdo->query("SELECT valor FROM configuracion WHERE clave='profesores_sustituciones_cobertura_desde' LIMIT 1")->fetchColumn();
-        if($coverage===''||(string)$sesion['sesion_inicio']<$coverage){
+        if($coverage===''||$sesionInicioUtc<$coverage){
             throw new HacheProfesorSustitucionException('La sesión está fuera de la cobertura forward-only de sustituciones F7.',409);
         }
 
@@ -58,7 +69,7 @@ function hache_profesor_sustitucion_registrar(PDO $pdo,string $sesionId,string $
               AND v.vigente_desde<=:inicio1
               AND (v.vigente_hasta IS NULL OR v.vigente_hasta>=:inicio2)
             LIMIT 1 FOR UPDATE");
-        $st->execute([':p'=>$originalId,':h'=>(string)$sesion['horario_id'],':inicio1'=>(string)$sesion['sesion_inicio'],':inicio2'=>(string)$sesion['sesion_inicio']]);
+        $st->execute([':p'=>$originalId,':h'=>(string)$sesion['horario_id'],':inicio1'=>$sesionInicioUtc,':inicio2'=>$sesionInicioUtc]);
         if(!$st->fetchColumn())throw new HacheProfesorSustitucionException('El profesor original no tiene una asignación durable que cubra esa sesión.',409);
 
         $st=$pdo->prepare('SELECT activo FROM profesores WHERE id=:p LIMIT 1 FOR UPDATE');
@@ -73,7 +84,7 @@ function hache_profesor_sustitucion_registrar(PDO $pdo,string $sesionId,string $
               AND v.vigente_desde<=:inicio1
               AND (v.vigente_hasta IS NULL OR v.vigente_hasta>=:inicio2)
             LIMIT 1");
-        $st->execute([':p'=>$sustitutoId,':h'=>(string)$sesion['horario_id'],':inicio1'=>(string)$sesion['sesion_inicio'],':inicio2'=>(string)$sesion['sesion_inicio']]);
+        $st->execute([':p'=>$sustitutoId,':h'=>(string)$sesion['horario_id'],':inicio1'=>$sesionInicioUtc,':inicio2'=>$sesionInicioUtc]);
         if($st->fetchColumn())throw new HacheProfesorSustitucionException('Ese profesor ya estaba asignado regularmente a la sesión; no corresponde registrarlo como sustituto.',409);
 
         $st=$pdo->prepare("SELECT id FROM profesor_sustituciones WHERE sesion_id=:s AND profesor_original_id=:p AND estado='ACTIVA' LIMIT 1 FOR UPDATE");
@@ -138,18 +149,20 @@ function hache_profesor_sustituciones_contexto(PDO $pdo,string $desde,string $ha
         ORDER BY se.fecha,h.hora_inicio,s.nombre");
     $st->execute([':d'=>$desde,':h'=>$hasta]);$sesiones=$st->fetchAll(PDO::FETCH_ASSOC);
 
-    $st=$pdo->prepare("SELECT se.id sesion_id,p.id profesor_id,p.nombre profesor_nombre
+    $st=$pdo->prepare("SELECT se.id sesion_id,se.fecha,h.hora_inicio,p.id profesor_id,p.nombre profesor_nombre,
+        v.vigente_desde,v.vigente_hasta
         FROM sesiones se
         JOIN horarios h ON h.id=se.horario_id
         JOIN profesor_horarios ph ON ph.horario_id=h.id
         JOIN profesor_horario_vigencias v ON v.profesor_horario_id=ph.id
         JOIN profesores p ON p.id=ph.profesor_id
         WHERE se.fecha BETWEEN :d AND :h
-          AND v.vigente_desde<=CONCAT(se.fecha,' ',h.hora_inicio)
-          AND (v.vigente_hasta IS NULL OR v.vigente_hasta>=CONCAT(se.fecha,' ',h.hora_inicio))
         ORDER BY se.fecha,h.hora_inicio,p.nombre");
     $st->execute([':d'=>$desde,':h'=>$hasta]);$assigned=[];
     foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+        $startUtc=hache_profesor_sesion_inicio_utc((string)$row['fecha'],(string)$row['hora_inicio']);
+        if((string)$row['vigente_desde']>$startUtc)continue;
+        if($row['vigente_hasta']!==null&&(string)$row['vigente_hasta']<$startUtc)continue;
         $assigned[(string)$row['sesion_id']][]=['id'=>(string)$row['profesor_id'],'nombre'=>(string)$row['profesor_nombre']];
     }
     foreach($sesiones as &$sesion)$sesion['profesores_asignados']=$assigned[(string)$sesion['id']]??[];
