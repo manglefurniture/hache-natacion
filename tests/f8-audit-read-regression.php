@@ -160,6 +160,38 @@ f8_expect($professorEdit['after']['available']===true&&$professorEdit['after']['
 f8_expect(str_contains((string)$professorEdit['result']['detail'],'nombre')&&str_contains((string)$professorEdit['result']['detail'],'whatsapp'),'Debe informar campos PII modificados sin copiar valores.');
 f8_expect(!str_contains(json_encode($professorEdit,JSON_UNESCAPED_UNICODE),'Profesor Secreto'),'La proyección no debe inventar ni copiar PII ausente.');
 
+$financialPeriod = hache_auditoria_evento_normalizar([
+    'id'=>'e-financial-period',
+    'usuario_id'=>'u1',
+    'usuario_nombre'=>'admin',
+    'accion'=>'PERIODO_FINANCIERO_RANGO_ACTUALIZADO',
+    'entidad'=>'periodo_financiero',
+    'entidad_id'=>'pf1',
+    'detalle'=>json_encode([
+        'sede_id'=>'s1',
+        'periodo'=>'2026-09-01',
+        'periodo_id'=>'pf1',
+        'anterior'=>['existia'=>true,'fecha_inicio'=>'2026-08-31','fecha_cierre'=>'2026-09-30'],
+        'nuevo'=>['existia'=>true,'fecha_inicio'=>'2026-08-31','fecha_cierre'=>'2026-09-29'],
+        'siguiente_periodo'=>'2026-10-01',
+        'siguiente_periodo_id'=>'pf2',
+        'siguiente_anterior'=>['existia'=>false],
+        'siguiente_nuevo'=>['existia'=>true,'fecha_inicio'=>'2026-09-30','fecha_cierre'=>'2026-10-31'],
+    ]),
+    'metodo'=>'POST',
+    'ruta'=>'/api/cierres-mensuales.php',
+    'created_at'=>'2026-09-18 15:07:10',
+]);
+f8_expect($financialPeriod['module']==='finanzas'&&$financialPeriod['result']['level']==='confirmed','El rango financiero durable debe proyectarse como cambio confirmado.');
+f8_expect($financialPeriod['entity']['id']==='pf1','Debe conservar el ID exacto del periodo principal.');
+f8_expect($financialPeriod['entity']['reference_type']==='periodo_financiero_siguiente'&&$financialPeriod['entity']['reference_id']==='pf2','Debe conservar la referencia exacta al periodo siguiente afectado.');
+f8_expect($financialPeriod['before']['available']===true&&$financialPeriod['before']['value']['periodo']['fecha_cierre']==='2026-09-30','Debe conservar el cierre anterior real del periodo principal.');
+f8_expect($financialPeriod['before']['value']['siguiente_periodo']['existia']===false,'La ausencia real de una fila previa debe conservarse explícitamente, no reconstruirse.');
+f8_expect($financialPeriod['after']['available']===true&&$financialPeriod['after']['value']['periodo']['fecha_cierre']==='2026-09-29','Debe conservar el cierre nuevo confirmado.');
+f8_expect($financialPeriod['after']['value']['siguiente_periodo']['fecha_inicio']==='2026-09-30','Debe conservar el inicio nuevo confirmado del periodo siguiente.');
+f8_expect($financialPeriod['scope']['sede_known']===true&&$financialPeriod['scope']['sede_id']==='s1','Debe conservar la sede demostrada por la operación.');
+f8_expect($financialPeriod['coverage']['before_after']==='structured','El rango financiero debe declarar before/after estructurado.');
+
 $attendanceCorrection = hache_auditoria_evento_normalizar([
     'id'=>'e-attendance-correction',
     'usuario_id'=>'u1',
