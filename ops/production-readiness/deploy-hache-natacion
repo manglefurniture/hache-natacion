@@ -204,6 +204,10 @@ apply_release_migrations() {
   if [[ -f "$professor_coteaching" ]]; then
     php "$professor_coteaching"
   fi
+  local f7_professor_assignment_validity="$REPO/bin/migrate-f7-professor-assignment-validity.php"
+  if [[ -f "$f7_professor_assignment_validity" ]]; then
+    php "$f7_professor_assignment_validity"
+  fi
   local centro_pendientes="$REPO/bin/migrate-centro-pendientes.php"
   if [[ -f "$centro_pendientes" ]]; then
     php "$centro_pendientes"
