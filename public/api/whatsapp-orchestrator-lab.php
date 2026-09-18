@@ -40,7 +40,7 @@ function sharky_lab_identity_before(PDO $pdo,array $event): array
     if(trim((string)($event['group_id']??''))!=='')return ['found'=>false];
     $contact=preg_replace('/\D+/','',(string)($event['from']??''))?:'';
     if($contact==='')return ['found'=>false];
-    try{return hache_sharky_business_identity_by_whatsapp($pdo,$contact);}catch(Throwable $e){return ['found'=>false];}
+    try{return hache_sharky_business_identity_by_whatsapp($pdo,$contact);}catch(Throwable $e){return ['found'=>false,'lookup_failed'=>true];}
 }
 
 /**
