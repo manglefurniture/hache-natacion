@@ -229,6 +229,7 @@ function dashboard_prospectos_conversion(PDO $pdo,string $inicio,string $fin): a
         $st=$pdo->prepare("SELECT entry_source,COALESCE(sede_clave,'SIN_SEDE') sede_clave,status,alumno_id,created_at,converted_at
             FROM sharky_prospect_opportunities
             WHERE created_at BETWEEN :d AND :h
+              AND status IN ('OPEN','CONVERTED')
             ORDER BY created_at,id");
         $st->execute([':d'=>$desde,':h'=>$hasta]);
 
@@ -246,7 +247,7 @@ function dashboard_prospectos_conversion(PDO $pdo,string $inicio,string $fin): a
             if(!isset($porFuente[$source]))$porFuente[$source]=['prospectos'=>0,'conversiones'=>0,'tasa'=>null];
             $porSede[$sede]['prospectos']++;
             $porFuente[$source]['prospectos']++;
-            $converted=(string)($row['status']??'')==='CONVERTED'&&trim((string)($row['alumno_id']??''))!=='';
+            $converted=(string)($row['status']??'')==='CONVERTED';
             if($converted){
                 $conversiones++;
                 $porSede[$sede]['conversiones']++;
