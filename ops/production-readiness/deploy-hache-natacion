@@ -208,6 +208,10 @@ apply_release_migrations() {
   if [[ -f "$f7_professor_assignment_validity" ]]; then
     php "$f7_professor_assignment_validity"
   fi
+  local f7_professor_substitutions="$REPO/bin/migrate-f7-professor-substitutions.php"
+  if [[ -f "$f7_professor_substitutions" ]]; then
+    php "$f7_professor_substitutions"
+  fi
   local centro_pendientes="$REPO/bin/migrate-centro-pendientes.php"
   if [[ -f "$centro_pendientes" ]]; then
     php "$centro_pendientes"
