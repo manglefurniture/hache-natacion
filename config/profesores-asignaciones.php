@@ -19,7 +19,11 @@ function hache_profesores_vigencias_schema_ready(PDO $pdo): bool
         $idx=$st->fetch(PDO::FETCH_ASSOC);
         if(!is_array($idx)||(string)($idx['cols']??'')!=='profesor_horario_id,abierta'||(int)($idx['non_unique']??1)!==0)return false;
         $st=$pdo->query("SELECT COUNT(*) FROM configuracion WHERE clave IN ('profesores_asignaciones_cobertura_desde','profesores_asignaciones_baseline_aplicado')");
-        return (int)$st->fetchColumn()===2;
+        if((int)$st->fetchColumn()!==2)return false;
+        $st=$pdo->query("SELECT COUNT(*) FROM profesor_horarios ph JOIN profesores p ON p.id=ph.profesor_id WHERE ph.activo=1 AND p.activo=0");
+        if((int)$st->fetchColumn()!==0)return false;
+        $st=$pdo->query("SELECT COUNT(*) FROM profesor_horario_vigencias v JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id WHERE ph.activo=0 AND v.vigente_hasta IS NULL");
+        return (int)$st->fetchColumn()===0;
     }catch(Throwable $e){return false;}
 }
 
