@@ -153,6 +153,24 @@ function hache_auditoria_evento_normalizar(array $row): array
             $scopeSede = trim((string)$detail['sede_id']);
             $scopeKnown = true;
         }
+    } elseif ($action === 'PAGO_INVALIDADO') {
+        $module = 'finanzas';
+        $level = 'confirmed';
+        $resultCode = null;
+        $resultDetail = null;
+        if (array_key_exists('estado_anterior', $detail)) {
+            $before = hache_auditoria_valor(true, ['estado' => $detail['estado_anterior']]);
+        }
+        if (array_key_exists('estado_nuevo', $detail)) {
+            $after = hache_auditoria_valor(true, ['estado' => $detail['estado_nuevo']]);
+        }
+        if ($before['available'] || $after['available']) {
+            $beforeAfter = 'structured';
+        }
+        if (isset($detail['sede_id']) && trim((string)$detail['sede_id']) !== '') {
+            $scopeSede = trim((string)$detail['sede_id']);
+            $scopeKnown = true;
+        }
     } elseif ($action === 'ELIMINAR_DEFINITIVO') {
         $module = 'alumnos';
         $level = 'confirmed';
