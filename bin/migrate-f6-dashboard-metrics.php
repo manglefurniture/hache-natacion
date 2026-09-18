@@ -16,15 +16,15 @@ function f6_dashboard_metrics_split_sql(string $sql): array
 
 function f6_dashboard_metrics_schema_ready(PDO $pdo): bool
 {
-    $st=$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='sesion_asistencia_cobertura'");
-    if((int)$st->fetchColumn()!==1)return false;
+    $st=$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('sesion_asistencia_cobertura','sharky_prospect_opportunities')");
+    if((int)$st->fetchColumn()!==2)return false;
 
     $expected=['sesion_id','expected_count','marked_count','present_count','justified_count','unjustified_count','complete','captured_by','captured_at'];
     $st=$pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sesion_asistencia_cobertura' ORDER BY ordinal_position");
     if(array_values($st->fetchAll(PDO::FETCH_COLUMN))!==$expected)return false;
 
-    $st=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_bajas_cobertura_desde','dashboard_asistencia_cobertura_desde') ORDER BY clave");
-    return array_values($st->fetchAll(PDO::FETCH_COLUMN))===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde'];
+    $st=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_bajas_cobertura_desde','dashboard_asistencia_cobertura_desde','dashboard_prospectos_cobertura_desde') ORDER BY clave");
+    return array_values($st->fetchAll(PDO::FETCH_COLUMN))===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde','dashboard_prospectos_cobertura_desde'];
 }
 
 try{
