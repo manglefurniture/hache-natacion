@@ -4,7 +4,7 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Última base comprobada para esta actualización:** `main`, commit `6d521421a8508c6a63de01ffbb4813aecd2bf28f`.  
+**Última base comprobada para esta actualización:** `main`, commit `6060e2a30dcbf1a1705a020acae8f76c9989d01b`.  
 **Estado del roadmap en esta actualización:** Fase 6 **En implementación**; los incrementos técnicamente definidos de F6 están desplegados y los huecos restantes de P-06 requieren decisiones explícitas antes de publicar nuevas métricas.  
 **Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
@@ -483,7 +483,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | 2026-09-17 | F6 Dashboard: cierre de hallazgos técnicos publicados. | PR #307; Quality #1557 en PR y #1558 en `main`; Deploy #273; producción `6d521421...`; marcador, sintaxis PHP y health verificados. | Los indicadores ya publicados cumplen contrato/detalle reconciliable y los hilos técnicos de #300/#302/#305/#306 quedaron resueltos; F6 sigue **En implementación** únicamente por P-06. |
 | 2026-09-17 | F6 P-06: autoridad durable de oportunidades. | PR #311; Quality #1590/#1591; Deploy #276; producción `41a38479...`; migración F6 y health verificados. | Esquema hash-only integrado sin productor, conversión ni métricas públicas. |
 | 2026-09-17 | F6 P-06: segundo micro-incremento, productor mínimo de oportunidades. | PR #312; Quality #1598 en PR y #1599 en `main`; Deploy #277; producción `4bdd3acd...`; marcador, migración F6, helper/recovery y health verificados. Codex automático detectó dos P1 de durabilidad, ambos corregidos y resueltos antes del merge. | **Desplegado y verificado técnicamente** para este micro-alcance: webhook y recovery comparten la frontera durable, los fallos dejan el recibo pendiente para retry y el mismo evento es idempotente. Conversión, exclusión, enriquecimiento posterior y dashboard quedan fuera. |
-| 2026-09-17 | F6 P-06: tercer micro-incremento, enriquecimiento estructurado de sede. | Rama `f6/p06-opportunity-venue-enrichment` desde `main` `188ef09d...`; sin reutilizar PR #310. | En implementación: enlaza la selección canónica de sede con la misma oportunidad `OPEN`, conserva cohorte/fuente/estado y falla sin adivinar ante múltiples oportunidades sin UUID interno. Conversión y dashboard quedan fuera. |
+| 2026-09-17 | F6 P-06: tercer micro-incremento, enriquecimiento estructurado de sede. | PR #314; Quality #1602 inicial, P1 automático de retry corregido en `057473a5...`, Quality #1603 posterior y #1604 en `main`; Deploy #279; producción `6060e2a...`; migración F6 y marcador desplegado verificados. | **Desplegado y verificado técnicamente** para este micro-alcance: la selección canónica actualiza la misma oportunidad `OPEN`, conserva cohorte/fuente/estado, no infiere desde texto libre y los fallos técnicos dejan retry durable. Conversión y dashboard siguen fuera. |
 
 ### 12.2 Estado de las fases
 
@@ -494,7 +494,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Desplegado | Alertas, F1, F2, proyección F4 y configuración F5 | Realizar verificación operativa dirigida en producción sobre casos reales disponibles; no fabricar datos para forzar escenarios. |
-| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18/D-19, lecturas puras y productor durable de oportunidades desplegado | Cerrar el enriquecimiento estructurado de sede y después implementar, en otro micro-paso, el vínculo verificable de conversión; no publicar prospectos/conversión hasta contar con cobertura suficiente. |
+| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18/D-19, lecturas puras, productor durable y enriquecimiento estructurado de sede desplegados | Implementar en un micro-paso separado el vínculo verificable de una oportunidad con una inscripción Sharky `COMPLETED`; no publicar prospectos/conversión hasta contar con cobertura suficiente. |
 | F7 Profesores | Pendiente | Profesores, horarios y cancelaciones | Resolver P-07 y preservar historial. |
 | F8 Auditoría | Pendiente | Auditoría e historial existentes | Resolver P-08 mediante matriz de acciones relevantes. |
 | F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |
