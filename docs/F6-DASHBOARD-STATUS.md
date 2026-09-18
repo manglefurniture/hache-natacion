@@ -32,6 +32,8 @@ PR #311 dejó integrada y desplegada la autoridad durable `sharky_prospect_oppor
 Contrato del productor:
 
 - solo corre para el primer turno de un contacto no identificado que ya pasó los guards de grupo, echo, alumno conocido y profesor;
+- la misma frontera se ejecuta tanto en el procesamiento inmediato del webhook como en el recovery del inbox durable;
+- si el lock, el esquema o la escritura de la oportunidad fallan, el turno no se completa y queda pendiente para retry;
 - el contacto se enlaza únicamente mediante `contact_hash`;
 - el `message_id` de origen se transforma a SHA-256 antes de persistirse;
 - reintentar el mismo evento devuelve la misma oportunidad y no duplica filas;
