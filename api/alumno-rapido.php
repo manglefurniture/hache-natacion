@@ -3,6 +3,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
 require_once __DIR__.'/../config/reglas-acceso.php';
+require_once __DIR__.'/../config/alumno-estado-eventos.php';
 require_once __DIR__.'/../config/telefono.php';
 $config=require __DIR__.'/../config/database.php';
 try{
@@ -19,8 +20,8 @@ $pdo->beginTransaction();
 // Serializa el cambio con el alta a un intensivo. De otro modo ambos procesos
 // podían validar el estado anterior y dejar un horario regular en un alumno
 // que acababa de ingresar a un curso intensivo.
-$st=$pdo->prepare("SELECT id FROM alumnos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$id,':s'=>$sedeId]);if(!$st->fetchColumn()){$pdo->rollBack();http_response_code(404);echo json_encode(['ok'=>false,'error'=>'Alumno no encontrado en la sede activa']);exit;}
+$st=$pdo->prepare("SELECT id,horario_preferido_id FROM alumnos WHERE id=:id AND sede_id=:s LIMIT 1 FOR UPDATE");$st->execute([':id'=>$id,':s'=>$sedeId]);$actual=$st->fetch();if(!$actual){$pdo->rollBack();http_response_code(404);echo json_encode(['ok'=>false,'error'=>'Alumno no encontrado en la sede activa']);exit;}
 $st=$pdo->prepare("SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.estado IN ('PROGRAMADO','EN_CURSO') LIMIT 1");$st->execute([':a'=>$id,':s'=>$sedeId]);if($st->fetchColumn()){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'El horario de un alumno en intensivo se modifica dentro del curso intensivo']);exit;}
 $st=$pdo->prepare("SELECT id,hora_inicio,hora_fin FROM horarios WHERE id=:id AND sede_id=:s AND activo=1 AND regular=1 LIMIT 1 FOR UPDATE");$st->execute([':id'=>$v,':s'=>$sedeId]);$h=$st->fetch();if(!$h){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Horario no disponible en la sede activa']);exit;}
-$st=$pdo->prepare("UPDATE alumnos SET horario_preferido_id=:h,updated_at=NOW() WHERE id=:id AND sede_id=:s");$st->execute([':h'=>$v,':id'=>$id,':s'=>$sedeId]);$pdo->commit();echo json_encode(['ok'=>true,'horario'=>$h],JSON_UNESCAPED_UNICODE);exit;
+$st=$pdo->prepare("UPDATE alumnos SET horario_preferido_id=:h,updated_at=NOW() WHERE id=:id AND sede_id=:s");$st->execute([':h'=>$v,':id'=>$id,':s'=>$sedeId]);hache_alumno_edicion_evento($pdo,$me,['id'=>$id,'horario_preferido_id'=>$actual['horario_preferido_id']??null],['horario_preferido_id'=>$v],$sedeId,'/api/alumno-rapido.php');$pdo->commit();echo json_encode(['ok'=>true,'horario'=>$h],JSON_UNESCAPED_UNICODE);exit;
 }catch(Throwable $e){if(isset($pdo)&&$pdo instanceof PDO&&$pdo->inTransaction())$pdo->rollBack();error_log('[alumno-rapido] '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'No se pudo actualizar el alumno'],JSON_UNESCAPED_UNICODE);}
