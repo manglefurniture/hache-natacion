@@ -2,7 +2,7 @@
 
 **Estado:** **Desplegado**  
 **Fecha de corte:** 2026-09-18  
-**SHA funcional verificado técnicamente en producción:** `f976b2c5c8ef828c168aa21c7fbd020e2880b1c0`
+**SHA técnico más reciente verificado en producción:** `6c0a298b57be4e958d67fd9723b0ced5deef0077`
 
 ## Alcance integrado
 
@@ -30,6 +30,21 @@ PR #336 integró F7.6. Quality #1665 detectó un error de sintaxis causado por u
 - `/api/health.php`: HTTP 200 / `ok: true`.
 - El endpoint interno de evidencia continuó bloqueado externamente: HTTP 404 con token inválido.
 - Codex automático no tenía revisión disponible por límite de uso; no se invocó manualmente.
+
+### Corrección posterior de F7.1
+
+PR #338 corrigió el caso legacy en el que una asignación podía seguir activa aunque el profesor ya estuviera inactivo. La reparación no borra filas ni reconstruye historia: desactiva la asignación inconsistente y, si existía un baseline sintético F7 abierto, lo colapsa al mismo instante de inicio.
+
+- Head final del PR: `beb2dde449665839d955291caabd4cdae8f70437`.
+- Quality #1682 del PR: **success**.
+- Merge a `main`: `6c0a298b57be4e958d67fd9723b0ced5deef0077`.
+- Quality #1683 y #1684 de `main`: **success**.
+- Deploy #304 y #305: **success** sobre el mismo SHA.
+- `.hache-deployed-sha`: `6c0a298b57be4e958d67fd9723b0ced5deef0077`.
+- `/api/health.php`: HTTP 200 / `ok: true`.
+- La revisión automática de Codex no llegó a ejecutarse en PR #338 porque el límite estaba agotado en ese momento; no se invocó manualmente.
+
+El estado global de F7 permanece **Desplegado**, no **Verificado**, porque su cierre sigue dependiendo de observar casos reales post-cobertura.
 
 ## Snapshot operacional real
 
