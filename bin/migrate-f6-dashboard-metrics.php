@@ -32,6 +32,8 @@ function f6_dashboard_metrics_schema_ready(PDO $pdo): bool
 
     $st=$pdo->query("SELECT non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' AND index_name='uq_sharky_prospect_origin' LIMIT 1");
     if((string)$st->fetchColumn()!=='0')return false;
+    $st=$pdo->query("SELECT non_unique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='sharky_prospect_opportunities' AND index_name='uq_sharky_prospect_conversion_action' LIMIT 1");
+    if((string)$st->fetchColumn()!=='0')return false;
 
     $st=$pdo->query("SELECT clave FROM configuracion WHERE clave IN ('dashboard_bajas_cobertura_desde','dashboard_asistencia_cobertura_desde') ORDER BY clave");
     return array_values($st->fetchAll(PDO::FETCH_COLUMN))===['dashboard_asistencia_cobertura_desde','dashboard_bajas_cobertura_desde'];
