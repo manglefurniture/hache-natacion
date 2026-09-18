@@ -8,6 +8,7 @@ require_once __DIR__.'/../config/sharky-contact-book.php';
 require_once __DIR__.'/../config/sharky-human-worker.php';
 require_once __DIR__.'/../config/sharky-language-guide.php';
 require_once __DIR__.'/../config/sharky-member-routing.php';
+require_once __DIR__.'/../config/sharky-prospect-opportunities.php';
 require_once __DIR__.'/../config/sharky-takeover-maintenance.php';
 require_once __DIR__.'/../config/sharky-groups.php';
 require_once __DIR__.'/../config/sharky-conversation-review.php';
@@ -84,6 +85,7 @@ try{
         }
         $member=hache_sharky_member_route_event($pdo,$event,$business);
         if($member!==null)return $member;
+        if(!hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null))return false;
         return hache_sharky_human_process_event($pdo,$event,$business,$minAge,$threshold);
     };
     $stats=hache_sharky_inbox_dispatch($pdo,$processor,10,$enabled);
