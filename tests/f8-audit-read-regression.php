@@ -135,6 +135,31 @@ f8_expect($studentEdit['before']['value']['inscripcion_historica_cubierta']===fa
 f8_expect(str_contains((string)$studentEdit['result']['detail'],'whatsapp'),'Debe informar qué campo PII cambió sin copiar sus valores.');
 f8_expect(!str_contains(json_encode($studentEdit,JSON_UNESCAPED_UNICODE),'5550000000'),'La proyección no debe inventar ni copiar un valor PII ausente.');
 
+$professorEdit = hache_auditoria_evento_normalizar([
+    'id'=>'e-professor-edit',
+    'usuario_id'=>'u1',
+    'usuario_nombre'=>'admin',
+    'accion'=>'PROFESOR_DATOS_ACTUALIZADOS',
+    'entidad'=>'profesor',
+    'entidad_id'=>'pr1',
+    'detalle'=>json_encode([
+        'cambios'=>[
+            'activo'=>['anterior'=>true,'nuevo'=>false],
+            'nombre'=>['modificado'=>true,'valores_omitidos'=>'PII'],
+            'whatsapp'=>['modificado'=>true,'valores_omitidos'=>'PII'],
+        ],
+    ]),
+    'metodo'=>'POST',
+    'ruta'=>'/api/profesores.php',
+    'created_at'=>'2026-09-18 15:07:00',
+]);
+f8_expect($professorEdit['module']==='profesores'&&$professorEdit['result']['level']==='confirmed','La edición durable del profesor debe proyectarse como cambio confirmado.');
+f8_expect($professorEdit['entity']['id']==='pr1','Debe conservar el ID exacto del profesor.');
+f8_expect($professorEdit['before']['available']===true&&$professorEdit['before']['value']['activo']===true,'Debe conservar el activo anterior real.');
+f8_expect($professorEdit['after']['available']===true&&$professorEdit['after']['value']['activo']===false,'Debe conservar el activo nuevo real.');
+f8_expect(str_contains((string)$professorEdit['result']['detail'],'nombre')&&str_contains((string)$professorEdit['result']['detail'],'whatsapp'),'Debe informar campos PII modificados sin copiar valores.');
+f8_expect(!str_contains(json_encode($professorEdit,JSON_UNESCAPED_UNICODE),'Profesor Secreto'),'La proyección no debe inventar ni copiar PII ausente.');
+
 $events = [$generic,$history,$state];
 hache_auditoria_ordenar($events);
 f8_expect($events[0]['source_id']==='h1'&&$events[2]['source_id']==='e-http','La mezcla de fuentes debe ordenarse por timestamp real sin inventar correlación.');
