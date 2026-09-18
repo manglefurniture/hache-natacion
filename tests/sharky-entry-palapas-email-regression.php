@@ -10,6 +10,7 @@ function sharky_entry_expect(bool $condition,string $message): void
 $root=dirname(__DIR__);
 $webhook=(string)file_get_contents($root.'/public/api/whatsapp-orchestrator-lab.php');
 $worker=(string)file_get_contents($root.'/bin/sharky-inbox-dispatch.php');
+$opportunities=(string)file_get_contents($root.'/config/sharky-prospect-opportunities.php');
 $inbox=(string)file_get_contents($root.'/config/sharky-inbox.php');
 $routing=(string)file_get_contents($root.'/config/sharky-member-routing.php');
 $brain=(string)file_get_contents($root.'/config/sharky-brain-shadow-runtime.php');
@@ -25,14 +26,23 @@ sharky_entry_expect(strpos($webhook,'sharky_lab_assume_unmatched_prospect')<strp
 sharky_entry_expect(str_contains($webhook,"require_once __DIR__.'/../../config/sharky-prospect-opportunities.php'"),'Live prospect entry must load the F6 opportunity producer.');
 $assumeStart=strpos($webhook,'function sharky_lab_assume_unmatched_prospect');
 $assumeEnd=strpos($webhook,'function sharky_lab_notify_registration_transition',$assumeStart?:0);
-sharky_entry_expect($assumeStart!==false&&$assumeEnd!==false,'Unmatched prospect entry block must remain bounded.');
+sharky_entry_expect($assumeStart!==false&&$assumeEnd!==false,'Unmatched prospect entry wrapper must remain bounded.');
 $assumeBlock=substr($webhook,$assumeStart,$assumeEnd-$assumeStart);
-$guidedPos=strpos($assumeBlock,'hache_sharky_entry_guided_first_prospect');
-$opportunityPos=strpos($assumeBlock,'hache_sharky_prospect_opportunity_open');
-$stateSavePos=strpos($assumeBlock,'hache_sharky_db_state_save');
-sharky_entry_expect($guidedPos!==false&&$opportunityPos!==false&&$stateSavePos!==false&&$guidedPos<$opportunityPos&&$opportunityPos<$stateSavePos,'Opportunity producer must observe the resolved first-entry source before the prospect state is saved.');
-sharky_entry_expect(str_contains($assumeBlock,"(string)(\$event['id']??'')"),'Opportunity idempotency must derive from the durable inbound message id.');
-sharky_entry_expect(str_contains($assumeBlock,'hache_sharky_orchestrator_contact_hash($contact)'),'Opportunity producer must receive only the contact hash, never the raw WhatsApp number.');
+sharky_entry_expect(str_contains($assumeBlock,'hache_sharky_prospect_opportunity_prepare_unmatched'),'Live webhook must delegate to the shared durable first-turn boundary.');
+sharky_entry_expect(str_contains($webhook,'if(!sharky_lab_assume_unmatched_prospect($pdo,$event,$identityBefore))continue;'),'Live producer failure must leave the durable inbox receipt pending for recovery.');
+
+$guidedPos=strpos($opportunities,'hache_sharky_entry_guided_first_prospect');
+$opportunityPos=strpos($opportunities,'hache_sharky_prospect_opportunity_open(',$guidedPos===false?0:$guidedPos);
+$stateSavePos=strpos($opportunities,'hache_sharky_db_state_save',$opportunityPos===false?0:$opportunityPos);
+sharky_entry_expect($guidedPos!==false&&$opportunityPos!==false&&$stateSavePos!==false&&$guidedPos<$opportunityPos&&$opportunityPos<$stateSavePos,'Shared producer must resolve the first-entry source, persist the opportunity, then save prospect state.');
+sharky_entry_expect(str_contains($opportunities,"(string)(\$event['id']??'')"),'Opportunity idempotency must derive from the durable inbound message id.');
+sharky_entry_expect(str_contains($opportunities,'hache_sharky_orchestrator_contact_hash($contact)'),'Opportunity producer must receive only the contact hash, never the raw WhatsApp number.');
+sharky_entry_expect(str_contains($opportunities,'if($opportunityId===null)')&&str_contains($opportunities,'return false;'),'Opportunity persistence failure must fail closed so the receipt is retried.');
+sharky_entry_expect(str_contains($worker,"require_once __DIR__.'/../config/sharky-prospect-opportunities.php'"),'Inbox recovery must load the shared opportunity producer.');
+$recoveryProducer=strpos($worker,'hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null)');
+$recoveryHuman=strpos($worker,'hache_sharky_human_process_event($pdo,$event',$recoveryProducer===false?0:$recoveryProducer);
+sharky_entry_expect($recoveryProducer!==false&&$recoveryHuman!==false&&$recoveryProducer<$recoveryHuman,'Inbox recovery must cross the same opportunity boundary before completing generic Sharky processing.');
+sharky_entry_expect(str_contains($worker,'if(!hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null))return false;'),'Recovery producer failure must defer the inbox receipt instead of losing the opportunity.');
 
 
 // Sharky-created intensive registrations must reuse the same Resend alert only
