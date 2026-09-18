@@ -6,7 +6,7 @@ Fecha de actualización: 2026-09-17.
 
 F6 — Dashboard operativo permanece **En implementación**.
 
-La base actualmente integrada y comprobada en producción es `4bdd3acd080b75e94ba309d5e97af1319f7203d1` (PR #312). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable de oportunidades y el productor mínimo del primer turno con recovery y retry.
+La base actualmente integrada y comprobada en producción es `6060e2a30dcbf1a1705a020acae8f76c9989d01b` (PR #314). Esa versión contiene las definiciones aprobadas de nuevos alumnos, bajas y asistencia, la autoridad durable de oportunidades, el productor mínimo del primer turno y el enriquecimiento estructurado de sede con retry durable.
 
 PR #310 **no se considera integrable como unidad**: mezcló prospectos, conversión, migración, Sharky, dashboard, pruebas y documentación, y la revisión automática encontró problemas reales de identidad/lifecycle e idempotencia. El cierre restante de P-06 se divide desde `main` en micro-pasos independientes.
 
@@ -25,9 +25,9 @@ Las decisiones de producto para el cierre restante siguen siendo:
 
 No se reconstruirá historia previa al inicio real de cobertura.
 
-## Micro-paso actual: enriquecimiento estructurado de sede
+## Micro-paso cerrado: enriquecimiento estructurado de sede
 
-PR #311 dejó la autoridad durable y PR #312 activó el productor mínimo del primer turno. Este tercer micro-paso se limita a enriquecer la misma oportunidad `OPEN` cuando Sharky ya tiene una sede confirmada por los controles estructurados del funnel.
+PR #311 dejó la autoridad durable, PR #312 activó el productor mínimo del primer turno y PR #314 integró este tercer micro-paso: enriquecer la misma oportunidad `OPEN` cuando Sharky ya tiene una sede confirmada por los controles estructurados del funnel.
 
 Contrato de este incremento:
 
@@ -73,7 +73,7 @@ Por tanto, la escritura continúa siendo forward-only y todavía no constituye c
 | Mensualidades y avisos | `config/dashboard-indicadores.php` |
 | Operación diaria | `config/dashboard-operacion.php` |
 | P-06 alumnos/bajas/asistencia | `config/dashboard-p06.php` + cobertura persistida |
-| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` + productor del primer turno; dashboard aún sin cobertura publicable |
+| P-06 oportunidad/prospecto | `sharky_prospect_opportunities` + productor del primer turno + enriquecimiento estructurado de sede; dashboard aún sin cobertura publicable |
 | Fecha/hora | `config/dashboard-tiempo.php`, `America/Cancun` |
 
 ## Evidencia acumulada
@@ -85,9 +85,9 @@ Por tanto, la escritura continúa siendo forward-only y todavía no constituye c
 | #309 | P-06: nuevos alumnos, bajas y asistencia | Integrado y producción comprobada en `dce535040557d636b01be629f434af1151542b75` |
 | #311 | P-06: autoridad durable inerte de oportunidades | Integrado, Quality y producción comprobados en `41a38479...` |
 | #312 | P-06: productor mínimo del primer turno prospecto | Integrado y producción comprobada en `4bdd3acd...`; Quality #1598/#1599, Deploy #277; 2 P1 automáticos corregidos/resueltos |
-| Este micro-paso | P-06: enriquecer sede estructurada en la oportunidad `OPEN` | En implementación desde `main` `188ef09d...`; sin conversión ni publicación de dashboard |
+| #314 | P-06: enriquecer sede estructurada en la oportunidad `OPEN` | Integrado y producción comprobada en `6060e2a...`; Quality #1602/#1603 en PR y #1604 en `main`; Deploy #279; P1 automático de retry corregido y resuelto |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
 ## Criterio para continuar el cierre
 
-Este incremento debe pasar Quality y revisión automática, integrarse desde su rama aislada, desplegarse mediante auto-deploy y verificarse sin cambiar el funnel. Después se abordará por separado el vínculo verificable de una inscripción `COMPLETED`; la publicación de prospectos/conversión en dashboard permanece fuera hasta contar con cobertura suficiente.
+El enriquecimiento estructurado de sede quedó integrado, desplegado y verificado técnicamente sin cambiar el funnel. El siguiente micro-paso será exclusivamente el vínculo verificable entre la oportunidad y una inscripción Sharky `COMPLETED`; la publicación de prospectos/conversión en dashboard permanece fuera hasta contar con cobertura suficiente.
