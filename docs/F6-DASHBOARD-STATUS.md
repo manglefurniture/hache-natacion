@@ -84,6 +84,7 @@ Por tanto, la escritura es forward-only y sigue sin constituir por sí sola cobe
 | #307 | Cierre de hallazgos técnicos de F6 | Integrado y desplegado como `6d521421...` |
 | #309 | P-06: nuevos alumnos, bajas y asistencia | Integrado y producción comprobada en `dce535040557d636b01be629f434af1151542b75` |
 | #311 | P-06: autoridad durable inerte de oportunidades | Integrado, Quality y producción comprobados en `41a38479...` |
+| #312 | P-06: productor mínimo del primer turno prospecto | En revisión; sin conversión ni publicación de dashboard |
 | #310 | P-06 mezclado: prospectos/conversión/Sharky/dashboard | Abierto; no debe mergearse como unidad |
 
 ## Criterio para continuar el cierre
