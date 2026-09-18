@@ -35,11 +35,16 @@ try {
         $input=json_decode(file_get_contents('php://input'),true);if(!is_array($input)){http_response_code(400);echo json_encode(['ok'=>false,'error'=>'JSON inválido']);exit;}
         $cursoId=trim((string)($input['curso_intensivo_id']??''));$alumnoId=trim((string)($input['alumno_id']??''));if($cursoId===''||$alumnoId===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Curso y alumno son obligatorios']);exit;}
         intensivos_reconciliar_estados_sede($pdo,$sedeId);$pdo->beginTransaction();
-        $stmt=$pdo->prepare("SELECT cia.id,ci.estado FROM curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id WHERE cia.curso_intensivo_id=:c AND cia.alumno_id=:a AND ci.sede_id=:s LIMIT 1 FOR UPDATE");$stmt->execute([':c'=>$cursoId,':a'=>$alumnoId,':s'=>$sedeId]);$rel=$stmt->fetch();
+        $stmt=$pdo->prepare("SELECT cia.id,cia.curso_intensivo_id,cia.alumno_id,ci.estado FROM curso_intensivo_alumnos cia JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id WHERE cia.curso_intensivo_id=:c AND cia.alumno_id=:a AND ci.sede_id=:s LIMIT 1 FOR UPDATE");$stmt->execute([':c'=>$cursoId,':a'=>$alumnoId,':s'=>$sedeId]);$rel=$stmt->fetch();
         if(!$rel){$pdo->rollBack();http_response_code(404);echo json_encode(['ok'=>false,'error'=>'El alumno no pertenece a este curso']);exit;}
         if($rel['estado']==='TERMINADO'){$pdo->rollBack();http_response_code(422);echo json_encode(['ok'=>false,'error'=>'No se puede modificar un curso terminado']);exit;}
         $stmt=$pdo->prepare("DELETE FROM curso_intensivo_alumnos WHERE id=:id");$stmt->execute([':id'=>$rel['id']]);
-        $stmt=$pdo->prepare("SELECT COUNT(*) FROM pagos WHERE alumno_id=:a AND intensivo_id=:c AND tipo='INTENSIVO' AND estado='VALIDO'");$stmt->execute([':a'=>$alumnoId,':c'=>$cursoId]);$tienePago=((int)$stmt->fetchColumn()>0);regla_recalcular_alumno($pdo,$alumnoId);$pdo->commit();
+        $stmt=$pdo->prepare("SELECT COUNT(*) FROM pagos WHERE alumno_id=:a AND intensivo_id=:c AND tipo='INTENSIVO' AND estado='VALIDO'");$stmt->execute([':a'=>$alumnoId,':c'=>$cursoId]);$tienePago=((int)$stmt->fetchColumn()>0);regla_recalcular_alumno($pdo,$alumnoId);
+        $detalleAudit=json_encode(['sede_id'=>$sedeId,'relacion_id'=>(string)$rel['id'],'curso_intensivo_id'=>(string)$rel['curso_intensivo_id'],'alumno_id'=>(string)$rel['alumno_id'],'presente_anterior'=>true,'presente_nuevo'=>false],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        if(!is_string($detalleAudit))throw new RuntimeException('No se pudo serializar el retiro del intensivo.');
+        $stmt=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta) VALUES(:uid,:un,'INTENSIVO_ALUMNO_RETIRADO','intensivo-alumnos',:rid,:detalle,'DELETE','/api/intensivo-alumnos.php')");
+        $stmt->execute([':uid'=>$me['id'],':un'=>$me['usuario']??null,':rid'=>$rel['id'],':detalle'=>$detalleAudit]);
+        $pdo->commit();
         echo json_encode(['ok'=>true,'mensaje'=>'Alumno retirado del curso intensivo','tiene_pago_intensivo_valido'=>$tienePago,'nota'=>$tienePago?'El pago válido permanece en el historial. Si fue un error, invalídalo desde Pagos.':null],JSON_UNESCAPED_UNICODE);exit;
     }
 

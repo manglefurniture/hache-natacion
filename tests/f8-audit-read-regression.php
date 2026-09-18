@@ -160,6 +160,33 @@ f8_expect($professorEdit['after']['available']===true&&$professorEdit['after']['
 f8_expect(str_contains((string)$professorEdit['result']['detail'],'nombre')&&str_contains((string)$professorEdit['result']['detail'],'whatsapp'),'Debe informar campos PII modificados sin copiar valores.');
 f8_expect(!str_contains(json_encode($professorEdit,JSON_UNESCAPED_UNICODE),'Profesor Secreto'),'La proyección no debe inventar ni copiar PII ausente.');
 
+$intensiveRemoval = hache_auditoria_evento_normalizar([
+    'id'=>'e-intensive-removal',
+    'usuario_id'=>'u1',
+    'usuario_nombre'=>'admin',
+    'accion'=>'INTENSIVO_ALUMNO_RETIRADO',
+    'entidad'=>'intensivo-alumnos',
+    'entidad_id'=>'rel1',
+    'detalle'=>json_encode([
+        'sede_id'=>'s1',
+        'relacion_id'=>'rel1',
+        'curso_intensivo_id'=>'ci1',
+        'alumno_id'=>'a1',
+        'presente_anterior'=>true,
+        'presente_nuevo'=>false,
+    ]),
+    'metodo'=>'DELETE',
+    'ruta'=>'/api/intensivo-alumnos.php',
+    'created_at'=>'2026-09-18 15:08:00',
+]);
+f8_expect($intensiveRemoval['module']==='intensivos'&&$intensiveRemoval['result']['level']==='confirmed','El retiro durable debe proyectarse como cambio confirmado.');
+f8_expect($intensiveRemoval['entity']['id']==='rel1','Debe conservar el ID exacto de la relación eliminada.');
+f8_expect($intensiveRemoval['entity']['reference_type']==='curso_intensivo'&&$intensiveRemoval['entity']['reference_id']==='ci1','Debe conservar la referencia durable al curso.');
+f8_expect($intensiveRemoval['before']['value']['presente']===true&&$intensiveRemoval['before']['value']['alumno_id']==='a1','El before debe conservar la relación real antes del borrado.');
+f8_expect($intensiveRemoval['after']['value']['presente']===false,'El after debe representar únicamente la ausencia confirmada de la relación.');
+f8_expect($intensiveRemoval['scope']['sede_known']===true&&$intensiveRemoval['scope']['sede_id']==='s1','Debe conservar la sede demostrada por la operación.');
+f8_expect($intensiveRemoval['coverage']['before_after']==='structured','El retiro debe declarar before/after estructurado.');
+
 $events = [$generic,$history,$state];
 hache_auditoria_ordenar($events);
 f8_expect($events[0]['source_id']==='h1'&&$events[2]['source_id']==='e-http','La mezcla de fuentes debe ordenarse por timestamp real sin inventar correlación.');
