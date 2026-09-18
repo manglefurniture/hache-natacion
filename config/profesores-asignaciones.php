@@ -27,6 +27,30 @@ function hache_profesores_vigencias_schema_ready(PDO $pdo): bool
     }catch(Throwable $e){return false;}
 }
 
+function hache_profesores_reconciliar_baselines_inactivos(PDO $pdo): int
+{
+    $st=$pdo->query("SELECT v.id,v.vigente_desde
+        FROM profesor_horario_vigencias v
+        JOIN profesor_horarios ph ON ph.id=v.profesor_horario_id
+        JOIN profesores p ON p.id=ph.profesor_id
+        WHERE p.activo=0
+          AND v.vigente_hasta IS NULL
+          AND v.origen='F7_BASELINE'
+        ORDER BY v.id");
+    $rows=$st->fetchAll(PDO::FETCH_ASSOC);
+    if(!$rows)return 0;
+
+    $update=$pdo->prepare("UPDATE profesor_horario_vigencias
+        SET vigente_hasta=:hasta,closed_by=NULL
+        WHERE id=:id AND vigente_hasta IS NULL AND origen='F7_BASELINE'");
+    $changed=0;
+    foreach($rows as $row){
+        $update->execute([':hasta'=>(string)$row['vigente_desde'],':id'=>(string)$row['id']]);
+        $changed+=$update->rowCount();
+    }
+    return $changed;
+}
+
 function hache_profesores_vigencia_abrir(PDO $pdo,string $assignmentId,?string $actorId): void
 {
     $st=$pdo->prepare("INSERT INTO profesor_horario_vigencias(id,profesor_horario_id,vigente_desde,origen,created_by)
