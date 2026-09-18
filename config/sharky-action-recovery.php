@@ -7,6 +7,27 @@ require_once __DIR__.'/sharky-prospect-opportunities.php';
 
 const HACHE_SHARKY_ACTION_LEASE_SECONDS=180;
 
+function hache_sharky_action_recovery_link_conversion(PDO $pdo,string $auditKey,?array $result): void
+{
+    $studentId=trim((string)($result['student_id']??''));
+    if($studentId==='')return;
+    try{
+        $meta=$pdo->prepare("SELECT action_type,contact_hash FROM sharky_action_audit WHERE idempotency_key=:k AND status='COMPLETED' LIMIT 1");
+        $meta->execute([':k'=>$auditKey]);$audit=$meta->fetch(PDO::FETCH_ASSOC);
+        if(!is_array($audit)||!in_array((string)($audit['action_type']??''),['register_intensive','register_regular'],true))return;
+        if(!hache_sharky_prospect_opportunity_convert(
+            $pdo,
+            (string)($audit['contact_hash']??''),
+            $studentId,
+            isset($result['sede_clave'])?(string)$result['sede_clave']:null
+        ))error_log('[sharky-opportunity] completed registration had no linkable opportunity');
+    }catch(Throwable $e){
+        // Analytics is a sidecar: a failure here must never turn a completed
+        // enrollment into an application-level failure or trigger a duplicate.
+        error_log('[sharky-opportunity] conversion link failed after completed registration');
+    }
+}
+
 function hache_sharky_action_source_message_id(string $idempotencyKey): string
 {
     $parts=explode('|',$idempotencyKey,2);
@@ -88,18 +109,7 @@ function hache_sharky_action_recovery_finish(PDO $pdo,string $idempotencyKey,boo
         $st=$pdo->prepare("UPDATE sharky_action_audit SET status=:s,result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=NOW(),lease_until=NULL,owner_token=NULL WHERE idempotency_key=:k AND status='PENDING' AND owner_token=:o");
         $st->execute([':s'=>$ok?'COMPLETED':'FAILED',':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext']??null,':iv'=>$sealed['iv']??null,':tag'=>$sealed['tag']??null,':m'=>$message!==''?mb_substr($message,0,500):null,':k'=>$auditKey,':o'=>$ownerToken]);
         $finished=$st->rowCount()===1;
-        if($finished&&$ok&&is_array($result)&&trim((string)($result['student_id']??''))!==''){
-            $meta=$pdo->prepare("SELECT action_type,contact_hash FROM sharky_action_audit WHERE idempotency_key=:k AND status='COMPLETED' LIMIT 1");
-            $meta->execute([':k'=>$auditKey]);$audit=$meta->fetch(PDO::FETCH_ASSOC);
-            if(is_array($audit)&&in_array((string)($audit['action_type']??''),['register_intensive','register_regular'],true)){
-                if(!hache_sharky_prospect_opportunity_convert(
-                    $pdo,
-                    (string)($audit['contact_hash']??''),
-                    (string)$result['student_id'],
-                    isset($result['sede_clave'])?(string)$result['sede_clave']:null
-                ))error_log('[sharky-opportunity] completed registration had no linkable opportunity');
-            }
-        }
+        if($finished&&$ok)hache_sharky_action_recovery_link_conversion($pdo,$auditKey,$result);
         return $finished;
     }catch(Throwable $e){error_log('[sharky-action] finish failed');return false;}
 }
@@ -125,18 +135,7 @@ function hache_sharky_action_recovery_reseal_completed(PDO $pdo,string $idempote
         $st=$pdo->prepare("UPDATE sharky_action_audit SET result_code=:r,result_json=:j,result_ciphertext=:c,result_iv=:iv,result_tag=:tag,result_message=:m,completed_at=COALESCE(completed_at,NOW()) WHERE idempotency_key=:k AND status='COMPLETED' AND delivery_queued_at IS NULL");
         $st->execute([':r'=>mb_substr($resultCode,0,80),':j'=>$json,':c'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':m'=>mb_substr($message,0,500),':k'=>$auditKey]);
         $resealed=$st->rowCount()===1;
-        if($resealed&&trim((string)($result['student_id']??''))!==''){
-            $meta=$pdo->prepare("SELECT action_type,contact_hash FROM sharky_action_audit WHERE idempotency_key=:k AND status='COMPLETED' LIMIT 1");
-            $meta->execute([':k'=>$auditKey]);$audit=$meta->fetch(PDO::FETCH_ASSOC);
-            if(is_array($audit)&&in_array((string)($audit['action_type']??''),['register_intensive','register_regular'],true)){
-                hache_sharky_prospect_opportunity_convert(
-                    $pdo,
-                    (string)($audit['contact_hash']??''),
-                    (string)$result['student_id'],
-                    isset($result['sede_clave'])?(string)$result['sede_clave']:null
-                );
-            }
-        }
+        if($resealed)hache_sharky_action_recovery_link_conversion($pdo,$auditKey,$result);
         return $resealed;
     }catch(Throwable $e){error_log('[sharky-action] completed result reseal failed');return false;}
 }
