@@ -23,6 +23,27 @@ CREATE TABLE IF NOT EXISTS sesion_asistencia_cobertura (
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- F6 / P-06: inert authority for future prospect opportunities.
+-- This table is intentionally not populated by this micro-step. It permits
+-- multiple opportunities for the same contact and uses a hashed origin event
+-- as the idempotency boundary, without storing raw phone/name/message content.
+CREATE TABLE IF NOT EXISTS sharky_prospect_opportunities (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  contact_hash CHAR(64) NOT NULL,
+  origin_message_hash CHAR(64) NOT NULL,
+  entry_source VARCHAR(30) NULL,
+  sede_clave VARCHAR(20) NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+  opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  closed_at DATETIME NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_sharky_prospect_origin (origin_message_hash),
+  INDEX idx_sharky_prospect_contact (contact_hash,opened_at),
+  INDEX idx_sharky_prospect_cohort (opened_at,status),
+  INDEX idx_sharky_prospect_sede (opened_at,sede_clave),
+  CONSTRAINT chk_sharky_prospect_status CHECK (status IN ('OPEN','CONVERTED','EXCLUDED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT IGNORE INTO configuracion(clave,valor,descripcion)
 VALUES
   ('dashboard_bajas_cobertura_desde',DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%d %H:%i:%s'),'Inicio de cobertura fiable para bajas registradas por F6'),
