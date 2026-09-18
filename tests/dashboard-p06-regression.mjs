@@ -54,7 +54,7 @@ $pdo->exec("INSERT INTO sesiones VALUES ('s1','2026-09-17','h1','REALIZADA'),('s
 $pdo->exec('CREATE TABLE sesion_asistencia_cobertura(sesion_id TEXT PRIMARY KEY,expected_count INTEGER,marked_count INTEGER,present_count INTEGER,justified_count INTEGER,unjustified_count INTEGER,complete INTEGER,captured_at TEXT)');
 $pdo->exec("INSERT INTO sesion_asistencia_cobertura VALUES ('s1',3,3,2,1,0,1,'2026-09-17 20:00:00'),('s2',2,1,1,0,0,0,'2026-09-17 21:00:00'),('s3',2,2,2,0,0,1,'2026-09-17 22:00:00'),('s4',1,1,1,0,0,1,'2026-09-17 20:00:00')");
 $pdo->exec('CREATE TABLE sharky_prospect_opportunities(id TEXT PRIMARY KEY,entry_source TEXT,sede_clave TEXT,status TEXT,alumno_id TEXT,created_at TEXT,converted_at TEXT)');
-$pdo->exec("INSERT INTO sharky_prospect_opportunities VALUES ('o1','direct','MONTEVERDE','CONVERTED','a1','2026-09-17 19:00:00','2026-10-02 12:00:00'),('o2','web',NULL,'OPEN',NULL,'2026-09-17 20:00:00',NULL),('o3','meta_ad','PALAPAS','CONVERTED','a3','2026-09-17 17:00:00','2026-09-18 10:00:00')");
+$pdo->exec("INSERT INTO sharky_prospect_opportunities VALUES ('o1','direct','MONTEVERDE','CONVERTED',NULL,'2026-09-17 19:00:00','2026-10-02 12:00:00'),('o2','web',NULL,'OPEN',NULL,'2026-09-17 20:00:00',NULL),('o3','meta_ad','PALAPAS','CONVERTED','a3','2026-09-17 17:00:00','2026-09-18 10:00:00'),('o4','direct','MONTEVERDE','EXCLUDED',NULL,'2026-09-17 21:00:00',NULL)");
 echo json_encode([
  dashboard_nuevos_alumnos($pdo,'A','2026-09-01','2026-09-30'),
  dashboard_bajas_registradas($pdo,'A','2026-09-01','2026-09-30'),
@@ -127,6 +127,7 @@ assert.match(migration,/dashboard_asistencia_cobertura_desde/);
 assert.match(migration,/CREATE TABLE IF NOT EXISTS sharky_prospect_opportunities/);
 assert.match(migration,/dashboard_prospectos_cobertura_desde/);
 assert.match(migration,/UNIQUE KEY uq_sharky_prospect_open \(contact_hash,open_slot\)/);
+assert.match(migration,/ENUM\('OPEN','CONVERTED','EXCLUDED'\)/);
 assert.match(migration,/present_count INT UNSIGNED/);
 assert.match(migration,/marked_count=present_count\+justified_count\+unjustified_count/);
 assert.match(migration,/UTC_TIMESTAMP\(\)/);
@@ -136,6 +137,7 @@ assert.match(deploy,/migrate-f6-dashboard-metrics\.php/);
 
 assert.match(opportunities,/function hache_sharky_prospect_opportunity_ensure/);
 assert.match(opportunities,/function hache_sharky_prospect_opportunity_sync_open/);
+assert.match(opportunities,/function hache_sharky_prospect_opportunity_exclude_open/);
 assert.match(opportunities,/function hache_sharky_prospect_opportunity_convert/);
 assert.match(opportunities,/contact_hash/);
 assert.doesNotMatch(opportunities,/participant_name|prospect_name|full_name/);
