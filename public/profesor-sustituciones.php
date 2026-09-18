@@ -108,8 +108,8 @@ function drawHistory(){
   history.innerHTML=rows.map(x=>{
     const active=String(x.estado)==='ACTIVA';
     const badge='<span class="badge '+(active?'active':'cancelled')+'">'+esc(x.estado)+'</span>';
-    const created='Registró '+esc(x.created_by_usuario||'sistema')+' · '+esc(x.created_at||'');
-    const annulled=!active?'<div class="meta">Anulada '+esc(x.anulada_at||'')+' por '+esc(x.anulada_by_usuario||'sistema')+' · '+esc(x.motivo_anulacion||'')+'</div>':'';
+    const created='Registró '+esc(x.created_by_usuario||'sistema')+' · '+esc(x.created_at||'')+' UTC';
+    const annulled=!active?'<div class="meta">Anulada '+esc(x.anulada_at||'')+' UTC por '+esc(x.anulada_by_usuario||'sistema')+' · '+esc(x.motivo_anulacion||'')+'</div>':'';
     const annulForm=active?'<div class="annul"><input maxlength="500" aria-label="Motivo de anulación" data-annul-reason="'+esc(x.id)+'" placeholder="Motivo de anulación"><button type="button" class="btn danger" data-annul="'+esc(x.id)+'">Anular</button></div>':'';
     return '<article class="item"><div class="itemtop"><div><div class="route">'+esc(x.profesor_original_nombre)+' → '+esc(x.profesor_sustituto_nombre)+'</div><div class="meta">'+esc(x.fecha)+' · '+esc(x.sede_nombre)+' · '+esc(hm(x.hora_inicio))+'–'+esc(hm(x.hora_fin))+'</div></div>'+badge+'</div><div class="meta">Motivo: '+esc(x.motivo)+'</div><div class="meta">'+created+'</div>'+annulled+annulForm+'</article>';
   }).join('')||'<div class="empty">No hay sustituciones registradas en este periodo.</div>';
