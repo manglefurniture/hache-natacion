@@ -24,6 +24,8 @@ jobs:
         run: node tests/f7-professor-substitutions-ui-regression.mjs
       - name: F7 professor activity UI regression
         run: node tests/f7-professor-activity-ui-regression.mjs
+      - name: F7 professor operational evidence regression
+        run: php tests/f7-professor-operational-evidence-regression.php
       - name: Expediente 360 regression
         run: node tests/expediente-360-regression.mjs
       - name: Sharky onboarding review regression
