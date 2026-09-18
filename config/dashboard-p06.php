@@ -202,3 +202,141 @@ function dashboard_asistencia_periodo(PDO $pdo,string $sedeId,string $inicio,str
                 'cobertura_desde_utc'=>$coberturaUtc,'motivo'=>'La cobertura persistida de asistencia no está disponible.'];
     }
 }
+
+function dashboard_prospectos_conversion(PDO $pdo,string $inicio,string $fin): array
+{
+    $coberturaUtc=dashboard_p06_config_datetime_utc($pdo,'dashboard_prospectos_cobertura_desde');
+    if($coberturaUtc===null){
+        return [
+            'disponible'=>false,
+            'prospectos'=>null,
+            'conversiones'=>null,
+            'tasa_conversion'=>null,
+            'rows'=>[],
+            'cobertura_desde'=>null,
+            'motivo'=>'Cobertura forward-only de oportunidades todavía no inicializada.',
+        ];
+    }
+
+    $coberturaLocal=dashboard_p06_utc_to_cancun($coberturaUtc);
+    [$desdePeriodo,$hastaPeriodo]=dashboard_p06_period_bounds_utc($inicio,$fin);
+    $desde=max($desdePeriodo,$coberturaUtc);
+    if($desde>$hastaPeriodo){
+        return [
+            'disponible'=>false,
+            'prospectos'=>null,
+            'conversiones'=>null,
+            'tasa_conversion'=>null,
+            'rows'=>[],
+            'periodo'=>['inicio'=>$inicio,'fin'=>$fin],
+            'cobertura_desde'=>$coberturaLocal,
+            'cobertura_desde_utc'=>$coberturaUtc,
+            'motivo'=>'El periodo seleccionado termina antes del inicio de cobertura fiable de oportunidades.',
+        ];
+    }
+
+    try{
+        $st=$pdo->prepare("SELECT id,entry_source,sede_clave,status,opened_at,closed_at
+            FROM sharky_prospect_opportunities
+            WHERE opened_at BETWEEN :d AND :h
+              AND status IN ('OPEN','CONVERTED')
+            ORDER BY opened_at,id");
+        $st->execute([':d'=>$desde,':h'=>$hastaPeriodo]);
+
+        $porSede=[
+            'MONTEVERDE'=>['prospectos'=>0,'conversiones'=>0,'tasa_conversion'=>null],
+            'PALAPAS'=>['prospectos'=>0,'conversiones'=>0,'tasa_conversion'=>null],
+            'SIN_SEDE'=>['prospectos'=>0,'conversiones'=>0,'tasa_conversion'=>null],
+        ];
+        $porFuente=[];
+        $porCohorte=[];
+        $rows=[];
+        $conversiones=0;
+
+        foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+            $sedeRaw=strtoupper(trim((string)($row['sede_clave']??'')));
+            $sede=in_array($sedeRaw,['MONTEVERDE','PALAPAS'],true)?$sedeRaw:'SIN_SEDE';
+
+            $fuenteRaw=strtolower(trim((string)($row['entry_source']??'')));
+            $fuente=in_array($fuenteRaw,['meta_ad','web','direct','referral'],true)?$fuenteRaw:'SIN_FUENTE';
+
+            $abiertaUtc=(string)$row['opened_at'];
+            $abiertaLocal=dashboard_p06_utc_to_cancun($abiertaUtc);
+            $cohorte=substr($abiertaLocal,0,10);
+            $convertida=(string)$row['status']==='CONVERTED';
+
+            if(!isset($porFuente[$fuente]))$porFuente[$fuente]=['prospectos'=>0,'conversiones'=>0,'tasa_conversion'=>null];
+            if(!isset($porCohorte[$cohorte]))$porCohorte[$cohorte]=['prospectos'=>0,'conversiones'=>0,'tasa_conversion'=>null];
+
+            $porSede[$sede]['prospectos']++;
+            $porFuente[$fuente]['prospectos']++;
+            $porCohorte[$cohorte]['prospectos']++;
+
+            if($convertida){
+                $conversiones++;
+                $porSede[$sede]['conversiones']++;
+                $porFuente[$fuente]['conversiones']++;
+                $porCohorte[$cohorte]['conversiones']++;
+            }
+
+            $cerradaUtc=trim((string)($row['closed_at']??''));
+            $rows[]=[
+                'oportunidad_id'=>(string)$row['id'],
+                'cohorte'=>$cohorte,
+                'sede'=>$sede,
+                'fuente'=>$fuente,
+                'estado'=>(string)$row['status'],
+                'convertida'=>$convertida,
+                'abierta_en'=>$abiertaLocal,
+                'abierta_en_utc'=>$abiertaUtc,
+                'cerrada_en'=>$cerradaUtc!==''?dashboard_p06_utc_to_cancun($cerradaUtc):null,
+                'cerrada_en_utc'=>$cerradaUtc!==''?$cerradaUtc:null,
+            ];
+        }
+
+        $calcularTasa=static function(array &$buckets): void {
+            foreach($buckets as &$bucket){
+                $bucket['tasa_conversion']=$bucket['prospectos']>0
+                    ?round(($bucket['conversiones']/$bucket['prospectos'])*100,1)
+                    :null;
+            }
+            unset($bucket);
+        };
+        $calcularTasa($porSede);
+        $calcularTasa($porFuente);
+        $calcularTasa($porCohorte);
+        ksort($porFuente);
+        ksort($porCohorte);
+
+        $prospectos=count($rows);
+        return [
+            'disponible'=>true,
+            'prospectos'=>$prospectos,
+            'conversiones'=>$conversiones,
+            'tasa_conversion'=>$prospectos>0?round(($conversiones/$prospectos)*100,1):null,
+            'rows'=>$rows,
+            'por_cohorte'=>$porCohorte,
+            'por_sede'=>$porSede,
+            'por_fuente'=>$porFuente,
+            'periodo'=>['inicio'=>$inicio,'fin'=>$fin],
+            'cohorte_desde'=>dashboard_p06_utc_to_cancun($desde),
+            'cohorte_desde_utc'=>$desde,
+            'cobertura_desde'=>$coberturaLocal,
+            'cobertura_desde_utc'=>$coberturaUtc,
+            'parcial'=>$desde>$desdePeriodo,
+            'unidad'=>'oportunidades_por_participante',
+            'contrato'=>'La cohorte usa opened_at. EXCLUDED no entra al denominador. CONVERTED exige inscripción Sharky COMPLETED y puede ocurrir después del cierre temporal de la cohorte.',
+        ];
+    }catch(Throwable $e){
+        return [
+            'disponible'=>false,
+            'prospectos'=>null,
+            'conversiones'=>null,
+            'tasa_conversion'=>null,
+            'rows'=>[],
+            'cobertura_desde'=>$coberturaLocal,
+            'cobertura_desde_utc'=>$coberturaUtc,
+            'motivo'=>'La lectura durable de oportunidades no está disponible.',
+        ];
+    }
+}
