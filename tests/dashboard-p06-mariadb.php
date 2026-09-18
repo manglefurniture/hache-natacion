@@ -122,11 +122,60 @@ try{
         'El mismo evento de origen no debe duplicar oportunidades.'
     );
 
+    $openedAt=(string)$pdo->query("SELECT opened_at FROM sharky_prospect_opportunities WHERE id='{$firstOpportunity}'")->fetchColumn();
+    $venueState=$producerState;
+    $venueState['commercial_context']['f6_opportunity_id']=$firstOpportunity;
+    $venueState['commercial_context']['sede_clave']='MONTEVERDE';
+    f6m_expect(
+        hache_sharky_prospect_opportunity_enrich_sede($pdo,$producerContact,$venueState),
+        'Una sede confirmada debe enriquecer la oportunidad OPEN representada por el estado.'
+    );
+    $q=$pdo->prepare('SELECT sede_clave,status,opened_at FROM sharky_prospect_opportunities WHERE id=?');
+    $q->execute([$firstOpportunity]);
+    $enriched=$q->fetch(PDO::FETCH_ASSOC);
+    f6m_expect((string)$enriched['sede_clave']==='MONTEVERDE','El enriquecimiento debe persistir únicamente la sede estructurada confirmada.');
+    f6m_expect((string)$enriched['status']==='OPEN','Confirmar sede no debe convertir ni excluir la oportunidad.');
+    f6m_expect((string)$enriched['opened_at']===$openedAt,'Confirmar sede no debe reescribir la cohorte/opened_at.');
+    f6m_expect(
+        hache_sharky_prospect_opportunity_enrich_sede($pdo,$producerContact,$venueState),
+        'Repetir la misma sede debe ser idempotente.'
+    );
+
     $secondOpportunity=hache_sharky_prospect_opportunity_open($pdo,$producerContact,'wamid.f6.prospect.002',$producerState);
     f6m_expect(is_string($secondOpportunity)&&$secondOpportunity!==''&&$secondOpportunity!==$firstOpportunity,'Un nuevo primer evento debe poder representar otra oportunidad del mismo contacto.');
     $q=$pdo->prepare('SELECT COUNT(*) FROM sharky_prospect_opportunities WHERE contact_hash=? AND status=\'OPEN\'');
     $q->execute([$producerContact]);
     f6m_expect((int)$q->fetchColumn()===2,'Oportunidades históricas distintas no deben colapsarse por contacto.');
+
+    $secondVenueState=$producerState;
+    $secondVenueState['commercial_context']['f6_opportunity_id']=$secondOpportunity;
+    $secondVenueState['commercial_context']['sede_clave']='PALAPAS';
+    f6m_expect(
+        hache_sharky_prospect_opportunity_enrich_sede($pdo,$producerContact,$secondVenueState),
+        'La oportunidad activa debe poder enriquecerse sin tocar otra oportunidad del mismo contacto.'
+    );
+    $q=$pdo->prepare('SELECT id,sede_clave FROM sharky_prospect_opportunities WHERE contact_hash=? ORDER BY opened_at,id');
+    $q->execute([$producerContact]);
+    $venueRows=[];
+    foreach($q->fetchAll(PDO::FETCH_ASSOC) as $row)$venueRows[(string)$row['id']]=$row['sede_clave'];
+    f6m_expect(($venueRows[$firstOpportunity]??null)==='MONTEVERDE','Enriquecer una oportunidad posterior no debe reescribir la anterior.');
+    f6m_expect(($venueRows[$secondOpportunity]??null)==='PALAPAS','La segunda oportunidad debe conservar su propia sede confirmada.');
+
+    $secondVenueState['commercial_context']['sede_clave']='MONTEVERDE';
+    f6m_expect(
+        hache_sharky_prospect_opportunity_enrich_sede($pdo,$producerContact,$secondVenueState),
+        'Ver otra sede debe actualizar la misma oportunidad, no crear una nueva.'
+    );
+    $q=$pdo->prepare('SELECT sede_clave FROM sharky_prospect_opportunities WHERE id=?');
+    $q->execute([$secondOpportunity]);
+    f6m_expect((string)$q->fetchColumn()==='MONTEVERDE','La reselección estructurada debe sustituir solo sede_clave en la oportunidad activa.');
+
+    $ambiguousState=$producerState;
+    $ambiguousState['commercial_context']['sede_clave']='PALAPAS';
+    f6m_expect(
+        hache_sharky_prospect_opportunity_enrich_sede($pdo,$producerContact,$ambiguousState)===false,
+        'Sin id durable, dos oportunidades OPEN del mismo contacto deben fallar sin adivinar cuál enriquecer.'
+    );
 
     $studentState=['identity'=>['kind'=>'student'],'commercial_context'=>['entry_source'=>'direct']];
     f6m_expect(

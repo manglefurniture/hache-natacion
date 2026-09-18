@@ -11,6 +11,7 @@ $root=dirname(__DIR__);
 $webhook=(string)file_get_contents($root.'/public/api/whatsapp-orchestrator-lab.php');
 $worker=(string)file_get_contents($root.'/bin/sharky-inbox-dispatch.php');
 $opportunities=(string)file_get_contents($root.'/config/sharky-prospect-opportunities.php');
+$metaFlow=(string)file_get_contents($root.'/config/sharky-meta-ad-flow.php');
 $inbox=(string)file_get_contents($root.'/config/sharky-inbox.php');
 $routing=(string)file_get_contents($root.'/config/sharky-member-routing.php');
 $brain=(string)file_get_contents($root.'/config/sharky-brain-shadow-runtime.php');
@@ -43,6 +44,19 @@ $recoveryProducer=strpos($worker,'hache_sharky_prospect_opportunity_prepare_unma
 $recoveryHuman=strpos($worker,'hache_sharky_human_process_event($pdo,$event',$recoveryProducer===false?0:$recoveryProducer);
 sharky_entry_expect($recoveryProducer!==false&&$recoveryHuman!==false&&$recoveryProducer<$recoveryHuman,'Inbox recovery must cross the same opportunity boundary before completing generic Sharky processing.');
 sharky_entry_expect(str_contains($worker,'if(!hache_sharky_prospect_opportunity_prepare_unmatched($pdo,$event,null))return false;'),'Recovery producer failure must defer the inbox receipt instead of losing the opportunity.');
+
+sharky_entry_expect(str_contains($opportunities,"\$state['commercial_context']['f6_opportunity_id']=\$opportunityId;"),'First-turn producer must keep the exact opportunity id only inside encrypted Sharky state.');
+sharky_entry_expect(str_contains($opportunities,'function hache_sharky_prospect_opportunity_enrich_sede'),'F6 must expose a narrow structured-venue enrichment helper.');
+sharky_entry_expect(str_contains($metaFlow,"require_once __DIR__.'/sharky-prospect-opportunities.php';"),'The closed Meta/web/direct funnel must load the venue-enrichment sidecar explicitly.');
+sharky_entry_expect(substr_count($metaFlow,'hache_sharky_meta_enrich_opportunity_venue($pdo,$state,$event);')===2,'Only canonical venue selection and Ver otra sede may trigger opportunity venue enrichment.');
+$venueStepPos=strpos($metaFlow,"if(\$step==='venue'){");
+$venueSetPos=strpos($metaFlow,"\$state['commercial_context']['sede_clave']=\$sede;",$venueStepPos===false?0:$venueStepPos);
+$venueEnrichPos=strpos($metaFlow,'hache_sharky_meta_enrich_opportunity_venue($pdo,$state,$event);',$venueSetPos===false?0:$venueSetPos);
+sharky_entry_expect($venueStepPos!==false&&$venueSetPos!==false&&$venueEnrichPos!==false&&$venueStepPos<$venueSetPos&&$venueSetPos<$venueEnrichPos,'Canonical venue state must be written before analytics enrichment.');
+$otherPos=strpos($metaFlow,"if(\$id==='meta:venue:other')");
+$otherSetPos=strpos($metaFlow,"\$state['commercial_context']['sede_clave']=\$other;",$otherPos===false?0:$otherPos);
+$otherEnrichPos=strpos($metaFlow,'hache_sharky_meta_enrich_opportunity_venue($pdo,$state,$event);',$otherSetPos===false?0:$otherSetPos);
+sharky_entry_expect($otherPos!==false&&$otherSetPos!==false&&$otherEnrichPos!==false&&$otherPos<$otherSetPos&&$otherSetPos<$otherEnrichPos,'Ver otra sede must update the same structured state before enriching the active opportunity.');
 
 
 // Sharky-created intensive registrations must reuse the same Resend alert only

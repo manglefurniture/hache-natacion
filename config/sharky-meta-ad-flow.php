@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-regular-enrollment.php';
 require_once __DIR__.'/sharky-safe-side-question.php';
+require_once __DIR__.'/sharky-prospect-opportunities.php';
 
 /**
  * Sharky 3.0 — funnel determinístico común para prospectos nuevos provenientes
@@ -273,6 +274,16 @@ function hache_sharky_meta_human_takeover(array $state,string $message='👤 Te 
     unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);return [$state,hache_sharky_orchestrator_decision('human_takeover',$message,[],['type'=>'human_takeover'])];
 }
 
+function hache_sharky_meta_enrich_opportunity_venue(PDO $pdo,array $state,array $event): void
+{
+    $contact=preg_replace('/\\D+/','',(string)($event['from']??''))?:'';
+    if($contact==='')return;
+    $contactHash=hache_sharky_orchestrator_contact_hash($contact);
+    if(!hache_sharky_prospect_opportunity_enrich_sede($pdo,$contactHash,$state)){
+        error_log('[sharky-opportunity] structured venue could not enrich the active opportunity');
+    }
+}
+
 function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,array $extraContext=[]): ?array
 {
     if(!hache_sharky_meta_active($state))return null;if(($state['identity']['kind']??'unknown')!=='prospect')return null;if(!hache_sharky_meta_supported_source($state))return null;if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
@@ -293,11 +304,22 @@ function hache_sharky_meta_handle(PDO $pdo,array $state,array $event,int $now,ar
         return [$state,hache_sharky_meta_regular_background_prompt()];
     }
     if($step==='venue'){
-        $sede=$id==='meta:venue:monteverde'?'MONTEVERDE':($id==='meta:venue:palapas'?'PALAPAS':'');if($sede==='')return [$state,hache_sharky_meta_venue_retry($state)];$state['commercial_context']['sede_clave']=$sede;$state=hache_sharky_meta_flow($state,'venue_detail',['sede_clave'=>$sede],$now);return [$state,hache_sharky_meta_venue_detail($pdo,$state,$sede)];
+        $sede=$id==='meta:venue:monteverde'?'MONTEVERDE':($id==='meta:venue:palapas'?'PALAPAS':'');
+        if($sede==='')return [$state,hache_sharky_meta_venue_retry($state)];
+        $state['commercial_context']['sede_clave']=$sede;
+        $state=hache_sharky_meta_flow($state,'venue_detail',['sede_clave'=>$sede],$now);
+        hache_sharky_meta_enrich_opportunity_venue($pdo,$state,$event);
+        return [$state,hache_sharky_meta_venue_detail($pdo,$state,$sede)];
     }
     if($step==='venue_detail'){
         $current=(string)($state['commercial_context']['sede_clave']??'');
-        if($id==='meta:venue:other'){$other=$current==='MONTEVERDE'?'PALAPAS':'MONTEVERDE';$state['commercial_context']['sede_clave']=$other;$state=hache_sharky_meta_flow($state,'venue_detail',['sede_clave'=>$other],$now);return [$state,hache_sharky_meta_venue_detail($pdo,$state,$other)];}
+        if($id==='meta:venue:other'){
+            $other=$current==='MONTEVERDE'?'PALAPAS':'MONTEVERDE';
+            $state['commercial_context']['sede_clave']=$other;
+            $state=hache_sharky_meta_flow($state,'venue_detail',['sede_clave'=>$other],$now);
+            hache_sharky_meta_enrich_opportunity_venue($pdo,$state,$event);
+            return [$state,hache_sharky_meta_venue_detail($pdo,$state,$other)];
+        }
         if($id==='meta:register:intensive'&&($state['commercial_context']['program']??'')==='intensive'){unset($state['commercial_context']['meta_step']);$state=hache_sharky_orchestrator_clear_flow($state);$context=function_exists('hache_sharky_whatsapp_context')?hache_sharky_whatsapp_context($pdo,(string)($event['from']??''),$extraContext):$extraContext;return hache_sharky_whatsapp_registration_form_from_context($state,$context,$now,'Perfecto.');}
         if($id==='meta:register:regular'&&($state['commercial_context']['program']??'')==='regular'){$extraContext['contact']=(string)($event['from']??'');return hache_sharky_meta_regular_form($pdo,$state,$now,$extraContext);}
         return [$state,hache_sharky_meta_venue_detail($pdo,$state,$current)];

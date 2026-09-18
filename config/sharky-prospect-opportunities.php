@@ -34,6 +34,75 @@ function hache_sharky_prospect_opportunity_sede(array $state): ?string
     return in_array($sede,['MONTEVERDE','PALAPAS'],true)?$sede:null;
 }
 
+function hache_sharky_prospect_opportunity_state_id(array $state): ?string
+{
+    $id=strtolower(trim((string)($state['commercial_context']['f6_opportunity_id']??'')));
+    return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/',$id)===1?$id:null;
+}
+
+/**
+ * Resolve the OPEN opportunity represented by the current encrypted Sharky
+ * state. Conversations created before this micro-step may lack the internal id;
+ * in that compatibility case we only proceed when exactly one OPEN opportunity
+ * exists for the contact, never by guessing between multiple historical rows.
+ */
+function hache_sharky_prospect_opportunity_resolve_open_id(PDO $pdo,string $contactHash,array $state): ?string
+{
+    $stateId=hache_sharky_prospect_opportunity_state_id($state);
+    try{
+        if($stateId!==null){
+            $st=$pdo->prepare("SELECT id FROM sharky_prospect_opportunities WHERE id=:id AND contact_hash=:contact_hash AND status='OPEN' LIMIT 1");
+            $st->execute([':id'=>$stateId,':contact_hash'=>$contactHash]);
+            $id=trim((string)($st->fetchColumn()?:''));
+            return $id!==''?$id:null;
+        }
+
+        $st=$pdo->prepare("SELECT id FROM sharky_prospect_opportunities WHERE contact_hash=:contact_hash AND status='OPEN' ORDER BY opened_at DESC,id DESC LIMIT 2");
+        $st->execute([':contact_hash'=>$contactHash]);
+        $ids=array_values(array_filter(array_map('strval',$st->fetchAll(PDO::FETCH_COLUMN))));
+        return count($ids)===1?$ids[0]:null;
+    }catch(Throwable $e){
+        return null;
+    }
+}
+
+/**
+ * Enrich only the currently represented OPEN opportunity with a venue that was
+ * already confirmed by Sharky's structured controls. This never infers a venue,
+ * creates an opportunity, changes lifecycle status or rewrites cohort time.
+ */
+function hache_sharky_prospect_opportunity_enrich_sede(PDO $pdo,string $contactHash,array $state): bool
+{
+    if(($state['identity']['kind']??'unknown')!=='prospect')return true;
+    $contactHash=strtolower(trim($contactHash));
+    $sede=hache_sharky_prospect_opportunity_sede($state);
+    if($sede===null)return true;
+    if(
+        preg_match('/^[0-9a-f]{64}$/',$contactHash)!==1
+        ||!hache_sharky_prospect_opportunity_schema_ready($pdo)
+    )return false;
+
+    $id=hache_sharky_prospect_opportunity_resolve_open_id($pdo,$contactHash,$state);
+    if($id===null){
+        error_log('[sharky-opportunity] unable to identify one OPEN opportunity for venue enrichment');
+        return false;
+    }
+
+    try{
+        $st=$pdo->prepare("UPDATE sharky_prospect_opportunities
+            SET sede_clave=:sede,updated_at=UTC_TIMESTAMP()
+            WHERE id=:id AND contact_hash=:contact_hash AND status='OPEN'");
+        $st->execute([':sede'=>$sede,':id'=>$id,':contact_hash'=>$contactHash]);
+
+        $q=$pdo->prepare("SELECT sede_clave FROM sharky_prospect_opportunities WHERE id=:id AND contact_hash=:contact_hash AND status='OPEN' LIMIT 1");
+        $q->execute([':id'=>$id,':contact_hash'=>$contactHash]);
+        return strtoupper(trim((string)($q->fetchColumn()?:'')))===$sede;
+    }catch(Throwable $e){
+        error_log('[sharky-opportunity] venue enrichment failed');
+        return false;
+    }
+}
+
 /**
  * Open exactly the opportunity represented by one first inbound event.
  *
@@ -139,6 +208,8 @@ function hache_sharky_prospect_opportunity_prepare_unmatched(PDO $pdo,array $eve
             return false;
         }
 
+        if(!is_array($state['commercial_context']??null))$state['commercial_context']=[];
+        $state['commercial_context']['f6_opportunity_id']=$opportunityId;
         hache_sharky_db_state_save($pdo,$contact,$state,86400);
         return true;
     }catch(Throwable $e){
