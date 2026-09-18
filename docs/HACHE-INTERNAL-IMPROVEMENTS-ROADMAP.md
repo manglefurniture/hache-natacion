@@ -492,6 +492,8 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 
 | 2026-09-17 | F6 P-06: sexto micro-incremento, cobertura forward-only y lectura backend reconciliable. | PR #321; Quality #1625 en PR y #1626 en `main`; Deploy #286; producción `89965959...`; `F6_DASHBOARD_METRICS_MIGRATION_OK`, marcador exacto, sintaxis PHP y health 200 verificados. | **Desplegado y verificado técnicamente** para este micro-alcance: lectura ADMIN por cohorte/sede/fuente, detalle sin PII/hashes, `EXCLUDED` fuera del denominador y sin backfill. La UI queda para un micro-paso posterior. |
 
+| 2026-09-18 | F6 P-06: séptimo micro-incremento, UI de prospectos/conversión. | PR #323 en revisión; UI ADMIN consume el contrato backend ya desplegado, muestra cohorte/sede/fuente y detalle sin PII; sin API, migración, backfill ni reglas nuevas. | La UI no recalcula denominador ni tasa; Quality, revisión, merge, deploy y verificación siguen separados. |
+
 ### 12.2 Estado de las fases
 
 | Fase | Estado | Base que se reutiliza | Próximo paso |
@@ -501,7 +503,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Desplegado | Alertas, F1, F2, proyección F4 y configuración F5 | Realizar verificación operativa dirigida en producción sobre casos reales disponibles; no fabricar datos para forzar escenarios. |
-| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18/D-19/D-20/D-21, lifecycle durable y lectura backend forward-only de prospectos/conversión desplegados | Añadir la UI de prospectos/conversión consumiendo el contrato backend ya verificado; sin backfill ni reglas paralelas en frontend. |
+| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18/D-19/D-20/D-21/D-22, lifecycle durable y lectura backend forward-only de prospectos/conversión desplegados | Completar Quality/revisión de PR #323 y, si queda integrado/desplegado/verificado, evaluar el criterio de cierre de F6 sin ampliar alcance. |
 | F7 Profesores | Pendiente | Profesores, horarios y cancelaciones | Resolver P-07 y preservar historial. |
 | F8 Auditoría | Pendiente | Auditoría e historial existentes | Resolver P-08 mediante matriz de acciones relevantes. |
 | F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |

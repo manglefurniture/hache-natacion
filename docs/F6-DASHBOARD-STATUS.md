@@ -110,6 +110,22 @@ Contrato de este incremento:
 
 PR #321 quedó integrado como `899659598f9c518a53248b6f5e6cc707403658d2`. Quality #1625 pasó en el PR y Quality #1626 pasó después del merge en `main`; la revisión automática no dejó hallazgos pendientes. Deploy automático #286 publicó ese mismo SHA y reportó `F6_DASHBOARD_METRICS_MIGRATION_OK`, verificación que ahora exige también `dashboard_prospectos_cobertura_desde`. En producción, `.hache-deployed-sha` coincide exactamente con el SHA integrado, `config/dashboard-p06.php` y `api/dashboard.php` pasan sintaxis PHP y `/api/health.php` responde `ok: true` con HTTP 200. No se amplió el acceso de `deploy-hache` a credenciales de MariaDB para realizar esta verificación.
 
+## Micro-paso en revisión: UI de prospectos y conversión
+
+PR #323 consume únicamente el contrato backend `prospectos_conversion` ya verificado. No añade otra autoridad ni recalcula métricas.
+
+Contrato del incremento:
+
+- la UI aparece únicamente cuando el backend ADMIN devuelve `disponible=true`; VERIFICADOR no recibe ni reconstruye la lectura global;
+- las tarjetas muestran prospectos, conversiones y `tasa_conversion` exactamente como las entrega el backend;
+- los desgloses por cohorte, sede y fuente usan los buckets backend y conservan `SIN_SEDE` / `SIN_FUENTE`;
+- el detalle usa las filas reconciliables sin nombre, teléfono, `contact_hash` ni `conversion_action_hash`;
+- el frontend no calcula `conversiones/prospectos`, no modifica la cohorte y no hace backfill;
+- no cambia API, productor, lifecycle, funnel, Brain, Flow, pagos, takeover ni reglas comerciales de Sharky;
+- la regresión P-06 valida sintaxis del JavaScript inline y el consumo del contrato backend.
+
+PR #323 permanece sujeto a Quality y revisión automática. Integración, deploy y producción siguen siendo hitos separados.
+
 ## Cobertura vigente
 
 - **Contexto operativo:** sede autorizada, fecha `America/Cancun`, periodo financiero vigente y hora de actualización.
