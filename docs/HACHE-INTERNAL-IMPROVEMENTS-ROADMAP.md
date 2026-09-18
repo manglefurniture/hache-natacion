@@ -322,7 +322,7 @@ Una ausencia consecutiva debe basarse en clases aplicables y marcas válidas, di
 
 Mostrar por separado carga prevista y realizada según las fuentes disponibles; que un profesor figure hoy en un horario no demuestra que impartió todas sus clases históricas. En docencia compartida, una indisponibilidad individual no debe cancelar la sesión si permanece otro docente disponible conforme a las reglas actuales.
 
-**Información necesaria.** Profesor, estado, horario/sede, sesión/fecha, asignaciones disponibles, cancelación o sustitución, motivo y autor cuando existan. **Pendiente de decidir:** unidad de carga (clases/horas), vigencia temporal de asignaciones, registro mínimo de sustitución y tratamiento de futuras asignaciones al inactivar.
+**Información necesaria.** Profesor, estado, horario/sede, sesión/fecha, asignaciones disponibles, cancelación o sustitución, motivo y autor cuando existan. **P-07 resuelta por D-23:** carga primaria por sesiones/clases, vigencia forward-only, sustitución explícita y cierre de asignaciones futuras al inactivar.
 
 **Riesgos de compatibilidad.** Borrado en cascada de asignaciones; modificar el pasado al editar un horario; contar doble una clase compartida; confundir registro de profesor con usuario de acceso; cancelar globalmente por ausencia de un docente.
 
@@ -330,7 +330,7 @@ Mostrar por separado carga prevista y realizada según las fuentes disponibles; 
 
 **Criterio de terminado.** Un profesor inactivo conserva ficha, referencias e historial; se distinguen asignación, sustitución e incidencia; carga tiene fuente y periodo; se verifican una clase con un docente, una compartida, una sustitución y una inactivación. Los casos sin historia suficiente se declaran sin reconstrucción ficticia.
 
-**Estado:** Pendiente. Activo/inactivo, asignaciones y cancelaciones ya tienen base versionada.
+**Estado:** En implementación. F7.1 incorpora vigencia durable forward-only de asignaciones manteniendo `profesor_horarios` como estado actual; no reconstruye docencia pasada ni incorpora todavía sustituciones, incidencias, carga realizada o nueva UI.
 
 ### FASE 8 — Auditoría interna
 
@@ -450,6 +450,7 @@ Antes de modificar archivos relacionados con Sharky deben consultarse `AGENTS.md
 | D-20 | 2026-09-17 | Una oportunidad F6 se considera convertida únicamente cuando el audit durable de Sharky confirma `register_intensive` o `register_regular` en estado `COMPLETED`. El vínculo usa el UUID exacto de la oportunidad y el hash de la acción; una misma acción no puede convertir dos oportunidades. | PR #316 añade `conversion_action_hash` e índice único, enlaza audit + oportunidad de forma transaccional en finalizaciones nuevas y reconcilia replays ya `COMPLETED`. No añade `alumno_id`/PII, no hace backfill y no declara todavía cobertura de prospectos/conversión. |
 | D-21 | 2026-09-17 | Una oportunidad provisional F6 debe pasar a `EXCLUDED` cuando identidad durable demuestra que el contacto ya corresponde a un alumno existente. La exclusión requiere el UUID exacto conservado en estado cifrado; no usa fallback por contacto ni persiste `student_id` en el ledger. | PR #318 ejecuta la reconciliación antes de member routing en live/recovery y también tras verificación durable; `CONVERTED` no se degrada y los fallos exactos quedan para retry. PR #320 completa el contrato: un error de lookup live se distingue de `found=false` y deja el evento pendiente para recovery. |
 | D-22 | 2026-09-17 | La cobertura publicable de prospectos/conversión comienza únicamente con `dashboard_prospectos_cobertura_desde`; la cohorte usa `opened_at`, `EXCLUDED` queda fuera del denominador y una conversión requiere `COMPLETED`. | PR #321 implementa la lectura backend ADMIN por cohorte, sede y fuente. No hay backfill, `SIN_SEDE`/`SIN_FUENTE` permanecen explícitos y el frontend futuro debe consumir este contrato sin recalcularlo. |
+| D-23 | 2026-09-18 | P-07 queda resuelta para F7: la vigencia de asignaciones es forward-only desde un marcador durable; la carga usa sesiones/clases como unidad primaria y las horas solo se derivan de la duración del horario; una sustitución futura debe registrar explícitamente sesión, profesor original, sustituto, motivo, fecha/origen y actor, nunca inferirse desde una cancelación. Inactivar un profesor cierra sus asignaciones futuras activas y reactivarlo no las restaura automáticamente. | F7.1 implementa únicamente la primera parte mediante periodos de vigencia separados de `profesor_horarios`, baseline de asignaciones activas desde el inicio de cobertura y sin backfill. Sustituciones, carga realizada, incidencias y UI integrada quedan para micro-pasos posteriores. |
 
 ### 11.2 Decisiones pendientes antes del incremento afectado
 
@@ -460,11 +461,10 @@ No es necesario resolverlas todas para iniciar una fase; sí resolver cada una a
 | P-03 | F3 | Fuente del nivel, notas con autoría y cobertura temporal de cambios del alumno. | Operación; datos verificables, sin completar historia por inferencia. |
 | P-04 | F4 | Mapeo de etapas, contacto/participante/oportunidad, último contacto, conversión y retención mínima. | Responsable comercial; cumplimiento de Core Rules y fuentes existentes. |
 | P-05 | F5 | Prioridad alta/media/baja de las reglas nuevas. Los umbrales habilitados ya se obtienen de configuración validada y continuidad queda deliberadamente inactiva mientras falten días/alcance. | Operación; `NEUTRA` se mantiene hasta una decisión explícita y no implica prioridad baja. |
-| P-07 | F7 | Vigencia de asignaciones, unidad de carga y registro de sustituciones. | Responsable de profesores; conservar historia y clases compartidas. |
 | P-08 | F8 | Matriz de cobertura y representación de antes/después con registros existentes. | Administración; consistencia entre resultado y evento, sin inventar datos pasados. |
 | P-09 | F9 | Corte diario, necesidad de instantánea y correcciones posteriores. | Operación; no confundir cierre operativo con cierre financiero. |
 
-P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resuelta para el primer incremento mediante D-13. P-05 conserva únicamente la decisión de prioridad: los umbrales y el comportamiento de activación ya están definidos por la configuración validada de F5. P-06 quedó resuelta por D-18; su lifecycle y lectura backend forward-only ya están desplegados por micro-pasos y no autorizan inferir historia previa. La UI permanece separada. Si un incremento posterior requiere ampliar esas decisiones, se registra una decisión adicional; no se borra la anterior.
+P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resuelta para el primer incremento mediante D-13. P-05 conserva únicamente la decisión de prioridad: los umbrales y el comportamiento de activación ya están definidos por la configuración validada de F5. P-06 quedó resuelta por D-18; su lifecycle y lectura backend forward-only ya están desplegados por micro-pasos y no autorizan inferir historia previa. P-07 quedó resuelta por D-23: F7 usa cobertura forward-only, carga primaria por sesiones/clases y sustitución explícita; F7.1 implementa solo la vigencia durable. Si un incremento posterior requiere ampliar esas decisiones, se registra una decisión adicional; no se borra la anterior.
 
 ## 12. Registro de progreso
 
@@ -505,7 +505,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Desplegado | Alertas, F1, F2, proyección F4 y configuración F5 | Realizar verificación operativa dirigida en producción sobre casos reales disponibles; no fabricar datos para forzar escenarios. |
 | F6 Dashboard | Verificado | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18–D-22, lifecycle durable, lectura backend forward-only y UI ADMIN de prospectos/conversión | Fase cerrada. Mantener contratos y tratar cualquier ajuste visual futuro como cambio separado; F7 permanece como siguiente fase del roadmap cuando sea autorizada. |
-| F7 Profesores | Pendiente | Profesores, horarios y cancelaciones | Resolver P-07 y preservar historial. |
+| F7 Profesores | En implementación | Profesores, horarios, cancelaciones y D-23 | Completar y verificar F7.1; después avanzar por micro-pasos a sustituciones, incidencias, carga e historial integrado. |
 | F8 Auditoría | Pendiente | Auditoría e historial existentes | Resolver P-08 mediante matriz de acciones relevantes. |
 | F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |
 
