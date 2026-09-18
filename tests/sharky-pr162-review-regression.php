@@ -60,11 +60,12 @@ pr162_review_ok(($referralGuided['commercial_context']['entry_source']??null)===
 pr162_review_ok(($referralGuided['flow']['name']??null)==='prospect_onboarding'&&($referralGuided['flow']['step']??null)==='name','Non-ad referrals keep the legacy profile-first fallback.');
 
 // Click-to-WhatsApp referral must be attached before entry context is derived.
-$webhook=(string)file_get_contents(__DIR__.'/../public/api/whatsapp-orchestrator-lab.php');
-$referralPos=strpos($webhook,'$referral=hache_sharky_orchestrator_referral($event,$now);');
-$capturePos=strpos($webhook,'$state=hache_sharky_orchestrator_capture_referral($state,$referral);',$referralPos===false?0:$referralPos);
-$bootstrapPos=strpos($webhook,'$state=hache_sharky_entry_guided_first_prospect($state,(string)($event[\'text\']??\'\'),$now);',$capturePos===false?0:$capturePos);
-pr162_review_ok($referralPos!==false&&$capturePos!==false&&$bootstrapPos!==false&&$referralPos<$capturePos&&$capturePos<$bootstrapPos,'Webhook must capture referral into state before onboarding derives source/interest.');
+// The durable first-turn boundary is shared by live webhook and inbox recovery.
+$opportunities=(string)file_get_contents(__DIR__.'/../config/sharky-prospect-opportunities.php');
+$referralPos=strpos($opportunities,'$referral=hache_sharky_orchestrator_referral($event,$now);');
+$capturePos=strpos($opportunities,'$state=hache_sharky_orchestrator_capture_referral($state,$referral);',$referralPos===false?0:$referralPos);
+$bootstrapPos=strpos($opportunities,'$state=hache_sharky_entry_guided_first_prospect($state,(string)($event[\'text\']??\'\'),$now);',$capturePos===false?0:$capturePos);
+pr162_review_ok($referralPos!==false&&$capturePos!==false&&$bootstrapPos!==false&&$referralPos<$capturePos&&$capturePos<$bootstrapPos,'Shared durable entry must capture referral into state before onboarding derives source/interest.');
 
 // Meta Ads keep their attribution while sharing the same deterministic engine.
 $metaEvent=[
