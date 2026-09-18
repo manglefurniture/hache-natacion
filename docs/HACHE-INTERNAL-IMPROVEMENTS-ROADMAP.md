@@ -4,8 +4,8 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Última base comprobada para esta actualización:** `main`, commit `6d521421a8508c6a63de01ffbb4813aecd2bf28f`.  
-**Estado del roadmap en esta actualización:** Fase 6 **En implementación**; los incrementos técnicamente definidos de F6 están desplegados y los huecos restantes de P-06 requieren decisiones explícitas antes de publicar nuevas métricas.  
+**Última base comprobada para esta actualización:** `main`, commit `dce535040557d636b01be629f434af1151542b75`.  
+**Estado del roadmap en esta actualización:** Fase 6 **En implementación**; P-06 quedó resuelta por decisión explícita. Nuevos alumnos, bajas y asistencia están desplegados; prospectos/conversión avanzan como último incremento funcional antes del cierre técnico de F6.  
 **Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
 ## 1. Propósito
@@ -445,6 +445,7 @@ Antes de modificar archivos relacionados con Sharky deben consultarse `AGENTS.md
 | D-15 | 2026-09-16 | Reutilizar la definición financiera de F2 para incorporar `SALDO_INTENSIVO_PENDIENTE` a F1, con identidad alumno + curso y sin depender del estado administrativo del alumno. Un curso terminado no liquida por sí mismo la obligación. | PR #262 expone el saldo registrado en la cola existente; pagos `VALIDO` reducen la causa y la liquidación la resuelve sin modificar el pago desde F1. |
 | D-16 | 2026-09-16 | Registrar la comprobación funcional ADMIN del resumen financiero, saldo intensivo en pendientes y deep link de pago, junto con checks y deploy exitosos del SHA integrado, sin equipararla a la verificación completa de todos los criterios de F2. | F2 queda **Desplegado** con verificación parcial documentada; el cierre como **Verificado** exige completar la evidencia restante del criterio de terminado. |
 | D-17 | 2026-09-17 | Cerrar el alcance funcional de F5 usando reglas deterministas y fuentes compartidas con F1/F2/F4; los prospectos sin sede se persisten como pendientes globales ADMIN con `sede_id=NULL`, sin sede ficticia. | F5 queda **Desplegado**. La prioridad de reglas nuevas continúa sin decisión y se representa como `NEUTRA`; pasar a **Verificado** requiere comprobación operativa dirigida en producción. |
+| D-18 | 2026-09-17 | Resolver P-06: nuevos alumnos se miden por `fecha_inicio` y reactivaciones no crean alta; bajas solo desde evento fiable hacia delante; asistencia solo sobre sesiones realizadas con snapshot completo; prospecto es oportunidad/persona destinataria, no contacto; conversión es cohorte de oportunidades creadas en el periodo que posteriormente alcanza inscripción `COMPLETED`. | PR #309 cubre alumnos/bajas/asistencia. El último incremento de F6 persiste únicamente la identidad analítica mínima de la oportunidad, conserva `SIN_SEDE`, no hace backfill sin evidencia y no cambia el funnel de Sharky. |
 
 ### 11.2 Decisiones pendientes antes del incremento afectado
 
@@ -455,12 +456,11 @@ No es necesario resolverlas todas para iniciar una fase; sí resolver cada una a
 | P-03 | F3 | Fuente del nivel, notas con autoría y cobertura temporal de cambios del alumno. | Operación; datos verificables, sin completar historia por inferencia. |
 | P-04 | F4 | Mapeo de etapas, contacto/participante/oportunidad, último contacto, conversión y retención mínima. | Responsable comercial; cumplimiento de Core Rules y fuentes existentes. |
 | P-05 | F5 | Prioridad alta/media/baja de las reglas nuevas. Los umbrales habilitados ya se obtienen de configuración validada y continuidad queda deliberadamente inactiva mientras falten días/alcance. | Operación; `NEUTRA` se mantiene hasta una decisión explícita y no implica prioridad baja. |
-| P-06 | F6 | Activos ya conserva su definición histórica. Pendientes: definición de nuevos alumnos/reactivaciones, fecha fiable de bajas, denominador/cobertura de asistencia, unidad de prospecto y cohorte/denominador de conversión. | Requiere decisión de operación/producto; hasta entonces esos indicadores permanecen sin publicar y no se infieren valores. |
 | P-07 | F7 | Vigencia de asignaciones, unidad de carga y registro de sustituciones. | Responsable de profesores; conservar historia y clases compartidas. |
 | P-08 | F8 | Matriz de cobertura y representación de antes/después con registros existentes. | Administración; consistencia entre resultado y evento, sin inventar datos pasados. |
 | P-09 | F9 | Corte diario, necesidad de instantánea y correcciones posteriores. | Operación; no confundir cierre operativo con cierre financiero. |
 
-P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resuelta para el primer incremento mediante D-13. P-05 conserva únicamente la decisión de prioridad: los umbrales y el comportamiento de activación ya están definidos por la configuración validada de F5. Si un incremento posterior requiere ampliar esas decisiones, se registra una decisión adicional; no se borra la anterior.
+P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resuelta para el primer incremento mediante D-13. P-06 quedó resuelta mediante D-18. P-05 conserva únicamente la decisión de prioridad: los umbrales y el comportamiento de activación ya están definidos por la configuración validada de F5. Si un incremento posterior requiere ampliar esas decisiones, se registra una decisión adicional; no se borra la anterior.
 
 ## 12. Registro de progreso
 
@@ -479,7 +479,9 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | 2026-09-17 | Implementación incremental de F5 sobre fuentes compartidas. | Prospectos, ausencias, continuidad, saldo, mensualidad, reposición e inscripción; regresiones específicas y Quality por incremento. | Cobertura funcional del catálogo comprometido sin nueva cola ni reglas financieras paralelas. |
 | 2026-09-17 | Integración final F1/F4/F5 de prospectos sin seguimiento. | PR #298; Quality #1534 y #1535; Deploy #264; `CENTRO_PENDIENTES_MIGRATION_OK`; producción `cf7dc078...`. | Último hueco funcional de F5 cerrado; fase pasa a **Desplegado** y queda pendiente solo verificación operativa completa para **Verificado**. |
 | 2026-09-17 | F6 Dashboard: integración incremental de autoridades y contratos seguros. | PR #300–#305; Quality post-merge #1540, #1545, #1547, #1549, #1551 y #1553; Deploy #266–#271; producción `f87f14d...`; evidencia en `F6-DASHBOARD-STATUS.md`. | Base funcional de F6 integrada; revisiones automáticas posteriores identificaron huecos técnicos adicionales antes del cierre. |
-| 2026-09-17 | F6 Dashboard: cierre de hallazgos técnicos publicados. | PR #307; Quality #1557 en PR y #1558 en `main`; Deploy #273; producción `6d521421...`; marcador, sintaxis PHP y health verificados. | Los indicadores ya publicados cumplen contrato/detalle reconciliable y los hilos técnicos de #300/#302/#305/#306 quedaron resueltos; F6 sigue **En implementación** únicamente por P-06. |
+| 2026-09-17 | F6 Dashboard: cierre de hallazgos técnicos publicados. | PR #307; Quality #1557 en PR y #1558 en `main`; Deploy #273; producción `6d521421...`; marcador, sintaxis PHP y health verificados. | Los indicadores ya publicados cumplen contrato/detalle reconciliable y los hilos técnicos de #300/#302/#305/#306 quedaron resueltos. |
+| 2026-09-17 | F6 P-06: nuevos alumnos, bajas y asistencia. | PR #309; `config/dashboard-p06.php`, cobertura persistida y regresión específica; producción comprobada en `dce535040557d636b01be629f434af1151542b75`. | Primer bloque de P-06 desplegado con cobertura explícita y sin inferir historia. |
+| 2026-09-17 | F6 P-06: unidad de prospecto y conversión por cohorte. | Rama `f6/p06-prospect-conversion`; ledger mínimo sin PII, conversión ligada a inscripción Sharky `COMPLETED`, métrica global ADMIN. | En implementación/revisión; no se considera desplegado hasta merge, auto-deploy y comprobación de producción. |
 
 ### 12.2 Estado de las fases
 
@@ -490,7 +492,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F3 Expediente 360° | Pendiente | Ficha y timeline | Resolver P-03 y definir secciones a completar. |
 | F4 CRM / Sharky | Pendiente | Memoria, atribución y contactos | Resolver P-04 sin cambiar el funnel. |
 | F5 Alertas | Desplegado | Alertas, F1, F2, proyección F4 y configuración F5 | Realizar verificación operativa dirigida en producción sobre casos reales disponibles; no fabricar datos para forzar escenarios. |
-| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5 y lecturas puras de alumnos/sesiones/intensivos/mensualidades/avisos | Resolver las decisiones restantes de P-06; no publicar altas, bajas, porcentaje de asistencia, prospectos ni conversiones con semántica provisional. |
+| F6 Dashboard | En implementación | Dashboard, tiempo operativo, F1/F2/F5, P-06 alumnos/bajas/asistencia y ledger analítico mínimo de oportunidades | Integrar, desplegar y verificar el último incremento P-06 de prospectos/conversión; no fabricar historia anterior al inicio de cobertura. |
 | F7 Profesores | Pendiente | Profesores, horarios y cancelaciones | Resolver P-07 y preservar historial. |
 | F8 Auditoría | Pendiente | Auditoría e historial existentes | Resolver P-08 mediante matriz de acciones relevantes. |
 | F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |
