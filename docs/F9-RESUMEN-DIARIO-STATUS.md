@@ -96,7 +96,8 @@ Solo después de F9.1: vista responsive con apertura/cierre, enlaces a las fuent
 - La vista conserva `ADMIN` / `VERIFICADOR`, fecha operativa de Cancún y sede resuelta por la autoridad de autenticación.
 - Apertura y cierre muestran directamente las cifras, disponibilidad, cobertura y filas entregadas por F9.1; el frontend no recalcula reglas de negocio.
 - `snapshot=false`, `VIVA_RECONCILIABLE`, fechas futuras, fuentes parciales y `pendientes_nuevos` no disponibles se presentan de forma explícita.
-- Los enlaces de detalle aceptan únicamente rutas internas y llevan a las fuentes operativas ya existentes.
+- Los enlaces de detalle aceptan únicamente rutas internas compatibles con el rol y con lectura segura: no se enlaza la vista de sesiones que puede generar filas y `VERIFICADOR` no recibe enlaces a auditoría ADMIN-only.
+- Las incidencias exponen los marcadores forward-only de F7 y advierten que un cero anterior a cobertura no demuestra ausencia; cambios rápidos de fecha cancelan la solicitud anterior para evitar resultados obsoletos.
 - El dashboard incorpora un acceso a “Resumen diario”; la cuadrícula queda adaptada a seis acciones en escritorio y dos columnas en móvil.
 - `tests/f9-resumen-diario-ui-regression.mjs` protege roles, fuente única F9.1, lectura viva, read-only, enlaces internos, adaptación móvil y ausencia de reconstrucción desde otras APIs.
 
