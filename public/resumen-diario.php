@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/../config/auth.php';
-page_require(['ADMIN','VERIFICADOR']);
+$me=page_require(['ADMIN','VERIFICADOR']);
+$isAdmin=(string)($me['rol']??'')==='ADMIN';
 
 $today=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('Y-m-d');
 $initialDate=trim((string)($_GET['fecha']??''));
@@ -68,13 +69,15 @@ details{margin-top:10px;border-top:1px solid #edf1f5;padding-top:9px}summary{cur
 </main>
 <script>
 const initialSede=<?=json_encode($initialSede,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)?>;
+const isAdmin=<?=json_encode($isAdmin)?>;
 const fecha=document.getElementById('fecha'),msg=document.getElementById('msg'),meta=document.getElementById('meta'),content=document.getElementById('content'),back=document.getElementById('back');
 let sede=initialSede||localStorage.getItem('hache_sede')||'';
+let loadController=null;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=v=>Number.isFinite(Number(v))?Number(v):0;
 const money=v=>num(v).toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:2});
-const safeHref=v=>{const s=String(v??'');return s.startsWith('/')&&!s.startsWith('//')?s:'#'};
-const link=(href,label='Ver fuente')=>href?'<a href="'+esc(safeHref(href))+'">'+esc(label)+'</a>':'';
+const safeHref=v=>{const s=String(v??'');if(!s.startsWith('/')||s.startsWith('//'))return '';if(s.startsWith('/sesiones.php'))return '';if(!isAdmin&&s.startsWith('/auditoria.php'))return '';return s};
+const link=(href,label='Ver fuente')=>{const target=safeHref(href);return target?'<a href="'+esc(target)+'">'+esc(label)+'</a>':''};
 const detail=(title,text,href='')=>'<div class="detail"><div class="detail-head"><strong>'+esc(title)+'</strong>'+link(href)+'</div><div class="muted">'+esc(text||'')+'</div></div>';
 const details=(label,rows,render)=>{
   if(!Array.isArray(rows)||rows.length===0)return '';
@@ -90,7 +93,9 @@ function incidentCard(x){
     details('Sesiones canceladas',sc.rows,r=>detail(String(r.hora_inicio||'').slice(0,5)+'–'+String(r.hora_fin||'').slice(0,5),r.motivo||'Sin motivo registrado',r.href))+
     details('Incidencias de profesor',pc.rows,r=>detail(r.profesor||'Profesor',String(r.hora_inicio||'').slice(0,5)+' · '+(r.motivo||''),r.href))+
     details('Sustituciones activas',su.rows,r=>detail((r.profesor_original||'')+' → '+(r.profesor_sustituto||''),String(r.hora_inicio||'').slice(0,5)+' · '+(r.motivo||''),r.href));
-  return card('Incidencias','Clase '+num(sc.total)+' · profesor '+num(pc.total)+' · sustitución '+num(su.total),x.alcance||'',body);
+  const cov=x.cobertura||{};
+  const coverage='Cobertura F7 — asignaciones desde '+String(cov.profesores_asignaciones_cobertura_desde||'no disponible')+' · sustituciones desde '+String(cov.profesores_sustituciones_cobertura_desde||'no disponible')+'. Los ceros anteriores a esos marcadores no prueban ausencia de incidencias.';
+  return card('Incidencias','Clase '+num(sc.total)+' · profesor '+num(pc.total)+' · sustitución '+num(su.total),[x.alcance,coverage].filter(Boolean).join(' '),body);
 }
 function pendingCard(x){
   if(!x||x.disponible!==true)return unavailable('Pendientes actuales',x?.motivo);
@@ -101,7 +106,7 @@ function pendingCard(x){
 function correctionsCard(x){
   if(!x)return unavailable('Correcciones posteriores','No disponibles para esta fecha.');
   const p=x.ediciones_pago||{},i=x.invalidaciones_pago||{},a=x.correcciones_asistencia||{};
-  const sub='Ediciones de pago '+(p.disponible===true?num(p.total):'—')+' · invalidaciones '+(i.disponible===true?num(i.total):'—')+' · asistencia '+(a.disponible===true?num(a.total):'—');
+  const sub='Ediciones de pago '+(p.disponible===true?num(p.total):'—')+' · invalidaciones '+(i.disponible===true?num(i.total):'—')+' · asistencia '+(a.disponible===true?num(a.total):'—')+(isAdmin?'':' · detalle de auditoría disponible solo para ADMIN');
   const body=
     details('Ediciones de pago',p.rows,r=>detail('Pago #'+(r.folio??'—'),'Registrado '+(r.registrado_en||''),r.href))+
     details('Invalidaciones de pago',i.rows,r=>detail('Pago #'+(r.folio??'—'),'Registrado '+(r.registrado_en||''),r.href))+
@@ -120,7 +125,7 @@ function closing(d){
   const c=d.cierre||{};
   if(c.disponible!==true)return '<section class="section"><div class="section-title"><h2>Cierre</h2><span>Hechos del día</span></div><div class="grid">'+unavailable('Cierre operativo',c.motivo)+'</div></section>';
   const s=c.sesiones||{},as=c.asistencia||{},co=c.cobros||{},al=c.altas||{},pn=c.pendientes_nuevos||{};
-  const sessions=card('Sesiones registradas',String(num(s.sesiones_registradas)),num(s.realizadas)+' realizadas · '+num(s.canceladas)+' canceladas · '+num(s.cerradas)+' cerradas','',s.href);
+  const sessions=card('Sesiones registradas',String(num(s.sesiones_registradas)),num(s.realizadas)+' realizadas · '+num(s.canceladas)+' canceladas · '+num(s.cerradas)+' cerradas · fuente F6 read-only');
   const attendance=as.disponible===true?card('Asistencia',String(as.porcentaje??'—')+'%',num(as.presentes)+'/'+num(as.esperados)+' presentes · '+num(as.sesiones_completas)+' sesiones con cobertura completa'):unavailable('Asistencia',as.motivo);
   const paymentBody=details('Cobros del día',co.rows,r=>detail('Folio '+(r.folio??'—'),(r.estado||'')+' · '+money(r.importe)+' · '+(r.tipo||''),r.href));
   const payments=co.disponible===true?card('Cobros válidos',money(co.total_valido),num(co.validos)+' válidos · '+num(co.invalidados)+' invalidados por '+money(co.total_invalidado),paymentBody):unavailable('Cobros',co.motivo);
@@ -138,12 +143,16 @@ function draw(d){
   content.innerHTML=opening(d)+closing(d)+contracts(d);
 }
 async function load(){
+  if(loadController)loadController.abort();
+  loadController=new AbortController();
+  const controller=loadController;
   msg.textContent='Cargando…';content.innerHTML='<div class="empty">Cargando resumen…</div>';
   try{
     const q=new URLSearchParams({fecha:fecha.value});
     if(sede)q.set('sede',sede);
-    const r=await fetch('/api/resumen-diario.php?'+q.toString(),{cache:'no-store',headers:{Accept:'application/json'}});
+    const r=await fetch('/api/resumen-diario.php?'+q.toString(),{cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal});
     const d=await r.json();
+    if(controller!==loadController)return;
     if(!r.ok||!d.ok)throw new Error(d.error||'No se pudo cargar el resumen diario.');
     sede=String(d.sede?.clave||sede);
     if(sede)localStorage.setItem('hache_sede',sede);
@@ -151,6 +160,8 @@ async function load(){
     back.href='/dashboard.php'+(sede?'?sede='+encodeURIComponent(sede):'');
     draw(d);msg.textContent='';
   }catch(e){
+    if(e instanceof DOMException&&e.name==='AbortError')return;
+    if(controller!==loadController)return;
     msg.textContent=e instanceof Error?e.message:'No se pudo cargar el resumen diario.';
     meta.innerHTML='';
     content.innerHTML='<div class="empty">Sin datos disponibles.</div>';
