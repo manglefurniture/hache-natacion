@@ -322,7 +322,7 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
     if(!$dia)throw new InvalidArgumentException('Fecha operativa inválida');
     $fin=$dia->modify('+1 day')->format('Y-m-d').' 00:00:00';
 
-    $edicionesPago=[];
+    $edicionesPago=[];$edicionesPagoDisponible=false;
     try{
         $st=$pdo->prepare("SELECT h.id,h.fecha_hora,h.referencia_id,p.folio
             FROM historial h
@@ -335,6 +335,7 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
               AND p.fecha<:h
             ORDER BY h.fecha_hora,h.id");
         $st->execute([':s'=>$sedeId,':d'=>$inicio,':h'=>$fin]);
+        $edicionesPagoDisponible=true;
         foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
             $edicionesPago[]=[
                 'historial_id'=>(string)$row['id'],
@@ -346,7 +347,7 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
         }
     }catch(Throwable){}
 
-    $invalidacionesPago=[];
+    $invalidacionesPago=[];$invalidacionesPagoDisponible=false;
     try{
         $st=$pdo->prepare("SELECT ae.id,ae.entidad_id,ae.created_at,p.folio
             FROM auditoria_eventos ae
@@ -359,6 +360,7 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
               AND p.fecha<:h
             ORDER BY ae.created_at,ae.id");
         $st->execute([':s'=>$sedeId,':d'=>$inicio,':h'=>$fin]);
+        $invalidacionesPagoDisponible=true;
         foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
             $invalidacionesPago[]=[
                 'evento_id'=>(string)$row['id'],
@@ -370,7 +372,7 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
         }
     }catch(Throwable){}
 
-    $asistencias=[];
+    $asistencias=[];$asistenciasDisponible=false;
     try{
         $st=$pdo->prepare("SELECT ae.id,ae.entidad_id,ae.created_at,se.id sesion_id
             FROM auditoria_eventos ae
@@ -382,6 +384,7 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
               AND se.fecha=:f
             ORDER BY ae.created_at,ae.id");
         $st->execute([':s'=>$sedeId,':f'=>$fecha]);
+        $asistenciasDisponible=true;
         foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
             $asistencias[]=[
                 'evento_id'=>(string)$row['id'],
@@ -393,12 +396,25 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
         }
     }catch(Throwable){}
 
+    $disponible=$edicionesPagoDisponible&&$invalidacionesPagoDisponible&&$asistenciasDisponible;
     return [
-        'disponible'=>true,
-        'ediciones_pago'=>['total'=>count($edicionesPago),'rows'=>$edicionesPago],
-        'invalidaciones_pago'=>['total'=>count($invalidacionesPago),'rows'=>$invalidacionesPago],
-        'correcciones_asistencia'=>['total'=>count($asistencias),'rows'=>$asistencias],
+        'disponible'=>$disponible,
+        'ediciones_pago'=>[
+            'disponible'=>$edicionesPagoDisponible,
+            'total'=>$edicionesPagoDisponible?count($edicionesPago):null,
+            'rows'=>$edicionesPago,
+        ],
+        'invalidaciones_pago'=>[
+            'disponible'=>$invalidacionesPagoDisponible,
+            'total'=>$invalidacionesPagoDisponible?count($invalidacionesPago):null,
+            'rows'=>$invalidacionesPago,
+        ],
+        'correcciones_asistencia'=>[
+            'disponible'=>$asistenciasDisponible,
+            'total'=>$asistenciasDisponible?count($asistencias):null,
+            'rows'=>$asistencias,
+        ],
         'fuente'=>'historial PAGO + auditoria_eventos PAGO_INVALIDADO/ASISTENCIA_CORREGIDA',
-        'alcance'=>'La lectura es viva: estas evidencias señalan revisiones durables relacionadas con hechos que actualmente pertenecen al día consultado; no reconstruyen un snapshot anterior.',
+        'alcance'=>'La lectura es viva: estas evidencias señalan revisiones durables relacionadas con hechos que actualmente pertenecen al día consultado; no reconstruyen un snapshot anterior. Una fuente no disponible permanece null, nunca se presenta como cero.',
     ];
 }
