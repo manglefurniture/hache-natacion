@@ -346,6 +346,30 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
         }
     }catch(Throwable){}
 
+    $invalidacionesPago=[];
+    try{
+        $st=$pdo->prepare("SELECT ae.id,ae.entidad_id,ae.created_at,p.folio
+            FROM auditoria_eventos ae
+            INNER JOIN pagos p ON p.id=ae.entidad_id
+            INNER JOIN alumnos a ON a.id=p.alumno_id
+            WHERE ae.accion='PAGO_INVALIDADO'
+              AND ae.entidad='pago'
+              AND a.sede_id=:s
+              AND p.fecha>=:d
+              AND p.fecha<:h
+            ORDER BY ae.created_at,ae.id");
+        $st->execute([':s'=>$sedeId,':d'=>$inicio,':h'=>$fin]);
+        foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+            $invalidacionesPago[]=[
+                'evento_id'=>(string)$row['id'],
+                'pago_id'=>(string)$row['entidad_id'],
+                'folio'=>(int)$row['folio'],
+                'registrado_en'=>(string)$row['created_at'],
+                'href'=>'/auditoria.php',
+            ];
+        }
+    }catch(Throwable){}
+
     $asistencias=[];
     try{
         $st=$pdo->prepare("SELECT ae.id,ae.entidad_id,ae.created_at,se.id sesion_id
@@ -372,8 +396,9 @@ function hache_resumen_diario_correcciones(PDO $pdo,string $sedeId,string $fecha
     return [
         'disponible'=>true,
         'ediciones_pago'=>['total'=>count($edicionesPago),'rows'=>$edicionesPago],
+        'invalidaciones_pago'=>['total'=>count($invalidacionesPago),'rows'=>$invalidacionesPago],
         'correcciones_asistencia'=>['total'=>count($asistencias),'rows'=>$asistencias],
-        'fuente'=>'historial PAGO + auditoria_eventos ASISTENCIA_CORREGIDA',
+        'fuente'=>'historial PAGO + auditoria_eventos PAGO_INVALIDADO/ASISTENCIA_CORREGIDA',
         'alcance'=>'La lectura es viva: estas evidencias señalan revisiones durables relacionadas con hechos que actualmente pertenecen al día consultado; no reconstruyen un snapshot anterior.',
     ];
 }
