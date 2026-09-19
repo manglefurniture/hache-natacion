@@ -514,6 +514,8 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 
 | 2026-09-19 | F9.0 Resumen diario: diagnóstico de fuentes y resolución P-09. | Revisión dirigida de tiempo operativo, F6, sesiones, pagos, F1/F5, F7 y F8 sobre `main` `a7aa88e0...`; contrato en `F9-RESUMEN-DIARIO-STATUS.md`. Sin código funcional, migración ni snapshot. | **En análisis**: corte de consulta y tratamiento de correcciones definidos; F9.1 queda listo como backend read-only. |
 
+| 2026-09-19 | F9.1 Resumen diario: backend read-only preparado. | Helper de composición + `GET /api/resumen-diario.php`; regresiones de contrato y MariaDB; sin migración, UI, snapshot, mensajes ni cierres automáticos. | **En implementación**: pendiente de Quality/revisión, merge y evidencia de despliegue. |
+
 ### 12.2 Estado de las fases
 
 | Fase | Estado | Base que se reutiliza | Próximo paso |
@@ -526,7 +528,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F6 Dashboard | Verificado | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18–D-22, lifecycle durable, lectura backend forward-only y UI ADMIN de prospectos/conversión | Fase cerrada. Mantener contratos y tratar cualquier ajuste visual futuro como cambio separado; F7 permanece como siguiente fase del roadmap cuando sea autorizada. |
 | F7 Profesores | Desplegado | Profesores, horarios, cancelaciones, D-23–D-28 y F7.1–F7.6 | Repetir la evidencia operacional read-only cuando existan casos reales post-cobertura. No fabricar sustituciones, incidencias, inactivaciones ni sesiones para forzar el estado **Verificado**. |
 | F8 Auditoría | Verificado | Auditoría e historial existentes; D-29; F8.0–F8.6 completos; PR #350 para regresión agregada y PR #352 para exclusión de ruido diagnóstico | Fase cerrada. Mantener el contrato de evidencia y tratar cambios futuros como incrementos separados. F9 permanece Pendiente hasta autorización explícita. |
-| F9 Resumen diario | En análisis | F1–F8, tiempo operativo, contratos F6 y D-30 | Implementar F9.1: backend read-only de apertura/cierre con cobertura explícita, sin snapshot ni mutaciones. |
+| F9 Resumen diario | En implementación | F1–F8, tiempo operativo, contratos F6 y D-30 | Revisar/integrar F9.1: backend read-only de apertura/cierre con cobertura explícita, sin snapshot ni mutaciones; después preparar F9.2 UI mínima. |
 
 En futuras actualizaciones registrar: fecha, fase/incremento, responsable real, estado anterior/nuevo, cambio concreto, PR/commit, validaciones y resultado, dependencias pendientes y siguiente paso. Registrar por separado los subalcances diferidos: completar un incremento no completa automáticamente la fase.
 
