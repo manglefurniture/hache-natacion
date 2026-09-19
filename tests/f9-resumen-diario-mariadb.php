@@ -100,6 +100,24 @@ try{
         clave VARCHAR(100) PRIMARY KEY,
         valor VARCHAR(255) NOT NULL
     ) ENGINE=InnoDB");
+    $pdo->exec("CREATE TABLE historial(
+        id VARCHAR(36) PRIMARY KEY,
+        fecha_hora DATETIME NOT NULL,
+        referencia_id VARCHAR(36) NULL,
+        tipo VARCHAR(40) NOT NULL,
+        referencia_tipo VARCHAR(40) NULL
+    ) ENGINE=InnoDB");
+    $pdo->exec("CREATE TABLE asistencias(
+        id VARCHAR(36) PRIMARY KEY,
+        sesion_id VARCHAR(36) NOT NULL
+    ) ENGINE=InnoDB");
+    $pdo->exec("CREATE TABLE auditoria_eventos(
+        id VARCHAR(36) PRIMARY KEY,
+        entidad_id VARCHAR(36) NULL,
+        created_at DATETIME NOT NULL,
+        accion VARCHAR(80) NOT NULL,
+        entidad VARCHAR(80) NULL
+    ) ENGINE=InnoDB");
 
     $site='site-1';
     $pdo->exec("INSERT INTO horarios(id,sede_id,activo,hora_inicio,hora_fin) VALUES
@@ -145,6 +163,19 @@ try{
         ('profesores_asignaciones_cobertura_desde','2026-09-18 11:30:36'),
         ('profesores_sustituciones_cobertura_desde','2026-09-18 11:46:33')");
 
+    $pdo->exec("INSERT INTO historial(id,fecha_hora,referencia_id,tipo,referencia_tipo)
+        VALUES('hist1','2026-09-22 09:00:00','p1','PAGO','PAGO')");
+    $pdo->exec("INSERT INTO auditoria_eventos(id,entidad_id,created_at,accion,entidad)
+        VALUES('audit-pay','p2','2026-09-22 10:00:00','PAGO_INVALIDADO','pago')");
+    $pdo->exec("INSERT INTO asistencias(id,sesion_id) VALUES('as1','s2')");
+    $pdo->exec("INSERT INTO auditoria_eventos(id,entidad_id,created_at,accion,entidad)
+        VALUES('audit-att','as1','2026-09-22 11:00:00','ASISTENCIA_CORREGIDA','asistencia')");
+
+    $correcciones=hache_resumen_diario_correcciones($pdo,$site,'2026-09-21');
+    f9m_expect((int)$correcciones['ediciones_pago']['total']===1,'Una edición posterior debe señalar el pago efectivo del día consultado.');
+    f9m_expect((int)$correcciones['invalidaciones_pago']['total']===1,'Una invalidación posterior debe permanecer vinculada al pago efectivo del día consultado.');
+    f9m_expect((int)$correcciones['correcciones_asistencia']['total']===1,'Una corrección posterior de asistencia debe vincularse a la sesión del día consultado.');
+
     $before=[
         'horarios'=>(int)$pdo->query('SELECT COUNT(*) FROM horarios')->fetchColumn(),
         'alumnos'=>(int)$pdo->query('SELECT COUNT(*) FROM alumnos')->fetchColumn(),
@@ -152,6 +183,8 @@ try{
         'sesiones'=>(int)$pdo->query('SELECT COUNT(*) FROM sesiones')->fetchColumn(),
         'cancelaciones'=>(int)$pdo->query('SELECT COUNT(*) FROM profesor_cancelaciones')->fetchColumn(),
         'sustituciones'=>(int)$pdo->query('SELECT COUNT(*) FROM profesor_sustituciones')->fetchColumn(),
+        'historial'=>(int)$pdo->query('SELECT COUNT(*) FROM historial')->fetchColumn(),
+        'auditoria'=>(int)$pdo->query('SELECT COUNT(*) FROM auditoria_eventos')->fetchColumn(),
     ];
 
     $incidencias=hache_resumen_diario_incidencias($pdo,$site,'2026-09-21');
@@ -167,6 +200,8 @@ try{
         'sesiones'=>(int)$pdo->query('SELECT COUNT(*) FROM sesiones')->fetchColumn(),
         'cancelaciones'=>(int)$pdo->query('SELECT COUNT(*) FROM profesor_cancelaciones')->fetchColumn(),
         'sustituciones'=>(int)$pdo->query('SELECT COUNT(*) FROM profesor_sustituciones')->fetchColumn(),
+        'historial'=>(int)$pdo->query('SELECT COUNT(*) FROM historial')->fetchColumn(),
+        'auditoria'=>(int)$pdo->query('SELECT COUNT(*) FROM auditoria_eventos')->fetchColumn(),
     ];
     f9m_expect($before===$after,'Las lecturas F9.1 no deben mutar las tablas de dominio.');
 
