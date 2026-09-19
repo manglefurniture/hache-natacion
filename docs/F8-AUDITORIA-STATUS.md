@@ -3,8 +3,8 @@
 **Fase:** F8 — Auditoría interna  
 **Base del diagnóstico F8.0:** `main` `a4c107fd8edff82872dbf2fe3ede6739d02fd136`  
 **Última cobertura funcional reflejada:** F8.4 completo hasta PR #349, desplegado en `26f02a9753fe7f95d0b28c6600efd21a841b930b`.  
-**Fecha:** 2026-09-18  
-**Estado del documento:** F8.0/F8.1 cerrados; F8.2/F8.3 desplegados; F8.4 completado; F8.5 desplegado técnicamente y pendiente de evidencia operativa real.
+**Fecha:** 2026-09-19  
+**Estado del documento:** F8.0–F8.6 cerrados; F8 queda **Verificado** con evidencia automatizada y evidencia operativa real en producción.
 
 ## 1. Principios de P-08
 
@@ -176,6 +176,17 @@ El conjunto de regresiones F8 cubre explícitamente:
 
 
 
+### Evidencia operativa F8.6
+
+El 2026-09-19 se realizó una verificación dirigida en producción con una sesión ADMIN y acciones administrativas reales, sin fabricar datos:
+
+- a las `2026-09-19 16:12:20`, la invalidación real de un pago produjo un evento genérico `CREAR_O_EJECUTAR` para `POST /api/invalidar-pago.php`, HTTP 200, clasificado correctamente como **Resultado técnico**, sin inventar before/after;
+- la misma operación produjo además `PAGO_INVALIDADO` en el módulo `finanzas`, clasificado como **Cambio confirmado**, con actor ADMIN conocido, sede demostrada, entidad exacta de pago y evidencia estructurada durable `Antes: {"estado":"VALIDO"}` / `Después: {"estado":"INVALIDADO"}`;
+- ambos registros permanecen separados en la lectura unificada, acreditando que F8 no deduplica por proximidad temporal ni convierte un HTTP 2xx en cambio de dominio confirmado;
+- la misma lectura mostró además casos reales post-cobertura como `INTENSIVO_ALUMNO_RETIRADO` con relación presente→ausente y `ALUMNO_DATOS_ACTUALIZADOS`, sin necesidad de backfill ni reconstrucción histórica.
+
+Responsable de la comprobación: administración operativa de Hache Natación, mediante revisión visual autenticada de la UI de Auditoría en producción. Esta evidencia, junto con la regresión agregada de F8.5, satisface los criterios de cierre: before/after durable, actor y timestamp reales, referencia exacta, separación técnico/confirmado, convivencia de evidencias y ausencia de correlación heurística.
+
 ## 6. Estado vigente de F8
 
 - F8.0: **terminado**.
@@ -184,6 +195,6 @@ El conjunto de regresiones F8 cubre explícitamente:
 - F8.2: **desplegado** — lectura ADMIN unificada read-only.
 - F8.3: **desplegado** — UI ADMIN mínima sobre el contrato F8.2.
 - F8.4: **terminado y desplegado** — PR #343–#349 integrados; matriz revalidada sin otros huecos de escritura administrativos importantes demostrados dentro del alcance F8.
-- F8.5: **desplegado técnicamente, no verificado operativamente** — PR #350, Quality #1714/#1715 y Deploy #317 completados; falta comprobar contenido real con sesión ADMIN y casos post-cobertura.
-- F8.6: **pendiente** — no debe cerrarse ni marcar F8 Verificado hasta disponer de esa evidencia operativa real.
-- F8 global: **Desplegado, no Verificado**. El código comprometido está en producción, pero falta la comprobación operativa final.
+- F8.5: **desplegado y verificado como base automatizada del cierre** — PR #350, Quality #1714/#1715 y Deploy #317 completados; sus regresiones cubren el contrato de evidencia.
+- F8.6: **terminado y verificado operativamente** — el 2026-09-19 una invalidación real de pago en producción mostró simultáneamente el resultado técnico HTTP 200 y el evento durable `PAGO_INVALIDADO` con actor, sede, entidad y before/after estructurados; la UI conservó ambos sin correlación heurística.
+- F8 global: **Verificado**. El alcance comprometido está desplegado y la comprobación operativa real cumplió los criterios de cierre.
