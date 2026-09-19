@@ -143,6 +143,7 @@ function hache_resumen_diario_operational_evidence(PDO $pdo,?DateTimeImmutable $
             $todayPlanning=hache_resumen_diario_clases_previstas($pdo,$siteId,$today,$today);
             $todayOperation=dashboard_operacion_fecha($pdo,$siteId,$today);
             $todayPayments=hache_resumen_diario_cobros($pdo,$siteId,$today);
+            $todayEnrollments=dashboard_nuevos_alumnos($pdo,$siteId,$today,$today);
             $pastPlanning=hache_resumen_diario_clases_previstas($pdo,$siteId,$yesterday,$today);
 
             $siteEvidence[$siteKey]=[
@@ -152,11 +153,13 @@ function hache_resumen_diario_operational_evidence(PDO $pdo,?DateTimeImmutable $
                     'observed'=>($todayPlanning['disponible']??false)===true
                         &&(int)($todayPlanning['total']??0)===0
                         &&(int)($todayOperation['sesiones_registradas']??0)===0
-                        &&(int)($todayPayments['pagos']??0)===0,
+                        &&(int)($todayPayments['pagos']??0)===0
+                        &&(int)($todayEnrollments['total']??0)===0,
                     'classes_planned_available'=>($todayPlanning['disponible']??false)===true,
                     'classes_planned_total'=>$todayPlanning['total']??null,
                     'sessions_registered'=>(int)($todayOperation['sesiones_registradas']??0),
                     'payments'=>(int)($todayPayments['pagos']??0),
+                    'enrollments'=>(int)($todayEnrollments['total']??0),
                 ],
                 'past_incomplete_case'=>[
                     'fecha'=>$yesterday,
