@@ -26,10 +26,10 @@ f9r_expect(!str_contains($api,"require_once __DIR__.'/pagos.php'"),'F9 no debe r
 f9r_expect(!str_contains($api,'generarSesiones('),'Consultar F9 no debe generar sesiones.');
 f9r_expect(!str_contains($api,'regla_reconciliar_sede_una_vez('),'Consultar F9 no debe reconciliar pagos/sede.');
 
-f9r_expect(str_contains($helper,"$estadoFecha==='PASADO'"),'Clases previstas históricas deben reconocer el límite sin snapshot.');
+f9r_expect(str_contains($helper,"\$estadoFecha==='PASADO'"),'Clases previstas históricas deben reconocer el límite sin snapshot.');
 f9r_expect(str_contains($helper,'No existe snapshot durable de la planificación histórica'),'No se deben reconstruir clases previstas históricas.');
 f9r_expect(str_contains($helper,'p.estado'),'Cobros deben conservar estado de pago.');
-f9r_expect(str_contains($helper,"$estado==='VALIDO'"),'Solo pagos VALIDO deben sumar cobro.');
+f9r_expect(str_contains($helper,"\$estado==='VALIDO'"),'Solo pagos VALIDO deben sumar cobro.');
 f9r_expect(str_contains($helper,'total_invalidado'),'Pagos invalidados deben permanecer visibles.');
 f9r_expect(str_contains($helper,"se.estado='CANCELADA'"),'Incidencias deben distinguir sesiones canceladas.');
 f9r_expect(str_contains($helper,"ps.estado='ACTIVA'"),'Sustituciones deben respetar estado explícito.');
