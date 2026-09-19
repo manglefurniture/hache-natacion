@@ -3,7 +3,7 @@
 **Fase:** F9 — Resumen operativo diario  
 **Base del diagnóstico F9.0:** `main` `a7aa88e09daad1e0b6db71393b94ec92d9d08353`  
 **Fecha:** 2026-09-19  
-**Estado:** F9.0 terminado; P-09 resuelta; F9.1 **Desplegado y verificado técnicamente**; F9.2 **En implementación** como UI mínima read-only.
+**Estado:** F9.0 terminado; P-09 resuelta; F9.1 y F9.2 **Desplegados y verificados técnicamente**; F9.3 **En implementación** para evidencia operativa read-only.
 
 ## 1. Resolución de P-09
 
@@ -101,7 +101,27 @@ Solo después de F9.1: vista responsive con apertura/cierre, enlaces a las fuent
 - El dashboard incorpora un acceso a “Resumen diario”; la cuadrícula queda adaptada a seis acciones en escritorio y dos columnas en móvil.
 - `tests/f9-resumen-diario-ui-regression.mjs` protege roles, fuente única F9.1, lectura viva, read-only, enlaces internos, adaptación móvil y ausencia de reconstrucción desde otras APIs.
 
-Este micro-paso permanece **En implementación** hasta completar Quality, revisión automática, merge, deploy y verificación técnica en producción.
+F9.2 quedó integrado mediante PR #356. Quality #1732 pasó antes de la revisión automática; Codex señaló un P1 y tres P2. Los cuatro hallazgos se corrigieron y se cerraron sus hilos; Quality #1735 del head pasó después de las correcciones. El merge `10de591cc895a1dab49dc11487ec108cf2cd6985` pasó Quality #1736 en `main` y Deploy #323. El marcador productivo coincidió exactamente, `public/resumen-diario.php` pasó `php -l`, `/api/health.php` respondió HTTP 200 / `ok:true` y la ruta protegida respondió 302 sin sesión, como corresponde.
+
+F9.2 queda **Desplegado y verificado técnicamente**. Esto no cierra F9: falta evidencia operativa real.
+
+### F9.3 — Evidencia operativa read-only
+
+Siguiente micro-paso: recolectar evidencia agregada real sin fabricar escenarios ni exponer PII.
+
+La implementación preparada:
+
+- agrega `config/resumen-diario-evidence.php`, collector agregado por sede y sin filas personales;
+- ejecuta la consulta dentro de `SET TRANSACTION READ ONLY` para que cualquier mutación accidental falle;
+- busca hasta 31 días hacia atrás el último día con actividad real por sede usando las autoridades F9/F6 existentes;
+- conserva conteos de sesiones, cobros válidos/invalidados, altas, incidencias, correcciones y disponibilidad de asistencia;
+- reconcilia internamente los totales de cobros y las marcas de asistencia devueltas por los contratos existentes;
+- registra un caso naturalmente vacío del día actual cuando exista y el caso de planificación histórica no disponible, sin convertir ausencia de evidencia en cero;
+- minimiza la salida: no incluye nombres, IDs de alumnos, pagos, sesiones ni mensajes;
+- se integra en `bin/production-readiness-evidence.php` bajo `operations.daily_summary_f9`;
+- `tests/f9-resumen-diario-operational-evidence-regression.php` protege privacidad, reconciliación, transacción read-only y `HUMAN_REVIEW_REQUIRED`.
+
+F9.3 permanece **En implementación** hasta Quality, revisión automática, merge, deploy y ejecución real del collector en producción.
 
 ### Cierre de F9
 
