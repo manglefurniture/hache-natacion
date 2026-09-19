@@ -11,6 +11,7 @@ if (PHP_SAPI !== 'cli' && !$internalHttp) {
 umask(0077);
 require_once __DIR__ . '/../config/sharky-delivery-status.php';
 require_once __DIR__ . '/../config/profesor-actividad-evidence.php';
+require_once __DIR__ . '/../config/resumen-diario-evidence.php';
 
 /** @return array{exists:bool,engine:?string} */
 function pr_table_state(PDO $pdo, string $table): array
@@ -295,6 +296,7 @@ try {
         ],
         'operations' => [
             'professors_f7' => hache_profesor_actividad_operational_evidence($pdo),
+            'daily_summary_f9' => hache_resumen_diario_operational_evidence($pdo),
         ],
         'gates' => [
             'field' => 'NOT EVALUATED',
