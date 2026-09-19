@@ -31,6 +31,7 @@ f9r_expect(str_contains($helper,'No existe snapshot durable de la planificación
 f9r_expect(str_contains($helper,'p.estado'),'Cobros deben conservar estado de pago.');
 f9r_expect(str_contains($helper,"\$estado==='VALIDO'"),'Solo pagos VALIDO deben sumar cobro.');
 f9r_expect(str_contains($helper,'total_invalidado'),'Pagos invalidados deben permanecer visibles.');
+f9r_expect(str_contains($helper,"ae.accion='PAGO_INVALIDADO'"),'Las invalidaciones posteriores deben quedar señaladas por evidencia F8.');
 f9r_expect(str_contains($helper,"se.estado='CANCELADA'"),'Incidencias deben distinguir sesiones canceladas.');
 f9r_expect(str_contains($helper,"ps.estado='ACTIVA'"),'Sustituciones deben respetar estado explícito.');
 f9r_expect(!preg_match('/\b(?:INSERT|UPDATE|DELETE|REPLACE)\s+(?:INTO\s+)?[a-z_]/i',$helper),'El helper F9.1 no debe contener escrituras SQL.');
