@@ -3,7 +3,7 @@
 **Fase:** F9 — Resumen operativo diario  
 **Base del diagnóstico F9.0:** `main` `a7aa88e09daad1e0b6db71393b94ec92d9d08353`  
 **Fecha:** 2026-09-19  
-**Estado:** F9.0 terminado; P-09 resuelta; F9.1 **En implementación** como backend read-only. El código y las regresiones están preparados en rama y pendientes de revisión/merge/despliegue.
+**Estado:** F9.0 terminado; P-09 resuelta; F9.1 **Desplegado y verificado técnicamente**; F9.2 **En implementación** como UI mínima read-only.
 
 ## 1. Resolución de P-09
 
@@ -84,11 +84,23 @@ El incremento mantiene el alcance del contrato:
 - F9 no llama los GET mutantes de sesiones/pagos y no contiene escrituras SQL en su helper;
 - Quality incorpora una regresión de contrato y otra MariaDB que comprueba planificación sin sesiones, cobros válidos/invalidados, incidencias/sustituciones y ausencia de mutaciones en las tablas observadas.
 
-Este estado no implica todavía despliegue ni verificación operativa; esos hitos se registrarán después del merge.
+F9.1 quedó integrado mediante PR #355. Quality #1730 del head y #1731 de `main` pasaron; el merge `dbce96b49f2700acc27d68fc5f5843fcebee1f8c` fue publicado por Deploy #322. El marcador productivo coincidió exactamente y `/api/health.php` respondió HTTP 200 / `ok:true`. Esto verifica técnicamente el backend, no cierra todavía F9.
 
 ### F9.2 — UI mínima
 
 Solo después de F9.1: vista responsive con apertura/cierre, enlaces a las fuentes y avisos claros de cobertura/lectura viva.
+
+### Implementación preparada de F9.2
+
+- `public/resumen-diario.php` consume únicamente `GET /api/resumen-diario.php`; no consulta APIs laterales ni contiene mutaciones.
+- La vista conserva `ADMIN` / `VERIFICADOR`, fecha operativa de Cancún y sede resuelta por la autoridad de autenticación.
+- Apertura y cierre muestran directamente las cifras, disponibilidad, cobertura y filas entregadas por F9.1; el frontend no recalcula reglas de negocio.
+- `snapshot=false`, `VIVA_RECONCILIABLE`, fechas futuras, fuentes parciales y `pendientes_nuevos` no disponibles se presentan de forma explícita.
+- Los enlaces de detalle aceptan únicamente rutas internas y llevan a las fuentes operativas ya existentes.
+- El dashboard incorpora un acceso a “Resumen diario”; la cuadrícula queda adaptada a seis acciones en escritorio y dos columnas en móvil.
+- `tests/f9-resumen-diario-ui-regression.mjs` protege roles, fuente única F9.1, lectura viva, read-only, enlaces internos, adaptación móvil y ausencia de reconstrucción desde otras APIs.
+
+Este micro-paso permanece **En implementación** hasta completar Quality, revisión automática, merge, deploy y verificación técnica en producción.
 
 ### Cierre de F9
 
