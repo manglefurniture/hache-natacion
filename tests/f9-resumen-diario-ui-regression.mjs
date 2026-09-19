@@ -15,6 +15,12 @@ assert.match(page,/cobros.*total_valido/s,'La UI debe mostrar el total válido e
 assert.match(page,/invalidados/,'La UI debe mantener visibles los cobros invalidados.');
 assert.match(page,/correcciones_asistencia/,'La UI debe representar correcciones durables de asistencia.');
 assert.match(page,/safeHref/,'Los enlaces devueltos por las fuentes deben limitarse a rutas internas.');
+assert.match(page,/profesores_asignaciones_cobertura_desde/,'La UI debe exponer los marcadores forward-only de F7.');
+assert.match(page,/Los ceros anteriores a esos marcadores no prueban ausencia/,'La UI no debe convertir pre-cobertura en cero conocido.');
+assert.match(page,/s\.startsWith\('\/sesiones\.php'\)/,'La UI debe bloquear enlaces a la vista de sesiones con GET mutante.');
+assert.match(page,/!isAdmin&&s\.startsWith\('\/auditoria\.php'\)/,'VERIFICADOR no debe recibir enlaces hacia la auditoría ADMIN-only.');
+assert.match(page,/new AbortController\(\)/,'Cambiar de fecha debe cancelar la lectura anterior.');
+assert.doesNotMatch(page,/Sesiones registradas[^\n]*s\.href/,'La tarjeta de sesiones no debe enlazar a una vista que pueda mutar o cambiar de fecha.');
 assert.match(page,/role="status" aria-live="polite"/,'La UI debe anunciar carga y errores.');
 assert.match(page,/@media\(max-width:720px\)/,'La vista debe tener adaptación móvil explícita.');
 assert.doesNotMatch(page,/method\s*:\s*['"]POST['"]|accion\s*:/,'La UI F9 debe permanecer read-only.');
