@@ -122,7 +122,7 @@ try{
     f9m_expect(($weekend['disponible']??false)===true&&(int)($weekend['total']??-1)===0,'Fin de semana debe devolver cero clases previstas sin inventar sesiones.');
 
     $past=hache_resumen_diario_clases_previstas($pdo,$site,'2026-09-19','2026-09-21');
-    f9m_expect(($past['disponible']??true)===false&&($past['total']??'x')===null,'Sin snapshot no se debe reconstruir planificación histórica.');
+    f9m_expect(($past['disponible']??true)===false&&array_key_exists('total',$past)&&$past['total']===null,'Sin snapshot no se debe reconstruir planificación histórica.');
 
     $pdo->exec("INSERT INTO pagos(id,folio,alumno_id,tipo,importe,metodo,fecha,estado) VALUES
         ('p1',101,'a1','MENSUALIDAD',1000.00,'TRANSFERENCIA','2026-09-21 08:15:00','VALIDO'),
