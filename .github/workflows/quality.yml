@@ -20,6 +20,8 @@ jobs:
         run: find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
       - name: Static regressions and JavaScript syntax
         run: npm test
+      - name: F9 daily summary contract regression
+        run: php tests/f9-resumen-diario-regression.php
       - name: F7 professor substitutions UI regression
         run: node tests/f7-professor-substitutions-ui-regression.mjs
       - name: F7 professor activity UI regression
@@ -220,6 +222,14 @@ jobs:
           DELIVERY_DB_USER: root
           DELIVERY_DB_PASS: root
         run: php tests/dashboard-p06-mariadb.php
+      - name: F9 daily summary MariaDB regression
+        env:
+          DELIVERY_DB_HOST: 127.0.0.1
+          DELIVERY_DB_PORT: 3306
+          DELIVERY_DB_NAME: hache_delivery_test
+          DELIVERY_DB_USER: root
+          DELIVERY_DB_PASS: root
+        run: php tests/f9-resumen-diario-mariadb.php
       - name: Production readiness RUM MariaDB regression
         env:
           DELIVERY_DB_HOST: 127.0.0.1

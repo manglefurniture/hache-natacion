@@ -3,7 +3,7 @@
 **Fase:** F9 — Resumen operativo diario  
 **Base del diagnóstico F9.0:** `main` `a7aa88e09daad1e0b6db71393b94ec92d9d08353`  
 **Fecha:** 2026-09-19  
-**Estado:** F9.0 terminado; P-09 resuelta; F9.1 autorizado por contrato como backend read-only, todavía no implementado.
+**Estado:** F9.0 terminado; P-09 resuelta; F9.1 **En implementación** como backend read-only. El código y las regresiones están preparados en rama y pendientes de revisión/merge/despliegue.
 
 ## 1. Resolución de P-09
 
@@ -70,6 +70,21 @@ Debe demostrar con regresiones que:
 - invalidaciones no desaparecen silenciosamente;
 - ADMIN y VERIFICADOR mantienen su alcance actual;
 - no se reconstruyen pendientes nuevos sin fuente durable.
+
+### Implementación preparada de F9.1
+
+El incremento mantiene el alcance del contrato:
+
+- `config/resumen-diario.php` compone fuentes puras para clases previstas, cobros por fecha efectiva, pendientes actuales F1/F5, incidencias F7 y correcciones durables relacionadas con pagos/asistencia;
+- `api/resumen-diario.php` es GET-only para `ADMIN`/`VERIFICADOR`, devuelve `snapshot=false` y `tipo_lectura=VIVA_RECONCILIABLE`;
+- una fecha pasada no reconstruye clases previstas desde asignaciones actuales: ese bloque queda no disponible sin snapshot;
+- una fecha futura permite apertura/planificación actual, pero declara el cierre como no disponible;
+- `pendientes_nuevos` permanece no disponible por falta de primera detección durable común;
+- los cobros muestran válidos e invalidados por separado y solo `VALIDO` suma ingreso;
+- F9 no llama los GET mutantes de sesiones/pagos y no contiene escrituras SQL en su helper;
+- Quality incorpora una regresión de contrato y otra MariaDB que comprueba planificación sin sesiones, cobros válidos/invalidados, incidencias/sustituciones y ausencia de mutaciones en las tablas observadas.
+
+Este estado no implica todavía despliegue ni verificación operativa; esos hitos se registrarán después del merge.
 
 ### F9.2 — UI mínima
 
