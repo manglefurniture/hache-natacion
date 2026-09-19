@@ -22,6 +22,8 @@ jobs:
         run: npm test
       - name: F9 daily summary contract regression
         run: php tests/f9-resumen-diario-regression.php
+      - name: F9 daily summary UI regression
+        run: node tests/f9-resumen-diario-ui-regression.mjs
       - name: F7 professor substitutions UI regression
         run: node tests/f7-professor-substitutions-ui-regression.mjs
       - name: F7 professor activity UI regression
