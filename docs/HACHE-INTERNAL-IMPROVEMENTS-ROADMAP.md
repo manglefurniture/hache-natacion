@@ -4,8 +4,8 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Última base comprobada para esta actualización:** `main`, commit `091d508fe67e8e211d191cdc559e81b140cda337`.  
-**Estado del roadmap en esta actualización:** Fase 6 **Verificado**. Fase 7 **Desplegado**: F7.1–F7.6 están integrados y publicados; todavía faltan casos reales post-cobertura suficientes para marcar F7 **Verificado**. Fase 8 **Verificado**: el contrato, la cobertura de escritura, la regresión agregada y la verificación operativa real en producción quedaron completados.  
+**Última base comprobada para esta actualización:** `main`, commit `a7aa88e09daad1e0b6db71393b94ec92d9d08353`.  
+**Estado del roadmap en esta actualización:** Fase 6 **Verificado**. Fase 7 **Desplegado**: F7.1–F7.6 están integrados y publicados; todavía faltan casos reales post-cobertura suficientes para marcar F7 **Verificado**. Fase 8 **Verificado**. Fase 9 **En análisis**: F9.0 resolvió P-09 y definió el contrato read-only; F9.1 queda como siguiente micro-paso.  
 **Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
 ## 1. Propósito
@@ -370,7 +370,7 @@ La información histórica existente permanece legible. Cuando falte un valor an
 
 Cobros del día usan fecha de cobro y validez conforme a la definición aprobada en F2; no se toma directamente el total del periodo financiero. Altas del día reutilizan la definición de F6. Pendientes nuevos se distinguen de pendientes acumulados; si falta fecha de detección fiable, no se presenta como nuevo. Revisiones posteriores de un pago o asistencia deben quedar identificadas mediante sus fuentes, sin alterar silenciosamente un supuesto corte histórico.
 
-**Información necesaria.** Fecha `America/Cancun`, sede, hechos diarios, estado actual de pendientes, fuentes y última actualización. **Pendiente de decidir:** momento de corte de la vista, si se requiere conservar una instantánea y tratamiento de correcciones posteriores. La primera vista puede ser una consulta reproducible; no se obliga a crear almacenamiento adicional.
+**Información necesaria.** Fecha `America/Cancun`, sede, hechos diarios, estado actual de pendientes, fuentes y última actualización. P-09 queda resuelta por D-30: el primer resumen usa un corte de consulta declarado por `actualizado_en`, no persiste instantánea y se etiqueta como lectura viva/reconciliable. Las correcciones posteriores pueden modificar una lectura futura del mismo día y deben permanecer visibles cuando exista evidencia durable; no se reconstruye un corte histórico inexistente.
 
 **Riesgos de compatibilidad.** Duplicar cálculos del dashboard, confundir mes financiero con día, crear sesiones al consultar, contar pendientes viejos como nuevos, mostrar como completas sesiones sin marcas o canceladas.
 
@@ -378,7 +378,7 @@ Cobros del día usan fecha de cobro y validez conforme a la definición aprobada
 
 **Criterio de terminado.** Cada bloque enlaza a los registros que explican su cifra bajo la misma sede y fecha; apertura/cierre funcionan con un día normal, un día sin actividad y datos incompletos. Cobros concilian por fecha, asistencia respeta cancelaciones y marcas, y consultar no produce mutaciones. El resumen reutiliza definiciones de módulos anteriores y declara diferencias de cobertura.
 
-**Estado:** Pendiente. No se implementa ni se programa envío alguno en esta fase todavía.
+**Estado:** **En análisis.** F9.0 resolvió P-09 y documentó fuentes, límites y contrato mínimo en [F9-RESUMEN-DIARIO-STATUS.md](F9-RESUMEN-DIARIO-STATUS.md). El siguiente micro-paso es F9.1: backend ADMIN/VERIFICADOR read-only, sin migración ni UI.
 
 ## 8. Orden recomendado de implementación
 
@@ -456,6 +456,7 @@ Antes de modificar archivos relacionados con Sharky deben consultarse `AGENTS.md
 | D-27 | 2026-09-18 | F7.5 presenta en ADMIN el contrato F7.4 sin recalcular carga, atribución, incidencias ni sustituciones en frontend. El filtro por profesor es solo de presentación y los casos sin evidencia conservan la limitación y las fuentes entregadas por backend. | La UI es de solo lectura, enlazada desde Profesores, conserva profesores inactivos, docencia compartida, estados vacíos y adaptación móvil; no añade migración, POST, backfill ni autoridad paralela. |
 | D-28 | 2026-09-18 | La verificación operacional de F7 reutiliza el collector seguro read-only existente y publica únicamente agregados sin PII. Las regresiones controladas acreditan los escenarios del contrato, pero no sustituyen la comprobación real exigida para el estado **Verificado**. | F7.6 permite observar clase individual, docencia compartida, sustitución, incidencia, inactivo con historia, carga con fuente/periodo y falta de atribución sin crear datos. El primer snapshot real no encontró todavía casos post-cobertura; F7 pasa a **Desplegado**, no a **Verificado**. |
 | D-29 | 2026-09-18 | Resolver P-08 mediante una proyección read-only que conserva las autoridades existentes y distingue resultado técnico de cambio confirmado. Before/after solo se muestran cuando la fuente los guardó de forma durable; actor, sede o valores ausentes permanecen desconocidos. | F8 no crea una tabla histórica paralela ni hace backfill. `auditoria_eventos`, `historial`, tablas de dominio F7/finanzas/operación y `sharky_action_audit` conservan su semántica. El contrato y la matriz están en [F8-AUDITORIA-STATUS.md](F8-AUDITORIA-STATUS.md). |
+| D-30 | 2026-09-19 | Resolver P-09 con un corte de consulta en `America/Cancun`: `actualizado_en` marca el instante de lectura y F9 no persiste snapshot en su primer contrato. Una fecha pasada es una lectura viva/reconciliable, no una fotografía inmutable; correcciones posteriores pueden cambiar lecturas futuras y deben declararse mediante cobertura/evidencia sin reconstruir un antes inexistente. | F9.1 puede ser un backend de solo lectura sin migración. Consultar no genera sesiones, no reconcilia pagos, no cierra operación ni finanzas. “Pendientes nuevos” queda no disponible mientras no exista fecha durable común de primera detección. Contrato detallado en [F9-RESUMEN-DIARIO-STATUS.md](F9-RESUMEN-DIARIO-STATUS.md). |
 
 ### 11.2 Decisiones pendientes antes del incremento afectado
 
@@ -466,9 +467,8 @@ No es necesario resolverlas todas para iniciar una fase; sí resolver cada una a
 | P-03 | F3 | Fuente del nivel, notas con autoría y cobertura temporal de cambios del alumno. | Operación; datos verificables, sin completar historia por inferencia. |
 | P-04 | F4 | Mapeo de etapas, contacto/participante/oportunidad, último contacto, conversión y retención mínima. | Responsable comercial; cumplimiento de Core Rules y fuentes existentes. |
 | P-05 | F5 | Prioridad alta/media/baja de las reglas nuevas. Los umbrales habilitados ya se obtienen de configuración validada y continuidad queda deliberadamente inactiva mientras falten días/alcance. | Operación; `NEUTRA` se mantiene hasta una decisión explícita y no implica prioridad baja. |
-| P-09 | F9 | Corte diario, necesidad de instantánea y correcciones posteriores. | Operación; no confundir cierre operativo con cierre financiero. |
 
-P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resuelta para el primer incremento mediante D-13. P-05 conserva únicamente la decisión de prioridad: los umbrales y el comportamiento de activación ya están definidos por la configuración validada de F5. P-06 quedó resuelta por D-18; su lifecycle y lectura backend forward-only ya están desplegados por micro-pasos y no autorizan inferir historia previa. P-07 quedó resuelta por D-23 y ampliada por D-24–D-28: F7 usa cobertura forward-only, carga primaria por sesiones/clases, sustitución explícita, lectura integrada sin atribución ficticia, UI sin autoridad paralela y evidencia operacional agregada. P-08 quedó resuelta por D-29: F8 compone autoridades existentes sin tabla histórica paralela, separa resultado técnico/cambio confirmado y mantiene explícitamente desconocido cualquier before/after, actor o sede no registrado. Si un incremento posterior requiere ampliar esas decisiones, se registra una decisión adicional; no se borra la anterior.
+P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resuelta para el primer incremento mediante D-13. P-05 conserva únicamente la decisión de prioridad: los umbrales y el comportamiento de activación ya están definidos por la configuración validada de F5. P-06 quedó resuelta por D-18; su lifecycle y lectura backend forward-only ya están desplegados por micro-pasos y no autorizan inferir historia previa. P-07 quedó resuelta por D-23 y ampliada por D-24–D-28: F7 usa cobertura forward-only, carga primaria por sesiones/clases, sustitución explícita, lectura integrada sin atribución ficticia, UI sin autoridad paralela y evidencia operacional agregada. P-08 quedó resuelta por D-29: F8 compone autoridades existentes sin tabla histórica paralela, separa resultado técnico/cambio confirmado y mantiene explícitamente desconocido cualquier before/after, actor o sede no registrado. P-09 quedó resuelta por D-30: F9 usa un corte de consulta vivo/reconciliable, sin snapshot persistido inicial, y declara las correcciones posteriores y límites de cobertura en vez de reconstruir un cierre histórico. Si un incremento posterior requiere ampliar esas decisiones, se registra una decisión adicional; no se borra la anterior.
 
 ## 12. Registro de progreso
 
@@ -512,6 +512,8 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | 2026-09-18 | F8: exclusión de ruido de diagnóstico. | PR #352; la telemetría de `/api/diagnostico.php` deja de generar auditoría genérica futura y sus eventos legacy se excluyen de la vista F8 sin borrar historia. Codex automático señaló un P2 en la regresión; se corrigió y Quality #1719 pasó antes del merge `091d508f...`. | **Desplegado y verificado técnicamente**: la vista conserva las acciones administrativas útiles sin mezclar telemetría diagnóstica. |
 | 2026-09-19 | F8.6 Auditoría: verificación operativa real de cierre. | Sesión ADMIN en producción; invalidación real de pago a las 16:12:20 mostró evento HTTP 200 como resultado técnico y `PAGO_INVALIDADO` como cambio confirmado, con actor y sede conocidos, entidad exacta y before/after `VALIDO→INVALIDADO`. La misma lectura mostró además eventos reales post-cobertura de alumno e intensivo. No se fabricaron datos ni se hizo backfill. | **F8 pasa a Verificado**: la evidencia operativa satisface el contrato F8.1 y los criterios de cierre junto con las regresiones F8.5. |
 
+| 2026-09-19 | F9.0 Resumen diario: diagnóstico de fuentes y resolución P-09. | Revisión dirigida de tiempo operativo, F6, sesiones, pagos, F1/F5, F7 y F8 sobre `main` `a7aa88e0...`; contrato en `F9-RESUMEN-DIARIO-STATUS.md`. Sin código funcional, migración ni snapshot. | **En análisis**: corte de consulta y tratamiento de correcciones definidos; F9.1 queda listo como backend read-only. |
+
 ### 12.2 Estado de las fases
 
 | Fase | Estado | Base que se reutiliza | Próximo paso |
@@ -524,7 +526,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F6 Dashboard | Verificado | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18–D-22, lifecycle durable, lectura backend forward-only y UI ADMIN de prospectos/conversión | Fase cerrada. Mantener contratos y tratar cualquier ajuste visual futuro como cambio separado; F7 permanece como siguiente fase del roadmap cuando sea autorizada. |
 | F7 Profesores | Desplegado | Profesores, horarios, cancelaciones, D-23–D-28 y F7.1–F7.6 | Repetir la evidencia operacional read-only cuando existan casos reales post-cobertura. No fabricar sustituciones, incidencias, inactivaciones ni sesiones para forzar el estado **Verificado**. |
 | F8 Auditoría | Verificado | Auditoría e historial existentes; D-29; F8.0–F8.6 completos; PR #350 para regresión agregada y PR #352 para exclusión de ruido diagnóstico | Fase cerrada. Mantener el contrato de evidencia y tratar cambios futuros como incrementos separados. F9 permanece Pendiente hasta autorización explícita. |
-| F9 Resumen diario | Pendiente | Módulos y definiciones previas | Resolver P-09 y componer apertura/cierre. |
+| F9 Resumen diario | En análisis | F1–F8, tiempo operativo, contratos F6 y D-30 | Implementar F9.1: backend read-only de apertura/cierre con cobertura explícita, sin snapshot ni mutaciones. |
 
 En futuras actualizaciones registrar: fecha, fase/incremento, responsable real, estado anterior/nuevo, cambio concreto, PR/commit, validaciones y resultado, dependencias pendientes y siguiente paso. Registrar por separado los subalcances diferidos: completar un incremento no completa automáticamente la fase.
 
