@@ -4,8 +4,8 @@
 **Repositorio y fuente de verdad:** [manglefurniture/hache-natacion](https://github.com/manglefurniture/hache-natacion)  
 **Fecha de elaboración:** 2026-09-15.  
 **Base comprobada inicialmente en GitHub:** `main`, commit [`b304ff10b303d8738c3790354d4f3a3378099b65`](https://github.com/manglefurniture/hache-natacion/commit/b304ff10b303d8738c3790354d4f3a3378099b65).  
-**Última base comprobada para esta actualización:** `main`, commit `a7aa88e09daad1e0b6db71393b94ec92d9d08353`.  
-**Estado del roadmap en esta actualización:** Fase 6 **Verificado**. Fase 7 **Desplegado**: F7.1–F7.6 están integrados y publicados; todavía faltan casos reales post-cobertura suficientes para marcar F7 **Verificado**. Fase 8 **Verificado**. Fase 9 **En análisis**: F9.0 resolvió P-09 y definió el contrato read-only; F9.1 queda como siguiente micro-paso.  
+**Última base comprobada para esta actualización:** `main`, commit `dbce96b49f2700acc27d68fc5f5843fcebee1f8c`.  
+**Estado del roadmap en esta actualización:** Fase 6 **Verificado**. Fase 7 **Desplegado**: F7.1–F7.6 están integrados y publicados; todavía faltan casos reales post-cobertura suficientes para marcar F7 **Verificado**. Fase 8 **Verificado**. Fase 9 **En implementación**: F9.0 resolvió P-09; F9.1 backend read-only está desplegado y verificado técnicamente; F9.2 UI mínima está preparada para revisión.  
 **Nota de continuidad:** la autorización documental inicial quedó superada por tareas funcionales posteriores expresamente autorizadas; el registro de decisiones y progreso de este archivo refleja el estado vigente.
 
 ## 1. Propósito
@@ -378,7 +378,7 @@ Cobros del día usan fecha de cobro y validez conforme a la definición aprobada
 
 **Criterio de terminado.** Cada bloque enlaza a los registros que explican su cifra bajo la misma sede y fecha; apertura/cierre funcionan con un día normal, un día sin actividad y datos incompletos. Cobros concilian por fecha, asistencia respeta cancelaciones y marcas, y consultar no produce mutaciones. El resumen reutiliza definiciones de módulos anteriores y declara diferencias de cobertura.
 
-**Estado:** **En análisis.** F9.0 resolvió P-09 y documentó fuentes, límites y contrato mínimo en [F9-RESUMEN-DIARIO-STATUS.md](F9-RESUMEN-DIARIO-STATUS.md). El siguiente micro-paso es F9.1: backend ADMIN/VERIFICADOR read-only, sin migración ni UI.
+**Estado:** **En implementación.** F9.0 resolvió P-09 y documentó fuentes/límites; F9.1 backend ADMIN/VERIFICADOR read-only quedó desplegado y verificado técnicamente. F9.2 prepara una UI mínima que consume ese contrato sin recalcular autoridad ni introducir mutaciones.
 
 ## 8. Orden recomendado de implementación
 
@@ -514,7 +514,8 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 
 | 2026-09-19 | F9.0 Resumen diario: diagnóstico de fuentes y resolución P-09. | Revisión dirigida de tiempo operativo, F6, sesiones, pagos, F1/F5, F7 y F8 sobre `main` `a7aa88e0...`; contrato en `F9-RESUMEN-DIARIO-STATUS.md`. Sin código funcional, migración ni snapshot. | **En análisis**: corte de consulta y tratamiento de correcciones definidos; F9.1 queda listo como backend read-only. |
 
-| 2026-09-19 | F9.1 Resumen diario: backend read-only preparado. | Helper de composición + `GET /api/resumen-diario.php`; regresiones de contrato y MariaDB; sin migración, UI, snapshot, mensajes ni cierres automáticos. | **En implementación**: pendiente de Quality/revisión, merge y evidencia de despliegue. |
+| 2026-09-19 | F9.1 Resumen diario: backend read-only desplegado. | PR #355; Quality #1730 del head y #1731 de `main` exitosos; merge `dbce96b49f2700acc27d68fc5f5843fcebee1f8c`; Deploy #322; marcador productivo exacto y health HTTP 200 / `ok:true`. Helper de composición + `GET /api/resumen-diario.php`; regresiones de contrato y MariaDB; sin migración, UI, snapshot, mensajes ni cierres automáticos. | **Desplegado y verificado técnicamente** para F9.1. La fase sigue abierta hasta UI y evidencia operativa real. |
+| 2026-09-19 | F9.2 Resumen diario: UI mínima preparada. | `public/resumen-diario.php` consume solo F9.1; apertura/cierre, lectura viva, cobertura, fuentes y enlaces internos; acceso desde dashboard; regresión UI incorporada a Quality. Sin mutaciones ni autoridad de negocio nueva. | **En implementación**: pendiente de Quality/revisión, merge, deploy y comprobación técnica en producción. |
 
 ### 12.2 Estado de las fases
 
@@ -528,7 +529,7 @@ P-01 quedó resuelta para el alcance inicial al implementar F1. P-02 quedó resu
 | F6 Dashboard | Verificado | Dashboard, tiempo operativo, F1/F2/F5, P-06 resuelta por D-18–D-22, lifecycle durable, lectura backend forward-only y UI ADMIN de prospectos/conversión | Fase cerrada. Mantener contratos y tratar cualquier ajuste visual futuro como cambio separado; F7 permanece como siguiente fase del roadmap cuando sea autorizada. |
 | F7 Profesores | Desplegado | Profesores, horarios, cancelaciones, D-23–D-28 y F7.1–F7.6 | Repetir la evidencia operacional read-only cuando existan casos reales post-cobertura. No fabricar sustituciones, incidencias, inactivaciones ni sesiones para forzar el estado **Verificado**. |
 | F8 Auditoría | Verificado | Auditoría e historial existentes; D-29; F8.0–F8.6 completos; PR #350 para regresión agregada y PR #352 para exclusión de ruido diagnóstico | Fase cerrada. Mantener el contrato de evidencia y tratar cambios futuros como incrementos separados. F9 permanece Pendiente hasta autorización explícita. |
-| F9 Resumen diario | En implementación | F1–F8, tiempo operativo, contratos F6 y D-30 | Revisar/integrar F9.1: backend read-only de apertura/cierre con cobertura explícita, sin snapshot ni mutaciones; después preparar F9.2 UI mínima. |
+| F9 Resumen diario | En implementación | F1–F8, tiempo operativo, contratos F6 y D-30; F9.1 desplegado | Revisar/integrar F9.2 UI mínima read-only; después realizar verificación operativa con datos reales sin fabricar escenarios. |
 
 En futuras actualizaciones registrar: fecha, fase/incremento, responsable real, estado anterior/nuevo, cambio concreto, PR/commit, validaciones y resultado, dependencias pendientes y siguiente paso. Registrar por separado los subalcances diferidos: completar un incremento no completa automáticamente la fase.
 
