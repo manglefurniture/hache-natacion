@@ -24,6 +24,8 @@ jobs:
         run: php tests/f9-resumen-diario-regression.php
       - name: F9 daily summary UI regression
         run: node tests/f9-resumen-diario-ui-regression.mjs
+      - name: F9 daily summary operational evidence regression
+        run: php tests/f9-resumen-diario-operational-evidence-regression.php
       - name: F7 professor substitutions UI regression
         run: node tests/f7-professor-substitutions-ui-regression.mjs
       - name: F7 professor activity UI regression
