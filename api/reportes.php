@@ -11,7 +11,7 @@ function getSede(PDO $pdo,string $clave):array{$st=$pdo->prepare('SELECT * FROM 
 
 try{
     $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
-    $periodo=financiero_validar_periodo((string)($_GET['periodo']??date('Y-m')));
+    $periodo=financiero_validar_periodo((string)($_GET['periodo']??financiero_periodo_operativo_actual()));
     $sedeClave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));
     $sede=getSede($pdo,$sedeClave);$sedeId=(string)$sede['id'];
     $fin=financiero_totales($pdo,$sede,$periodo);$rango=$fin['rango'];$desde=$rango['inicio'];$hasta=$rango['cierre'];
