@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/dashboard-tiempo.php';
+
 function intensivo_hoy_operativo(?DateTimeImmutable $referencia = null): DateTimeImmutable
 {
-    return $referencia ?? new DateTimeImmutable('today', new DateTimeZone('America/Cancun'));
+    return $referencia ?? hache_hoy_operativo();
 }
 
 function intensivo_lunes_semana_actual(?DateTimeImmutable $referencia = null): DateTimeImmutable

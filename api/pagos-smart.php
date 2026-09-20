@@ -21,11 +21,8 @@ function periodoMensualidad(string $sedeClave,?string $ciclo,int $anio,int $mes)
     return ['inicio'=>$inicio,'fin'=>$fin,'etiqueta'=>$inicio->format('d/m/Y').' al '.$fin->format('d/m/Y')];
 }
 function periodoActualInicio(string $sedeClave,?string $ciclo):DateTimeImmutable{
-    $hoy=new DateTimeImmutable('today');
-    if($sedeClave==='PALAPAS'&&$ciclo==='P15'){
-        return ((int)$hoy->format('j')>=15)?new DateTimeImmutable($hoy->format('Y-m-15')):new DateTimeImmutable($hoy->modify('-1 month')->format('Y-m-15'));
-    }
-    return new DateTimeImmutable($hoy->format('Y-m-01'));
+    $periodo=regla_periodo_regular_actual($sedeClave,$ciclo);
+    return new DateTimeImmutable($periodo['inicio'],hache_zona_horaria_operativa());
 }
 function etiquetaPeriodo(DateTimeImmutable $inicio,DateTimeImmutable $fin):string{return $inicio->format('d/m/Y').' al '.$fin->format('d/m/Y');}
 function fechaPagoExacta(string $value):DateTimeImmutable{
@@ -103,7 +100,7 @@ if($tipo==='INSCRIPCION'){
  $cursoPago=hache_pago_resolver_intensivo($pdo,$alumnoId,$sedeId,$cursoId);
  $intensivoId=(string)$cursoPago['id'];
  $stmt=$pdo->prepare("SELECT id,importe FROM pagos WHERE intensivo_id=:curso AND alumno_id=:alumno AND tipo='INTENSIVO' AND estado='VALIDO' FOR UPDATE");$stmt->execute([':curso'=>$intensivoId,':alumno'=>$alumnoId]);$pagadoIntensivo=0.0;foreach($stmt->fetchAll(PDO::FETCH_ASSOC) as $pagoPrevio){$pagadoIntensivo+=(float)$pagoPrevio['importe'];}$precioIntensivo=(float)$cursoPago['precio'];$saldoIntensivo=max(0.0,round($precioIntensivo-$pagadoIntensivo,2));if($saldoIntensivo<=0.009)throw new RuntimeException('Este curso intensivo ya está liquidado');if((float)$importeDecimal>$saldoIntensivo+0.009)throw new RuntimeException('El importe supera el saldo pendiente del curso intensivo: $'.number_format($saldoIntensivo,2,'.',','));$saldoIntensivoDespues=max(0.0,round($saldoIntensivo-(float)$importeDecimal,2));$estadoPagoIntensivo=$saldoIntensivoDespues<=0.009?'PAGADO':'ANTICIPO';
- $today=(new DateTimeImmutable('today',new DateTimeZone('America/Cancun')))->format('Y-m-d');
+ $today=hache_fecha_operativa();
  $pagoIntensivoHistorico=(string)$cursoPago['fecha_fin']<$today;
  if($pagoIntensivoHistorico){
      $motivo='Pago del curso intensivo iniciado '.date('d/m/Y',strtotime((string)$cursoPago['fecha_inicio']));

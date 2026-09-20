@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__.'/dashboard-tiempo.php';
+
 function regla_bloquear_identidades_alumnos(PDO $pdo): void
 {
     if(!$pdo->inTransaction()) throw new LogicException('El bloqueo de identidades requiere una transacción activa');
@@ -13,7 +15,7 @@ function regla_bloquear_identidades_alumnos(PDO $pdo): void
 
 function regla_periodo_regular_actual(string $sedeClave, ?string $cicloPago, ?DateTimeImmutable $referencia=null): array
 {
-    $d=$referencia ?: new DateTimeImmutable('today');
+    $d=$referencia ?: hache_hoy_operativo();
     $sede=strtoupper($sedeClave);
     $ciclo=strtoupper((string)$cicloPago);
     if($sede==='PALAPAS' && $ciclo==='P15'){
@@ -149,13 +151,14 @@ function regla_recalcular_alumno_regular(PDO $pdo,string $alumnoId): array
     return regla_recalcular_alumno($pdo,$alumnoId);
 }
 
-function regla_promover_planes_programados_sede(PDO $pdo,string $sedeId): int
+function regla_promover_planes_programados_sede(PDO $pdo,string $sedeId,?DateTimeImmutable $referencia=null): int
 {
+    $hoy=hache_fecha_operativa($referencia);
     $st=$pdo->prepare("UPDATE alumnos a
         INNER JOIN planes p ON p.id=a.plan_programado_id AND p.sede_id=a.sede_id AND p.activo=1
         SET a.plan_actual_id=a.plan_programado_id,a.plan_programado_id=NULL,a.plan_programado_desde=NULL,a.updated_at=NOW()
-        WHERE a.sede_id=:s AND a.plan_programado_id IS NOT NULL AND a.plan_programado_desde IS NOT NULL AND a.plan_programado_desde<=CURDATE()");
-    $st->execute([':s'=>$sedeId]);
+        WHERE a.sede_id=:s AND a.plan_programado_id IS NOT NULL AND a.plan_programado_desde IS NOT NULL AND a.plan_programado_desde<=:hoy");
+    $st->execute([':s'=>$sedeId,':hoy'=>$hoy]);
     return $st->rowCount();
 }
 
@@ -166,12 +169,12 @@ function regla_reconciliar_sede(PDO $pdo,string $sedeId): void
     foreach($st->fetchAll(PDO::FETCH_COLUMN) as $id) regla_recalcular_alumno($pdo,(string)$id);
 }
 
-function regla_reconciliar_sede_una_vez(PDO $pdo,string $sedeId,string $sedeClave): bool
+function regla_reconciliar_sede_una_vez(PDO $pdo,string $sedeId,string $sedeClave,?DateTimeImmutable $referencia=null): bool
 {
     $clave=strtoupper(trim($sedeClave));
-    $hoy=date('Y-m-d');
+    $hoy=hache_fecha_operativa($referencia);
     if(($_SESSION['hache_reconciliada'][$clave]??null)===$hoy) return false;
-    regla_promover_planes_programados_sede($pdo,$sedeId);
+    regla_promover_planes_programados_sede($pdo,$sedeId,$referencia);
     regla_reconciliar_sede($pdo,$sedeId);
     $_SESSION['hache_reconciliada'][$clave]=$hoy;
     return true;
