@@ -30,7 +30,8 @@ try{
 
     $alumnoId=trim((string)($_GET['alumno_id']??''));
     $cursoId=trim((string)($_GET['curso_intensivo_id']??($_GET['curso_id']??'')));
-    $mes=(int)($_GET['mes']??date('n'));$anio=(int)($_GET['anio']??date('Y'));
+    $ahoraOperativa=hache_instante_operativo();
+    $mes=(int)($_GET['mes']??$ahoraOperativa->format('n'));$anio=(int)($_GET['anio']??$ahoraOperativa->format('Y'));
     if($alumnoId==='')pago_contexto_out(['ok'=>false,'error'=>'alumno_id es obligatorio'],422);
     if($mes<1||$mes>12||$anio<2000||$anio>2100)pago_contexto_out(['ok'=>false,'error'=>'Periodo inválido'],422);
 
@@ -95,7 +96,7 @@ try{
     if($ultimaInscripcion){
         $ultima=new DateTimeImmutable(substr((string)$ultimaInscripcion['fecha'],0,10));
         $permitida=$ultima->modify('first day of this month')->modify('+3 months');
-        $inscripcionPermitida=new DateTimeImmutable('today')>=$permitida;
+        $inscripcionPermitida=hache_fecha_operativa()>=$permitida->format('Y-m-d');
         $proximaInscripcion=$permitida->format('Y-m-d');
     }
 
