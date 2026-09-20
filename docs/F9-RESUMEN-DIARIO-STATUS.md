@@ -3,7 +3,7 @@
 **Fase:** F9 — Resumen operativo diario  
 **Base del diagnóstico F9.0:** `main` `a7aa88e09daad1e0b6db71393b94ec92d9d08353`  
 **Fecha:** 2026-09-19  
-**Estado:** F9.0 terminado; P-09 resuelta; F9.1 y F9.2 **Desplegados y verificados técnicamente**; F9.3 **En implementación** para evidencia operativa read-only.
+**Estado:** F9 **Verificado**. F9.0/P-09 cerrados; F9.1 y F9.2 desplegados y verificados técnicamente; F9.3 desplegado y verificado operativamente con evidencia real read-only de producción.
 
 ## 1. Resolución de P-09
 
@@ -121,8 +121,8 @@ La implementación preparada:
 - se integra en `bin/production-readiness-evidence.php` bajo `operations.daily_summary_f9`;
 - `tests/f9-resumen-diario-operational-evidence-regression.php` protege privacidad, reconciliación, transacción read-only y `HUMAN_REVIEW_REQUIRED`.
 
-F9.3 permanece **En implementación** hasta Quality, revisión automática, merge, deploy y ejecución real del collector en producción.
+F9.3 quedó integrado mediante PR #357. Quality #1737 del head y #1738 de `main` pasaron; el merge `c745034fb07a21a9c683e1039c7759f71d895d9f` fue publicado por Deploy #324 y Ops Field Evidence Once #273 terminó correctamente. El marcador productivo coincidió exactamente y los dos PHP nuevos pasaron `php -l`.\n\nLa ejecución real del collector en producción confirmó `read_only_transaction_completed=true`, actividad real reciente en ambas sedes, cobros reconciliados, asistencia operativa reconciliada cuando estuvo disponible, un caso vacío natural en PALAPAS y el caso histórico incompleto sin reconstrucción ficticia. La salida mantuvo el contrato de privacidad sin filas personales, nombres ni IDs de pagos. El collector conserva `decision=HUMAN_REVIEW_REQUIRED`; esta actualización registra la revisión humana de los criterios de F9 y no convierte el collector en una aprobación automática.\n\nF9.3 queda **Desplegado y verificado operativamente**.
 
 ### Cierre de F9
 
-F9 no pasa a **Verificado** hasta comprobar en producción un día con actividad real, un caso vacío o incompleto cuando exista naturalmente, conciliación de cobros/asistencia y ausencia de mutaciones al consultar.
+Los criterios de cierre quedaron comprobados en producción: hubo actividad real, un caso vacío natural, un caso histórico incompleto tratado como desconocido, reconciliación de cobros y asistencia disponible, y la lectura completó una transacción `READ ONLY` sin mutaciones. F9 pasa a **Verificado**. Esto no crea snapshots históricos ni cambia las limitaciones documentadas de cobertura.
