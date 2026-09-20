@@ -20,6 +20,8 @@ jobs:
         run: find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
       - name: Static regressions and JavaScript syntax
         run: npm test
+      - name: Persistent login regression
+        run: php tests/auth-remember-regression.php
       - name: F9 daily summary contract regression
         run: php tests/f9-resumen-diario-regression.php
       - name: F9 daily summary UI regression
@@ -138,6 +140,14 @@ jobs:
         with:
           php-version: '8.2'
           extensions: pdo_mysql
+      - name: Persistent login MariaDB regression
+        env:
+          DELIVERY_DB_HOST: 127.0.0.1
+          DELIVERY_DB_PORT: 3306
+          DELIVERY_DB_NAME: hache_delivery_test
+          DELIVERY_DB_USER: root
+          DELIVERY_DB_PASS: root
+        run: php tests/auth-remember-mariadb.php
       - name: Delivery status MariaDB regression
         env:
           DELIVERY_DB_HOST: 127.0.0.1

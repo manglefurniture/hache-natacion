@@ -220,6 +220,10 @@ apply_release_migrations() {
   if [[ -f "$portal_access" ]]; then
     php "$portal_access"
   fi
+  local auth_remember="$REPO/bin/migrate-auth-remember.php"
+  if [[ -f "$auth_remember" ]]; then
+    php "$auth_remember"
+  fi
   local sharky_crm_managements="$REPO/bin/migrate-sharky-crm-managements.php"
   if [[ -f "$sharky_crm_managements" ]]; then
     php "$sharky_crm_managements"

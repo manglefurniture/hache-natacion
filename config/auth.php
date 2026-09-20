@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__.'/remember-session.php';
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
     $httpsDirect=!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
     $httpsForwarded=strtolower(trim((string)($_SERVER['HTTP_X_FORWARDED_PROTO']??'')))==='https';
@@ -17,6 +19,23 @@ function auth_user(): ?array
 {
     $u = $_SESSION['hache_usuario'] ?? null;
     return is_array($u) ? $u : null;
+}
+
+function auth_open_pdo(): PDO
+{
+    $local=__DIR__.'/database.local.php';
+    $cfg=is_file($local)?require $local:[
+        'host'=>getenv('DB_HOST')?:'127.0.0.1',
+        'dbname'=>getenv('DB_NAME')?:'hache_natacion',
+        'user'=>getenv('DB_USER')?:'',
+        'password'=>getenv('DB_PASS')?:'',
+        'charset'=>getenv('DB_CHARSET')?:'utf8mb4',
+    ];
+    return new PDO(
+        "mysql:host={$cfg['host']};dbname={$cfg['dbname']};charset={$cfg['charset']}",
+        $cfg['user'],$cfg['password'],
+        [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
+    );
 }
 
 function auth_login(array $user): void
@@ -99,26 +118,26 @@ function auth_revalidate_user(bool $force=false): ?array
 {
     static $checkedThisRequest=false;
     $u=auth_user();
-    if(!$u || $checkedThisRequest)return $u;
+    if(!$u){
+        if(!isset($_COOKIE[HACHE_REMEMBER_COOKIE]))return null;
+        try{
+            $remembered=hache_remember_restore(auth_open_pdo());
+            if(!$remembered)return null;
+            auth_login($remembered);
+            return auth_user();
+        }catch(Throwable $e){
+            error_log('Hache restauración de sesión persistente: '.$e->getMessage());
+            return null;
+        }
+    }
+    if($checkedThisRequest)return $u;
     $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
     $mutation=!in_array($method,['GET','HEAD','OPTIONS'],true);
     $last=(int)($u['auth_checked_at']??0);
     if(!$force && !$mutation && $last>0 && (time()-$last)<60)return $u;
     $checkedThisRequest=true;
     try{
-        $local=__DIR__.'/database.local.php';
-        $cfg=is_file($local)?require $local:[
-            'host'=>getenv('DB_HOST')?:'127.0.0.1',
-            'dbname'=>getenv('DB_NAME')?:'hache_natacion',
-            'user'=>getenv('DB_USER')?:'',
-            'password'=>getenv('DB_PASS')?:'',
-            'charset'=>getenv('DB_CHARSET')?:'utf8mb4',
-        ];
-        $pdo=new PDO(
-            "mysql:host={$cfg['host']};dbname={$cfg['dbname']};charset={$cfg['charset']}",
-            $cfg['user'],$cfg['password'],
-            [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]
-        );
+        $pdo=auth_open_pdo();
         $st=$pdo->prepare("SELECT u.id,u.usuario,u.password_hash,u.rol,u.activo,u.alumno_id,u.sede_id,u.debe_cambiar_password,s.clave sede_clave,s.nombre sede_nombre,s.activo sede_activo FROM usuarios u LEFT JOIN sedes s ON s.id=u.sede_id WHERE u.id=:id LIMIT 1");
         $st->execute([':id'=>(string)$u['id']]);$fresh=$st->fetch();
         if(!$fresh || !(bool)$fresh['activo']){auth_logout();return null;}
@@ -146,6 +165,13 @@ function auth_revalidate_user(bool $force=false): ?array
 
 function auth_logout(): void
 {
+    try{
+        if(isset($_COOKIE[HACHE_REMEMBER_COOKIE]))hache_remember_revoke_current(auth_open_pdo());
+        else hache_remember_clear_cookie();
+    }catch(Throwable $e){
+        hache_remember_clear_cookie();
+        error_log('Hache cierre de sesión persistente: '.$e->getMessage());
+    }
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $p = session_get_cookie_params();
