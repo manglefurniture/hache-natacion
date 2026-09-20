@@ -33,8 +33,8 @@ function intensivo_transferir_por_fecha_edicion(
     ?string $motivoHistorico=null
 ): array {
     intensivos_reconciliar_estados_sede($pdo,$sedeId);
-    $st=$pdo->prepare("SELECT cia.id AS relacion_id,cia.curso_intensivo_id,cia.horario_id,cia.reposiciones_justificadas,cia.reposiciones_cancelacion,cia.continua_regular,cia.plan_continuidad_id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,ci.created_by FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=CURDATE() ORDER BY ci.fecha_inicio ASC FOR UPDATE");
-    $st->execute([':a'=>$alumnoId,':s'=>$sedeId]);$relaciones=$st->fetchAll();
+    $st=$pdo->prepare("SELECT cia.id AS relacion_id,cia.curso_intensivo_id,cia.horario_id,cia.reposiciones_justificadas,cia.reposiciones_cancelacion,cia.continua_regular,cia.plan_continuidad_id,ci.fecha_inicio,ci.fecha_fin,ci.precio,ci.estado,ci.created_by FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=:a AND ci.sede_id=:s AND ci.fecha_fin>=:hoy ORDER BY ci.fecha_inicio ASC FOR UPDATE");
+    $st->execute([':a'=>$alumnoId,':s'=>$sedeId,':hoy'=>hache_fecha_operativa()]);$relaciones=$st->fetchAll();
     $fecha=intensivo_validar_fecha_transferencia($relaciones,$fechaInicio);
     if(!$relaciones) return ['aplica'=>false,'transferido'=>false];
     $fechaInicio=trim((string)$fechaInicio);
