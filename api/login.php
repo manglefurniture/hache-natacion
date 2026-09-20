@@ -8,7 +8,7 @@ try {
     $pdo = new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {http_response_code(405);echo json_encode(['ok'=>false,'error'=>'Método no permitido'],JSON_UNESCAPED_UNICODE);exit;}
     $input=json_decode(file_get_contents('php://input'),true);if(!is_array($input)){http_response_code(400);echo json_encode(['ok'=>false,'error'=>'JSON inválido'],JSON_UNESCAPED_UNICODE);exit;}
-    $usuario=trim((string)($input['usuario']??''));$password=(string)($input['password']??'');
+    $usuario=trim((string)($input['usuario']??''));$password=(string)($input['password']??'');$recordarme=!empty($input['recordarme']);
     if($usuario===''||$password===''){http_response_code(422);echo json_encode(['ok'=>false,'error'=>'Usuario y contraseña son obligatorios'],JSON_UNESCAPED_UNICODE);exit;}
     $ipKey=security_rate_limit_client_ip();$accountKey=mb_strtolower($usuario,'UTF-8');
     $ipLimit=security_rate_limit_check('login-ip',$ipKey,30,900);$accountLimit=security_rate_limit_check('login-account',$accountKey,8,900);
@@ -20,8 +20,8 @@ try {
     $user['rol']=$role;
     if($role==='ALUMNO' && empty($user['alumno_id'])){http_response_code(403);echo json_encode(['ok'=>false,'error'=>'Este usuario alumno no está vinculado a una ficha'],JSON_UNESCAPED_UNICODE);exit;}
     if($role==='VERIFICADOR' && (empty($user['sede_id'])||(int)($user['sede_activo']??0)!==1||!in_array(strtoupper((string)($user['sede_clave']??'')),['MONTEVERDE','PALAPAS'],true))){http_response_code(403);echo json_encode(['ok'=>false,'error'=>'Este verificador no tiene una sede activa asignada'],JSON_UNESCAPED_UNICODE);exit;}
-    security_rate_limit_clear('login-account',$accountKey);auth_login($user);$pdo->prepare("UPDATE usuarios SET last_login=NOW() WHERE id=:id")->execute([':id'=>$user['id']]);$safe=auth_user();
+    security_rate_limit_clear('login-account',$accountKey);auth_login($user);$recordado=$recordarme?hache_remember_issue($pdo,$user):false;if(!$recordarme&&isset($_COOKIE[HACHE_REMEMBER_COOKIE]))hache_remember_revoke_current($pdo);$pdo->prepare("UPDATE usuarios SET last_login=NOW() WHERE id=:id")->execute([':id'=>$user['id']]);$safe=auth_user();
     $pendingVerification=is_string($_SESSION['sharky_verification_token']??null)&&preg_match('/^[a-f0-9]{64}$/',(string)$_SESSION['sharky_verification_token'])===1;
     $redirect=!empty($safe['debe_cambiar_password'])?'/cambiar-password.php':($safe['rol']==='ALUMNO'&&$pendingVerification?'/sharky-verificar.php':($safe['rol']==='ALUMNO'?'/mi-cuenta.php':'/dashboard.php'));
-    echo json_encode(['ok'=>true,'mensaje'=>'Login correcto','usuario'=>$safe,'redirect'=>$redirect],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+    echo json_encode(['ok'=>true,'mensaje'=>'Login correcto','usuario'=>$safe,'redirect'=>$redirect,'recordado'=>$recordado],JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
 } catch(Throwable $e){error_log('Hache login: '.$e->getMessage());http_response_code(500);echo json_encode(['ok'=>false,'error'=>'Error interno del servidor'],JSON_UNESCAPED_UNICODE);}
