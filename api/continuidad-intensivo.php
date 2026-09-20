@@ -75,7 +75,7 @@ try{
         $planContinuidad=(string)($rel['plan_continuidad_id']??'');
         $programacionPropia=(int)$rel['continua_regular']===1
             && $programadoDesde!==''
-            && $programadoDesde>date('Y-m-d')
+            && $programadoDesde>hache_fecha_operativa()
             && $planProgramado!==''
             && $planProgramado===$planContinuidad;
 

@@ -18,7 +18,7 @@ function csvCell(mixed $value): mixed
     return preg_match('/^\s*[=+\-@]/u', $value) ? "'".$value : $value;
 }
 
-try{$periodo=financiero_validar_periodo(trim((string)($_GET['periodo']??date('Y-m'))));}catch(InvalidArgumentException $e){http_response_code(422);exit($e->getMessage());}
+try{$periodo=financiero_validar_periodo(trim((string)($_GET['periodo']??financiero_periodo_operativo_actual())));}catch(InvalidArgumentException $e){http_response_code(422);exit($e->getMessage());}
 $clave = auth_active_sede_clave();
 $stmt = $pdo->prepare('SELECT id,nombre,socio,porcentaje_mensualidad_socio,porcentaje_intensivo_socio,porcentaje_inscripcion_socio,minimo_mensual_socio FROM sedes WHERE clave=:clave AND activo=1 LIMIT 1');
 $stmt->execute([':clave'=>$clave]);

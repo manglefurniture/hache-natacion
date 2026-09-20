@@ -54,7 +54,7 @@ try{
     $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));
     $s=site($pdo,$clave);
     if($method==='GET'){
-        $period=financiero_validar_periodo(trim((string)($_GET['periodo']??date('Y-m'))));
+        $period=financiero_validar_periodo(trim((string)($_GET['periodo']??financiero_periodo_operativo_actual())));
         $base=obligation($pdo,$period);
         $rango=$base['rango'];
         $start=$rango['inicio'].' 00:00:00';
@@ -97,7 +97,7 @@ try{
     if(!in_array($type,$allowed,true))jsonOut(['ok'=>false,'error'=>'Tipo de movimiento inválido. Las comisiones PROA se cargan automáticamente.'],422);
     if($amount===false||$amount<=0||$amount>9999999.99)jsonOut(['ok'=>false,'error'=>'El importe debe ser mayor que cero y estar dentro del límite permitido'],422);
     if(mb_strlen($student)>180||mb_strlen($reference)>180||mb_strlen($observation)>2000)jsonOut(['ok'=>false,'error'=>'Uno de los textos excede la longitud permitida'],422);
-    $date=$date===''?date('Y-m-d H:i:s'):exactMovementDate($date);
+    $date=$date===''?hache_instante_operativo()->format('Y-m-d H:i:s'):exactMovementDate($date);
     if($type==='PAGO_DIRECTO_PROA'){
         if($studentId==='')jsonOut(['ok'=>false,'error'=>'Selecciona un alumno de la lista'],422);
         $stmt=$pdo->prepare("SELECT a.id,a.nombre FROM alumnos a INNER JOIN sedes s ON s.id=a.sede_id WHERE a.id=:id AND s.clave='MONTEVERDE' LIMIT 1");$stmt->execute([':id'=>$studentId]);$real=$stmt->fetch();

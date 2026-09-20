@@ -11,16 +11,16 @@ $stSede->execute([':clave'=>$sedeClave]);
 $sedeId=$stSede->fetchColumn();
 if(!$sedeId){throw new RuntimeException('Sede activa inválida');}
 regla_reconciliar_sede_una_vez($pdo,(string)$sedeId,$sedeClave);
-$mesActual=(int)date('n');$anioActual=(int)date('Y');
+$ahoraOperativa=hache_instante_operativo();$hoyOperativo=$ahoraOperativa->format('Y-m-d');$mesActual=(int)$ahoraOperativa->format('n');$anioActual=(int)$ahoraOperativa->format('Y');
 $sql="SELECT a.id,a.nombre,a.whatsapp,a.correo,a.fecha_inicio,a.estado_administrativo,a.horario_preferido_id,a.plan_actual_id,a.plan_programado_id,a.plan_programado_desde,
 h.hora_inicio,h.hora_fin,p.nombre plan_nombre,p.sesiones_semana,p.precio,
 pp.nombre plan_programado_nombre,pp.sesiones_semana plan_programado_sesiones_semana,pp.precio plan_programado_precio,
 ma.id mensualidad_actual_id,ma.estado mensualidad_estado,ma.fecha_pago,ma.importe_cobrado mensualidad_actual_importe_cobrado,
 EXISTS(SELECT 1 FROM pagos pma WHERE pma.mensualidad_id=ma.id) mensualidad_actual_tiene_pagos,
 EXISTS(SELECT 1 FROM curso_intensivo_alumnos cic WHERE cic.alumno_id=a.id AND cic.continua_regular=1) continuante_regular,
-(SELECT mf.estado FROM mensualidades mf WHERE mf.alumno_id=a.id AND mf.sede_id=a.sede_id AND mf.periodo_inicio>CURDATE() ORDER BY mf.periodo_inicio ASC LIMIT 1) mensualidad_futura_estado,
-(SELECT mf.periodo_inicio FROM mensualidades mf WHERE mf.alumno_id=a.id AND mf.sede_id=a.sede_id AND mf.periodo_inicio>CURDATE() ORDER BY mf.periodo_inicio ASC LIMIT 1) mensualidad_futura_inicio,
-(SELECT mf.periodo_fin FROM mensualidades mf WHERE mf.alumno_id=a.id AND mf.sede_id=a.sede_id AND mf.periodo_inicio>CURDATE() ORDER BY mf.periodo_inicio ASC LIMIT 1) mensualidad_futura_fin,
+(SELECT mf.estado FROM mensualidades mf WHERE mf.alumno_id=a.id AND mf.sede_id=a.sede_id AND mf.periodo_inicio>:hoy_futuro_estado ORDER BY mf.periodo_inicio ASC LIMIT 1) mensualidad_futura_estado,
+(SELECT mf.periodo_inicio FROM mensualidades mf WHERE mf.alumno_id=a.id AND mf.sede_id=a.sede_id AND mf.periodo_inicio>:hoy_futuro_inicio ORDER BY mf.periodo_inicio ASC LIMIT 1) mensualidad_futura_inicio,
+(SELECT mf.periodo_fin FROM mensualidades mf WHERE mf.alumno_id=a.id AND mf.sede_id=a.sede_id AND mf.periodo_inicio>:hoy_futuro_fin ORDER BY mf.periodo_inicio ASC LIMIT 1) mensualidad_futura_fin,
 EXISTS(SELECT 1 FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=a.id AND ci.sede_id=a.sede_id AND ci.estado IN ('PROGRAMADO','EN_CURSO')) intensivo_activo,
 (SELECT ci.id FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=a.id AND ci.sede_id=a.sede_id AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1) intensivo_id,
 (SELECT ci.fecha_inicio FROM curso_intensivo_alumnos cia INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id WHERE cia.alumno_id=a.id AND ci.sede_id=a.sede_id AND ci.estado IN ('PROGRAMADO','EN_CURSO') ORDER BY ci.fecha_inicio DESC LIMIT 1) intensivo_fecha_inicio,
@@ -41,16 +41,16 @@ LEFT JOIN mensualidades ma ON ma.id=(
       AND mensualidad_ciclo.sede_id=a.sede_id
       AND mensualidad_ciclo.periodo_inicio=CASE
         WHEN a.ciclo_pago='P15' THEN DATE_FORMAT(
-            CASE WHEN DAY(CURDATE())>=15 THEN CURDATE() ELSE DATE_SUB(CURDATE(),INTERVAL 1 MONTH) END,
+            CASE WHEN DAY(:hoy_p15_dia)>=15 THEN :hoy_p15_actual ELSE DATE_SUB(:hoy_p15_anterior,INTERVAL 1 MONTH) END,
             '%Y-%m-15'
         )
-        ELSE DATE_FORMAT(CURDATE(),'%Y-%m-01')
+        ELSE DATE_FORMAT(:hoy_p1,'%Y-%m-01')
       END
     ORDER BY mensualidad_ciclo.id ASC
     LIMIT 1
 )
 WHERE a.sede_id=:sede ORDER BY a.nombre";
-$stmt=$pdo->prepare($sql);$stmt->execute([':sede'=>$sedeId]);$alumnos=$stmt->fetchAll();
+$stmt=$pdo->prepare($sql);$stmt->execute([':sede'=>$sedeId,':hoy_futuro_estado'=>$hoyOperativo,':hoy_futuro_inicio'=>$hoyOperativo,':hoy_futuro_fin'=>$hoyOperativo,':hoy_p15_dia'=>$hoyOperativo,':hoy_p15_actual'=>$hoyOperativo,':hoy_p15_anterior'=>$hoyOperativo,':hoy_p1'=>$hoyOperativo]);$alumnos=$stmt->fetchAll();
 $intensivos=array_values(array_filter($alumnos,fn($a)=>(int)$a['intensivo_activo']===1));
 $sinPlan=array_values(array_filter($alumnos,fn($a)=>(int)$a['intensivo_activo']!==1 && empty($a['plan_actual_id']) && empty($a['plan_programado_id'])));
 $regulares=array_values(array_filter($alumnos,fn($a)=>(int)$a['intensivo_activo']!==1 && (!empty($a['plan_actual_id']) || !empty($a['plan_programado_id']))));
@@ -59,7 +59,7 @@ function hora(string $h):string{return date('H:i',strtotime($h));}
 function fecha_corta(string $f):string{return (new DateTimeImmutable($f))->format('d/m/Y');}
 function mes_fecha(string $f):string{$m=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return $m[(int)(new DateTimeImmutable($f))->format('n')-1];}
 function inicio_regular_futuro(array $a):?string{
-    $hoy=date('Y-m-d');
+    $hoy=hache_fecha_operativa();
     if(!empty($a['plan_programado_id'])&&!empty($a['plan_programado_desde'])&&(string)$a['plan_programado_desde']>$hoy)return (string)$a['plan_programado_desde'];
     $actualSinHistorial=empty($a['mensualidad_actual_id'])||(($a['mensualidad_estado']??'')==='PENDIENTE'&&$a['mensualidad_actual_importe_cobrado']===null&&(int)($a['mensualidad_actual_tiene_pagos']??0)===0);
     if((int)($a['continuante_regular']??0)===1&&$actualSinHistorial&&!empty($a['mensualidad_futura_inicio'])&&(string)$a['mensualidad_futura_inicio']>$hoy){

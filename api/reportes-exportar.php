@@ -7,7 +7,8 @@ $config=require __DIR__.'/../config/database.php';
 $pdo=new PDO("mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}",$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
 function exactDate(string $value):string{$date=DateTimeImmutable::createFromFormat('!Y-m-d',$value);if(!$date||$date->format('Y-m-d')!==$value){http_response_code(422);exit('Fecha inválida');}return $value;}
 function csvCell(mixed $value):mixed{if(!is_string($value))return $value;return preg_match('/^\s*[=+\-@]/u',$value)?"'".$value:$value;}
-$desde=exactDate((string)($_GET['desde']??date('Y-m-01')));$hasta=exactDate((string)($_GET['hasta']??date('Y-m-t')));if($hasta<$desde){[$desde,$hasta]=[$hasta,$desde];}
+$mesOperativo=financiero_mes_calendario_operativo_actual();
+$desde=exactDate((string)($_GET['desde']??$mesOperativo['inicio']));$hasta=exactDate((string)($_GET['hasta']??$mesOperativo['fin']));if($hasta<$desde){[$desde,$hasta]=[$hasta,$desde];}
 $clave=auth_resolve_sede_clave((string)($_GET['sede']??'MONTEVERDE'));$st=$pdo->prepare('SELECT id,nombre FROM sedes WHERE clave=:c AND activo=1 LIMIT 1');$st->execute([':c'=>$clave]);$s=$st->fetch();if(!$s){http_response_code(422);exit('Sede inválida');}
 $periodoDesde=financiero_periodo_para_fecha($pdo,(string)$s['id'],$desde);$periodoHasta=financiero_periodo_para_fecha($pdo,(string)$s['id'],$hasta);financiero_validar_periodo($periodoDesde);financiero_validar_periodo($periodoHasta);
 $rd=financiero_rango($pdo,(string)$s['id'],$periodoDesde);$rh=financiero_rango($pdo,(string)$s['id'],$periodoHasta);$limiteDesde=$rd['inicio'];$limiteHasta=$rh['cierre'];

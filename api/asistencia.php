@@ -3,13 +3,14 @@ declare(strict_types=1);
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/dashboard-tiempo.php';
 if ($method === 'GET' || $method === 'HEAD') auth_require(['ADMIN','VERIFICADOR']);
 else auth_require(['ADMIN']);
 
 function hache_fecha_solicitada(string $method): ?string
 {
     if ($method === 'GET') {
-        return isset($_GET['fecha']) ? (string)$_GET['fecha'] : date('Y-m-d');
+        return isset($_GET['fecha']) ? (string)$_GET['fecha'] : hache_fecha_operativa();
     }
 
     // Para POST no consumimos php://input aquí porque el endpoint original lo necesita.

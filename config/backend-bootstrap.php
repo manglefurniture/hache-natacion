@@ -78,7 +78,7 @@ if ($u['rol'] === 'ADMIN') {
     try {
         require_once __DIR__ . '/reglas-acceso.php';
         $sedeClaveReglas = auth_resolve_sede_clave(null);
-        $hoyReglas = date('Y-m-d');
+        $hoyReglas = hache_fecha_operativa();
         $reconciliada = $_SESSION['hache_reconciliada'][$sedeClaveReglas] ?? null;
         if ($reconciliada !== $hoyReglas) {
             $cfg = require __DIR__ . '/database.php';

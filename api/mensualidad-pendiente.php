@@ -3,6 +3,7 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__.'/../config/auth.php';
+require_once __DIR__.'/../config/dashboard-tiempo.php';
 $config=require __DIR__.'/../config/database.php';
 
 function mensualidad_pendiente_out(array $data,int $status=200):never
@@ -35,12 +36,13 @@ try{
         FROM mensualidades
         WHERE alumno_id=:a AND sede_id=:s AND estado='PENDIENTE'
         ORDER BY
-            (CURDATE() BETWEEN periodo_inicio AND periodo_fin) DESC,
-            (periodo_inicio>CURDATE()) DESC,
-            CASE WHEN periodo_inicio>CURDATE() THEN periodo_inicio END ASC,
+            (:hoy_actual BETWEEN periodo_inicio AND periodo_fin) DESC,
+            (periodo_inicio>:hoy_futuro) DESC,
+            CASE WHEN periodo_inicio>:hoy_case THEN periodo_inicio END ASC,
             periodo_inicio DESC
         LIMIT 1");
-    $st->execute([':a'=>$alumnoId,':s'=>$sedeId]);
+    $hoyOperativo=hache_fecha_operativa();
+    $st->execute([':a'=>$alumnoId,':s'=>$sedeId,':hoy_actual'=>$hoyOperativo,':hoy_futuro'=>$hoyOperativo,':hoy_case'=>$hoyOperativo]);
     $mensualidad=$st->fetch()?:null;
 
     mensualidad_pendiente_out(['ok'=>true,'mensualidad'=>$mensualidad]);

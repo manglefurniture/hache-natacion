@@ -20,7 +20,7 @@ try{
   $st=$pdo->query("SELECT id,porcentaje_mensualidad_socio,porcentaje_intensivo_socio,porcentaje_inscripcion_socio,minimo_mensual_socio FROM sedes WHERE clave='MONTEVERDE' AND activo=1 LIMIT 1");$site=$st->fetch();if(!$site)out(['ok'=>false,'error'=>'La sede Monteverde no está disponible'],422);$sedeId=(string)$site['id'];
   $minimo=$site['minimo_mensual_socio']!==null?(float)$site['minimo_mensual_socio']:(float)($pdo->query("SELECT valor FROM configuracion WHERE clave='minimo_proa_mensual' LIMIT 1")->fetchColumn()?:28000);
   if(($_SERVER['REQUEST_METHOD']??'GET')==='GET'){
-    $ym=financiero_validar_periodo((string)($_GET['periodo']??date('Y-m')));
+    $ym=financiero_validar_periodo((string)($_GET['periodo']??financiero_periodo_operativo_actual()));
     $periodo=monthStart($ym);$prev=financiero_periodo_anterior($ym);
     $prevData=proaForMonth($pdo,$prev,$site);$habilitado=$prevData['aporte_proa']>=$minimo;
     $st=$pdo->prepare("SELECT id,periodo,alumno_proa_nombre,importe,observacion,created_at FROM comisiones_proa WHERE periodo=:p ORDER BY alumno_proa_nombre,created_at");$st->execute([':p'=>$periodo]);$rows=$st->fetchAll();
