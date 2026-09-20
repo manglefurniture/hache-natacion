@@ -22,7 +22,7 @@ remember_expect(str_contains($service,'LIMIT 1 FOR UPDATE')&&str_contains($servi
 remember_expect(str_contains($migration,'token_hash CHAR(64) NOT NULL')&&!str_contains($migration,' password TEXT')&&!str_contains($migration,' password VARCHAR'),'La base nunca debe guardar la contraseña ni el token en claro.');
 remember_expect(str_contains($auth,'hache_remember_restore(auth_open_pdo())'),'Una sesión PHP vencida debe poder restaurarse desde el token persistente.');
 remember_expect(str_contains($auth,'hache_remember_revoke_current(auth_open_pdo())'),'Cerrar sesión debe revocar el token del dispositivo.');
-remember_expect(str_contains($login,"$recordarme=!empty($input['recordarme'])")&&str_contains($login,'hache_remember_issue($pdo,$user)'),'Login debe emitir el token solo cuando el usuario lo solicita.');
+remember_expect(str_contains($login,"\$recordarme=!empty(\$input['recordarme'])")&&str_contains($login,'hache_remember_issue($pdo,$user)'),'Login debe emitir el token solo cuando el usuario lo solicita.');
 remember_expect(str_contains($page,'id="recordarme"')&&str_contains($page,'Mantener sesión iniciada en este dispositivo'),'La pantalla debe ofrecer la opción visible de mantener la sesión.');
 remember_expect(str_contains($page,"recordarme:document.getElementById('recordarme').checked"),'La preferencia debe enviarse al backend.');
 remember_expect(!str_contains($page,'localStorage.setItem(\'password\'')&&!str_contains($page,'document.cookie') ,'La interfaz no debe guardar la contraseña en almacenamiento web ni escribir cookies de credenciales.');
