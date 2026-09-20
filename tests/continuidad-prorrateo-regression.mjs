@@ -142,8 +142,19 @@ assert.match(
 
 assert.match(
   mensualidadPendiente,
-  /\(CURDATE\(\) BETWEEN periodo_inicio AND periodo_fin\) DESC[\s\S]{0,180}\(periodo_inicio>CURDATE\(\)\) DESC/,
+  /\(:hoy_actual BETWEEN periodo_inicio AND periodo_fin\) DESC[\s\S]{0,180}\(periodo_inicio>:hoy_futuro\) DESC/,
   'la obligación vigente debe tener prioridad y, si no existe, la próxima obligación debe preceder a deudas antiguas'
+);
+
+assert.match(
+  mensualidadPendiente,
+  /\$hoyOperativo=hache_fecha_operativa\(\);[\s\S]{0,300}:hoy_actual[^\n]*\$hoyOperativo[^\n]*:hoy_futuro[^\n]*\$hoyOperativo[^\n]*:hoy_case[^\n]*\$hoyOperativo/,
+  'la prioridad de obligaciones debe usar la fecha operativa de Cancún y no la fecha implícita de MySQL'
+);
+
+assert.ok(
+  !/CURDATE\(\)/.test(mensualidadPendiente),
+  'la selección de mensualidad pendiente no debe depender de la zona horaria implícita de MySQL'
 );
 
 assert.match(
