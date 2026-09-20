@@ -57,7 +57,7 @@ try{
 
     $clave=auth_resolve_sede_clave((string)($_GET['sede']??''));
     $sede=finanzas_sede($pdo,$clave);
-    $periodo=financiero_validar_periodo((string)($_GET['periodo']??date('Y-m')));
+    $periodo=financiero_validar_periodo((string)($_GET['periodo']??financiero_periodo_operativo_actual()));
     $totales=financiero_totales($pdo,$sede,$periodo);
     $rango=$totales['rango'];
     $reparto=finanzas_reparto($sede,$totales);
