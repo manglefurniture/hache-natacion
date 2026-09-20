@@ -7,11 +7,12 @@ declare(strict_types=1);
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/dashboard-tiempo.php';
 if ($method === 'GET' || $method === 'HEAD') auth_require(['ADMIN','VERIFICADOR']);
 else auth_require(['ADMIN']);
 
 if ($method === 'GET') {
-    $fecha = (string)($_GET['fecha'] ?? date('Y-m-d'));
+    $fecha = (string)($_GET['fecha'] ?? hache_fecha_operativa());
     $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $fecha);
 
     if (!$dt || $dt->format('Y-m-d') !== $fecha) {
