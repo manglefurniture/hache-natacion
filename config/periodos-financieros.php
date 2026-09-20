@@ -1,6 +1,19 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__.'/dashboard-tiempo.php';
+
+function financiero_periodo_operativo_actual(?DateTimeImmutable $instante=null): string
+{
+    return hache_instante_operativo($instante)->format('Y-m');
+}
+
+function financiero_mes_calendario_operativo_actual(?DateTimeImmutable $instante=null): array
+{
+    $ahora=hache_instante_operativo($instante);
+    return ['inicio'=>$ahora->format('Y-m-01'),'fin'=>$ahora->format('Y-m-t')];
+}
+
 function financiero_validar_periodo(string $periodo): string
 {
     if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $periodo)) {
