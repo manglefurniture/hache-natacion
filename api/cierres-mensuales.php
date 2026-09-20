@@ -78,7 +78,7 @@ try{
     $site=activeSite($pdo);
     $method=$_SERVER['REQUEST_METHOD']??'GET';
     if($method==='GET'){
-        $period=financiero_validar_periodo(trim((string)($_GET['periodo']??date('Y-m'))));
+        $period=financiero_validar_periodo(trim((string)($_GET['periodo']??financiero_periodo_operativo_actual())));
         $current=calculateClose($pdo,$period,$site);
         out(['ok'=>true,'sede'=>['clave'=>$site['clave'],'nombre'=>$site['nombre'],'socio'=>$site['socio']],'actual'=>$current,'cierre'=>closedPeriod($pdo,(string)$site['id'],$period)?:null]);
     }
