@@ -65,7 +65,7 @@ function hache_remember_issue(PDO $pdo,array $user,int $ttlSeconds=HACHE_REMEMBE
     try {
         $pdo->prepare("DELETE FROM auth_remember_tokens WHERE expires_at<NOW()")->execute();
         $id=(string)$pdo->query('SELECT UUID()')->fetchColumn();
-        $st=$pdo->prepare("INSERT INTO auth_remember_tokens(id,user_id,selector,token_hash,password_fingerprint,expires_at) VALUES(:id,:u,:s,:h,:p,FROM_UNIXTIME(:e))");
+        $st=$pdo->prepare("INSERT INTO `auth_remember_tokens`(id,user_id,selector,token_hash,password_fingerprint,expires_at) VALUES(:id,:u,:s,:h,:p,FROM_UNIXTIME(:e))");
         $st->execute([
             ':id'=>$id,
             ':u'=>$userId,
