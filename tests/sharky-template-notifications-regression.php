@@ -54,7 +54,7 @@ expect_template(str_contains($helper,'HACHE_SHARKY_TEMPLATE_COURSE_START,[$name,
 expect_template(str_contains($helper,"\$payload['_sharky_not_after']=\$notAfter"),'La plantilla debe caducar cuando comienza la clase');
 expect_template(substr_count($outbox,"'_sharky_not_after'")>=2&&str_contains($outbox,"'NOT_AFTER_EXPIRED'"),'El outbox debe cancelar un recordatorio vencido y nunca enviarlo después del inicio');
 $courseStartPos=strpos($outboxWorker,'hache_sharky_notify_due_course_starts($pdo)');
-$outboxDispatchPos=strpos($outboxWorker,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_outbox_meta_send',10)");
+$outboxDispatchPos=strpos($outboxWorker,"hache_sharky_outbox_dispatch(\$pdo,'hache_sharky_outbox_meta_send',10)");
 expect_template($courseStartPos!==false&&$outboxDispatchPos!==false&&$courseStartPos<$outboxDispatchPos,'El worker debe encolar recordatorios debidos antes de despachar el outbox');
 
 expect_template(str_contains($helper,'function hache_sharky_notify_enrollment_confirmed'),'Debe existir el disparador de registro recibido');
