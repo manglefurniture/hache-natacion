@@ -13,7 +13,9 @@ $publicRegistration=file_get_contents($root.'/public/registro.php');
 $payments=file_get_contents($root.'/api/pagos.php');
 $endpoint=file_get_contents($root.'/api/pago-notificacion.php');
 $quickPay=file_get_contents($root.'/public/assets/alumnos-quick-pay.js');
-expect_template(is_string($helper)&&is_string($registrationNotifier)&&is_string($publicRegistration)&&is_string($payments)&&is_string($endpoint)&&is_string($quickPay),'No se pudieron leer los archivos de integración');
+$outbox=file_get_contents($root.'/config/sharky-outbox.php');
+$outboxWorker=file_get_contents($root.'/bin/sharky-outbox-dispatch.php');
+expect_template(is_string($helper)&&is_string($registrationNotifier)&&is_string($publicRegistration)&&is_string($payments)&&is_string($endpoint)&&is_string($quickPay)&&is_string($outbox)&&is_string($outboxWorker),'No se pudieron leer los archivos de integración');
 
 $templates=[
     'hache_pago_confirmado',
@@ -37,6 +39,23 @@ expect_template(str_contains($helper,"'sub_type'=>'url'"),'El registro debe sopo
 expect_template(str_contains($helper,"'index'=>'0'"),'El acceso al portal debe usar el primer botón de la plantilla');
 expect_template(str_contains($helper,'hache_sharky_outbox_enqueue_raw'),'Las plantillas deben pasar por el outbox cifrado/idempotente');
 expect_template(str_contains($helper,"SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'"),'El envío debe respetar el kill switch de Sharky');
+
+expect_template(str_contains($helper,"require_once __DIR__.'/dashboard-tiempo.php';"),'El inicio de curso debe reutilizar la fecha/hora operativa centralizada de Cancún');
+expect_template(str_contains($helper,'function hache_sharky_course_start_at'),'Debe existir el cálculo del instante real de primera clase');
+expect_template(str_contains($helper,'function hache_sharky_course_start_is_due'),'Debe existir la ventana de envío de inicio de curso');
+expect_template(str_contains($helper,"$start->modify('-1 hour')")&&str_contains($helper,'$now<$start'),'La plantilla debe habilitarse una hora antes y cerrarse al comenzar la clase');
+expect_template(str_contains($helper,'function hache_sharky_notify_due_course_starts'),'Debe existir el disparador periódico de inicio de curso');
+expect_template(str_contains($helper,"ci.fecha_inicio=:today"),'Solo deben evaluarse cursos que inician en la fecha operativa');
+expect_template(str_contains($helper,"ci.estado IN ('PROGRAMADO','EN_CURSO')"),'No deben notificarse cursos terminados o cancelados');
+expect_template(str_contains($helper,"a.estado_administrativo<>'BAJA'"),'No deben notificarse alumnos dados de baja');
+expect_template(str_contains($helper,"p.estado='VALIDO'")&&str_contains($helper,'p.importe>0'),'El recordatorio requiere una reserva/pago válido del mismo intensivo');
+expect_template(str_contains($helper,"'course-start|relation:'.$relationId"),'El inicio de curso debe deduplicarse por inscripción al intensivo');
+expect_template(str_contains($helper,'HACHE_SHARKY_TEMPLATE_COURSE_START,[$name,$time,$site]'),'La plantilla de inicio debe recibir nombre, hora y sede en ese orden');
+expect_template(str_contains($helper,"$payload['_sharky_not_after']=$notAfter"),'La plantilla debe caducar cuando comienza la clase');
+expect_template(substr_count($outbox,"'_sharky_not_after'")>=2&&str_contains($outbox,"'NOT_AFTER_EXPIRED'"),'El outbox debe cancelar un recordatorio vencido y nunca enviarlo después del inicio');
+$courseStartPos=strpos($outboxWorker,'hache_sharky_notify_due_course_starts($pdo)');
+$outboxDispatchPos=strpos($outboxWorker,"hache_sharky_outbox_dispatch($pdo,'hache_sharky_outbox_meta_send',10)");
+expect_template($courseStartPos!==false&&$outboxDispatchPos!==false&&$courseStartPos<$outboxDispatchPos,'El worker debe encolar recordatorios debidos antes de despachar el outbox');
 
 expect_template(str_contains($helper,'function hache_sharky_notify_enrollment_confirmed'),'Debe existir el disparador de registro recibido');
 expect_template(str_contains($helper,"HACHE_SHARKY_TEMPLATE_ENROLLMENT_CONFIRMED = 'hache_registro_recibido_portal_mx'"),'El registro debe usar la plantilla aprobada de acceso al portal');
