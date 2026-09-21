@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__.'/telefono.php';
 require_once __DIR__.'/sharky-outbox.php';
 require_once __DIR__.'/portal-access.php';
+require_once __DIR__.'/dashboard-tiempo.php';
 
 const HACHE_SHARKY_TEMPLATE_LANGUAGE_MX = 'es_MX';
 const HACHE_SHARKY_TEMPLATE_PAYMENT_CONFIRMED = 'hache_pago_confirmado';
@@ -66,7 +67,7 @@ function hache_sharky_template_payload(string $to,string $templateName,array $bo
 }
 
 /** @return array{ok:bool,reason:string,queued:bool} */
-function hache_sharky_template_enqueue(PDO $pdo,string $phone,string $templateName,array $bodyParameters,string $dedupeSeed,?string $urlButtonParameter=null): array
+function hache_sharky_template_enqueue(PDO $pdo,string $phone,string $templateName,array $bodyParameters,string $dedupeSeed,?string $urlButtonParameter=null,?int $notAfter=null): array
 {
     if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){
         return ['ok'=>false,'reason'=>'SHARKY_DISABLED','queued'=>false];
@@ -75,6 +76,7 @@ function hache_sharky_template_enqueue(PDO $pdo,string $phone,string $templateNa
     if($normalized===null)return ['ok'=>false,'reason'=>'INVALID_PHONE','queued'=>false];
     if(!preg_match('/^[a-z0-9_]{1,512}$/',$templateName))return ['ok'=>false,'reason'=>'INVALID_TEMPLATE','queued'=>false];
     $payload=hache_sharky_template_payload($normalized['digits'],$templateName,$bodyParameters,$urlButtonParameter);
+    if($notAfter!==null&&$notAfter>0)$payload['_sharky_not_after']=$notAfter;
     $queued=hache_sharky_outbox_enqueue_raw($pdo,$normalized['digits'],$payload,'template|'.$dedupeSeed,time());
     return ['ok'=>$queued,'reason'=>$queued?'QUEUED':'OUTBOX_UNAVAILABLE','queued'=>$queued];
 }
@@ -186,6 +188,73 @@ function hache_sharky_notify_enrollment_confirmed(PDO $pdo,array $student,array 
         error_log('[sharky-template] enrollment confirmation enqueue failed');
         return ['ok'=>false,'reason'=>'INTERNAL_ERROR','queued'=>false];
     }
+}
+
+function hache_sharky_course_start_at(string $date,string $time): ?DateTimeImmutable
+{
+    $date=trim($date);$time=trim($time);
+    $format=preg_match('/^\\d{2}:\\d{2}$/',$time)?'H:i':(preg_match('/^\\d{2}:\\d{2}:\\d{2}$/',$time)?'H:i:s':'');
+    if($format==='')return null;
+    $value=$date.' '.$time;
+    $start=DateTimeImmutable::createFromFormat('!Y-m-d '.$format,$value,hache_zona_horaria_operativa());
+    return $start&&$start->format('Y-m-d '.$format)===$value?$start:null;
+}
+
+function hache_sharky_course_start_is_due(string $date,string $time,?DateTimeImmutable $now=null): bool
+{
+    $start=hache_sharky_course_start_at($date,$time);if(!$start)return false;
+    $now=hache_instante_operativo($now);
+    return $now>=$start->modify('-1 hour')&&$now<$start;
+}
+
+function hache_sharky_course_start_site_label(string $siteKey,string $fallback): string
+{
+    $siteKey=strtoupper(trim($siteKey));
+    if($siteKey==='MONTEVERDE')return 'Monteverde';
+    if($siteKey==='PALAPAS')return 'Palapas Protudec';
+    return hache_sharky_template_text($fallback,120);
+}
+
+/** @return array{candidates:int,due:int,queued:int,already_queued:int,skipped:int,errors:int} */
+function hache_sharky_notify_due_course_starts(PDO $pdo,?DateTimeImmutable $now=null): array
+{
+    $stats=['candidates'=>0,'due'=>0,'queued'=>0,'already_queued'=>0,'skipped'=>0,'errors'=>0];
+    try{
+        $now=hache_instante_operativo($now);$today=$now->format('Y-m-d');
+        $st=$pdo->prepare(
+            "SELECT cia.id relation_id,cia.curso_intensivo_id course_id,cia.alumno_id,a.nombre,a.whatsapp,\n"
+            ."       ci.fecha_inicio,s.clave sede_clave,s.nombre sede_nombre,h.hora_inicio\n"
+            ."FROM curso_intensivo_alumnos cia\n"
+            ."INNER JOIN cursos_intensivos ci ON ci.id=cia.curso_intensivo_id\n"
+            ."INNER JOIN alumnos a ON a.id=cia.alumno_id AND a.sede_id=ci.sede_id\n"
+            ."INNER JOIN horarios h ON h.id=cia.horario_id AND h.sede_id=ci.sede_id\n"
+            ."INNER JOIN sedes s ON s.id=ci.sede_id AND s.activo=1\n"
+            ."WHERE ci.fecha_inicio=:today\n"
+            ."  AND ci.estado IN ('PROGRAMADO','EN_CURSO')\n"
+            ."  AND a.estado_administrativo<>'BAJA'\n"
+            ."  AND EXISTS(SELECT 1 FROM pagos p WHERE p.alumno_id=cia.alumno_id AND p.intensivo_id=ci.id AND p.tipo='INTENSIVO' AND p.estado='VALIDO' AND p.importe>0)\n"
+            ."ORDER BY h.hora_inicio,cia.id"
+        );
+        $st->execute([':today'=>$today]);
+        foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
+            $stats['candidates']++;
+            $start=hache_sharky_course_start_at((string)$row['fecha_inicio'],(string)$row['hora_inicio']);
+            if(!$start){$stats['skipped']++;continue;}
+            if(!hache_sharky_course_start_is_due((string)$row['fecha_inicio'],(string)$row['hora_inicio'],$now))continue;
+            $stats['due']++;
+            $relationId=trim((string)$row['relation_id']);$name=hache_sharky_template_text((string)$row['nombre'],120);$phone=trim((string)$row['whatsapp']);
+            $time=hache_sharky_enrollment_time_text((string)$row['hora_inicio']);$site=hache_sharky_course_start_site_label((string)$row['sede_clave'],(string)$row['sede_nombre']);
+            if($relationId===''||$name===''||$phone===''||$time===''||$site===''){$stats['skipped']++;continue;}
+            $dedupeSeed='course-start|relation:'.$relationId;
+            if(hache_sharky_outbox_exists($pdo,'template|'.$dedupeSeed)){$stats['already_queued']++;continue;}
+            $result=hache_sharky_template_enqueue($pdo,$phone,HACHE_SHARKY_TEMPLATE_COURSE_START,[$name,$time,$site],$dedupeSeed,null,$start->getTimestamp());
+            if(($result['queued']??false)===true)$stats['queued']++;else $stats['errors']++;
+        }
+    }catch(Throwable $e){
+        error_log('[sharky-template] course start scheduler failed');
+        $stats['errors']++;
+    }
+    return $stats;
 }
 
 /** @return array{ok:bool,reason:string,queued:bool} */
