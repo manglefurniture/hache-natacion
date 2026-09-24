@@ -21,10 +21,11 @@ El PDF nunca debe estar codificado para una sede específica. Debe resolverse po
 1. Resumen: total cobrado, mensualidades, inscripciones e intensivos.
 2. Participación de Hache y del socio de la sede.
 3. Mínimo contractual, cuando exista, y estado alcanzado/pendiente.
-4. Bloque **Nuevas inscripciones**: una fila por alumno, mostrando únicamente nombre, importe de inscripción e importe de mensualidad del mismo periodo.
-5. Bloque **Mensualidades**: alumnos regulares que pagaron mensualidad y no aparecen como nueva inscripción del periodo; mostrar únicamente nombre e importe de mensualidad.
-6. Bloque **Cursos intensivos**: separar los alumnos por fecha de inicio del curso; dentro de cada fecha mostrar únicamente nombre e importe pagado por intensivo.
-7. Nota breve de las reglas financieras utilizadas.
+4. Para Monteverde/PROA, total informativo de Hache: participación contractual de Hache + comisiones PROA registradas en el mismo periodo. Este dato no modifica el reparto contractual ni la conciliación.
+5. Bloque **Nuevas inscripciones**: una fila por alumno, mostrando únicamente nombre, importe de inscripción e importe de mensualidad del mismo periodo.
+6. Bloque **Mensualidades**: alumnos regulares que pagaron mensualidad y no aparecen como nueva inscripción del periodo; mostrar únicamente nombre e importe de mensualidad.
+7. Bloque **Cursos intensivos**: separar los alumnos por fecha de inicio del curso; dentro de cada fecha mostrar únicamente nombre e importe pagado por intensivo.
+8. Nota breve de las reglas financieras utilizadas.
 
 El PDF es un documento de lectura y liquidación. No debe mostrar folio, método de pago ni otros campos técnicos que no sean necesarios para entender la liquidación. El CSV conserva el detalle completo para auditoría.
 
