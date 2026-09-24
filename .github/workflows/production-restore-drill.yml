@@ -11,8 +11,9 @@ on:
         description: Approved RTO in seconds (explicit, no default)
         required: true
         type: string
-  schedule:
-    - cron: '17 10 1 * *'
+  workflow_run:
+    workflows: ["Production Backup Daily"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -23,14 +24,41 @@ concurrency:
 
 jobs:
   restore-real-backup:
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'schedule' &&
+          github.event.workflow_run.head_branch == 'main')
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      RPO_SECONDS: ${{ github.event_name == 'schedule' && '86400' || github.event.inputs.rpo_seconds }}
-      RTO_SECONDS: ${{ github.event_name == 'schedule' && '3600' || github.event.inputs.rto_seconds }}
+      RPO_SECONDS: ${{ github.event_name == 'workflow_run' && '86400' || github.event.inputs.rpo_seconds }}
+      RTO_SECONDS: ${{ github.event_name == 'workflow_run' && '3600' || github.event.inputs.rto_seconds }}
     steps:
-      - name: Validate recovery objectives and scheduled contract
+      - name: Decide whether recurring drill is due
+        id: cadence
+        env:
+          BACKUP_CREATED_AT: ${{ github.event.workflow_run.created_at }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          test -n "$BACKUP_CREATED_AT"
+          backup_day="$(date -u -d "$BACKUP_CREATED_AT" +%d)"
+          if [[ "$backup_day" == "01" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate recovery objectives and recurring contract
+        if: ${{ steps.cadence.outputs.should_run == 'true' }}
         run: |
           set -Eeuo pipefail
           max=9223372036854775807
@@ -44,12 +72,13 @@ jobs:
           valid_positive_decimal "$RPO_SECONDS"
           valid_positive_decimal "$RTO_SECONDS"
 
-          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
             [[ "$RPO_SECONDS" == "86400" ]]
             [[ "$RTO_SECONDS" == "3600" ]]
           fi
 
       - name: Configure SSH
+        if: ${{ steps.cadence.outputs.should_run == 'true' }}
         env:
           DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -63,6 +92,7 @@ jobs:
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Restore latest complete production backup into isolated DB
+        if: ${{ steps.cadence.outputs.should_run == 'true' }}
         id: restore
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -91,6 +121,7 @@ jobs:
           test -s evidence/restore-drill.json
 
       - name: Validate minimized restore evidence
+        if: ${{ steps.cadence.outputs.should_run == 'true' }}
         env:
           HELPER_EXIT_CODE: ${{ steps.restore.outputs.exit_code }}
         run: |
@@ -120,7 +151,7 @@ jobs:
           '
 
       - name: Upload minimized restore evidence
-        if: ${{ always() }}
+        if: ${{ always() && steps.cadence.outputs.should_run == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: production-readiness-real-restore-${{ github.run_id }}-${{ github.run_attempt }}
