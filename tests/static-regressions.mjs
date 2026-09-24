@@ -475,6 +475,16 @@ test('el cobro bloquea el plan y una invalidación conserva pagos válidos dupli
   assert.match(source.slice(remaining, reopen + 120), /if\(!\$otroPagoValido\)/);
 });
 
+test('el reporte mensual suma las comisiones PROA al total informativo de Hache', () => {
+  includes('api/reportes.php', "if((string)$sede['clave']==='MONTEVERDE')");
+  includes('api/reportes.php', 'SELECT COALESCE(SUM(importe),0) FROM comisiones_proa WHERE periodo=:p');
+  includes('api/reportes.php', "'comisiones_proa_total'=>$comisionesProaTotal");
+  includes('api/reportes.php', "'total_hache_mes'=>$totalHacheMes");
+  includes('public/reportes.php', 'Total Hache Natación');
+  includes('public/reportes.php', 'q.comisiones_proa_total');
+  includes('public/reportes.php', 'q.total_hache_mes');
+});
+
 test('comisiones PROA usa el convenio configurado y detecta eliminaciones inexistentes', () => {
   const source = read('api/comisiones-proa.php');
   includes('api/comisiones-proa.php', 'porcentaje_mensualidad_socio');
