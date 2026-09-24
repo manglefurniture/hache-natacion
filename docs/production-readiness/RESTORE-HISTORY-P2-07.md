@@ -9,17 +9,27 @@ Hache Natación es el piloto real Nivel C. Esta evidencia amplía el restore dri
 ## Cadencia aprobada
 
 - backup de producción: diario a las `09:17 UTC` (`04:17 America/Cancun`);
-- restore drill recurrente: día 1 de cada mes a las `10:17 UTC` (`05:17 America/Cancun`), una hora después del backup diario;
-- RPO usado por la ejecución programada: `86400` s (24 h);
-- RTO usado por la ejecución programada: `3600` s (1 h).
+- restore drill recurrente: después de que el backup programado del **día 1 de cada mes** termine correctamente;
+- RPO usado por la ejecución recurrente: `86400` s (24 h);
+- RTO usado por la ejecución recurrente: `3600` s (1 h).
 
-La ruta manual `workflow_dispatch` permanece disponible y sigue exigiendo RPO/RTO explícitos, sin defaults. La ruta `schedule` utiliza únicamente los objetivos ya aprobados para este proyecto y falla si esos valores se desalinean del contrato.
+La ruta manual `workflow_dispatch` permanece disponible y sigue exigiendo RPO/RTO explícitos, sin defaults.
+
+La ruta recurrente ya no usa un cron independiente. `Production Restore Drill` escucha la finalización de `Production Backup Daily` mediante `workflow_run` y solo continúa cuando el backup padre:
+
+- terminó con `success`;
+- fue originado por `schedule`;
+- corresponde a `main`;
+- fue creado el día 1 UTC.
+
+Esto elimina la carrera entre dos cron independientes: el restore no puede empezar antes de que termine el backup que le da origen. Una ejecución manual del workflow de backup tampoco dispara el restore recurrente.
 
 ## Evidencia histórica
 
-Cada ejecución conserva:
+Cada ejecución real de restore conserva:
 
 - el run de GitHub Actions;
+- la relación temporal con un backup programado ya terminado;
 - un artifact único por `run_id` + `run_attempt`;
 - únicamente `evidence/restore-drill.json` minimizado;
 - retención de artifact de 90 días;
@@ -27,22 +37,23 @@ Cada ejecución conserva:
 
 El dump de producción permanece en el VPS y nunca se copia a GitHub Actions. No se guarda PII ni credenciales en el artifact.
 
-El run real `33999270733` del 2026-09-05 permanece como evidencia bootstrap del restore: PASS, backup real usado, RPO 24 h cumplido, RTO 1 h cumplido, target aislado, verificaciones críticas correctas y cleanup exitoso. Esa ejecución fue manual y **no sustituye** la primera evidencia de la nueva cadencia programada.
+El run real `33999270733` del 2026-09-05 permanece como evidencia bootstrap del restore: PASS, backup real usado, RPO 24 h cumplido, RTO 1 h cumplido, target aislado, verificaciones críticas correctas y cleanup exitoso. Esa ejecución fue manual y **no sustituye** la primera evidencia de la nueva cadencia recurrente.
 
 ## Regla de revisión
 
-P2-07 no se cierra solo porque exista el cron. Después de la primera ejecución programada se debe revisar que:
+P2-07 no se cierra solo porque exista el trigger. Después de la primera ejecución recurrente se debe revisar que:
 
-1. el workflow haya arrancado por `schedule` desde `main`;
-2. use RPO `86400` y RTO `3600`;
-3. seleccione e importe un backup real de producción;
-4. RPO/RTO queden cumplidos;
-5. las tablas y guardas críticas pasen;
-6. el target aislado se limpie correctamente;
-7. el artifact permanezca minimizado y sin datos personales/credenciales.
+1. `Production Backup Daily` haya arrancado por `schedule` desde `main` el día 1 y terminado en `success`;
+2. `Production Restore Drill` haya sido disparado por ese `workflow_run`, no por un cron independiente;
+3. use RPO `86400` y RTO `3600`;
+4. seleccione e importe un backup real de producción;
+5. RPO/RTO queden cumplidos;
+6. las tablas y guardas críticas pasen;
+7. el target aislado se limpie correctamente;
+8. el artifact permanezca minimizado y sin datos personales/credenciales.
 
 Una ejecución fallida queda como evidencia de fallo y requiere revisión humana; no se reescribe ni se convierte automáticamente en PASS.
 
 ## Frontera
 
-Este cambio implementa la **cadencia y conservación de historia** en Hache Natación. Hache Base puede reutilizar el patrón después de observar una ejecución programada real; no debe afirmar evidencia histórica inexistente ni imponer esta cadencia a otros proyectos C con RPO/RTO distintos.
+Este cambio implementa la **cadencia serializada y conservación de historia** en Hache Natación. Hache Base puede reutilizar el patrón después de observar una ejecución recurrente real; no debe afirmar evidencia histórica inexistente ni imponer esta cadencia a otros proyectos C con RPO/RTO distintos.
