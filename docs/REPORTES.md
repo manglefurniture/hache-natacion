@@ -21,7 +21,7 @@ El PDF nunca debe estar codificado para una sede específica. Debe resolverse po
 1. Resumen: total cobrado, mensualidades, inscripciones e intensivos.
 2. Participación de Hache y del socio de la sede.
 3. Mínimo contractual, cuando exista, y estado alcanzado/pendiente.
-4. Para Monteverde/PROA, total informativo de Hache: participación contractual de Hache + comisiones PROA registradas en el mismo periodo. Este dato no modifica el reparto contractual ni la conciliación.
+4. Para ADMIN en Monteverde/PROA, total informativo de Hache: participación contractual de Hache + comisiones PROA registradas en el mismo periodo. Debe aparecer tanto en pantalla como en PDF. No se expone a VERIFICADOR y no modifica el reparto contractual ni la conciliación.
 5. Bloque **Nuevas inscripciones**: una fila por alumno, mostrando únicamente nombre, importe de inscripción e importe de mensualidad del mismo periodo.
 6. Bloque **Mensualidades**: alumnos regulares que pagaron mensualidad y no aparecen como nueva inscripción del periodo; mostrar únicamente nombre e importe de mensualidad.
 7. Bloque **Cursos intensivos**: separar los alumnos por fecha de inicio del curso; dentro de cada fecha mostrar únicamente nombre e importe pagado por intensivo.
