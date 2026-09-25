@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/request-context.php';
+hache_request_apply_response_headers();
+
 // Compuerta central de seguridad para los endpoints de la API.
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 if (str_starts_with($uri, '/api/')) {
@@ -14,7 +17,7 @@ if (str_starts_with($uri, '/api/')) {
     }
     if (!defined('HACHE_API_ERROR_FILTER')) {
         define('HACHE_API_ERROR_FILTER', true);
-        ob_start(static function (string $body): string {
+        ob_start(static function (string $body) use ($uri): string {
             if (http_response_code() < 500 || $body === '') return $body;
             $isJson = false;
             foreach (headers_list() as $header) {
@@ -26,8 +29,12 @@ if (str_starts_with($uri, '/api/')) {
             if (!$isJson) return $body;
             $payload = json_decode($body, true);
             if (!is_array($payload) || !array_key_exists('error', $payload)) return $body;
-            error_log('Hache API error [' . ($_SERVER['REQUEST_URI'] ?? '') . ']: ' . (string)$payload['error']);
+            hache_log_event('ERROR', 'api.response.internal_error', [
+                'route' => $uri,
+                'status' => http_response_code(),
+            ]);
             $payload['error'] = 'No se pudo completar la operación. Intenta nuevamente.';
+            $payload['request_id'] ??= hache_request_context()['request_id'];
             return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $body;
         });
     }

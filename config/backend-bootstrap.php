@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/request-context.php';
+hache_request_apply_response_headers();
+
 $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
 $baseName = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: $scriptName;

@@ -280,5 +280,8 @@ f8_expect(str_contains($endpoint, "auth_require(['ADMIN'])"),'La lectura unifica
 f8_expect(!str_contains($endpoint, 'contact_hash'),'La API F8 no debe exponer hashes de contacto.');
 f8_expect(!preg_match('/SELECT[^;]+\bip\b/is', $endpoint),'La API F8 no debe seleccionar IP del audit genérico.');
 f8_expect(str_contains($endpoint, "'correlacion'=>'sin_heuristicas'"),'La respuesta debe declarar que no correlaciona fuentes heurísticamente.');
+$deletionEndpoint = file_get_contents(__DIR__.'/../api/alumno-gestion.php') ?: '';
+f8_expect(!str_contains($deletionEndpoint, "'alumno'=>\$alumno['nombre']"),'La bitácora de eliminación no debe persistir el nombre del alumno cuando ya conserva su ID.');
+f8_expect(str_contains($deletionEndpoint, "'alumno_id'=>\$alumno['id']"),'La bitácora de eliminación debe conservar la referencia durable del alumno.');
 
 fwrite(STDOUT, "F8_AUDIT_READ_REGRESSION_OK\n");

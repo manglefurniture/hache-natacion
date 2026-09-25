@@ -46,7 +46,7 @@ function auditar_eliminacion(PDO $pdo,array $me,array $alumno,array $detalle):vo
 {
     if(!tabla_tiene_columna($pdo,'auditoria_eventos','entidad_id'))return;
     $st=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,entidad_id,detalle,metodo,ruta) VALUES(:uid,:un,'ELIMINAR_DEFINITIVO','alumno',:aid,:detalle,'POST','/api/alumno-gestion.php')");
-    $st->execute([':uid'=>$me['id'],':un'=>$me['usuario']??null,':aid'=>$alumno['id'],':detalle'=>json_encode(['alumno'=>$alumno['nombre'],'eliminados'=>$detalle],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)]);
+    $st->execute([':uid'=>$me['id'],':un'=>$me['usuario']??null,':aid'=>$alumno['id'],':detalle'=>json_encode(['alumno_id'=>$alumno['id'],'eliminados'=>$detalle],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)]);
 }
 
 try{

@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Configure SSH
         env:
@@ -131,7 +131,7 @@ jobs:
           '
 
       - name: Upload production evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-readiness-production-snapshot-${{ github.run_id }}
           path: evidence/
@@ -144,7 +144,7 @@ jobs:
     timeout-minutes: 15
     services:
       mariadb:
-        image: mariadb:11.8
+        image: mariadb:11.8@sha256:2439dcd7d14010ecd1ff7a4e1c5abe8e208c34fe35290744deeeaac3569043c3
         env:
           MARIADB_ROOT_PASSWORD: root
         ports:
@@ -155,7 +155,7 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install MariaDB client
         run: |
@@ -235,7 +235,7 @@ jobs:
           '
 
       - name: Upload restore evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-readiness-restore-lab-${{ github.run_id }}
           path: evidence/restore-lab.json
