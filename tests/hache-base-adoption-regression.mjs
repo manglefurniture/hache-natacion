@@ -21,7 +21,7 @@ let usesCount = 0;
 
 for (const file of workflowFiles) {
   const source = fs.readFileSync(path.join(workflowDirectory, file), 'utf8');
-  for (const match of source.matchAll(/^\s*uses:\s*([^\s#]+)\s*(?:#.*)?$/gm)) {
+  for (const match of source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)\s*(?:#.*)?$/gm)) {
     usesCount += 1;
     const reference = match[1];
     expect(/@[0-9a-f]{40}$/i.test(reference), `${file} must pin ${reference} to a full immutable commit SHA`);
