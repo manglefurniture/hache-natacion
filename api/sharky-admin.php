@@ -89,7 +89,8 @@ if ($action === 'PROTECTED_ADD' || $action === 'PROTECTED_REMOVE') {
     if($action==='PROTECTED_ADD'){
         $label=(string)($input['label']??'');
         if(mb_strlen($label)>120)sharky_admin_out(['ok'=>false,'error'=>'Etiqueta demasiado larga'],422);
-        if(!hache_sharky_protected_add($pdo,$phone,$label))sharky_admin_out(['ok'=>false,'error'=>'El número ya está protegido'],409);
+        try{$added=hache_sharky_protected_add($pdo,$phone,$label);}catch(Throwable $e){sharky_admin_out(['ok'=>false,'error'=>'No se pudo activar aún la protección. Inténtalo de nuevo en unos segundos.'],503);}
+        if(!$added)sharky_admin_out(['ok'=>false,'error'=>'El número ya está protegido'],409);
     }else{
         if(!hache_sharky_protected_remove($pdo,$phone))sharky_admin_out(['ok'=>false,'error'=>'Número no encontrado'],404);
     }

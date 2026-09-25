@@ -45,15 +45,46 @@ function hache_sharky_is_protected_number(PDO $pdo,string $phone): bool
     return (bool)$st->fetchColumn();
 }
 
+/** Same advisory lock guards activation and irreversible automatic sends/contact writes. */
+function hache_sharky_protected_lock(PDO $pdo,string $phone,int $waitSeconds=0): ?string
+{
+    $hash=hache_sharky_protected_hash($phone);
+    if($hash===null)return null;
+    $name='sharky-protect-'.substr($hash,0,40);
+    $st=$pdo->prepare('SELECT GET_LOCK(:name,:wait)');
+    $st->execute([':name'=>$name,':wait'=>max(0,min(15,$waitSeconds))]);
+    return (int)$st->fetchColumn()===1?$name:null;
+}
+
+function hache_sharky_protected_unlock(PDO $pdo,string $name): void
+{
+    if($name==='')return;
+    $st=$pdo->prepare('SELECT RELEASE_LOCK(:name)');
+    $st->execute([':name'=>$name]);
+}
+
+function hache_sharky_protected_automatic_send(PDO $pdo,string $phone,callable $send): bool
+{
+    $lock=hache_sharky_protected_lock($pdo,$phone,0);
+    if($lock===null)return false;
+    try{
+        return !hache_sharky_is_protected_number($pdo,$phone)&&$send()===true;
+    }finally{hache_sharky_protected_unlock($pdo,$lock);}
+}
+
 function hache_sharky_protected_add(PDO $pdo,string $phone,string $label=''): bool
 {
     $normalized=hache_sharky_protected_normalize($phone);
     if($normalized===null)throw new InvalidArgumentException('Número inválido');
-    $label=hache_sharky_contact_book_clean_name($label);
-    $sealed=hache_sharky_contact_book_encrypt(['phone'=>$normalized['e164'],'label'=>$label]);
-    $st=$pdo->prepare('INSERT IGNORE INTO sharky_protected_numbers(contact_hash,payload_ciphertext,payload_iv,payload_tag) VALUES(:h,:p,:iv,:tag)');
-    $st->execute([':h'=>hache_sharky_protected_hash($phone),':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag']]);
-    return $st->rowCount()===1;
+    $lock=hache_sharky_protected_lock($pdo,$phone,10);
+    if($lock===null)throw new RuntimeException('No se pudo activar la protección mientras termina una automatización; inténtalo de nuevo.');
+    try{
+        $label=hache_sharky_contact_book_clean_name($label);
+        $sealed=hache_sharky_contact_book_encrypt(['phone'=>$normalized['e164'],'label'=>$label]);
+        $st=$pdo->prepare('INSERT IGNORE INTO sharky_protected_numbers(contact_hash,payload_ciphertext,payload_iv,payload_tag) VALUES(:h,:p,:iv,:tag)');
+        $st->execute([':h'=>hache_sharky_protected_hash($phone),':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag']]);
+        return $st->rowCount()===1;
+    }finally{hache_sharky_protected_unlock($pdo,$lock);}
 }
 
 function hache_sharky_protected_remove(PDO $pdo,string $phone): bool

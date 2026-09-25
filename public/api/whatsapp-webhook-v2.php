@@ -193,6 +193,8 @@ function whatsapp_v2_sharky_answer(string $message, array $history): string
 
 function whatsapp_v2_send_text(string $to, string $body): bool
 {
+    $pdo=hache_sharky_pdo();if(!$pdo)return false;
+    try{return hache_sharky_protected_automatic_send($pdo,$to,static function()use($to,$body):bool{
     $token = whatsapp_v2_secret('WHATSAPP_ACCESS_TOKEN');
     $phoneNumberId = whatsapp_v2_secret('WHATSAPP_PHONE_NUMBER_ID');
     if ($token === '' || $phoneNumberId === '') return false;
@@ -222,6 +224,7 @@ function whatsapp_v2_send_text(string $to, string $body): bool
     hache_sharky_metric_increment($ok ? 'messages_sent' : 'errors_send');
     if (!$ok) error_log('[whatsapp-webhook-v2] outbound send failed http='.$status);
     return $ok;
+    });}catch(Throwable $e){return false;}
 }
 
 function whatsapp_v2_media_metadata(string $mediaId): ?array
@@ -358,9 +361,14 @@ $configuredPhoneId = whatsapp_v2_secret('WHATSAPP_PHONE_NUMBER_ID');
 
 foreach (whatsapp_v2_extract_echoes($payload) as $echo) {
     if ($configuredPhoneId !== '' && $echo['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $echo['phone_number_id'])) continue;
-    try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $echo['to'])) continue; } catch (Throwable $e) { continue; }
+    $pdo=hache_sharky_pdo();$lock=null;
+    try {
+        if(!$pdo instanceof PDO)continue;
+        $lock=hache_sharky_protected_lock($pdo,$echo['to'],0);
+        if($lock===null||hache_sharky_is_protected_number($pdo,$echo['to']))continue;
     $state = whatsapp_v2_history_read($echo['to']);
     whatsapp_v2_activate_handoff($echo['to'], 'manual', $state['turns']);
+    }catch(Throwable $e){continue;}finally{if($lock!==null)hache_sharky_protected_unlock($pdo,$lock);}
 }
 
 $jobs = [];
@@ -384,7 +392,11 @@ $business = hache_sharky_business_values(hache_sharky_pdo());
 $threshold = hache_sharky_config_int($business, 'sharky_escalado_intentos', 2, 1, 5);
 
 foreach ($jobs as $job) {
-    try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $job['from'])) continue; } catch (Throwable $e) { continue; }
+    $pdo=hache_sharky_pdo();$lock=null;
+    try {
+        if(!$pdo instanceof PDO)continue;
+        $lock=hache_sharky_protected_lock($pdo,$job['from'],0);
+        if($lock===null||hache_sharky_is_protected_number($pdo,$job['from']))continue;
     if (hache_sharky_takeover_active($job['from'])) {
         error_log('[whatsapp-webhook-v2] queued skipped human_takeover=1');
         continue;
@@ -453,6 +465,7 @@ foreach ($jobs as $job) {
         whatsapp_v2_history_write($job['from'], $turns, $unresolved);
     }
     error_log('[whatsapp-webhook-v2] processed message type='.$job['type'].' sent='.($sent ? '1' : '0'));
+    }catch(Throwable $e){continue;}finally{if($lock!==null)hache_sharky_protected_unlock($pdo,$lock);}
 }
 
 exit;

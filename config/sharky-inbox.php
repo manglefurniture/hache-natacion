@@ -43,12 +43,10 @@ function hache_sharky_inbox_store(PDO $pdo,array $event): bool
         $st=$pdo->prepare('INSERT IGNORE INTO sharky_message_receipts(message_id,contact_hash,message_type,payload_ciphertext,payload_iv,payload_tag,attempt_count) VALUES(:m,:c,:t,:p,:iv,:tag,0)');
         $st->execute([':m'=>$id,':c'=>$hash,':t'=>$type,':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag']]);
         if($st->rowCount()===1){
-            hache_sharky_contact_book_capture_event($pdo,$event);
             return true;
         }
         $st=$pdo->prepare('UPDATE sharky_message_receipts SET payload_ciphertext=COALESCE(payload_ciphertext,:p),payload_iv=COALESCE(payload_iv,:iv),payload_tag=COALESCE(payload_tag,:tag) WHERE message_id=:m');
         $st->execute([':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':m'=>$id]);
-        hache_sharky_contact_book_capture_event($pdo,$event);
         return true;
     }catch(Throwable $e){error_log('[sharky-inbox] persist failed');return false;}
 }
@@ -104,14 +102,24 @@ function hache_sharky_inbox_dispatch(PDO $pdo,callable $processor,int $limit=20,
         }
         $event=hache_sharky_inbox_decrypt($row);$id=(string)($row['message_id']??'');
         if($event===null){hache_sharky_inbox_mark_dead($pdo,$id,'DECRYPT_FAILED');$stats['dead']++;continue;}
+        $protectedLock=null;
         try{
+            $protectedLock=hache_sharky_protected_lock($pdo,hache_sharky_inbox_contact($event),0);
+            if($protectedLock===null){$stats['deferred']++;continue;}
             if(hache_sharky_is_protected_number($pdo,hache_sharky_inbox_contact($event))){
                 if(hache_sharky_orchestrator_mark_processed($pdo,$id))$stats['processed']++;else$stats['deferred']++;
                 continue;
             }
-        }catch(Throwable $e){$stats['deferred']++;continue;}
-        $done=false;try{$done=$processor($event)===true;}catch(Throwable $e){error_log('[sharky-inbox] worker exception');$done=false;}
-        if($done)$stats['processed']++;else$stats['deferred']++;
+            if(!hache_sharky_contact_book_capture_event($pdo,$event)){$stats['deferred']++;continue;}
+            if(in_array((string)($event['type']??''),['image','document'],true)
+                &&(string)($event['kind']??'')!=='member_absence_evidence'){
+                if(hache_sharky_orchestrator_mark_processed($pdo,$id))$stats['processed']++;else$stats['deferred']++;
+                continue;
+            }
+            $done=false;try{$done=$processor($event)===true;}catch(Throwable $e){error_log('[sharky-inbox] worker exception');$done=false;}
+            if($done)$stats['processed']++;else$stats['deferred']++;
+        }catch(Throwable $e){$stats['deferred']++;}
+        finally{if($protectedLock!==null)hache_sharky_protected_unlock($pdo,$protectedLock);}
     }
     return $stats;
 }

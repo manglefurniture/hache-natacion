@@ -188,14 +188,9 @@ $durable=array_merge($events,$echoes);usort($durable,static fn(array $a,array $b
 // P0 durability: persist every supported normalized inbound message/echo before returning 200.
 foreach($durable as $event)if(!hache_sharky_inbox_store($pdo,$event))sharky_lab_json(503,['ok'=>false,'error'=>'Unable to persist inbound event']);
 
-// Generic media remains evidence-only and is finalized immediately. Absence
-// evidence is the exception: it must pass through member-ops so it can be bound
-// to the confirmed absence before the inbox receipt is completed.
-foreach($events as $event){
-    if(!in_array((string)($event['type']??''),['image','document'],true))continue;
-    if((string)($event['kind']??'')===HACHE_SHARKY_MEMBER_EVIDENCE_KIND)continue;
-    if(!hache_sharky_orchestrator_mark_processed($pdo,(string)($event['id']??'')))sharky_lab_json(503,['ok'=>false,'error'=>'Unable to finalize inbound media event']);
-}
+// Generic media is evidence-only. Its encrypted receipt is durable before ACK;
+// the inbox worker captures the contact and finalizes it without conversational AI.
+// Absence evidence still passes through member-ops in the normal processor.
 
 http_response_code(200);header('Content-Type: application/json; charset=utf-8');echo '{"ok":true}';if(function_exists('fastcgi_finish_request'))fastcgi_finish_request();ignore_user_abort(true);@set_time_limit(90);
 
@@ -214,12 +209,15 @@ usort($processing,static function(array $a,array $b):int{
 foreach($processing as $event){
     if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
     $eventPhone=(string)($event['from']??$event['to']??'');
+    $protectedLock=null;
     try{
+        $protectedLock=hache_sharky_protected_lock($pdo,$eventPhone,0);
+        if($protectedLock===null)continue;
         if(hache_sharky_is_protected_number($pdo,$eventPhone)){
             hache_sharky_orchestrator_mark_processed($pdo,(string)($event['id']??''));
             continue;
         }
-    }catch(Throwable $e){continue;}
+        if(!hache_sharky_contact_book_capture_event($pdo,$event))continue;
     $identityBefore=sharky_lab_identity_before($pdo,$event);
     if(!hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,$identityBefore))continue;
     if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){
@@ -239,6 +237,8 @@ foreach($processing as $event){
     $event=hache_sharky_language_prepare_event($pdo,$event);
     hache_sharky_human_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
     sharky_lab_notify_registration_transition($pdo,$event,$identityBefore);
+    }catch(Throwable $e){continue;}
+    finally{if($protectedLock!==null)hache_sharky_protected_unlock($pdo,$protectedLock);}
 }
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
 
