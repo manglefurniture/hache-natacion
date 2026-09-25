@@ -171,10 +171,20 @@ $pdo->exec("CREATE TABLE sharky_message_receipts(message_id VARCHAR(191) PRIMARY
 foreach(['sharky_referrals','sharky_action_audit','sharky_outbox'] as $table)$pdo->exec("CREATE TABLE {$table}(id INT PRIMARY KEY)");
 $protectedEvent=['id'=>'protected-message','from'=>$existing,'kind'=>'message','type'=>'text','text'=>'Consulta privada'];
 $normalEvent=['id'=>'normal-message','from'=>$protected,'kind'=>'message','type'=>'text','text'=>'Consulta normal'];
+$newEvent=['id'=>'new-contact-message','from'=>'529981888780','profile_name'=>'Persona nueva','kind'=>'message','type'=>'text','text'=>'Hola'];
+$mediaEvent=['id'=>'media-message','from'=>'529981888781','profile_name'=>'Persona con foto','kind'=>'message','type'=>'image'];
 contact_book_db_expect(hache_sharky_inbox_store($pdo,$protectedEvent),'Protected message was not stored.');
 contact_book_db_expect(hache_sharky_inbox_store($pdo,$normalEvent),'Normal message was not stored.');
+contact_book_db_expect(hache_sharky_inbox_store($pdo,$newEvent),'New contact message was not stored.');
+contact_book_db_expect(hache_sharky_inbox_store($pdo,$mediaEvent),'Media message was not stored.');
+$st=$pdo->prepare('SELECT COUNT(*) FROM sharky_contacts WHERE contact_hash=:h');$st->execute([':h'=>hache_sharky_protected_hash($newEvent['from'])]);
+contact_book_db_expect((int)$st->fetchColumn()===0,'Webhook capture must not block before ACK.');
 $calls=[];$stats=hache_sharky_inbox_dispatch($pdo,static function(array $event)use($pdo,&$calls):bool{$calls[]=$event['id'];return hache_sharky_orchestrator_mark_processed($pdo,$event['id']);});
-contact_book_db_expect($calls===['normal-message']&&$stats['processed']===2,'Protected message reached the automatic processor or normal message was blocked.');
+contact_book_db_expect($calls===['new-contact-message','normal-message']&&$stats['processed']===4,'Protected/media messages reached the automatic processor or normal messages were blocked.');
+$st->execute([':h'=>hache_sharky_protected_hash($newEvent['from'])]);
+contact_book_db_expect((int)$st->fetchColumn()===1,'Normal contact was not captured by the worker.');
+$st->execute([':h'=>hache_sharky_protected_hash($mediaEvent['from'])]);
+contact_book_db_expect((int)$st->fetchColumn()===1,'Media contact was lost before finalization.');
 $st=$pdo->query("SELECT processed_at,payload_ciphertext FROM sharky_message_receipts WHERE message_id='protected-message'");$receipt=$st->fetch(PDO::FETCH_ASSOC);
 contact_book_db_expect(!empty($receipt['processed_at'])&&!empty($receipt['payload_ciphertext']),'Protected inbound message must remain durably readable.');
 

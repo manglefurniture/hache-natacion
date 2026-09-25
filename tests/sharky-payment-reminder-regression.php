@@ -116,9 +116,9 @@ $extractPos = strpos($webhook, 'hache_sharky_payment_reminder_extract_proof_even
 $persistPos = strpos($webhook, 'hache_sharky_inbox_store');
 payment_reminder_expect($extractPos !== false && $persistPos !== false && $extractPos < $persistPos, 'Proof candidates must be normalized before durable inbox persistence.');
 payment_reminder_expect(str_contains($webhook, "\$event['kind']='group_media'"), 'Group media must not cancel an individual payment reminder.');
-$markMediaPos = strpos($webhook, 'Unable to finalize inbound media event');
 $ackPos = strpos($webhook, 'http_response_code(200)');
-payment_reminder_expect($markMediaPos !== false && $ackPos !== false && $markMediaPos < $ackPos, 'Proof media must be durably finalized before webhook ACK.');
+$inboxWorker = file_get_contents(__DIR__.'/../config/sharky-inbox.php') ?: '';
+payment_reminder_expect($persistPos !== false && $ackPos !== false && $persistPos < $ackPos && str_contains($inboxWorker,"['image','document']") && str_contains($inboxWorker,'hache_sharky_orchestrator_mark_processed($pdo,$id)'), 'Proof media must be durable before ACK and finalized by the inbox worker without conversational AI.');
 payment_reminder_expect(str_contains($webhook, "['image','document']"), 'Image/document events must be excluded from conversational AI processing.');
 
 echo "OK sharky payment reminder regression\n";

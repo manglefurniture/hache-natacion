@@ -198,7 +198,10 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
         try{
             if(!hache_sharky_outbox_renew_owner($pdo,$id,$owner))continue;if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
             try{$protectedLock=hache_sharky_protected_lock($pdo,$contact,0);}catch(Throwable $e){$protectedLock=null;}
-            if($protectedLock===null){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
+            if($protectedLock===null){
+                if(!hache_sharky_outbox_reschedule_owner($pdo,$id,$owner,time()+2,'PROTECTION_LOCK_BUSY'))hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'PROTECTION_LOCK_BUSY');
+                continue;
+            }
             try{$protected=hache_sharky_is_protected_number($pdo,$contact);}catch(Throwable $e){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
             if($protected){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,'PROTECTED_NUMBER'))$stats['cancelled']++;continue;}
             if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;continue;}

@@ -160,7 +160,7 @@ function hache_sharky_contact_book_capture_event(PDO $pdo,array $event): bool
     if($normalized===null)return true;
     $protectedLock=null;
     try{
-        $protectedLock=hache_sharky_protected_lock($pdo,$contact,10);
+        $protectedLock=hache_sharky_protected_lock($pdo,$contact,0);
         if($protectedLock===null)return false;
         if(hache_sharky_is_protected_number($pdo,$contact))return true;
         $contactHash=hache_sharky_orchestrator_contact_hash($normalized['digits']);
