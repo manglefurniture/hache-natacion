@@ -116,7 +116,7 @@ for (const fragment of [
   'rm -f evidence/database.sql',
   'production_backup_used',
   'RESTORE_REMAINS_PARTIAL',
-  'actions/upload-artifact@v4',
+  'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
 ]) {
   assert.ok(workflow.includes(fragment), `missing evidence workflow contract: ${fragment}`);
 }
