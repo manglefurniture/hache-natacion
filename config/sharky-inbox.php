@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-contact-book.php';
+require_once __DIR__.'/sharky-protected-numbers.php';
 
 function hache_sharky_inbox_key(): string
 {
@@ -103,6 +104,12 @@ function hache_sharky_inbox_dispatch(PDO $pdo,callable $processor,int $limit=20,
         }
         $event=hache_sharky_inbox_decrypt($row);$id=(string)($row['message_id']??'');
         if($event===null){hache_sharky_inbox_mark_dead($pdo,$id,'DECRYPT_FAILED');$stats['dead']++;continue;}
+        try{
+            if(hache_sharky_is_protected_number($pdo,hache_sharky_inbox_contact($event))){
+                if(hache_sharky_orchestrator_mark_processed($pdo,$id))$stats['processed']++;else$stats['deferred']++;
+                continue;
+            }
+        }catch(Throwable $e){$stats['deferred']++;continue;}
         $done=false;try{$done=$processor($event)===true;}catch(Throwable $e){error_log('[sharky-inbox] worker exception');$done=false;}
         if($done)$stats['processed']++;else$stats['deferred']++;
     }

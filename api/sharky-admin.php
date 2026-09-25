@@ -9,6 +9,7 @@ require_once __DIR__.'/../config/sharky-groups.php';
 require_once __DIR__.'/../config/sharky-brain-diagnostics.php';
 require_once __DIR__.'/../config/sharky-brain-live-router.php';
 require_once __DIR__.'/../config/sharky-contact-naming.php';
+require_once __DIR__.'/../config/sharky-protected-numbers.php';
 
 $me = auth_require(['ADMIN']);
 
@@ -21,6 +22,7 @@ function sharky_admin_out(array $body, int $status = 200): never
 
 $pdo = hache_sharky_pdo();
 if (!$pdo) sharky_admin_out(['ok'=>false, 'error'=>'No se pudo conectar con la configuración'], 503);
+if (!hache_sharky_protected_schema_ready($pdo)) sharky_admin_out(['ok'=>false,'error'=>'Migración de números protegidos pendiente'],503);
 
 $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 if ($method === 'GET') {
@@ -65,6 +67,8 @@ if ($method === 'GET') {
     sharky_admin_out([
         'ok'=>true,
         'admin'=>true,
+        'csrf'=>auth_csrf_token(),
+        'protected_numbers'=>hache_sharky_protected_list($pdo),
         'configuracion'=>$config,
         'takeovers'=>hache_sharky_takeover_list(),
         'metrics'=>$metrics,
@@ -76,7 +80,21 @@ if ($method === 'GET') {
 if ($method !== 'POST') sharky_admin_out(['ok'=>false, 'error'=>'Método no permitido'], 405);
 $input = json_decode(file_get_contents('php://input'), true);
 if (!is_array($input)) sharky_admin_out(['ok'=>false, 'error'=>'Solicitud JSON inválida'], 400);
+if (!auth_csrf_validate(isset($input['csrf'])?(string)$input['csrf']:null)) sharky_admin_out(['ok'=>false,'error'=>'Sesión de seguridad vencida. Recarga la página.'],419);
 $action = strtoupper(trim((string) ($input['accion'] ?? '')));
+
+if ($action === 'PROTECTED_ADD' || $action === 'PROTECTED_REMOVE') {
+    $phone=(string)($input['phone']??'');
+    if(hache_sharky_protected_normalize($phone)===null)sharky_admin_out(['ok'=>false,'error'=>'Número inválido'],422);
+    if($action==='PROTECTED_ADD'){
+        $label=(string)($input['label']??'');
+        if(mb_strlen($label)>120)sharky_admin_out(['ok'=>false,'error'=>'Etiqueta demasiado larga'],422);
+        if(!hache_sharky_protected_add($pdo,$phone,$label))sharky_admin_out(['ok'=>false,'error'=>'El número ya está protegido'],409);
+    }else{
+        if(!hache_sharky_protected_remove($pdo,$phone))sharky_admin_out(['ok'=>false,'error'=>'Número no encontrado'],404);
+    }
+    sharky_admin_out(['ok'=>true]);
+}
 
 if ($action === 'RESUME') {
     $hash = strtolower(trim((string) ($input['contact_hash'] ?? '')));

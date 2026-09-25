@@ -196,6 +196,10 @@ validate_expected_sha() {
 
 apply_release_migrations() {
   require_command php
+  local protected_numbers="$REPO/bin/migrate-sharky-protected-numbers.php"
+  if [[ -f "$protected_numbers" ]]; then
+    php "$protected_numbers"
+  fi
   local partial_payments="$REPO/bin/migrate-intensive-partial-payments.php"
   if [[ -f "$partial_payments" ]]; then
     php "$partial_payments"

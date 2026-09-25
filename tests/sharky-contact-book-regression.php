@@ -7,6 +7,11 @@ putenv('SHARKY_CONTACT_HASH_KEY=contact-book-regression-hash-key-2026-abcdef');
 require_once __DIR__.'/../config/sharky-contact-book.php';
 require_once __DIR__.'/../config/sharky-contact-profiles.php';
 
+foreach(['+52 998 111 2222','529981112222','9981112222','+52 1 998 111 2222'] as $format){
+    if(hache_sharky_protected_hash($format)!==hache_sharky_protected_hash('529981112222'))throw new RuntimeException('Protected number normalization changed');
+}
+if(hache_sharky_protected_normalize('abc')!==null)throw new RuntimeException('Invalid protected number accepted');
+
 function contact_book_expect(bool $ok,string $message): void
 {
     if(!$ok){fwrite(STDERR,"SHARKY CONTACT BOOK FAIL: {$message}\n");exit(1);}

@@ -46,6 +46,7 @@ $pdo->exec("INSERT INTO horarios(id,sede_id,hora_inicio) VALUES('h-mv-8','s-mv',
 $sql=file_get_contents(__DIR__.'/../database/migrations/20260908_sharky_contact_book.sql');
 contact_book_db_expect(is_string($sql)&&trim($sql)!=='','Migration SQL must be readable.');
 $pdo->exec($sql);
+$pdo->exec((string)file_get_contents(__DIR__.'/../database/migrations/20260925_sharky_protected_numbers.sql'));
 contact_book_db_expect(hache_sharky_contact_book_schema_ready($pdo),'Migration must create the verified contact-book schema.');
 
 $configRows=hache_sharky_contact_naming_config_rows($pdo);
@@ -130,6 +131,43 @@ contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>'52
 $teacher=contact_book_db_payload($pdo,'529981234567');
 contact_book_db_expect(($teacher['row']['role']??'')==='TEACHER'&&($teacher['row']['profesor_id']??'')===$teacherId,'Active teacher identity must take precedence.');
 contact_book_db_expect(($teacher['payload']['managed_name']??'')==='HEIDY GARCIA — COACH HACHE','Teacher contact must remain uppercase.');
+
+// Protected numbers never create or mutate local contacts, even when a profile changes.
+$protected='529981888777';
+contact_book_db_expect(hache_sharky_protected_add($pdo,'+52 998 188 8777','Referencia privada'),'Protected add failed.');
+contact_book_db_expect(!hache_sharky_protected_add($pdo,$protected,'Duplicado'),'Canonical duplicate was accepted.');
+contact_book_db_expect(hache_sharky_is_protected_number($pdo,'9981888777'),'National number bypassed protection.');
+$listed=hache_sharky_protected_list($pdo);
+contact_book_db_expect(count($listed)===1&&$listed[0]['phone']==='+529981888777'&&$listed[0]['label']==='Referencia privada','Protected list did not decrypt saved data.');
+contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>$protected,'profile_name'=>'Nombre automático']),'Protected capture should be a safe no-op.');
+$st=$pdo->prepare('SELECT COUNT(*) FROM sharky_contacts WHERE contact_hash=:h');$st->execute([':h'=>hache_sharky_protected_hash($protected)]);
+contact_book_db_expect((int)$st->fetchColumn()===0,'Protected capture created a contact.');
+$existing='529981888778';
+contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>$existing,'profile_name'=>'Nombre manual']),'Normal contact capture failed.');
+$before=contact_book_db_payload($pdo,$existing);
+contact_book_db_expect(hache_sharky_protected_add($pdo,$existing,'Existente'),'Existing contact protection failed.');
+contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>$existing,'profile_name'=>'Nombre impuesto']),'Existing protected capture should be a no-op.');
+$after=contact_book_db_payload($pdo,$existing);
+contact_book_db_expect($before['row']['desired_hash']===$after['row']['desired_hash']&&$before['row']['last_seen_at']===$after['row']['last_seen_at'],'Protected contact metadata changed.');
+contact_book_db_expect($before['payload']===$after['payload'],'Protected contact name changed.');
+contact_book_db_expect(hache_sharky_protected_remove($pdo,'9981888777'),'Protected remove failed.');
+contact_book_db_expect(!hache_sharky_is_protected_number($pdo,$protected),'Removed number remains protected.');
+contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>$protected,'profile_name'=>'Normal']),'Unprotected contact capture failed.');
+$st->execute([':h'=>hache_sharky_protected_hash($protected)]);
+contact_book_db_expect((int)$st->fetchColumn()===1,'Unprotected number did not resume normal contact creation.');
+
+// Signed webhook receipt remains visible, while the worker never calls Sharky's processor.
+require_once __DIR__.'/../config/sharky-inbox.php';
+$pdo->exec("CREATE TABLE sharky_message_receipts(message_id VARCHAR(191) PRIMARY KEY,contact_hash CHAR(64),message_type VARCHAR(30),payload_ciphertext MEDIUMTEXT,payload_iv VARCHAR(32),payload_tag VARCHAR(32),received_at DATETIME DEFAULT CURRENT_TIMESTAMP,lease_until DATETIME NULL,processed_at DATETIME NULL,attempt_count INT DEFAULT 0)");
+foreach(['sharky_referrals','sharky_action_audit','sharky_outbox'] as $table)$pdo->exec("CREATE TABLE {$table}(id INT PRIMARY KEY)");
+$protectedEvent=['id'=>'protected-message','from'=>$existing,'kind'=>'message','type'=>'text','text'=>'Consulta privada'];
+$normalEvent=['id'=>'normal-message','from'=>$protected,'kind'=>'message','type'=>'text','text'=>'Consulta normal'];
+contact_book_db_expect(hache_sharky_inbox_store($pdo,$protectedEvent),'Protected message was not stored.');
+contact_book_db_expect(hache_sharky_inbox_store($pdo,$normalEvent),'Normal message was not stored.');
+$calls=[];$stats=hache_sharky_inbox_dispatch($pdo,static function(array $event)use($pdo,&$calls):bool{$calls[]=$event['id'];return hache_sharky_orchestrator_mark_processed($pdo,$event['id']);});
+contact_book_db_expect($calls===['normal-message']&&$stats['processed']===2,'Protected message reached the automatic processor or normal message was blocked.');
+$st=$pdo->query("SELECT processed_at,payload_ciphertext FROM sharky_message_receipts WHERE message_id='protected-message'");$receipt=$st->fetch(PDO::FETCH_ASSOC);
+contact_book_db_expect(!empty($receipt['processed_at'])&&!empty($receipt['payload_ciphertext']),'Protected inbound message must remain durably readable.');
 
 $admin->exec("DROP DATABASE IF EXISTS `{$testDb}`");
 fwrite(STDOUT,"SHARKY_CONTACT_BOOK_MARIADB_OK\n");
