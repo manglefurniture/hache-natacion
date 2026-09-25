@@ -150,6 +150,15 @@ contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>$ex
 $after=contact_book_db_payload($pdo,$existing);
 contact_book_db_expect($before['row']['desired_hash']===$after['row']['desired_hash']&&$before['row']['last_seen_at']===$after['row']['last_seen_at'],'Protected contact metadata changed.');
 contact_book_db_expect($before['payload']===$after['payload'],'Protected contact name changed.');
+$pendingHashes=array_column(hache_sharky_contact_book_pending($pdo,50),'contact_hash');
+contact_book_db_expect(!in_array(hache_sharky_protected_hash($existing),$pendingHashes,true),'Protected contact consumes bounded sync capacity.');
+$sent=0;
+contact_book_db_expect(!hache_sharky_protected_automatic_send($pdo,$existing,static function()use(&$sent):bool{$sent++;return true;})&&$sent===0,'Protected outbound callback ran.');
+contact_book_db_expect(hache_sharky_protected_automatic_send($pdo,'529981888779',static function()use(&$sent):bool{$sent++;return true;})&&$sent===1,'Normal outbound callback did not run.');
+$other=new PDO("mysql:host={$host};port={$port};dbname={$testDb};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+$activeLock=hache_sharky_protected_lock($pdo,$existing,0);
+contact_book_db_expect($activeLock!==null&&hache_sharky_protected_lock($other,$existing,0)===null,'Protection activation must wait for in-flight worker.');
+hache_sharky_protected_unlock($pdo,(string)$activeLock);
 contact_book_db_expect(hache_sharky_protected_remove($pdo,'9981888777'),'Protected remove failed.');
 contact_book_db_expect(!hache_sharky_is_protected_number($pdo,$protected),'Removed number remains protected.');
 contact_book_db_expect(hache_sharky_contact_book_capture_event($pdo,['from'=>$protected,'profile_name'=>'Normal']),'Unprotected contact capture failed.');

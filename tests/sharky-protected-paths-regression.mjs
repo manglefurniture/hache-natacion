@@ -9,6 +9,10 @@ assert.ok(inbox.indexOf('hache_sharky_contact_book_capture_event')>inbox.indexOf
 assert.ok(inbox.indexOf('hache_sharky_is_protected_number($pdo,hache_sharky_inbox_contact($event))')<inbox.indexOf('$processor($event)'),'the worker must gate before automated processing');
 const outbox=read('config/sharky-outbox.php');
 assert.ok(outbox.indexOf("'PROTECTED_NUMBER'")<outbox.indexOf('$sender($payload)'),'pending sends must be cancelled before delivery');
+assert.match(outbox,/hache_sharky_protected_lock\(\$pdo,\$contact,0\)/,'outbox delivery must share the activation lock');
+const book=read('config/sharky-contact-book.php');
+assert.match(book,/NOT EXISTS \(SELECT 1 FROM sharky_protected_numbers/,'protected contacts must not occupy bounded sync batches');
+assert.match(book,/hache_sharky_protected_lock\(\$pdo,\(string\)\$contact\['e164'\],0\)/,'Google sync must share the activation lock');
 const admin=read('api/sharky-admin.php');
 assert.match(admin,/auth_require\(\['ADMIN'\]\)/);
 assert.match(admin,/auth_csrf_validate/);

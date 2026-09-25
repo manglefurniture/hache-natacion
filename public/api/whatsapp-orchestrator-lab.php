@@ -214,12 +214,14 @@ usort($processing,static function(array $a,array $b):int{
 foreach($processing as $event){
     if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
     $eventPhone=(string)($event['from']??$event['to']??'');
+    $protectedLock=null;
     try{
+        $protectedLock=hache_sharky_protected_lock($pdo,$eventPhone,0);
+        if($protectedLock===null)continue;
         if(hache_sharky_is_protected_number($pdo,$eventPhone)){
             hache_sharky_orchestrator_mark_processed($pdo,(string)($event['id']??''));
             continue;
         }
-    }catch(Throwable $e){continue;}
     $identityBefore=sharky_lab_identity_before($pdo,$event);
     if(!hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,$identityBefore))continue;
     if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){
@@ -239,6 +241,8 @@ foreach($processing as $event){
     $event=hache_sharky_language_prepare_event($pdo,$event);
     hache_sharky_human_process_event($pdo,$event,$business,$minAge,$escalationThreshold);
     sharky_lab_notify_registration_transition($pdo,$event,$identityBefore);
+    }catch(Throwable $e){continue;}
+    finally{if($protectedLock!==null)hache_sharky_protected_unlock($pdo,$protectedLock);}
 }
 if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')==='1')hache_sharky_outbox_dispatch($pdo,'hache_sharky_lab_send',20);
 

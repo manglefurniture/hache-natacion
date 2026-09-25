@@ -158,9 +158,11 @@ function hache_sharky_contact_book_capture_event(PDO $pdo,array $event): bool
     $contact=preg_replace('/\D+/','',(string)($event['from']??$event['to']??''))?:'';
     $normalized=hache_sharky_contact_book_normalize_phone($contact);
     if($normalized===null)return true;
-    if(hache_sharky_is_protected_number($pdo,$contact))return true;
-
+    $protectedLock=null;
     try{
+        $protectedLock=hache_sharky_protected_lock($pdo,$contact,10);
+        if($protectedLock===null)return false;
+        if(hache_sharky_is_protected_number($pdo,$contact))return true;
         $contactHash=hache_sharky_orchestrator_contact_hash($normalized['digits']);
         $existing=hache_sharky_contact_book_existing_payload($pdo,$contactHash);
         $eventName=hache_sharky_contact_book_event_name($event);
@@ -190,6 +192,7 @@ function hache_sharky_contact_book_capture_event(PDO $pdo,array $event): bool
         $st->execute([':c'=>$contactHash,':p'=>$sealed['ciphertext'],':iv'=>$sealed['iv'],':tag'=>$sealed['tag'],':d'=>$desiredHash,':r'=>$identity['role'],':a'=>$identity['student_id'],':pr'=>$identity['teacher_id']]);
         return true;
     }catch(Throwable $e){error_log('[sharky-contact-book] capture failed');return false;}
+    finally{if($protectedLock!==null)hache_sharky_protected_unlock($pdo,$protectedLock);}
 }
 
 function hache_sharky_google_contacts_configured(): bool
@@ -360,7 +363,7 @@ function hache_sharky_contact_book_pending(PDO $pdo,int $limit=20): array
 {
     $limit=max(1,min(50,$limit));$out=[];
     try{
-        $rows=$pdo->query("SELECT contact_hash,desired_hash,google_resource_name,contact_ciphertext,contact_iv,contact_tag FROM sharky_contacts WHERE sync_status IN ('PENDING','UNMANAGED') OR (sync_status='FAILED' AND (last_sync_attempt_at IS NULL OR last_sync_attempt_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE))) ORDER BY last_seen_at,contact_hash LIMIT ".$limit)->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$pdo->query("SELECT c.contact_hash,c.desired_hash,c.google_resource_name,c.contact_ciphertext,c.contact_iv,c.contact_tag FROM sharky_contacts c WHERE (c.sync_status IN ('PENDING','UNMANAGED') OR (c.sync_status='FAILED' AND (c.last_sync_attempt_at IS NULL OR c.last_sync_attempt_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE)))) AND NOT EXISTS (SELECT 1 FROM sharky_protected_numbers p WHERE p.contact_hash=c.contact_hash) ORDER BY c.last_seen_at,c.contact_hash LIMIT ".$limit)->fetchAll(PDO::FETCH_ASSOC);
         foreach($rows as $row){
             $contact=hache_sharky_contact_book_decrypt($row);if(!is_array($contact))continue;
             $desiredHash=(string)($row['desired_hash']??'');if(!preg_match('/^[a-f0-9]{64}$/',$desiredHash))continue;
@@ -383,7 +386,10 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
         if($token==='')return array_replace($stats,['failed'=>1]);
         foreach(hache_sharky_contact_book_pending($pdo,$limit) as $row){
             $stats['processed']++;$hash=$row['contact_hash'];$expected=$row['desired_hash'];$contact=$row['contact'];$resource=trim($row['google_resource_name']);
+            $protectedLock=null;
             try{
+                $protectedLock=hache_sharky_protected_lock($pdo,(string)$contact['e164'],0);
+                if($protectedLock===null)continue;
                 if(hache_sharky_is_protected_number($pdo,(string)$contact['e164']))continue;
                 $latest=null;
                 if($resource!==''){
@@ -439,6 +445,8 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
                 if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'SYNCED',$savedResource,''))$stats['synced']++;
             }catch(Throwable $e){
                 if(hache_sharky_contact_book_mark_sync($pdo,$hash,$expected,'FAILED',$resource,'GOOGLE_SYNC_EXCEPTION'))$stats['failed']++;
+            }finally{
+                if($protectedLock!==null)hache_sharky_protected_unlock($pdo,$protectedLock);
             }
         }
     }finally{

@@ -104,14 +104,18 @@ function hache_sharky_inbox_dispatch(PDO $pdo,callable $processor,int $limit=20,
         }
         $event=hache_sharky_inbox_decrypt($row);$id=(string)($row['message_id']??'');
         if($event===null){hache_sharky_inbox_mark_dead($pdo,$id,'DECRYPT_FAILED');$stats['dead']++;continue;}
+        $protectedLock=null;
         try{
+            $protectedLock=hache_sharky_protected_lock($pdo,hache_sharky_inbox_contact($event),0);
+            if($protectedLock===null){$stats['deferred']++;continue;}
             if(hache_sharky_is_protected_number($pdo,hache_sharky_inbox_contact($event))){
                 if(hache_sharky_orchestrator_mark_processed($pdo,$id))$stats['processed']++;else$stats['deferred']++;
                 continue;
             }
-        }catch(Throwable $e){$stats['deferred']++;continue;}
-        $done=false;try{$done=$processor($event)===true;}catch(Throwable $e){error_log('[sharky-inbox] worker exception');$done=false;}
-        if($done)$stats['processed']++;else$stats['deferred']++;
+            $done=false;try{$done=$processor($event)===true;}catch(Throwable $e){error_log('[sharky-inbox] worker exception');$done=false;}
+            if($done)$stats['processed']++;else$stats['deferred']++;
+        }catch(Throwable $e){$stats['deferred']++;}
+        finally{if($protectedLock!==null)hache_sharky_protected_unlock($pdo,$protectedLock);}
     }
     return $stats;
 }

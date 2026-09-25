@@ -194,8 +194,11 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
         $paymentReminderArm=is_array($payload['_sharky_payment_reminder_arm']??null)?$payload['_sharky_payment_reminder_arm']:null;unset($payload['_sharky_payment_reminder_arm']);$paymentReminderMeta=is_array($payload['_sharky_payment_reminder']??null)?$payload['_sharky_payment_reminder']:null;unset($payload['_sharky_payment_reminder']);
         $contact=preg_replace('/\D+/','',(string)($payload['to']??''))?:'';if($contact===''||!hash_equals((string)($row['contact_hash']??''),hache_sharky_orchestrator_contact_hash($contact))){if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,7,'INVALID_CONTACT'))$stats['dead']++;continue;}
         $deliveryLock=null;$callerOwnsLock=$lockedContact!==''&&hash_equals($lockedContact,$contact);if(!$callerOwnsLock){$deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock)){if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'DELIVERY_LOCK_UNAVAILABLE'))$stats['failed']++;continue;}}
+        $protectedLock=null;
         try{
             if(!hache_sharky_outbox_renew_owner($pdo,$id,$owner))continue;if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
+            try{$protectedLock=hache_sharky_protected_lock($pdo,$contact,0);}catch(Throwable $e){$protectedLock=null;}
+            if($protectedLock===null){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
             try{$protected=hache_sharky_is_protected_number($pdo,$contact);}catch(Throwable $e){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
             if($protected){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,'PROTECTED_NUMBER'))$stats['cancelled']++;continue;}
             if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;continue;}
@@ -206,7 +209,7 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
             $sendResult=false;try{$sendResult=$sender($payload);}catch(Throwable $e){$sendResult=false;}$ok=$sendResult===true||(is_array($sendResult)&&($sendResult['ok']??false)===true);$providerMessageId=is_array($sendResult)?trim((string)($sendResult['provider_message_id']??'')):'';
             if($ok){if(hache_sharky_outbox_mark_sent($pdo,$id,$owner,$providerMessageId)){$stats['sent']++;if(is_array($followupMeta))hache_sharky_followup_after_sent($pdo,$contact,$followupMeta,time());elseif(is_array($followupArm))hache_sharky_followup_after_normal_sent($pdo,$contact,$followupArm,time());if(is_array($paymentReminderArm))hache_sharky_payment_reminder_after_registration_sent($pdo,$contact,$paymentReminderArm,time());}else error_log('[sharky-outbox] sender succeeded but sent marker failed');}
             else{if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count']))$stats['failed']++;}
-        }finally{if(is_resource($deliveryLock))hache_sharky_orchestrator_unlock($deliveryLock);}
+        }finally{if($protectedLock!==null)hache_sharky_protected_unlock($pdo,$protectedLock);if(is_resource($deliveryLock))hache_sharky_orchestrator_unlock($deliveryLock);}
     }
     return $stats;
 }
