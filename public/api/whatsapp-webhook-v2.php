@@ -5,6 +5,7 @@ declare(strict_types=1);
 header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-runtime.php';
 require_once __DIR__.'/../../config/sharky-start-authority.php';
+require_once __DIR__.'/../../config/sharky-protected-numbers.php';
 
 function whatsapp_v2_secret(string $name): string
 {
@@ -357,6 +358,7 @@ $configuredPhoneId = whatsapp_v2_secret('WHATSAPP_PHONE_NUMBER_ID');
 
 foreach (whatsapp_v2_extract_echoes($payload) as $echo) {
     if ($configuredPhoneId !== '' && $echo['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $echo['phone_number_id'])) continue;
+    try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $echo['to'])) continue; } catch (Throwable $e) { continue; }
     $state = whatsapp_v2_history_read($echo['to']);
     whatsapp_v2_activate_handoff($echo['to'], 'manual', $state['turns']);
 }
@@ -364,6 +366,7 @@ foreach (whatsapp_v2_extract_echoes($payload) as $echo) {
 $jobs = [];
 foreach (whatsapp_v2_extract_messages($payload) as $message) {
     if ($configuredPhoneId !== '' && $message['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $message['phone_number_id'])) continue;
+    try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $message['from'])) continue; } catch (Throwable $e) { continue; }
     if (hache_sharky_takeover_active($message['from'])) {
         error_log('[whatsapp-webhook-v2] inbound skipped human_takeover=1');
         hache_sharky_metric_increment('messages_skipped_takeover');
@@ -381,6 +384,7 @@ $business = hache_sharky_business_values(hache_sharky_pdo());
 $threshold = hache_sharky_config_int($business, 'sharky_escalado_intentos', 2, 1, 5);
 
 foreach ($jobs as $job) {
+    try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $job['from'])) continue; } catch (Throwable $e) { continue; }
     if (hache_sharky_takeover_active($job['from'])) {
         error_log('[whatsapp-webhook-v2] queued skipped human_takeover=1');
         continue;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/telefono.php';
 require_once __DIR__.'/sharky-contact-naming.php';
+require_once __DIR__.'/sharky-protected-numbers.php';
 
 const HACHE_SHARKY_CONTACT_BOOK_MARKER_KEY='Hache Natación';
 const HACHE_SHARKY_CONTACT_BOOK_MARKER_VALUE='managed-contact-v1';
@@ -157,6 +158,7 @@ function hache_sharky_contact_book_capture_event(PDO $pdo,array $event): bool
     $contact=preg_replace('/\D+/','',(string)($event['from']??$event['to']??''))?:'';
     $normalized=hache_sharky_contact_book_normalize_phone($contact);
     if($normalized===null)return true;
+    if(hache_sharky_is_protected_number($pdo,$contact))return true;
 
     try{
         $contactHash=hache_sharky_orchestrator_contact_hash($normalized['digits']);
@@ -382,6 +384,7 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
         foreach(hache_sharky_contact_book_pending($pdo,$limit) as $row){
             $stats['processed']++;$hash=$row['contact_hash'];$expected=$row['desired_hash'];$contact=$row['contact'];$resource=trim($row['google_resource_name']);
             try{
+                if(hache_sharky_is_protected_number($pdo,(string)$contact['e164']))continue;
                 $latest=null;
                 if($resource!==''){
                     $get=hache_sharky_google_contacts_get($token,$resource);
@@ -419,6 +422,8 @@ function hache_sharky_contact_book_sync_pending(PDO $pdo,int $limit=20): array
                 // the contact was originally created by the owner. Only the name,
                 // Hache organization marker and Hache custom marker are updated;
                 // phone numbers, email addresses, notes and other fields are left intact.
+                // Recheck after the remote lookup: protection may have been added while searching.
+                if(hache_sharky_is_protected_number($pdo,(string)$contact['e164']))continue;
                 $response=$resource===''
                     ?hache_sharky_google_contacts_create($token,$contact)
                     :hache_sharky_google_contacts_update($token,$resource,$contact,$latest??[]);

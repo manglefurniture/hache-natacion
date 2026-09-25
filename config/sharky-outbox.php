@@ -9,6 +9,7 @@ require_once __DIR__.'/sharky-payment-reminder.php';
 require_once __DIR__.'/sharky-groups.php';
 require_once __DIR__.'/sharky-delivery-status.php';
 require_once __DIR__.'/sharky-age-policy.php';
+require_once __DIR__.'/sharky-protected-numbers.php';
 
 const HACHE_SHARKY_OUTBOX_LEASE_SECONDS=90;
 
@@ -70,6 +71,7 @@ function hache_sharky_outbox_enqueue_raw(PDO $pdo,string $contact,array $payload
 {
     if(!hache_sharky_orchestrator_store_ready($pdo))return false;$availableAt??=time();
     try{
+        if(hache_sharky_is_protected_number($pdo,$contact))return false;
         $payload=hache_sharky_outbox_add_venue_hints($payload);$payload=hache_sharky_outbox_add_sales_close($payload);
         $payload=hache_sharky_age_policy_apply_flow_bounds($pdo,$payload);
         $sealed=hache_sharky_outbox_encrypt($payload);$dedupe=hash('sha256','outbox|'.$dedupeSeed);
@@ -194,6 +196,8 @@ function hache_sharky_outbox_dispatch(PDO $pdo,callable $sender,int $limit=10,st
         $deliveryLock=null;$callerOwnsLock=$lockedContact!==''&&hash_equals($lockedContact,$contact);if(!$callerOwnsLock){$deliveryLock=hache_sharky_orchestrator_delivery_lock($contact);if(!is_resource($deliveryLock)){if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'DELIVERY_LOCK_UNAVAILABLE'))$stats['failed']++;continue;}}
         try{
             if(!hache_sharky_outbox_renew_owner($pdo,$id,$owner))continue;if(hache_sharky_orchestrator_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1'){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
+            try{$protected=hache_sharky_is_protected_number($pdo,$contact);}catch(Throwable $e){hache_sharky_outbox_release_owner($pdo,$id,$owner);break;}
+            if($protected){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,'PROTECTED_NUMBER'))$stats['cancelled']++;continue;}
             if(!$allowTakeover&&function_exists('hache_sharky_takeover_active')&&hache_sharky_takeover_active($contact)){if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner))$stats['cancelled']++;continue;}
             if(is_array($followupMeta)){$gate=hache_sharky_followup_validate_before_send($pdo,$contact,$followupMeta,time());if(($gate['ok']??false)!==true){$reason=(string)($gate['reason']??'FOLLOWUP_CANCELLED');$reschedule=(int)($gate['reschedule_at']??0);if($reschedule>0){if(hache_sharky_outbox_reschedule_owner($pdo,$id,$owner,$reschedule,$reason))continue;if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'FOLLOWUP_RESCHEDULE_FAILED'))$stats['failed']++;continue;}hache_sharky_followup_note_cancelled($pdo,$contact,$followupMeta,$reason,time());if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,$reason))$stats['cancelled']++;continue;}}
             if(is_array($paymentReminderMeta)){$gate=hache_sharky_payment_reminder_validate_before_send($pdo,$contact,$paymentReminderMeta,time());if(($gate['ok']??false)!==true){$reason=(string)($gate['reason']??'PAYMENT_REMINDER_CANCELLED');$reschedule=(int)($gate['reschedule_at']??0);if($reschedule>0){if(hache_sharky_outbox_reschedule_owner($pdo,$id,$owner,$reschedule,$reason))continue;if(hache_sharky_outbox_mark_failed($pdo,$id,$owner,(int)$row['attempt_count'],'PAYMENT_REMINDER_RESCHEDULE_FAILED'))$stats['failed']++;continue;}if(hache_sharky_outbox_mark_cancelled($pdo,$id,$owner,$reason))$stats['cancelled']++;continue;}}

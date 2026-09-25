@@ -72,6 +72,8 @@ jobs:
         run: php tests/sharky-brain-numeric-context-regression.php
       - name: Sharky contact book regression
         run: php tests/sharky-contact-book-regression.php
+      - name: Sharky protected automation paths
+        run: node tests/sharky-protected-paths-regression.mjs
       - name: Sharky CRM read-only regression
         run: php tests/sharky-crm-regression.php
       - name: Prospect follow-up internal alert regression

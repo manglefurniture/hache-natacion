@@ -13,6 +13,7 @@ require_once __DIR__.'/../../config/sharky-groups.php';
 require_once __DIR__.'/../../config/sharky-delivery-status.php';
 require_once __DIR__.'/../../config/notificaciones-email.php';
 require_once __DIR__.'/../../config/sharky-prospect-opportunities.php';
+require_once __DIR__.'/../../config/sharky-protected-numbers.php';
 
 function sharky_lab_json(int $status,array $body): never
 {
@@ -212,6 +213,13 @@ usort($processing,static function(array $a,array $b):int{
 });
 foreach($processing as $event){
     if(hache_sharky_lab_secret('SHARKY_ORCHESTRATOR_LAB_ENABLED')!=='1')break;
+    $eventPhone=(string)($event['from']??$event['to']??'');
+    try{
+        if(hache_sharky_is_protected_number($pdo,$eventPhone)){
+            hache_sharky_orchestrator_mark_processed($pdo,(string)($event['id']??''));
+            continue;
+        }
+    }catch(Throwable $e){continue;}
     $identityBefore=sharky_lab_identity_before($pdo,$event);
     if(!hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,$identityBefore))continue;
     if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){

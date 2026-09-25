@@ -13,6 +13,7 @@ require_once __DIR__.'/../config/sharky-takeover-maintenance.php';
 require_once __DIR__.'/../config/sharky-groups.php';
 require_once __DIR__.'/../config/sharky-conversation-review.php';
 require_once __DIR__.'/../config/sharky-learning.php';
+require_once __DIR__.'/../config/sharky-protected-numbers.php';
 
 if(PHP_SAPI!=='cli'){fwrite(STDERR,"CLI only\n");exit(2);}
 
@@ -62,6 +63,7 @@ try{
     $pdo=hache_sharky_pdo();if(!$pdo instanceof PDO)throw new RuntimeException('Database unavailable');
     if(!hache_sharky_orchestrator_store_ready($pdo))throw new RuntimeException('Sharky 2.0 migration incomplete');
     hache_sharky_contact_book_apply_additive_migration($pdo);
+    if(!hache_sharky_protected_schema_ready($pdo))throw new RuntimeException('Protected numbers migration incomplete');
     hache_sharky_conversation_review_apply_additive_migration($pdo);
     hache_sharky_learning_apply_additive_migration($pdo);
     $business=hache_sharky_business_values($pdo);

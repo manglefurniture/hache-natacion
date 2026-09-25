@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 header('Cache-Control: no-store');
+require_once __DIR__.'/../../config/sharky-protected-numbers.php';
+require_once __DIR__.'/../../config/sharky-runtime.php';
 
 function whatsapp_secret(string $name): string
 {
@@ -414,6 +416,7 @@ if ($method === 'POST') {
         if ($configuredPhoneId !== '' && $echo['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $echo['phone_number_id'])) {
             continue;
         }
+        try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $echo['to'])) continue; } catch (Throwable $e) { continue; }
         if (whatsapp_mark_human_takeover($echo['to'])) {
             error_log('[whatsapp-webhook] human takeover activated');
         }
@@ -424,6 +427,7 @@ if ($method === 'POST') {
         if ($configuredPhoneId !== '' && $message['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $message['phone_number_id'])) {
             continue;
         }
+        try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $message['from'])) continue; } catch (Throwable $e) { continue; }
         if (whatsapp_human_takeover_active($message['from'])) {
             error_log('[whatsapp-webhook] inbound text skipped human_takeover=1');
             continue;
@@ -439,6 +443,7 @@ if ($method === 'POST') {
     @set_time_limit(70);
 
     foreach ($jobs as $job) {
+        try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $job['from'])) continue; } catch (Throwable $e) { continue; }
         // Re-check after acknowledging to close the race where a human reply
         // arrives while an inbound message is already queued for Sharky.
         if (whatsapp_human_takeover_active($job['from'])) {

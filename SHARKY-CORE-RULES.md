@@ -224,6 +224,8 @@ La respuesta lateral informativa no depende de Brain conversacional ni de 2B-A. 
 
 ## 16. Takeover, pausa y reactivación
 
+La lista administrativa de números protegidos tiene prioridad sobre automatizaciones: un número protegido conserva su recepción humana, pero no inicia procesamiento, envío, takeover ni mutación automática de contactos, incluso si ya había trabajos en cola. La comparación usa el teléfono canónico; el administrador puede agregarlo o retirarlo sin despliegue. Los demás números siguen este contrato de takeover.
+
 La intervención humana no destruye contexto comercial válido y tiene tres estados funcionales por conversación:
 
 - `normal`: Sharky responde con el comportamiento vigente.
