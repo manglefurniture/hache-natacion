@@ -2,8 +2,13 @@ name: Production Backup Daily
 
 on:
   schedule:
-    # 09:17 UTC = 04:17 America/Cancun (UTC-5), chosen to minimize VPS contention.
+    # Primary daily slot: 09:17 UTC = 04:17 America/Cancun (UTC-5).
     - cron: '17 9 * * *'
+    # P2-07 monthly fallback: a second scheduled backup on day 1 protects the
+    # recurring restore evidence from a delayed or omitted primary GitHub cron.
+    # It remains a scheduled Production Backup Daily run, so the restore still
+    # starts only through workflow_run after a successful production backup.
+    - cron: '17 18 1 * *'
   workflow_dispatch:
 
 permissions:
