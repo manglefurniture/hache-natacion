@@ -9,6 +9,7 @@ Hache Natación es el piloto real Nivel C. Esta evidencia amplía el restore dri
 ## Cadencia aprobada
 
 - backup de producción: diario a las `09:17 UTC` (`04:17 America/Cancun`);
+- fallback P2-07: un segundo backup programado el día 1 a las `18:17 UTC` (`13:17 America/Cancun`) para reducir el riesgo de perder la evidencia mensual si GitHub retrasa u omite el cron primario;
 - restore drill recurrente: después de que el backup programado del **día 1 de cada mes** termine correctamente;
 - RPO usado por la ejecución recurrente: `86400` s (24 h);
 - RTO usado por la ejecución recurrente: `3600` s (1 h).
@@ -22,7 +23,7 @@ La ruta recurrente ya no usa un cron independiente. `Production Restore Drill` e
 - corresponde a `main`;
 - fue creado el día 1 UTC.
 
-Esto elimina la carrera entre dos cron independientes: el restore no puede empezar antes de que termine el backup que le da origen. Una ejecución manual del workflow de backup tampoco dispara el restore recurrente.
+Esto elimina la carrera entre cron independientes de backup y restore: el restore no puede empezar antes de que termine el backup que le da origen. Una ejecución manual del workflow de backup tampoco dispara el restore recurrente. El fallback del día 1 pertenece al mismo workflow de backup y conserva `event=schedule`; si GitHub ejecuta tanto el slot primario como el fallback, puede existir evidencia recurrente adicional ese mes, pero cada restore sigue aislado, validado y limpiado.
 
 ## Evidencia histórica
 

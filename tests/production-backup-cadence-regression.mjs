@@ -11,7 +11,8 @@ const backup = fs.readFileSync('.github/workflows/production-backup-daily.yml', 
 const once = fs.readFileSync('.github/workflows/ops-production-restore-evidence-once.yml', 'utf8');
 const restore = fs.readFileSync('.github/workflows/production-restore-drill.yml', 'utf8');
 
-ok(backup.includes("cron: '17 9 * * *'"), 'daily backup must remain scheduled once per day at the approved off-peak slot');
+ok(backup.includes("cron: '17 9 * * *'"), 'daily backup must retain the approved primary off-peak slot');
+ok(backup.includes("cron: '17 18 1 * *'"), 'day-1 backup must include a later scheduled fallback for P2-07 recurring evidence');
 ok(backup.includes("sudo /usr/local/sbin/deploy-hache-natacion backup"), 'daily backup must use the protected production helper');
 ok(backup.includes("grep -Eq '^BACKUP_OK .*retained_complete_max=20$'"), 'daily backup must require a completed retained backup result');
 ok(!backup.includes('database.sql'), 'scheduled workflow must not copy or artifact the production dump');
