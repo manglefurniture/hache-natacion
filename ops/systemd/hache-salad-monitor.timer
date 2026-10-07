@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Hache SaladCloud monitor every five minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=5min
+AccuracySec=10s
+Persistent=true
+Unit=hache-salad-monitor.service
+
+[Install]
+WantedBy=timers.target
