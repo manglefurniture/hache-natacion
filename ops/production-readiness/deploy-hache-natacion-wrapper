@@ -143,6 +143,26 @@ set_salad_monitor_secret() {
   [[ "$(stat -c '%U:%G:%a' "$target")" == 'root:www-data:640' ]] || fail "permisos inseguros para la configuración Salad."
   echo "SALAD_MONITOR_SECRET_CONFIGURED"
 }
+set_salad_ntfy_topic() {
+  local topic temp_file target="/etc/hache-salad-ntfy.env"
+  require_command install; require_command mktemp; require_command stat
+  [[ "$#" -eq 0 ]] || fail "salad-ntfy-topic-set recibe el tópico exclusivamente por stdin."
+  topic="$(cat)"; [[ "$topic" =~ ^[A-Za-z0-9_-]{16,200}$ ]] || fail "NTFY_TOPIC inválido."
+  [[ ! -L "$target" ]] || fail "archivo de configuración ntfy no puede ser symlink."
+  temp_file="$(mktemp /tmp/hache-salad-ntfy.XXXXXX)"; printf 'NTFY_TOPIC=%s\n' "$topic" > "$temp_file"
+  install -o root -g www-data -m 0640 "$temp_file" "$target"; rm -f -- "$temp_file"
+  [[ "$(stat -c '%U:%G:%a' "$target")" == 'root:www-data:640' ]] || fail "permisos inseguros para la configuración ntfy."
+  echo "SALAD_NTFY_TOPIC_CONFIGURED"
+}
+enable_salad_monitor_timer() {
+  local service="$REPO/ops/systemd/hache-salad-monitor.service" timer="$REPO/ops/systemd/hache-salad-monitor.timer"
+  [[ -f "$service" && -f "$timer" ]] || fail "unidades Salad monitor ausentes."
+  install -o root -g root -m 0644 "$service" /etc/systemd/system/hache-salad-monitor.service
+  install -o root -g root -m 0644 "$timer" /etc/systemd/system/hache-salad-monitor.timer
+  systemctl daemon-reload; systemctl enable --now hache-salad-monitor.timer
+  systemctl is-active --quiet hache-salad-monitor.timer || fail "timer Salad monitor inactivo."
+  echo "SALAD_MONITOR_TIMER_ENABLED"
+}
 
 main() {
   require_root; [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -166,6 +186,8 @@ main() {
     google-contacts-token-set) [[ "$#" -eq 1 ]] || fail "google-contacts-token-set recibe el token exclusivamente por stdin."; run_google_contacts_token_set ;;
     google-contacts-code-exchange) [[ "$#" -eq 1 ]] || fail "google-contacts-code-exchange recibe el código exclusivamente por stdin; con stdin vacío promueve el staging OAuth verificado."; run_google_contacts_code_exchange ;;
     salad-monitor-secret-set) shift; set_salad_monitor_secret "$@" ;;
+    salad-ntfy-topic-set) shift; set_salad_ntfy_topic "$@" ;;
+    salad-monitor-enable) [[ "$#" -eq 1 ]] || fail "salad-monitor-enable no acepta argumentos."; enable_salad_monitor_timer ;;
     *) [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."; run_target_deploy "$1" ;;
   esac
 }

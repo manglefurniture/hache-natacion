@@ -104,6 +104,24 @@ function hache_salad_monitor_send_yellow_notification(array $group): bool
     return is_string($response)&&$status>=200&&$status<300;
 }
 
+/**
+ * Applies the yellow-entry alert rule without performing any API request itself.
+ *
+ * @param list<array<string,mixed>> $groups
+ * @param array<string,array{health?:string}> $previous
+ * @param callable(array<string,mixed>):bool $notify
+ * @return array{state:array<string,array{health:string,updated_at:string}>,sent:int}
+ */
+function hache_salad_monitor_apply_alert_transitions(array $groups,array $previous,callable $notify): array
+{
+    $next=[];$sent=0;$now=gmdate(DATE_ATOM);
+    foreach($groups as $group){$key=(string)($group['group']??'');if($key==='')continue;$health=(string)($group['health']??'red');$before=(string)($previous[$key]['health']??'unknown');
+        if($health==='yellow'&&$before!=='yellow'){if(!$notify($group))throw new RuntimeException('ntfy no confirmó la alerta para '.$key);$sent++;}
+        $next[$key]=['health'=>$health,'updated_at'=>$now];
+    }
+    return ['state'=>$next,'sent'=>$sent];
+}
+
 /** @return list<array<string,mixed>> */
 function hache_salad_monitor_collect(): array
 {
