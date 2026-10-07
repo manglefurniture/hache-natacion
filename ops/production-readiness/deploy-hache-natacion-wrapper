@@ -130,6 +130,19 @@ run_google_contacts_status() { ensure_google_contacts_oauth_stage_dir; run_php_g
 run_google_contacts_sync_once() { ensure_google_contacts_oauth_stage_dir; run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --sync-once; }
 run_google_contacts_token_set() { ensure_google_contacts_oauth_stage_dir; run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --set-refresh-token; }
 run_google_contacts_code_exchange() { ensure_google_contacts_oauth_stage_dir; run_php_guarded "$REPO/bin/sharky-google-contacts-maintenance.php" --exchange-auth-code; }
+set_salad_monitor_secret() {
+  local secret temp_file target="/etc/hache-salad-monitor.env"
+  require_command install; require_command mktemp; require_command stat
+  [[ "$#" -eq 0 ]] || fail "salad-monitor-secret-set recibe la clave exclusivamente por stdin."
+  secret="$(cat)"; [[ -n "$secret" ]] || fail "SALAD_API_KEY vacía."
+  [[ "$secret" != *$'\n'* && "$secret" != *$'\r'* ]] || fail "SALAD_API_KEY debe ser una sola línea."
+  [[ ! -L "$target" ]] || fail "archivo de configuración Salad no puede ser symlink."
+  temp_file="$(mktemp /tmp/hache-salad-monitor.XXXXXX)"
+  printf 'SALAD_API_KEY=%s\nSALAD_ORGANIZATION=hache\nSALAD_PROJECT=prl-tests\n' "$secret" > "$temp_file"
+  install -o root -g www-data -m 0640 "$temp_file" "$target"; rm -f -- "$temp_file"
+  [[ "$(stat -c '%U:%G:%a' "$target")" == 'root:www-data:640' ]] || fail "permisos inseguros para la configuración Salad."
+  echo "SALAD_MONITOR_SECRET_CONFIGURED"
+}
 
 main() {
   require_root; [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -152,6 +165,7 @@ main() {
     google-contacts-sync-once) [[ "$#" -eq 1 ]] || fail "google-contacts-sync-once no acepta argumentos."; run_google_contacts_sync_once ;;
     google-contacts-token-set) [[ "$#" -eq 1 ]] || fail "google-contacts-token-set recibe el token exclusivamente por stdin."; run_google_contacts_token_set ;;
     google-contacts-code-exchange) [[ "$#" -eq 1 ]] || fail "google-contacts-code-exchange recibe el código exclusivamente por stdin; con stdin vacío promueve el staging OAuth verificado."; run_google_contacts_code_exchange ;;
+    salad-monitor-secret-set) shift; set_salad_monitor_secret "$@" ;;
     *) [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."; run_target_deploy "$1" ;;
   esac
 }
