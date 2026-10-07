@@ -20,6 +20,8 @@ jobs:
         run: find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
       - name: Static regressions and JavaScript syntax
         run: npm test
+      - name: Salad monitor regression
+        run: php tests/salad-monitor-regression.php
       - name: Persistent login regression
         run: php tests/auth-remember-regression.php
       - name: F9 daily summary contract regression
