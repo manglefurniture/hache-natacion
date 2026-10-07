@@ -36,6 +36,40 @@ function hache_salad_monitor_http(array $config,string $method,string $path,?arr
     return $decoded;
 }
 
+function hache_salad_monitor_snapshot_file(): string
+{
+    return (string)(getenv('SALAD_MONITOR_SNAPSHOT_FILE')?:'/var/lib/hache-natacion/salad-monitor-snapshot.json');
+}
+
+/** @param list<array<string,mixed>> $groups */
+function hache_salad_monitor_write_snapshot(array $groups): void
+{
+    $file=hache_salad_monitor_snapshot_file();$dir=dirname($file);
+    if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))throw new RuntimeException('No se pudo crear el directorio del snapshot.');
+    $payload=['observed_at'=>(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format(DATE_ATOM),'groups'=>$groups];
+    $tmp=tempnam($dir,'salad-snapshot-');if($tmp===false)throw new RuntimeException('No se pudo crear el snapshot temporal.');
+    try{
+        if(file_put_contents($tmp,json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),LOCK_EX)===false)throw new RuntimeException('No se pudo escribir el snapshot.');
+        chmod($tmp,0600);
+        if(!rename($tmp,$file))throw new RuntimeException('No se pudo publicar el snapshot.');
+    }finally{if(is_file($tmp))@unlink($tmp);}
+}
+
+/** @return array{observed_at:string,groups:list<array<string,mixed>>}|null */
+function hache_salad_monitor_read_snapshot(): ?array
+{
+    $file=hache_salad_monitor_snapshot_file();if(!is_readable($file))return null;
+    $raw=file_get_contents($file);if(!is_string($raw)||$raw==='')return null;
+    $decoded=json_decode($raw,true);if(!is_array($decoded)||!is_array($decoded['groups']??null))return null;
+    return ['observed_at'=>(string)($decoded['observed_at']??''),'groups'=>array_values(array_filter($decoded['groups'],'is_array'))];
+}
+
+function hache_salad_monitor_snapshot_age_seconds(string $observedAt): ?int
+{
+    if($observedAt==='')return null;
+    try{$at=new DateTimeImmutable($observedAt);return max(0,time()-$at->getTimestamp());}catch(Throwable){return null;}
+}
+
 function hache_salad_monitor_clean_line(string $line): string
 {
     return preg_replace('/\x1B\[[0-9;]*[A-Za-z]/','',$line)??$line;
@@ -127,12 +161,27 @@ function hache_salad_monitor_collect(): array
 {
     $config=hache_salad_monitor_config();$base='/organizations/'.rawurlencode($config['organization']).'/projects/'.rawurlencode($config['project']).'/containers';
     $groups=hache_salad_monitor_http($config,'GET',$base);$items=$groups['items']??$groups['container_groups']??[];if(!is_array($items))throw new RuntimeException('La lista de Container Groups no tiene el formato esperado.');
+    $previous=hache_salad_monitor_read_snapshot();$previousByGroup=[];
+    foreach($previous['groups']??[] as $old){$key=(string)($old['group']??'');if($key!=='')$previousByGroup[$key]=$old;}
     $end=new DateTimeImmutable('now',new DateTimeZone('UTC'));$start=$end->sub(new DateInterval('PT10M'));$result=[];
-    foreach($items as $group){if(!is_array($group))continue;$name=trim((string)($group['name']??''));if($name==='')continue;$instances=hache_salad_monitor_http($config,'GET',$base.'/'.rawurlencode($name).'/instances');
-        $logs=hache_salad_monitor_http($config,'POST','/organizations/'.rawurlencode($config['organization']).'/log-entries',['sort_order'=>'desc','start_time'=>$start->format('Y-m-d\\TH:i:s\\Z'),'end_time'=>$end->format('Y-m-d\\TH:i:s\\Z'),'page_size'=>100,'query'=>'resource.type = "container" and resource.labels.project_name = "'.$config['project'].'" and resource.labels.container_group_name = "'.$name.'"']);
-        $metrics=hache_salad_monitor_parse(is_array($logs['items']??null)?$logs['items']:[]);$state=(string)($group['current_state']['status']??$group['status']??'unknown');$safeInstances=[];
-        foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)if(is_array($instance))$safeInstances[]=['id'=>(string)($instance['id']??''),'machine_id'=>(string)($instance['machine_id']??''),'state'=>(string)($instance['state']??''),'ready'=>(bool)($instance['ready']??false),'started'=>(bool)($instance['started']??false),'update_time'=>(string)($instance['update_time']??''),'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null];
-        $result[]=['group'=>$name,'display_name'=>(string)($group['display_name']??$name),'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics),'observed_at'=>$end->format(DATE_ATOM)];
+    foreach($items as $group){
+        if(!is_array($group))continue;$name=trim((string)($group['name']??''));if($name==='')continue;
+        $display=(string)($group['display_name']??$name);$state=(string)($group['current_state']['status']??$group['status']??'unknown');
+        try{
+            $instances=hache_salad_monitor_http($config,'GET',$base.'/'.rawurlencode($name).'/instances');
+            $logs=hache_salad_monitor_http($config,'POST','/organizations/'.rawurlencode($config['organization']).'/log-entries',['sort_order'=>'desc','start_time'=>$start->format('Y-m-d\\TH:i:s\\Z'),'end_time'=>$end->format('Y-m-d\\TH:i:s\\Z'),'page_size'=>100,'query'=>'resource.type = "container" and resource.labels.project_name = "'.$config['project'].'" and resource.labels.container_group_name = "'.$name.'"']);
+            $metrics=hache_salad_monitor_parse(is_array($logs['items']??null)?$logs['items']:[]);$safeInstances=[];
+            foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)if(is_array($instance))$safeInstances[]=['id'=>(string)($instance['id']??''),'machine_id'=>(string)($instance['machine_id']??''),'state'=>(string)($instance['state']??''),'ready'=>(bool)($instance['ready']??false),'started'=>(bool)($instance['started']??false),'update_time'=>(string)($instance['update_time']??''),'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null];
+            $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
+        }catch(Throwable $e){
+            error_log('[salad-monitor] group '.$name.': '.$e->getMessage());
+            if(isset($previousByGroup[$name])){
+                $fallback=$previousByGroup[$name];$fallback['display_name']=$display;$fallback['state']=$state;$fallback['stale']=true;$fallback['update_error']='No se pudo actualizar este grupo.';$result[]=$fallback;
+            }else{
+                $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_15m_ths'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>['accepted'=>0,'rejected'=>0,'hardware_errors'=>0],'last_log_at'=>null];
+                $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>[],'metrics'=>$metrics,'health'=>'red','stale'=>true,'update_error'=>'No se pudo actualizar este grupo.','observed_at'=>$end->format(DATE_ATOM)];
+            }
+        }
     }
     return $result;
 }

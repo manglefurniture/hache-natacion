@@ -1,6 +1,15 @@
 # Monitor SaladCloud
 
-La página privada `/salad-monitor.php` y la API `/api/salad-monitor.php` son solo para `ADMIN`. La API consulta en modo lectura los Container Groups e instancias del proyecto `prl-tests`, y los logs de SRBMiner. No existe ninguna operación que cambie, reasigne o detenga instancias.
+La página privada `/salad-monitor.php` y la API `/api/salad-monitor.php` son solo para `ADMIN`.
+
+El proceso `hache-salad-monitor.timer` consulta SaladCloud cada cinco minutos en modo lectura, guarda un snapshot atómico con el último estado válido y evalúa las alertas amarillas. El navegador **no consulta SaladCloud directamente**: lee únicamente el snapshot local. Así se evita multiplicar llamadas a Salad cuando se abre o recarga el dashboard desde móvil o escritorio.
+
+Si Salad falla temporalmente:
+- el último snapshot completo sigue disponible;
+- un fallo aislado de un Container Group conserva el último dato válido de ese grupo y lo marca como desactualizado;
+- un fallo de la consulta global no borra ni reemplaza el snapshot anterior.
+
+No existe ninguna operación que cambie, reasigne o detenga instancias.
 
 ## Configuración de servidor
 
@@ -14,8 +23,19 @@ SALAD_PROJECT=prl-tests
 
 También se aceptan esas variables de entorno. No crear ni subir este archivo al repositorio. La clave se envía sólo en la cabecera servidor-a-servidor `Salad-Api-Key`; nunca llega al navegador ni aparece en las respuestas JSON.
 
-El histórico visual actual se conserva en el navegador durante 24 horas. Es deliberadamente local: la solicitud `GET` del dashboard no escribe en la base de datos ni crea una carga adicional de mutación en producción.
+El snapshot se guarda por defecto en `/var/lib/hache-natacion/salad-monitor-snapshot.json`. Puede cambiarse con `SALAD_MONITOR_SNAPSHOT_FILE`.
+
+El histórico visual de 24 horas sigue siendo local al navegador.
 
 ## Verificación
 
-Ejecutar `php tests/salad-monitor-regression.php`. Antes de activar la ruta en el VPS, verificar que `php-curl` esté instalado y que la clave tenga permisos de lectura sobre la organización/proyecto indicados.
+Ejecutar:
+
+```bash
+php -l config/salad-monitor.php
+php -l bin/salad-monitor-poll.php
+php -l api/salad-monitor.php
+php tests/salad-monitor-regression.php
+```
+
+Tras desplegar, ejecutar una vez `hache-salad-monitor.service` para generar el primer snapshot y comprobar después `/api/salad-monitor.php`.
