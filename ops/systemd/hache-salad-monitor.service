@@ -1,0 +1,16 @@
+[Unit]
+Description=Hache SaladCloud yellow-alert monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/hache-natacion
+StateDirectory=hache-natacion
+ExecStart=/usr/bin/php /var/www/hache-natacion/bin/salad-monitor-poll.php
+TimeoutStartSec=2min
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full

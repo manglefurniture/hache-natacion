@@ -24,6 +24,8 @@ jobs:
         run: php tests/salad-monitor-regression.php
       - name: Salad secret provisioning regression
         run: node tests/salad-secret-provisioning-regression.mjs
+      - name: Salad ntfy provisioning regression
+        run: node tests/salad-ntfy-provisioning-regression.mjs
       - name: Persistent login regression
         run: php tests/auth-remember-regression.php
       - name: F9 daily summary contract regression

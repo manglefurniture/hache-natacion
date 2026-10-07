@@ -72,8 +72,54 @@ function hache_salad_monitor_status(string $groupState,array $metrics): string
 {
     $state=strtolower($groupState);if(!in_array($state,['running','started'],true))return 'red';
     if(($metrics['hashrate_ths']??0)<=0||($metrics['gpu']??null)===null)return 'red';
-    if(($metrics['temperature_c']??0)>=82||($metrics['fan_percent']??0)>=95||(($metrics['shares']['rejected']??0)>0)||(($metrics['shares']['hardware_errors']??0)>0))return 'yellow';
+    if(hache_salad_monitor_yellow_reasons($metrics)!==[])return 'yellow';
     return 'green';
+}
+
+/** @return list<string> */
+function hache_salad_monitor_yellow_reasons(array $metrics): array
+{
+    $reasons=[];
+    if(($metrics['temperature_c']??0)>=82)$reasons[]='temperatura alta ('.(int)$metrics['temperature_c'].'°C)';
+    if(($metrics['fan_percent']??0)>=95)$reasons[]='ventilador alto ('.(int)$metrics['fan_percent'].'%)';
+    if(($metrics['shares']['rejected']??0)>0)$reasons[]='shares rechazadas ('.(int)$metrics['shares']['rejected'].')';
+    if(($metrics['shares']['hardware_errors']??0)>0)$reasons[]='errores de hardware ('.(int)$metrics['shares']['hardware_errors'].')';
+    return $reasons;
+}
+
+function hache_salad_monitor_ntfy_topic(): string
+{
+    $topic=trim((string)getenv('NTFY_TOPIC'));if($topic!=='')return $topic;
+    $file='/etc/hache-salad-ntfy.env';if(!is_readable($file))return '';
+    foreach(file($file,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)?:[] as $line){$line=trim((string)$line);if(str_starts_with($line,'NTFY_TOPIC='))return trim(trim(substr($line,11)),"\"'");}
+    return '';
+}
+
+function hache_salad_monitor_send_yellow_notification(array $group): bool
+{
+    $topic=hache_salad_monitor_ntfy_topic();if($topic==='')throw new RuntimeException('NTFY_TOPIC no está configurado en el servidor.');
+    $metrics=$group['metrics']??[];$reasons=hache_salad_monitor_yellow_reasons($metrics);$now=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('Y-m-d H:i T');
+    $body="⚠️ Salad Monitor\n".($group['display_name']??$group['group'])."\n".($metrics['gpu']??'GPU sin datos')."\n".($metrics['temperature_c']??'—')."°C | Fan ".($metrics['fan_percent']??'—')."% | ".($metrics['hashrate_ths']??'—')." TH/s\n15 min: ".($metrics['hashrate_15m_ths']??'—')." TH/s | Potencia: ".($metrics['watts']??'—')." W\nMotivo: ".implode('; ',$reasons)."\nHora: $now";
+    $curl=curl_init('https://ntfy.sh/'.rawurlencode($topic));curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$body,CURLOPT_HTTPHEADER=>['Content-Type: text/plain; charset=utf-8','Title: Salad Monitor - ALERTA AMARILLA','Priority: urgent','Tags: warning,computer'],CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15]);$response=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
+    return is_string($response)&&$status>=200&&$status<300;
+}
+
+/**
+ * Applies the yellow-entry alert rule without performing any API request itself.
+ *
+ * @param list<array<string,mixed>> $groups
+ * @param array<string,array{health?:string}> $previous
+ * @param callable(array<string,mixed>):bool $notify
+ * @return array{state:array<string,array{health:string,updated_at:string}>,sent:int}
+ */
+function hache_salad_monitor_apply_alert_transitions(array $groups,array $previous,callable $notify): array
+{
+    $next=[];$sent=0;$now=gmdate(DATE_ATOM);
+    foreach($groups as $group){$key=(string)($group['group']??'');if($key==='')continue;$health=(string)($group['health']??'red');$before=(string)($previous[$key]['health']??'unknown');
+        if($health==='yellow'&&$before!=='yellow'){if(!$notify($group))throw new RuntimeException('ntfy no confirmó la alerta para '.$key);$sent++;}
+        $next[$key]=['health'=>$health,'updated_at'=>$now];
+    }
+    return ['state'=>$next,'sent'=>$sent];
 }
 
 /** @return list<array<string,mixed>> */
