@@ -163,6 +163,12 @@ enable_salad_monitor_timer() {
   systemctl is-active --quiet hache-salad-monitor.timer || fail "timer Salad monitor inactivo."
   echo "SALAD_MONITOR_TIMER_ENABLED"
 }
+run_salad_monitor_simulation() {
+  local mode="$1"
+  [[ "$mode" == 'yellow' || "$mode" == 'green' ]] || fail "simulación Salad inválida."
+  [[ -f "$REPO/bin/salad-monitor-poll.php" ]] || fail "poller Salad ausente."
+  runuser -u www-data -- /usr/bin/php "$REPO/bin/salad-monitor-poll.php" "--simulate=$mode"
+}
 
 main() {
   require_root; [[ "$#" -ge 1 ]] || fail "falta comando o SHA."
@@ -188,6 +194,7 @@ main() {
     salad-monitor-secret-set) shift; set_salad_monitor_secret "$@" ;;
     salad-ntfy-topic-set) shift; set_salad_ntfy_topic "$@" ;;
     salad-monitor-enable) [[ "$#" -eq 1 ]] || fail "salad-monitor-enable no acepta argumentos."; enable_salad_monitor_timer ;;
+    salad-monitor-simulate) [[ "$#" -eq 2 ]] || fail "salad-monitor-simulate requiere yellow o green."; run_salad_monitor_simulation "$2" ;;
     *) [[ "$#" -eq 1 ]] || fail "el deploy acepta exactamente un SHA."; run_target_deploy "$1" ;;
   esac
 }
