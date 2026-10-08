@@ -54,6 +54,13 @@ check($estimate['running_4070_low']===2&&abs($estimate['daily_usd_estimate']-6.2
 $valid['groups'][]=['group'=>'prl-medium-4070','stale'=>false,'metrics'=>['gpu'=>'RTX 4070 Ti SUPER'],
      'instances'=>[['state'=>'running','ready'=>true,'started'=>true]]];
 check(mineria_caja_operational($valid,$t)['running_4070_low']===2,'No asumir precio Low en Medium');
+$valid['groups'][]=['group'=>'prl-low-3090','stale'=>false,'metrics'=>['gpu'=>'RTX 3090'],
+     'instances'=>[['state'=>'running','ready'=>true,'started'=>true]]];
+check(mineria_caja_operational($valid,$t)['available']&&mineria_caja_operational($valid,$t)['running_4070_low']===2,
+    'Otras GPU Low no deben invalidar la estimación de 4070 verificadas');
+$valid['groups'][]=['group'=>'prl-lowest-4070','stale'=>false,'metrics'=>['gpu'=>'RTX 4070 Ti SUPER'],
+     'instances'=>[['state'=>'running','ready'=>true,'started'=>true]]];
+check(mineria_caja_operational($valid,$t)['running_4070_low']===2,'No confundir Lowest con Low');
 $old=mineria_caja_operational($valid,$t+1000);check(!$old['available'],'Estimación stale aceptada');
   $valid['groups'][0]['stale']=true;
   check(!mineria_caja_operational($valid,$t)['available'],'Grupo stale aceptado');
