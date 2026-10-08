@@ -40,13 +40,18 @@ jobs:
             return [];
           }
           (async()=>{
-            const org='hache',project='prl-tests';
+            const org='interactive';
+            const projectsResponse=await get('/organizations/'+org+'/projects');
+            const projects=list(projectsResponse).map(p=>({name:p.name,display_name:p.display_name}));
+            console.log('READ_ONLY_PROJECTS',JSON.stringify({organization:org,projects}));
+            if(!projects.length)throw new Error('No projects found in interactive.');
+            const project=projects.find(x=>x.name==='prl-tests')?.name??projects[0].name;
             const quota=await get('/organizations/'+org+'/quotas');
             const groupQuota=quota.container_group_quotas||quota.container_groups_quotas||{};
             console.log('READ_ONLY_QUOTAS',JSON.stringify({fields:Object.keys(quota),group_quotas:groupQuota}));
             const response=await get('/organizations/'+org+'/projects/'+project+'/containers');
             const groups=list(response);
-            if(!Array.isArray(groups)||!groups.length)throw new Error('No groups returned; no changes made.');
+            if(!Array.isArray(groups))throw new Error('Groups response invalid.');
             const safe=groups.map(g=>({
               name:String(g.name||'').slice(0,80),
               priority:g.priority,
