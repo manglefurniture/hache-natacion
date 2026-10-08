@@ -20,13 +20,13 @@ function mineria_caja_read_unlocked(string $path): array {
     return $data;
 }
 function mineria_caja_read(): array { return mineria_caja_read_unlocked(mineria_caja_path()); }
-function mineria_caja_amount_cents(mixed $value): int {
+function mineria_caja_amount_cents(mixed $value,bool $allowZero=false): int {
     if(!is_string($value)&&!is_int($value))throw new InvalidArgumentException('Importe inválido.');
     $amount=trim((string)$value);
     if(!preg_match('/^([0-9]{1,8})(?:\\.([0-9]{1,2}))?$/D',$amount,$m))
         throw new InvalidArgumentException('Usa un importe positivo con hasta dos decimales.');
     $cents=(int)$m[1]*100+(int)str_pad($m[2]??'0',2,'0');
-    if($cents<1)throw new InvalidArgumentException('El importe debe ser mayor que cero.');
+    if($cents<1&&!$allowZero)throw new InvalidArgumentException('El importe debe ser mayor que cero.');
     return $cents;
 }
 function mineria_caja_types(): array {
@@ -45,7 +45,7 @@ function mineria_caja_types(): array {
 function mineria_caja_validate(array $input): array {
     $type=(string)($input['type']??'');
     if(!isset(mineria_caja_types()[$type]))throw new InvalidArgumentException('Tipo de movimiento inválido.');
-    $cents=mineria_caja_amount_cents($input['amount']??null);
+    $cents=mineria_caja_amount_cents($input['amount']??null,str_starts_with($type,'opening_'));
     $date=(string)($input['date']??'');
     $parsed=DateTimeImmutable::createFromFormat('!Y-m-d',$date,new DateTimeZone('America/Cancun'));
     if(!$parsed||$parsed->format('Y-m-d')!==$date)
@@ -79,6 +79,10 @@ function mineria_caja_add(array $input): array {
                     throw new InvalidArgumentException('Identificador reutilizado con datos diferentes.');
                 return $existing;
             }
+        }
+        if(str_starts_with($entry['type'],'opening_')){
+            foreach($data['entries'] as $existing)
+                if(($existing['type']??'')===$entry['type'])throw new InvalidArgumentException('La apertura de este saldo ya está registrada.');
         }
         if(count($data['entries'])>=10000)throw new RuntimeException('El registro llegó a su límite: exportar antes de continuar.');
         $entry['id']=bin2hex(random_bytes(12));
