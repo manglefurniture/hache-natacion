@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Solo registra movimientos efectivamente realizados; no inventa costos a partir del hashrate.
  */
 function mineria_caja_path(): string {
-    return (string)(getenv('MINERIA_CAJA_FILE') ?: '/var/lib/hache-natacion/mineria-caja.json');
+    return (string)(getenv('MINERIA_CAJA_FILE') ?: '/var/lib/hache-natacion/mineria-caja/ledger.json');
 }
 function mineria_caja_empty(): array { return ['version'=>1,'entries'=>[]]; }
 function mineria_caja_read_unlocked(string $path): array {

@@ -13,6 +13,7 @@ DB_OPS_HOME="/home/deploy-hache"
 DB_OPS_CNF="${DB_OPS_HOME}/.my.cnf"
 GOOGLE_CONTACTS_OAUTH_ROOT="/var/lib/hache-natacion"
 GOOGLE_CONTACTS_OAUTH_STAGE_DIR="${GOOGLE_CONTACTS_OAUTH_ROOT}/oauth-stage"
+MINING_CASH_DIR="/var/lib/hache-natacion/mineria-caja"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 require_root() { [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "este wrapper debe ejecutarse como root mediante sudo."; }
@@ -33,6 +34,15 @@ ensure_google_contacts_oauth_stage_dir() {
   [[ ! -L "$GOOGLE_CONTACTS_OAUTH_STAGE_DIR" ]] || fail "staging OAuth no puede ser symlink."
   install -d -o www-data -g www-data -m 0700 "$GOOGLE_CONTACTS_OAUTH_STAGE_DIR"
   [[ "$(stat -c '%U:%G:%a' "$GOOGLE_CONTACTS_OAUTH_STAGE_DIR")" == 'www-data:www-data:700' ]] || fail "permisos inesperados en staging OAuth."
+}
+
+ensure_mining_cash_dir() {
+  require_command install; require_command stat
+  id www-data >/dev/null 2>&1 || fail "usuario Linux www-data ausente."
+  [[ -d "$GOOGLE_CONTACTS_OAUTH_ROOT" && ! -L "$GOOGLE_CONTACTS_OAUTH_ROOT" ]] || fail "raíz privada de datos inválida."
+  [[ ! -L "$MINING_CASH_DIR" ]] || fail "ruta de caja minera no puede ser symlink."
+  install -d -o www-data -g www-data -m 0700 "$MINING_CASH_DIR"
+  [[ "$(stat -c '%U:%G:%a' "$MINING_CASH_DIR")" == 'www-data:www-data:700' ]] || fail "permisos inseguros en caja minera."
 }
 
 normalize_tracked_worktree_permissions() {
@@ -72,6 +82,7 @@ run_target_deploy() {
   [[ "$(git rev-parse origin/main)" == "$sha" ]] || fail "origin/main no coincide con el SHA aprobado."
   sync_wrapper_from_target_if_present "$sha"
   ensure_google_contacts_oauth_stage_dir
+  ensure_mining_cash_dir
   implementation="$(mktemp /tmp/hache-deploy-implementation.XXXXXX)"
   extract_target_file "$sha" "$IMPLEMENTATION_PATH" "$implementation"; bash -n "$implementation"; chmod 0700 "$implementation"
   set +e; bash "$implementation" "$sha"; rc=$?; set -e; rm -f -- "$implementation"

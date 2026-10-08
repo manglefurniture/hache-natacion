@@ -49,7 +49,20 @@ try{
   $old=mineria_caja_operational($valid,$t+1000);check(!$old['available'],'Estimación stale aceptada');
   $valid['groups'][0]['stale']=true;
   check(!mineria_caja_operational($valid,$t)['available'],'Grupo stale aceptado');
-  echo "MINERIA_CAJA_REGRESSION_OK\n";
 }finally{
   @unlink($file);@unlink($file.'.lock');@rmdir($dir);putenv('MINERIA_CAJA_FILE');
 }
+$wrapper=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion-wrapper');
+$deploy=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion');
+check(is_string($wrapper)&&str_contains($wrapper,'ensure_mining_cash_dir')&&str_contains($wrapper,'www-data:www-data:700'),
+    'El deploy debe provisionar el directorio privado de caja.');
+check(mineria_caja_path()==='/var/lib/hache-natacion/mineria-caja/ledger.json',
+    'Ruta de caja no apunta al directorio privado.');
+check(is_string($deploy)&&str_contains($deploy,'/var/lib/hache-natacion/mineria-caja/ledger.json'),
+    'El backup versionado debe incluir el ledger privado.');
+$mergeAt=strpos($deploy,'  git merge --ff-only origin/main');
+$provisionAt=strrpos($deploy,'  ensure_mining_cash_dir');
+check(substr_count($deploy,'ensure_mining_cash_dir')>=3&&$mergeAt!==false&&$provisionAt!==false&&$provisionAt<$mergeAt&&($mergeAt-$provisionAt)<250,
+    'El primer deploy debe provisionar la caja antes de hacer fast-forward.');
+
+echo "MINERIA_CAJA_REGRESSION_OK\n";

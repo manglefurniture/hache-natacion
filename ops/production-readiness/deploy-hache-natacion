@@ -171,7 +171,7 @@ create_complete_backup() {
   [[ -s "$destination/database.sql" ]] || fail "el dump de DB quedó vacío."
   # El libro de minería vive fuera del repositorio y del backup SQL.
   # Preservarlo en cada backup pre-deploy sin seguir symlinks ni incluir secretos.
-  local mining_cash_file="/var/lib/hache-natacion/mineria-caja.json"
+  local mining_cash_file="/var/lib/hache-natacion/mineria-caja/ledger.json"
   if [[ -e "$mining_cash_file" || -L "$mining_cash_file" ]]; then
     [[ -f "$mining_cash_file" && ! -L "$mining_cash_file" ]] || fail "ruta de caja minera insegura."
     install -o root -g root -m 0600 "$mining_cash_file" "$destination/mineria-caja.json"
@@ -247,6 +247,20 @@ apply_release_migrations() {
   fi
 }
 
+ensure_mining_cash_dir() {
+  # Se ejecuta desde el código del SHA aprobado, también en el primer deploy
+  # en que el wrapper actualmente instalado todavía es una versión anterior.
+  local root="/var/lib/hache-natacion" dir="$root/mineria-caja"
+  require_root
+  require_command install
+  require_command stat
+  id www-data >/dev/null 2>&1 || fail "usuario Linux www-data ausente."
+  [[ -d "$root" && ! -L "$root" ]] || fail "directorio privado raíz inválido."
+  [[ ! -L "$dir" ]] || fail "ruta de caja minera no puede ser symlink."
+  install -d -o www-data -g www-data -m 0700 "$dir"
+  [[ "$(stat -c '%U:%G:%a' "$dir")" == 'www-data:www-data:700' ]] || fail "permisos inseguros en la caja minera."
+}
+
 deploy_sha() {
   local expected_sha="$1" remote local_sha base deployed
   require_root
@@ -275,6 +289,7 @@ deploy_sha() {
   base="$(git merge-base HEAD origin/main)"
 
   if [[ "$local_sha" == "$remote" ]]; then
+    ensure_mining_cash_dir
     apply_release_migrations
     publish_deployed_sha "$local_sha"
     echo "Ya esta actualizado: $local_sha"
@@ -286,6 +301,7 @@ deploy_sha() {
   # de la DB productiva. El marcador BACKUP_COMPLETE se crea al final.
   create_complete_backup
   [[ -n "${LAST_BACKUP_DIR:-}" && -f "$LAST_BACKUP_DIR/BACKUP_COMPLETE" ]] || fail "backup pre-deploy incompleto."
+  ensure_mining_cash_dir
 
   cd "$REPO"
   git merge --ff-only origin/main
