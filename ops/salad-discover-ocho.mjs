@@ -19,9 +19,12 @@ export async function main() {
    let groups;
    try{groups=items(await get(key,api+'/projects/'+encodeURIComponent(project)+'/containers','group listing')); }
    catch(e){console.log('SKIPPED_PROJECT_LOOKUP:',project,e.message);continue;}
-   const hits=groups.filter(g=>g.name===target);
+   console.log('LISTED_CONTAINER_GROUPS:',project,groups.length);
+   const hits=groups.filter(g=>g.name===target || g.display_name===target ||
+     /ocho/i.test(String(g.name??'')+' '+String(g.display_name??'')));
    for(const g of hits){
-     found.push({project,group:g.name,priority:g.priority,replicas:g.replicas,
+     found.push({project,group:g.name,display_name:g.display_name??g.name,
+       priority:g.priority,replicas:g.replicas,
        state:g.current_state?.status??'unknown',pending_change:g.pending_change,
        gpu_class_count:g.container?.resources?.gpu_classes?.length??0});
    }
