@@ -47,7 +47,7 @@ jobs:
             const projects=[];
             const gpuCatalog=list(await get('/organizations/'+org+'/gpu-classes'));
             const candidateGpus=gpuCatalog.filter(x=>/4070 ti super/i.test(x.name||''))
-              .map(x=>({id:x.id,name:x.name,fields:Object.keys(x)}));
+              .map(x=>({id:x.id,name:x.name,prices:x.prices,fields:Object.keys(x)}));
             console.log('READ_ONLY_QTC_GPU_CLASSES',JSON.stringify({count:candidateGpus.length,candidates:candidateGpus}));
             const pearlTemplate=await get('/organizations/hache/projects/prl-tests/containers/prl-low-4070-experimental');
             console.log('READ_ONLY_PRL_TEMPLATE',JSON.stringify({priority:pearlTemplate.priority,
@@ -55,7 +55,7 @@ jobs:
               restart_policy:pearlTemplate.restart_policy,group_fields:Object.keys(pearlTemplate),
               container_fields:Object.keys(pearlTemplate.container||{}),
               resources:pearlTemplate.container?.resources,
-              env_names:(pearlTemplate.container?.environment_variables||[]).map(v=>v.key||v.name),
+              env_names:Array.isArray(pearlTemplate.container?.environment_variables) ? pearlTemplate.container.environment_variables.map(v=>v.key||v.name) : Object.keys(pearlTemplate.container?.environment_variables||{}),
               registry_keys:Object.keys(pearlTemplate.container?.image_authentication||{})
             }));
             const quota=await get('/organizations/'+org+'/quotas');
