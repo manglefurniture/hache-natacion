@@ -49,7 +49,6 @@ try{
   $old=mineria_caja_operational($valid,$t+1000);check(!$old['available'],'Estimación stale aceptada');
   $valid['groups'][0]['stale']=true;
   check(!mineria_caja_operational($valid,$t)['available'],'Grupo stale aceptado');
-  echo "MINERIA_CAJA_REGRESSION_OK\n";
 }finally{
   @unlink($file);@unlink($file.'.lock');@rmdir($dir);putenv('MINERIA_CAJA_FILE');
 }
@@ -61,3 +60,5 @@ check(mineria_caja_path()==='/var/lib/hache-natacion/mineria-caja/ledger.json',
     'Ruta de caja no apunta al directorio privado.');
 check(is_string($deploy)&&str_contains($deploy,'/var/lib/hache-natacion/mineria-caja/ledger.json'),
     'El backup versionado debe incluir el ledger privado.');
+
+echo "MINERIA_CAJA_REGRESSION_OK\n";
