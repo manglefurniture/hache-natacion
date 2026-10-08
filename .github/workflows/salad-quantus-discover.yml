@@ -90,5 +90,15 @@ jobs:
               image:(g.container?.image||'').replace(/@sha256:[a-f0-9]+/i,'@digest').slice(0,160),
             })).sort((a,b)=>a.name.localeCompare(b.name));
             console.log('READ_ONLY_SALAD_DISCOVERY',JSON.stringify({organization:org,project,count:safe.length,groups:safe}));
+            if(project==='default'){
+              const trial=await get('/organizations/'+org+'/projects/'+project+'/containers/quantus-low-4070-trial-02');
+              console.log('QTC_GROUP_VERIFICATION',JSON.stringify({
+                name:trial.name,priority:trial.priority,autostart:trial.autostart_policy,
+                replicas:trial.replicas,state:trial.current_state?.status,
+                image:trial.container?.image,
+                wallet_set:Boolean(trial.container?.environment_variables?.QTC_WALLET),
+                dry_run:trial.container?.environment_variables?.QTC_DRY_RUN,
+              }));
+            }
           })().catch(e=>{console.error('READ_ONLY_DISCOVERY_FAILED',e.message);process.exitCode=1});
           JS
