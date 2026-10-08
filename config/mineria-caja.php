@@ -133,7 +133,7 @@ function mineria_caja_operational(?array $snapshot,int $now): array {
         if(!is_array($group))continue;
         $name=strtolower((string)($group['group']??''));
         $gpu=strtoupper((string)($group['metrics']['gpu']??''));
-        if(!str_contains($name,'4070')||!str_contains($name,'low'))continue;
+        if(!str_contains($name,'low'))continue; // El modelo real se valida con los datos de GPU.
         if(($group['stale']??false)===true){$uncertain=true;continue;}
         if(!str_contains($gpu,'4070 TI SUPER')){$uncertain=true;continue;}
         foreach($group['instances']??[] as $i)
