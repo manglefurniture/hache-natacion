@@ -41,16 +41,23 @@ jobs:
           }
           (async()=>{
             const org='interactive';
-            const projectsResponse=await get('/organizations/'+org+'/projects');
-            const projects=list(projectsResponse).map(p=>({name:p.name,display_name:p.display_name}));
-            console.log('READ_ONLY_PROJECTS',JSON.stringify({organization:org,projects}));
-            if(!projects.length)throw new Error('No projects found in interactive.');
-            const project=projects.find(x=>x.name==='prl-tests')?.name??projects[0].name;
+            // Salad's public API does not expose GET /organizations/{org}/projects.
+            // Validate the organization with quotas, then inspect only likely project slugs.
+            const possibleProjects=['default','prl-tests','prl-test'];
+            const projects=[];
             const quota=await get('/organizations/'+org+'/quotas');
             const groupQuota=quota.container_group_quotas||quota.container_groups_quotas||{};
             console.log('READ_ONLY_QUOTAS',JSON.stringify({fields:Object.keys(quota),group_quotas:groupQuota}));
-            const response=await get('/organizations/'+org+'/projects/'+project+'/containers');
-            const groups=list(response);
+            let project=null,groups=[];
+            for(const candidate of possibleProjects) {
+              const endpoint='/organizations/'+org+'/projects/'+candidate+'/containers';
+              let response;
+              try {response=await get(endpoint);}
+              catch(e) {if(String(e.message||'').includes('HTTP 404'))continue;throw e;}
+              project=candidate;groups=list(response);projects.push(candidate);break;
+            }
+            console.log('READ_ONLY_PROJECTS',JSON.stringify({organization:org,projects,matched:project}));
+            if(!project)throw new Error('Organization quota works but no known project slug was found.');
             if(!Array.isArray(groups))throw new Error('Groups response invalid.');
             const safe=groups.map(g=>({
               name:String(g.name||'').slice(0,80),
