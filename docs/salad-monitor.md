@@ -9,7 +9,7 @@ Si Salad falla temporalmente:
 - un fallo aislado de un Container Group conserva el último dato válido de ese grupo y lo marca como desactualizado;
 - un fallo de la consulta global no borra ni reemplaza el snapshot anterior.
 
-No existe ninguna operación que cambie, reasigne o detenga instancias.
+El monitor es de solo lectura salvo una automatización explícita: puede pedir a SaladCloud que **reasigne una instancia** cuando un grupo previamente sano permanece por debajo de 130 TH/s durante al menos 5 minutos. Usa el endpoint oficial de reallocate para que Salad entregue un nodo distinto; no cambia el Container Group, la imagen, el precio ni la cantidad de réplicas.
 
 ## Configuración de servidor
 
@@ -50,3 +50,15 @@ El poller envía notificaciones por ntfy únicamente en transiciones de estado p
 - Mientras un grupo permanezca en el mismo estado amarillo o rojo no repite la alerta.
 - Los datos `stale` conservados por un fallo temporal de la API no generan una falsa alerta roja.
 - La latencia máxima normal depende del timer de cinco minutos.
+
+
+## Auto-reallocate por hashrate bajo
+
+La protección de rendimiento se evalúa en cada ciclo del timer de 5 minutos:
+
+- El grupo debe haber demostrado previamente al menos una lectura de **130 TH/s o más**. Esto evita reciclar automáticamente pruebas/GPU que nunca estuvieron diseñadas para superar ese umbral.
+- Si una única instancia activa y `ready/running` cae por debajo de **130 TH/s**, se inicia un temporizador persistente.
+- Si sigue por debajo del umbral al menos **300 segundos** después, el poller solicita `POST .../instances/{instance_id}/reallocate` a SaladCloud.
+- La misma instancia nunca recibe dos solicitudes de reallocate; el control se rearma cuando Salad entrega un nuevo `instance_id`.
+- Un snapshot `stale`, un fallo de API o un grupo sin exactamente una instancia activa no dispara la automatización.
+- Tras aceptar Salad la reasignación, se envía una notificación ntfy `Salad Monitor - AUTO REALLOCATE` con el hashrate observado.
