@@ -105,9 +105,18 @@ $('form').addEventListener('submit',async ev=>{
  try{
   const r=await fetch('/api/mineria-caja.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)});
   const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'No se pudo guardar');
-  requestId='';$('amount').value='';$('note').value='';
-  await load();setStatus('Movimiento registrado correctamente.');
- }catch(e){setStatus(e.message,true)}finally{$('save').disabled=false;}
+  // El POST ya está confirmado: un error del GET posterior NO es un error de escritura.
+  $('save').disabled=true;
+  setStatus('Asiento guardado (ID '+d.entry.id+'). Actualizando…');
+  try{
+    await load();requestId='';$('amount').value='';$('note').value='';
+    setStatus('Movimiento registrado correctamente.');
+    $('save').disabled=false;
+  }catch(refreshError){
+    // Bloquear otro envío: evita crear otro asiento si el usuario interpreta el refresh como fallo del POST.
+    setStatus('Asiento guardado (ID '+d.entry.id+'). No se pudo refrescar el historial. Recarga la página para verlo; no vuelvas a registrar este movimiento.');
+  }
+ }catch(e){setStatus(e.message,true);$('save').disabled=false;}
 });
 for(const id of ['type','amount','date','note'])$(id).addEventListener('input',()=>{requestId='';});
 $('type').addEventListener('change',()=>{$('amount').min=$('type').value.startsWith('opening_')?'0':'0.01'});
