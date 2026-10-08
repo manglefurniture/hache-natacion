@@ -60,5 +60,7 @@ check(mineria_caja_path()==='/var/lib/hache-natacion/mineria-caja/ledger.json',
     'Ruta de caja no apunta al directorio privado.');
 check(is_string($deploy)&&str_contains($deploy,'/var/lib/hache-natacion/mineria-caja/ledger.json'),
     'El backup versionado debe incluir el ledger privado.');
+check(substr_count($deploy,'ensure_mining_cash_dir')>=3&&str_contains($deploy,'  ensure_mining_cash_dir\n\n  cd "$REPO"'),
+    'El primer deploy debe provisionar la caja antes de hacer fast-forward.');
 
 echo "MINERIA_CAJA_REGRESSION_OK\n";
