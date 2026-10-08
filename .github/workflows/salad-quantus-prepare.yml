@@ -41,7 +41,8 @@ jobs:
               const issue=await r.json().catch(()=>({}));
               const label=String(issue?.title||'').replace(/[^a-zA-Z0-9 ._-]/g,'').slice(0,100);
               const detail=String(issue?.detail||'').replace(/[^a-zA-Z0-9 .:_-]/g,'').slice(0,350);
-              throw Error('Salad '+method+' HTTP '+r.status+' title='+label+' detail='+detail);
+              const safeIssue=JSON.stringify(issue).replace(/qz[1-9A-HJ-NP-Za-km-z]{30,}/g,'[QTC_WALLET]') .slice(0,1000);
+              throw Error('Salad '+method+' HTTP '+r.status+' title='+label+' detail='+detail+' issue='+safeIssue);
             }
             const responseText=await r.text();
             return {status:r.status,data:responseText?JSON.parse(responseText):null};
