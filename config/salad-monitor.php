@@ -102,9 +102,18 @@ function hache_salad_monitor_parse(array $logItems): array
     return $metrics;
 }
 
-function hache_salad_monitor_status(string $groupState,array $metrics): string
+function hache_salad_monitor_status(string $groupState,array $metrics,?array $instances=null): string
 {
     $state=strtolower($groupState);if(!in_array($state,['running','started'],true))return 'red';
+    if($instances!==null){
+        $healthy=false;
+        foreach($instances as $instance){
+            if(!is_array($instance))continue;
+            $instanceState=strtolower((string)($instance['state']??''));
+            if(($instance['ready']??false)===true&&(($instance['started']??false)===true||$instanceState==='running')){$healthy=true;break;}
+        }
+        if(!$healthy)return 'red';
+    }
     if(($metrics['hashrate_ths']??0)<=0||($metrics['gpu']??null)===null)return 'red';
     if(hache_salad_monitor_yellow_reasons($metrics)!==[])return 'yellow';
     return 'green';
@@ -121,6 +130,26 @@ function hache_salad_monitor_yellow_reasons(array $metrics): array
     return $reasons;
 }
 
+/** @return list<string> */
+function hache_salad_monitor_red_reasons(array $group): array
+{
+    $reasons=[];$state=strtolower((string)($group['state']??'unknown'));
+    if(!in_array($state,['running','started'],true))$reasons[]='grupo fuera de servicio ('.$state.')';
+    $instances=is_array($group['instances']??null)?$group['instances']:[];
+    $healthy=false;$states=[];
+    foreach($instances as $instance){
+        if(!is_array($instance))continue;
+        $instanceState=strtolower((string)($instance['state']??'unknown'));$ready=(bool)($instance['ready']??false);$started=(bool)($instance['started']??false);
+        $states[]=$instanceState.'/ready='.($ready?'sí':'no');
+        if($ready&&($started||$instanceState==='running'))$healthy=true;
+    }
+    if(!$healthy)$reasons[]=$instances===[]?'sin instancia activa':'instancia no disponible ('.implode(', ',$states).')';
+    $metrics=is_array($group['metrics']??null)?$group['metrics']:[];
+    if(($metrics['hashrate_ths']??0)<=0)$reasons[]='sin hashrate';
+    if(($metrics['gpu']??null)===null)$reasons[]='sin datos de GPU';
+    return array_values(array_unique($reasons));
+}
+
 function hache_salad_monitor_ntfy_topic(): string
 {
     $topic=trim((string)getenv('NTFY_TOPIC'));if($topic!=='')return $topic;
@@ -129,17 +158,21 @@ function hache_salad_monitor_ntfy_topic(): string
     return '';
 }
 
-function hache_salad_monitor_send_yellow_notification(array $group): bool
+function hache_salad_monitor_send_notification(array $group): bool
 {
     $topic=hache_salad_monitor_ntfy_topic();if($topic==='')throw new RuntimeException('NTFY_TOPIC no está configurado en el servidor.');
-    $metrics=$group['metrics']??[];$reasons=hache_salad_monitor_yellow_reasons($metrics);$now=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('Y-m-d H:i T');
-    $body="⚠️ Salad Monitor\n".($group['display_name']??$group['group'])."\n".($metrics['gpu']??'GPU sin datos')."\n".($metrics['temperature_c']??'—')."°C | Fan ".($metrics['fan_percent']??'—')."% | ".($metrics['hashrate_ths']??'—')." TH/s\n15 min: ".($metrics['hashrate_15m_ths']??'—')." TH/s | Potencia: ".($metrics['watts']??'—')." W\nMotivo: ".implode('; ',$reasons)."\nHora: $now";
-    $curl=curl_init('https://ntfy.sh/'.rawurlencode($topic));curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$body,CURLOPT_HTTPHEADER=>['Content-Type: text/plain; charset=utf-8','Title: Salad Monitor - ALERTA AMARILLA','Priority: urgent','Tags: warning,computer'],CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15]);$response=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
+    $health=(string)($group['health']??'red');$metrics=is_array($group['metrics']??null)?$group['metrics']:[];
+    $reasons=$health==='red'?hache_salad_monitor_red_reasons($group):hache_salad_monitor_yellow_reasons($metrics);
+    $now=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('Y-m-d H:i T');
+    $icon=$health==='red'?'🚨':'⚠️';$label=$health==='red'?'ALERTA ROJA':'ALERTA AMARILLA';
+    $body=$icon." Salad Monitor\n".($group['display_name']??$group['group'])."\n".($metrics['gpu']??'GPU sin datos')."\nEstado: ".$health." | Grupo: ".($group['state']??'—')."\n".($metrics['temperature_c']??'—')."°C | Fan ".($metrics['fan_percent']??'—')."% | ".($metrics['hashrate_ths']??'—')." TH/s\n15 min: ".($metrics['hashrate_15m_ths']??'—')." TH/s | Potencia: ".($metrics['watts']??'—')." W\nMotivo: ".implode('; ',$reasons)."\nHora: $now";
+    $headers=['Content-Type: text/plain; charset=utf-8','Title: Salad Monitor - '.$label,'Priority: urgent','Tags: '.($health==='red'?'rotating_light,computer':'warning,computer')];
+    $curl=curl_init('https://ntfy.sh/'.rawurlencode($topic));curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$body,CURLOPT_HTTPHEADER=>$headers,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15]);$response=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
     return is_string($response)&&$status>=200&&$status<300;
 }
 
 /**
- * Applies the yellow-entry alert rule without performing any API request itself.
+ * Applies alert transitions for yellow/red health without performing any API request itself.
  *
  * @param list<array<string,mixed>> $groups
  * @param array<string,array{health?:string}> $previous
@@ -149,8 +182,10 @@ function hache_salad_monitor_send_yellow_notification(array $group): bool
 function hache_salad_monitor_apply_alert_transitions(array $groups,array $previous,callable $notify): array
 {
     $next=[];$sent=0;$now=gmdate(DATE_ATOM);
-    foreach($groups as $group){$key=(string)($group['group']??'');if($key==='')continue;$health=(string)($group['health']??'red');$before=(string)($previous[$key]['health']??'unknown');
-        if($health==='yellow'&&$before!=='yellow'){if(!$notify($group))throw new RuntimeException('ntfy no confirmó la alerta para '.$key);$sent++;}
+    foreach($groups as $group){
+        $key=(string)($group['group']??'');if($key==='')continue;$health=(string)($group['health']??'red');$before=(string)($previous[$key]['health']??'unknown');
+        $stale=(bool)($group['stale']??false);$alertable=in_array($health,['yellow','red'],true);
+        if(!$stale&&$alertable&&$before!==$health){if(!$notify($group))throw new RuntimeException('ntfy no confirmó la alerta para '.$key);$sent++;}
         $next[$key]=['health'=>$health,'updated_at'=>$now];
     }
     return ['state'=>$next,'sent'=>$sent];
@@ -172,7 +207,7 @@ function hache_salad_monitor_collect(): array
             $logs=hache_salad_monitor_http($config,'POST','/organizations/'.rawurlencode($config['organization']).'/log-entries',['sort_order'=>'desc','start_time'=>$start->format('Y-m-d\\TH:i:s\\Z'),'end_time'=>$end->format('Y-m-d\\TH:i:s\\Z'),'page_size'=>100,'query'=>'resource.type = "container" and resource.labels.project_name = "'.$config['project'].'" and resource.labels.container_group_name = "'.$name.'"']);
             $metrics=hache_salad_monitor_parse(is_array($logs['items']??null)?$logs['items']:[]);$safeInstances=[];
             foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)if(is_array($instance))$safeInstances[]=['id'=>(string)($instance['id']??''),'machine_id'=>(string)($instance['machine_id']??''),'state'=>(string)($instance['state']??''),'ready'=>(bool)($instance['ready']??false),'started'=>(bool)($instance['started']??false),'update_time'=>(string)($instance['update_time']??''),'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null];
-            $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
+            $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics,$safeInstances),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
         }catch(Throwable $e){
             error_log('[salad-monitor] group '.$name.': '.$e->getMessage());
             if(isset($previousByGroup[$name])){
