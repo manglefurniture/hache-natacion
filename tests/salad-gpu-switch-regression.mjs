@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {validate,planSwitch,verifyApplied,run} from '../ops/salad-gpu-switch.mjs';
+import {validate,planSwitch,verifyApplied,assertSameNonGpu,run} from '../ops/salad-gpu-switch.mjs';
 const oldId='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',newId='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
 const catalog={items:[
   {id:oldId,name:'RTX 4070 Ti Super (16 GB)'},
@@ -62,4 +62,24 @@ test('preview uses GET only, and apply uses one PATCH after second GET',async()=
     assert.equal(calls.filter(c=>c.method==='PATCH').length,1);
     assert.equal(poll,2);
   }finally{if(prev===undefined)delete process.env.SALAD_API_KEY;else process.env.SALAD_API_KEY=prev;}
+});
+
+test('concurrent non-GPU edit aborts before any PATCH',async()=>{
+  const prev=process.env.SALAD_API_KEY;
+  process.env.SALAD_API_KEY='fake-key-not-real';
+  let gets=0;let patches=0;
+  try{
+    await assert.rejects(()=>run(opts('apply'),async(key,method,path)=>{
+      if(path.endsWith('/gpu-classes'))return catalog;
+      if(method==='PATCH'){patches++;return group();}
+      const item=group();
+      gets++;
+      if(gets===2)item.container.image='changed-concurrently';
+      return item;
+    },async()=>{}),/Non-GPU settings changed/);
+    assert.equal(patches,0);
+  }finally{
+    if(prev===undefined)delete process.env.SALAD_API_KEY;
+    else process.env.SALAD_API_KEY=prev;
+  }
 });
