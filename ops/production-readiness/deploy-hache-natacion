@@ -469,6 +469,12 @@ restore_drill() {
   if ! (cd "$backup_dir" && sha256sum --check --strict SHA256SUMS >/dev/null 2>&1); then
     restore_fail "checksum_failed" "falló la validación de checksums."
   fi
+  # Verificación aislada del ledger opcional: nunca sobrescribe la caja de producción.
+  if [[ -f "$backup_dir/mineria-caja.json" ]]; then
+    if ! php -r '$x=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);if(!is_array($x)||($x["version"]??null)!==1||!is_array($x["entries"]??null))exit(1);' "$backup_dir/mineria-caja.json" >/dev/null 2>&1; then
+      restore_fail "mineria_caja_invalid" "el respaldo de caja minera no se puede reconstruir."
+    fi
+  fi
 
   manifest_status="$(awk -F= '$1=="backup_status"{print $2; exit}' "$backup_dir/backup-manifest.env")"
   source_db="$(awk -F= '$1=="database_name"{print $2; exit}' "$backup_dir/backup-manifest.env")"
