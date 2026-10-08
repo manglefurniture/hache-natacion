@@ -43,7 +43,7 @@ jobs:
             const org='hache',project='prl-tests';
             const quota=await get('/organizations/'+org+'/quotas');
             const groupQuota=quota.container_group_quotas||quota.container_groups_quotas||{};
-            console.log('READ_ONLY_QUOTAS',JSON.stringify({fields:Object.keys(quota),max_groups:groupQuota.max_created_container_groups??null,max_instances:groupQuota.container_instance_quota??null}));
+            console.log('READ_ONLY_QUOTAS',JSON.stringify({fields:Object.keys(quota),group_quotas:groupQuota}));
             const response=await get('/organizations/'+org+'/projects/'+project+'/containers');
             const groups=list(response);
             if(!Array.isArray(groups)||!groups.length)throw new Error('No groups returned; no changes made.');
