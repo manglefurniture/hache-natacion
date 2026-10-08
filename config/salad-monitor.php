@@ -114,7 +114,7 @@ function hache_salad_monitor_profitability(string $name,string $state,array $met
 {
     $result=['applicable'=>false,'level'=>'unknown','hashrate_15m_ths'=>null,'warning_ths'=>140,'break_even_ths'=>125];
     $gpu=strtoupper((string)($metrics['gpu']??''));
-    if(!str_contains(strtolower($name),'low')||!str_contains($gpu,'4070 TI SUPER'))return $result;
+    if(!preg_match('/(?:^|[-_])low(?:$|[-_])/',strtolower($name))||!str_contains($gpu,'4070 TI SUPER'))return $result;
     $result['applicable']=true;
     $active=0;
     foreach($instances as $instance){
