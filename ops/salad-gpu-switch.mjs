@@ -40,7 +40,7 @@ export function planSwitch(group, catalog, input) {
     oldId:old[0].id,newId:goal[0].id,
     patch:{container:{resources:{gpu_classes:[goal[0].id]}}}};
 }
-export function verifyApplied(original, result, plan) {
+export function assertSameNonGpu(original, result) {
   if (result?.name !== original.name || result?.replicas !== original.replicas ||
       !same(result?.priority,original.priority)) throw new Error('Other group settings changed');
   const before=structuredClone(original.container),after=structuredClone(result.container);
@@ -48,6 +48,9 @@ export function verifyApplied(original, result, plan) {
   delete before.resources.gpu_classes; delete after.resources.gpu_classes;
   if (JSON.stringify(before)!==JSON.stringify(after))
     throw new Error('Non-GPU settings changed unexpectedly');
+}
+export function verifyApplied(original, result, plan) {
+  assertSameNonGpu(original, result);
   const cls=result?.container?.resources?.gpu_classes;
   return Array.isArray(cls)&&cls.length===1&&cls[0]===plan.newId&&result.pending_change===false;
 }
@@ -74,6 +77,7 @@ export async function run(input,call=request,delay=sleep) {
   if(o.mode==='plan'){console.log('PREVISUALIZACION: sin cambios en Salad');return 'preview';}
   const fresh=await call(key,'GET',path);
   const check=planSwitch(fresh,classes,o);
+  assertSameNonGpu(original, fresh);
   if(check.already||check.oldId!==p.oldId||check.newId!==p.newId)
     throw new Error('The group changed after preflight');
   const response=await call(key,'PATCH',path,p.patch);
@@ -81,7 +85,7 @@ export async function run(input,call=request,delay=sleep) {
   console.log('PATCH aceptado; comprobando configuracion aplicada');
   for(let i=0;i<60;i++){
     const observed=await call(key,'GET',path);
-    if(verifyApplied(original,observed,p)){
+    if(verifyApplied(fresh,observed,p)){
       console.log('GPU_CONFIGURADA:',p.newClass,'| estado:',observed.current_state?.status??'unknown',
         '| pending: false | NO confirma GPU lista ni hashrate');
       return 'applied';
