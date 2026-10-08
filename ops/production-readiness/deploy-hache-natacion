@@ -171,7 +171,7 @@ create_complete_backup() {
   [[ -s "$destination/database.sql" ]] || fail "el dump de DB quedó vacío."
   # El libro de minería vive fuera del repositorio y del backup SQL.
   # Preservarlo en cada backup pre-deploy sin seguir symlinks ni incluir secretos.
-  local mining_cash_file="/var/lib/hache-natacion/mineria-caja.json"
+  local mining_cash_file="/var/lib/hache-natacion/mineria-caja/ledger.json"
   if [[ -e "$mining_cash_file" || -L "$mining_cash_file" ]]; then
     [[ -f "$mining_cash_file" && ! -L "$mining_cash_file" ]] || fail "ruta de caja minera insegura."
     install -o root -g root -m 0600 "$mining_cash_file" "$destination/mineria-caja.json"
