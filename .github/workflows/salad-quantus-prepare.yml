@@ -34,7 +34,7 @@ jobs:
           const route='/organizations/'+org+'/projects/'+project+'/containers';
           async function request(method,path,data){
             const r=await fetch(api+path,{method,headers:{'Salad-Api-Key':key,Accept:'application/json',
-              ...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined,
+              ...(data?{'Content-Type':method==='PATCH'?'application/merge-patch+json':'application/json'}:{})},body:data?JSON.stringify(data):undefined,
               signal:AbortSignal.timeout(25000)});
             if(r.status===404)return {status:404};
             if(!r.ok)throw Error('Salad '+method+' HTTP '+r.status+' (response suppressed)');
@@ -48,10 +48,18 @@ jobs:
             const prior=await request('GET',route+'/'+group);
             if(prior.status!==404){
               const p=prior.data;
-              const safe=p?.autostart_policy===false&&p?.replicas===1&&p?.priority==='low'&&
+              const safe=p?.autostart_policy===false&&p?.replicas===1&&
                 p?.container?.image==='ghcr.io/manglefurniture/prl-miner:quantus-exp'&&
                 p?.current_state?.status!=='running';
               if(!safe)throw Error('Existing group unexpected; no mutations performed');
+              if(p.priority!=='low'){
+                if(p.priority!=='high')throw Error('Unexpected priority; refusing to change it');
+                await request('PATCH',route+'/'+group,{container:{priority:'low'}});
+                const after=await request('GET',route+'/'+group);
+                if(after.data?.priority!=='low'||after.data?.autostart_policy!==false)
+                  throw Error('Low priority not confirmed after patch; group remains stopped');
+                console.log('QUANTUS_PRIORITY_FIXED',JSON.stringify({name:group,priority:after.data.priority,autostart:after.data.autostart_policy}));
+              }
               console.log('QUANTUS_GROUP_ALREADY_PREPARED',JSON.stringify({name:p.name,state:p.current_state?.status,autostart:p.autostart_policy}));
               return;
             }
@@ -63,8 +71,8 @@ jobs:
             const lowPrice=Number((gpu.prices||[]).find(p=>p.priority==='low')?.price);
             if(!Number.isFinite(lowPrice)||lowPrice>0.13)throw Error('Low price exceeds budget');
             const body={name:group,display_name:'Quantus Trial 4070',autostart_policy:false,
-              restart_policy:'never',replicas:1,priority:'low',
-              country_codes:[],container:{image:'ghcr.io/manglefurniture/prl-miner:quantus-exp',
+              restart_policy:'never',replicas:1,
+              country_codes:[],container:{priority:'low',image:'ghcr.io/manglefurniture/prl-miner:quantus-exp',
                 resources:{cpu:1,memory:8192,shm_size:64,gpu_classes:[gpu.id]},
                 environment_variables:{QTC_DRY_RUN:'true'},image_caching:true}};
             // No QTC_WALLET configured here: the group is deliberately stopped.
