@@ -46,7 +46,15 @@ try{
   ]];
   $estimate=mineria_caja_operational($valid,$t);
   check($estimate['available']&&$estimate['running_4070_low']===1&&abs($estimate['daily_usd_estimate']-3.12)<0.001,'Estimación cuenta allocating');
-  $old=mineria_caja_operational($valid,$t+1000);check(!$old['available'],'Estimación stale aceptada');
+  $valid['groups'][]=['group'=>'prl-low-profitable-01','stale'=>false,'metrics'=>['gpu'=>'RTX 4070 Ti SUPER'],
+     'instances'=>[['state'=>'running','ready'=>true,'started'=>true]]];
+$estimate=mineria_caja_operational($valid,$t);
+check($estimate['running_4070_low']===2&&abs($estimate['daily_usd_estimate']-6.24)<0.001,
+    'Una GPU 4070 Low verificada debe contarse aunque el grupo no incluya 4070 en su nombre');
+$valid['groups'][]=['group'=>'prl-medium-4070','stale'=>false,'metrics'=>['gpu'=>'RTX 4070 Ti SUPER'],
+     'instances'=>[['state'=>'running','ready'=>true,'started'=>true]]];
+check(mineria_caja_operational($valid,$t)['running_4070_low']===2,'No asumir precio Low en Medium');
+$old=mineria_caja_operational($valid,$t+1000);check(!$old['available'],'Estimación stale aceptada');
   $valid['groups'][0]['stale']=true;
   check(!mineria_caja_operational($valid,$t)['available'],'Grupo stale aceptado');
 }finally{
