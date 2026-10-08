@@ -1,0 +1,82 @@
+name: Prepare isolated Quantus group (stopped)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/salad-quantus-prepare.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: interactive-quantus-stopped-group-preparation
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'exp/quantus-salad-discovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Create only a stopped dry-run group in Interactive
+        env:
+          SALAD_API_KEY: ${{ secrets.SALAD_API_KEY }}
+        run: |
+          node <<'JS'
+          const key=process.env.SALAD_API_KEY||'';
+          if(!key)throw Error('Missing Salad credential');
+          const org='interactive',project='default',group='quantus-low-4070-test';
+          const gpuName='RTX 4070 Ti Super (16 GB)';
+          const api='https://api.salad.com/api/public';
+          const route='/organizations/'+org+'/projects/'+project+'/containers';
+          async function request(method,path,data){
+            const r=await fetch(api+path,{method,headers:{'Salad-Api-Key':key,Accept:'application/json',
+              ...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined,
+              signal:AbortSignal.timeout(25000)});
+            if(r.status===404)return {status:404};
+            if(!r.ok)throw Error('Salad '+method+' HTTP '+r.status+' (response suppressed)');
+            return {status:r.status,data:await r.json()};
+          }
+          (async()=>{
+            const quotas=(await request('GET','/organizations/'+org+'/quotas')).data?.container_groups_quotas;
+            if(!quotas||!Number.isFinite(quotas.container_replicas_quota))throw Error('No valid quota');
+            const used=quotas.container_replicas_used;
+            console.log('INTERACTIVE_QUOTA',JSON.stringify({used,total:quotas.container_replicas_quota}));
+            const prior=await request('GET',route+'/'+group);
+            if(prior.status!==404){
+              const p=prior.data;
+              const safe=p?.autostart_policy===false&&p?.replicas===1&&p?.priority==='low'&&
+                p?.container?.image==='ghcr.io/manglefurniture/prl-miner:quantus-exp'&&
+                p?.current_state?.status!=='running';
+              if(!safe)throw Error('Existing group unexpected; no mutations performed');
+              console.log('QUANTUS_GROUP_ALREADY_PREPARED',JSON.stringify({name:p.name,state:p.current_state?.status,autostart:p.autostart_policy}));
+              return;
+            }
+            if(used>=quotas.container_replicas_quota)throw Error('No free replicas; did not create group');
+            const catalog=await request('GET','/organizations/'+org+'/gpu-classes');
+            const options=(catalog.data?.items||[]).filter(c=>c.name===gpuName);
+            if(options.length!==1)throw Error('GPU class ambiguous');
+            const gpu=options[0];
+            const lowPrice=Number((gpu.prices||[]).find(p=>p.priority==='low')?.price);
+            if(!Number.isFinite(lowPrice)||lowPrice>0.13)throw Error('Low price exceeds budget');
+            const body={name:group,display_name:'Quantus Trial 4070',autostart_policy:false,
+              restart_policy:'never',replicas:1,priority:'low',
+              country_codes:[],container:{image:'ghcr.io/manglefurniture/prl-miner:quantus-exp',
+                resources:{cpu:1,memory:8192,shm_size:64,gpu_classes:[gpu.id]},
+                environment_variables:{QTC_DRY_RUN:'true'},image_caching:true}};
+            // No QTC_WALLET configured here: the group is deliberately stopped.
+            const created=await request('POST',route,body);
+            console.log('QUANTUS_GROUP_CREATED',JSON.stringify({
+              name:created.data?.name,priority:created.data?.priority,replicas:created.data?.replicas,
+              autostart:created.data?.autostart_policy,state:created.data?.current_state?.status,price_per_hour:lowPrice}));
+            if(created.data?.autostart_policy!==false ||
+               created.data?.current_state?.status==='running'){
+              const stopped=await request('POST',route+'/'+group+'/stop');
+              console.log('QUANTUS_SAFETY_STOP',JSON.stringify({status:stopped.status}));
+              throw Error('Unexpected start detected and stop requested');
+            }
+          })().catch(e=>{console.error('QUANTUS_PREPARE_FAILED',e.message);process.exitCode=1});
+          JS
