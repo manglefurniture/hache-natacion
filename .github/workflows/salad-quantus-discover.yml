@@ -1,0 +1,58 @@
+name: Salad Quantus read-only discovery
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/salad-quantus-discover.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'exp/quantus-salad-discovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Query sanitized Salad group inventory (read-only)
+        env:
+          SALAD_API_KEY: ${{ secrets.SALAD_API_KEY }}
+        run: |
+          node <<'JS'
+          const key = process.env.SALAD_API_KEY || '';
+          if (!key) throw new Error('Salad key not available in GitHub Actions.');
+          const base='https://api.salad.com/api/public';
+          async function get(path) {
+            const r=await fetch(base+path,{
+              headers:{'Salad-Api-Key':key,Accept:'application/json'},
+              signal:AbortSignal.timeout(20000),
+            });
+            if(!r.ok)throw new Error('Salad discovery failed HTTP '+r.status);
+            return r.json();
+          }
+          function list(obj) {
+            if(Array.isArray(obj))return obj;
+            for(const k of ['items','container_groups','containerGroups','groups'])
+              if(Array.isArray(obj?.[k]))return obj[k];
+            return [];
+          }
+          (async()=>{
+            const org='hache',project='prl-tests';
+            const response=await get('/organizations/'+org+'/projects/'+project+'/containers');
+            const groups=list(response);
+            if(!Array.isArray(groups)||!groups.length)throw new Error('No groups returned; no changes made.');
+            const safe=groups.map(g=>({
+              name:String(g.name||'').slice(0,80),
+              priority:g.priority,
+              replicas:g.replicas,
+              pending_change:g.pending_change,
+              state:g.current_state?.status??null,
+              gpu_classes:g.container?.resources?.gpu_classes??[],
+              image:(g.container?.image||'').replace(/@sha256:[a-f0-9]+/i,'@digest').slice(0,160),
+            })).sort((a,b)=>a.name.localeCompare(b.name));
+            console.log('READ_ONLY_SALAD_DISCOVERY',JSON.stringify({organization:org,project,count:safe.length,groups:safe}));
+          })().catch(e=>{console.error('READ_ONLY_DISCOVERY_FAILED',e.message);process.exitCode=1});
+          JS
