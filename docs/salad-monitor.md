@@ -2,7 +2,7 @@
 
 La página privada `/salad-monitor.php` y la API `/api/salad-monitor.php` son solo para `ADMIN`.
 
-El proceso `hache-salad-monitor.timer` consulta SaladCloud cada cinco minutos en modo lectura, guarda un snapshot atómico con el último estado válido y evalúa las alertas amarillas. El navegador **no consulta SaladCloud directamente**: lee únicamente el snapshot local. Así se evita multiplicar llamadas a Salad cuando se abre o recarga el dashboard desde móvil o escritorio.
+El proceso `hache-salad-monitor.timer` consulta SaladCloud cada cinco minutos en modo lectura, guarda un snapshot atómico con el último estado válido y evalúa alertas amarillas y rojas. El navegador **no consulta SaladCloud directamente**: lee únicamente el snapshot local. Así se evita multiplicar llamadas a Salad cuando se abre o recarga el dashboard desde móvil o escritorio.
 
 Si Salad falla temporalmente:
 - el último snapshot completo sigue disponible;
@@ -39,3 +39,14 @@ php tests/salad-monitor-regression.php
 ```
 
 Tras desplegar, ejecutar una vez `hache-salad-monitor.service` para generar el primer snapshot y comprobar después `/api/salad-monitor.php`.
+
+
+## Alertas al teléfono
+
+El poller envía notificaciones por ntfy únicamente en transiciones de estado para evitar spam:
+
+- `green -> yellow`: alerta amarilla por temperatura, ventilador, shares rechazadas o errores HW.
+- `green/yellow -> red`: alerta roja si el grupo deja de estar operativo, la instancia deja de estar `ready/running`, desaparece la instancia o se pierde el hashrate/dato de GPU.
+- Mientras un grupo permanezca en el mismo estado amarillo o rojo no repite la alerta.
+- Los datos `stale` conservados por un fallo temporal de la API no generan una falsa alerta roja.
+- La latencia máxima normal depende del timer de cinco minutos.
