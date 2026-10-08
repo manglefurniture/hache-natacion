@@ -75,7 +75,8 @@ async function load(){
   const response=await fetch('/api/mineria-caja.php',{cache:'no-store',credentials:'same-origin'});
   const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||'No disponible');
   csrf=data.csrf_token;types=data.types;entries=data.entries;
-  $('type').replaceChildren(...Object.entries(types).map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option}));
+  const selectedType=$('type').value; $('type').replaceChildren(...Object.entries(types).map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option})); if(types[selectedType])$('type').value=selectedType;
+  $('amount').min=$('type').value.startsWith('opening_')?'0':'0.01';
   const s=data.summary;
   $('wallet').textContent=money(s.wallet_cents);$('salad').textContent=money(s.salad_cents);
   $('combined').textContent=money(s.combined_cents);$('operating').textContent=money(s.operating_result_cents);
@@ -109,6 +110,7 @@ $('form').addEventListener('submit',async ev=>{
  }catch(e){setStatus(e.message,true)}finally{$('save').disabled=false;}
 });
 for(const id of ['type','amount','date','note'])$(id).addEventListener('input',()=>{requestId='';});
+$('type').addEventListener('change',()=>{$('amount').min=$('type').value.startsWith('opening_')?'0':'0.01'});
 $('export').addEventListener('click',()=>{
  const rows=[['fecha','tipo','importe_usd','nota','id','registrado_utc'],...entries.map(e=>[e.date,e.type,(e.amount_cents/100).toFixed(2),e.note,e.id,e.created_at])];
  const csv='\uFEFF'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');
