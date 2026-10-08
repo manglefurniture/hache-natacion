@@ -49,6 +49,14 @@ jobs:
             const candidateGpus=gpuCatalog.filter(x=>/4070 ti super/i.test(x.name||''))
               .map(x=>({id:x.id,name:x.name,prices:x.prices,fields:Object.keys(x)}));
             console.log('READ_ONLY_QTC_GPU_CLASSES',JSON.stringify({count:candidateGpus.length,candidates:candidateGpus}));
+            if(candidateGpus.length!==1)throw new Error('Missing or ambiguous 4070 Ti Super class.');
+            const availabilityResponse=await fetch(base+'/organizations/'+org+'/availability/sce-gpu-availability',{
+              method:'POST',headers:{'Salad-Api-Key':key,Accept:'application/json','Content-Type':'application/json'},
+              body:JSON.stringify({gpu_classes:[candidateGpus[0].id],country_codes:[],cpu:1,memory:8192,storage_amount:1000000000}),
+              signal:AbortSignal.timeout(20000)});
+            if(!availabilityResponse.ok)throw new Error('Read-only GPU availability HTTP '+availabilityResponse.status);
+            const available=await availabilityResponse.json();
+            console.log('READ_ONLY_QTC_AVAILABILITY',JSON.stringify(available));
             const pearlTemplate=await get('/organizations/hache/projects/prl-tests/containers/prl-low-4070-experimental');
             console.log('READ_ONLY_PRL_TEMPLATE',JSON.stringify({priority:pearlTemplate.priority,
               replicas:pearlTemplate.replicas,autostart_policy:pearlTemplate.autostart_policy,
