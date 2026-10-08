@@ -169,9 +169,18 @@ create_complete_backup() {
   unset MYSQL_PWD
 
   [[ -s "$destination/database.sql" ]] || fail "el dump de DB quedó vacío."
+  # El libro de minería vive fuera del repositorio y del backup SQL.
+  # Preservarlo en cada backup pre-deploy sin seguir symlinks ni incluir secretos.
+  local mining_cash_file="/var/lib/hache-natacion/mineria-caja.json"
+  if [[ -e "$mining_cash_file" || -L "$mining_cash_file" ]]; then
+    [[ -f "$mining_cash_file" && ! -L "$mining_cash_file" ]] || fail "ruta de caja minera insegura."
+    install -o root -g root -m 0600 "$mining_cash_file" "$destination/mineria-caja.json"
+    [[ -s "$destination/mineria-caja.json" ]] || fail "backup de caja minera vacío."
+  fi
   (
     cd "$destination"
     sha256sum commit.txt database.sql > SHA256SUMS
+    if [[ -f mineria-caja.json ]]; then sha256sum mineria-caja.json >> SHA256SUMS; fi
   )
 
   cat > "$destination/backup-manifest.env" <<EOF
@@ -459,6 +468,12 @@ restore_drill() {
   checksum_manifest_complete "$backup_dir" || restore_fail "checksum_manifest_incomplete" "SHA256SUMS no cubre commit.txt y database.sql."
   if ! (cd "$backup_dir" && sha256sum --check --strict SHA256SUMS >/dev/null 2>&1); then
     restore_fail "checksum_failed" "falló la validación de checksums."
+  fi
+  # Verificación aislada del ledger opcional: nunca sobrescribe la caja de producción.
+  if [[ -f "$backup_dir/mineria-caja.json" ]]; then
+    if ! php -r '$x=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);if(!is_array($x)||($x["version"]??null)!==1||!is_array($x["entries"]??null))exit(1);' "$backup_dir/mineria-caja.json" >/dev/null 2>&1; then
+      restore_fail "mineria_caja_invalid" "el respaldo de caja minera no se puede reconstruir."
+    fi
   fi
 
   manifest_status="$(awk -F= '$1=="backup_status"{print $2; exit}' "$backup_dir/backup-manifest.env")"
