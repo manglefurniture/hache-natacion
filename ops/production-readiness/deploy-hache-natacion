@@ -301,12 +301,12 @@ deploy_sha() {
   # de la DB productiva. El marcador BACKUP_COMPLETE se crea al final.
   create_complete_backup
   [[ -n "${LAST_BACKUP_DIR:-}" && -f "$LAST_BACKUP_DIR/BACKUP_COMPLETE" ]] || fail "backup pre-deploy incompleto."
+  ensure_mining_cash_dir
 
   cd "$REPO"
   git merge --ff-only origin/main
   deployed="$(git rev-parse HEAD)"
   [[ "$deployed" == "$expected_sha" ]] || fail "el SHA desplegado no coincide con el SHA aprobado."
-  ensure_mining_cash_dir
   apply_release_migrations
   publish_deployed_sha "$deployed"
   echo "Deploy OK: $deployed"
