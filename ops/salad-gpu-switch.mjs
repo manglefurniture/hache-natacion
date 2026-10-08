@@ -14,7 +14,7 @@ export function planSwitch(group, gpuClasses) {
   if (group?.name !== GROUP) throw new Error('Different container group: abort');
   if (group?.replicas !== 1) throw new Error('Expected one replica: abort');
   if (group?.pending_change === true) throw new Error('Pending config change: abort');
-  if (String(group?.container?.priority ?? '').toLowerCase() !== 'low')
+  if (String(group?.priority ?? '').toLowerCase() !== 'low')
     throw new Error('Priority is not Low or cannot be verified: abort');
   if (!Array.isArray(gpuClasses?.items)) throw new Error('Cannot verify Salad GPU class catalog');
   const matches = gpuClasses.items.filter(g =>
@@ -59,7 +59,7 @@ export async function run() {
   const classes = await request(key, 'GET', classPath);
   const plan = planSwitch(original, classes);
   console.log('Target:', ORG + '/' + PROJECT + '/' + GROUP);
-  console.log('Before:', plan.oldClass, '| priority:', original.container.priority,
+  console.log('Before:', plan.oldClass, '| priority:', original.priority,
     '| replicas:', original.replicas, '| state:', original.current_state?.status ?? 'unknown');
   if (plan.already) {
     console.log('ALREADY_CONFIGURED: RTX 4090 desktop; no PATCH issued');
@@ -69,12 +69,12 @@ export async function run() {
   const modified = await request(key, 'PATCH', groupPath, plan.patch);
   if (modified?.name !== GROUP)
     throw new Error('PATCH responded with wrong group; do not perform further writes');
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 60; i++) {
     const observed = await request(key, 'GET', groupPath);
     const newClasses = observed?.container?.resources?.gpu_classes;
-    if (Array.isArray(newClasses) && newClasses.length === 1 && newClasses[0] === plan.newId) {
+    if (Array.isArray(newClasses) && newClasses.length === 1 && newClasses[0] === plan.newId && observed.pending_change === false) {
       if (observed.replicas !== original.replicas ||
-          String(observed.container.priority).toLowerCase() !== 'low' ||
+          String(observed.priority).toLowerCase() !== 'low' ||
           observed.container.image !== original.container.image)
         throw new Error('Post-check failed: non-GPU configuration unexpectedly differs');
       console.log('GPU_SWITCH_CONFIRMED:', plan.newClass, '| group:', observed.name,
@@ -84,7 +84,7 @@ export async function run() {
     }
     await sleep(5000);
   }
-  throw new Error('PATCH accepted, but GPU change not yet visible in GET; inspect Salad before retrying');
+  throw new Error('PATCH accepted but rollout is still pending or GPU class not yet applied; inspect Salad before retrying');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
