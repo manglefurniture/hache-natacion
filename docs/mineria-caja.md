@@ -24,7 +24,7 @@
 - Autonomía = créditos Salad registrados / costo horario *estimado*, sólo si ambas aperturas constan y hay dato reciente de GPU.
 
 ## Seguridad y persistencia
-Archivo privado: `/var/lib/hache-natacion/mineria-caja.json` (modo 0600). La carpeta ya debe existir, pertenecer a `www-data` y ser escribible por PHP-FPM; **no crear rutas públicas ni guardar contraseñas/API keys**. Un lock separado serializa escrituras; guarda mediante temp + rename. Lecturas y escrituras de la API exigen sesión ADMIN, mutaciones CSRF, respuestas sin caché. El registro no forma parte de los cierres financieros de natación.
+Archivo privado: `/var/lib/hache-natacion/mineria-caja/ledger.json` (modo 0600). La carpeta ya debe existir, pertenecer a `www-data` y ser escribible por PHP-FPM; **no crear rutas públicas ni guardar contraseñas/API keys**. Un lock separado serializa escrituras; guarda mediante temp + rename. Lecturas y escrituras de la API exigen sesión ADMIN, mutaciones CSRF, respuestas sin caché. El registro no forma parte de los cierres financieros de natación.
 
 **Antes de habilitar en producción:** confirmar que el procedimiento de backup existente protege también este JSON. Si sólo respalda MariaDB y código, ampliar el backup **versionado en GitHub y revisado** antes de aceptar asientos reales. No incluir datos reales del usuario en GitHub.
 
