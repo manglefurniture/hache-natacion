@@ -1,0 +1,78 @@
+name: Salad - Probar GPU (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "Container Group exacto prl-low-*"
+        required: true
+        type: string
+      current_gpu:
+        description: "GPU actual esperada (nombre exacto de Salad)"
+        required: true
+        type: string
+      target_gpu:
+        description: "GPU destino (nombre exacto del catalogo)"
+        required: true
+        type: string
+      operation:
+        description: "Previsualizar primero; aplicar solo tras aceptar costo e interrupcion"
+        required: true
+        type: choice
+        default: PREVISUALIZAR
+        options:
+          - PREVISUALIZAR
+          - APLICAR
+      confirm_group:
+        description: "Para APLICAR, repetir nombre exacto del grupo"
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - .github/workflows/salad-gpu-experiments.yml
+      - .github/workflows/salad-4090-experimental.yml
+      - ops/salad-gpu-switch.mjs
+      - tests/salad-gpu-switch-regression.mjs
+      - docs/salad-gpu-experiments.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: salad-prl-gpu-changes
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Verify change isolation and dry-run
+        run: |
+          node --check ops/salad-gpu-switch.mjs
+          node --test tests/salad-gpu-switch-regression.mjs
+
+  plan-or-apply:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Change GPU only if explicitly confirmed
+        env:
+          SALAD_API_KEY: ${{ secrets.SALAD_API_KEY }}
+          SALAD_GPU_GROUP: ${{ inputs.group }}
+          SALAD_GPU_EXPECTED: ${{ inputs.current_gpu }}
+          SALAD_GPU_TARGET: ${{ inputs.target_gpu }}
+          SALAD_GPU_MODE: ${{ inputs.operation == 'APLICAR' && 'apply' || 'plan' }}
+          SALAD_GPU_CONFIRM: ${{ inputs.confirm_group }}
+        run: node ops/salad-gpu-switch.mjs
