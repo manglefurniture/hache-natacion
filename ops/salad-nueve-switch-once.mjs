@@ -1,4 +1,6 @@
 import { run } from './salad-gpu-switch.mjs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 const name = 'prl-low-4070-experimental-nueve';
 const gpuBefore = 'RTX 4070 Ti Super (16 GB)';
 const gpuAfter = 'RTX 4090 (24 GB)';
@@ -24,4 +26,5 @@ async function main() {
   console.log('Verified NUEVE group slug:',slug);
   await run({group:slug,expected:gpuBefore,target:gpuAfter,mode:'apply',confirm:slug});
 }
-main().catch(e=>{console.error('NUEVE_SWITCH_FAILED:',e.message);process.exitCode=1;});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main().catch(e=>{console.error('NUEVE_SWITCH_FAILED:',e.message);process.exitCode=1;});
