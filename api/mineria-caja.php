@@ -25,7 +25,7 @@ try {
     $data=mineria_caja_read();
     $snapshot=hache_salad_monitor_read_snapshot();
     mineria_caja_out(['ok'=>true,'summary'=>mineria_caja_summary($data['entries']),
-        'types'=>mineria_caja_types(),'entries'=>array_slice(array_reverse($data['entries']),0,200),
+        'types'=>mineria_caja_types(),'entries'=>array_reverse($data['entries']),
         'csrf_token'=>auth_csrf_token(),
         'operational'=>mineria_caja_operational($snapshot,time()),
         'note'=>'Los costos estimados no se contabilizan como consumo real.']);
