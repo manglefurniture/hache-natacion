@@ -250,7 +250,8 @@ apply_release_migrations() {
 ensure_mining_cash_dir() {
   # Se ejecuta desde el código del SHA aprobado, también en el primer deploy
   # en que el wrapper actualmente instalado todavía es una versión anterior.
-  local root="/var/lib/hache-natacion" dir="$root/mineria-caja"
+  local root="/var/lib/hache-natacion"
+  local dir="$root/mineria-caja"
   require_root
   require_command install
   require_command stat
