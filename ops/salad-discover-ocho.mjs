@@ -11,12 +11,11 @@ async function get(key,url,label) {
 export async function main() {
  const key=process.env.SALAD_API_KEY;
  if(!key)throw new Error('No Salad secret configured');
- const projects=items(await get(key,api+'/projects','projects listing'));
- console.log('PROJECTS_FOUND:',projects.length);
+ // Salad's public API requires a project slug. These are the two project names
+ // already known from Hache's existing monitor and previous Salad setup.
+ const projects=['prl-tests','prl-test'];
  const found=[];
- for(const p of projects.slice(0,40)) {
-   const project=String(p.name??'');
-   if(!/^[a-zA-Z0-9-]{1,80}$/.test(project))continue;
+ for(const project of projects) {
    let groups;
    try{groups=items(await get(key,api+'/projects/'+encodeURIComponent(project)+'/containers','group listing')); }
    catch(e){console.log('SKIPPED_PROJECT_LOOKUP:',project,e.message);continue;}
