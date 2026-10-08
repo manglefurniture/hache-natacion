@@ -1,4 +1,4 @@
-name: Salad one-time: grupo ocho to RTX 4090
+name: 'Salad one-time - grupo ocho to RTX 4090'
 
 on:
   pull_request:
