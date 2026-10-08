@@ -186,9 +186,82 @@ function hache_salad_monitor_apply_alert_transitions(array $groups,array $previo
         $key=(string)($group['group']??'');if($key==='')continue;$health=(string)($group['health']??'red');$before=(string)($previous[$key]['health']??'unknown');
         $stale=(bool)($group['stale']??false);$alertable=in_array($health,['yellow','red'],true);
         if(!$stale&&$alertable&&$before!==$health){if(!$notify($group))throw new RuntimeException('ntfy no confirmó la alerta para '.$key);$sent++;}
-        $next[$key]=['health'=>$health,'updated_at'=>$now];
+        $entry=is_array($previous[$key]??null)?$previous[$key]:[];
+        $next[$key]=array_merge($entry,['health'=>$health,'updated_at'=>$now]);
     }
     return ['state'=>$next,'sent'=>$sent];
+}
+
+function hache_salad_monitor_reallocate_instance(array $group): bool
+{
+    $config=hache_salad_monitor_config();$name=trim((string)($group['group']??''));if($name==='')return false;
+    $instances=is_array($group['instances']??null)?$group['instances']:[];
+    $eligible=[];
+    foreach($instances as $instance){
+        if(!is_array($instance))continue;$id=trim((string)($instance['id']??''));if($id==='')continue;
+        $state=strtolower((string)($instance['state']??''));$ready=(bool)($instance['ready']??false);$started=(bool)($instance['started']??false);
+        if($ready&&($started||$state==='running'))$eligible[]=$id;
+    }
+    if(count($eligible)!==1)throw new RuntimeException('Auto-reallocate requiere exactamente una instancia activa en '.$name.'.');
+    if($config['api_key']===''||!function_exists('curl_init'))throw new RuntimeException('Salad no está configurado para auto-reallocate.');
+    $path='/organizations/'.rawurlencode($config['organization']).'/projects/'.rawurlencode($config['project']).'/containers/'.rawurlencode($name).'/instances/'.rawurlencode($eligible[0]).'/reallocate';
+    $curl=curl_init($config['api_base'].$path);curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Accept: application/json','Salad-Api-Key: '.$config['api_key']],CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>8,CURLOPT_TIMEOUT=>25]);
+    $raw=curl_exec($curl);$error=curl_error($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
+    if($status!==202)throw new RuntimeException('Salad rechazó auto-reallocate HTTP '.$status.($error!==''?' ('.$error.')':'').(is_string($raw)&&$raw!==''?' '.$raw:''));
+    return true;
+}
+
+function hache_salad_monitor_send_reallocation_notification(array $group,float $hashrate,int $lowSeconds): bool
+{
+    $topic=hache_salad_monitor_ntfy_topic();if($topic==='')throw new RuntimeException('NTFY_TOPIC no está configurado en el servidor.');
+    $now=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('Y-m-d H:i T');$minutes=max(5,(int)floor($lowSeconds/60));
+    $body="♻️ Salad Auto-Reallocate\n".($group['display_name']??$group['group'])."\nHashrate: ".number_format($hashrate,2,'.','')." TH/s\nBajo 130 TH/s durante al menos ".$minutes." min.\nAcción: reallocate solicitado para obtener un nodo nuevo.\nHora: $now";
+    $curl=curl_init('https://ntfy.sh/'.rawurlencode($topic));curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$body,CURLOPT_HTTPHEADER=>['Content-Type: text/plain; charset=utf-8','Title: Salad Monitor - AUTO REALLOCATE','Priority: high','Tags: arrows_counterclockwise,computer'],CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15]);$response=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
+    return is_string($response)&&$status>=200&&$status<300;
+}
+
+/**
+ * Reallocates a single healthy/running instance when its hashrate stays below
+ * the threshold for at least the configured duration. The rule is armed only
+ * after the group has demonstrated hashrate >= threshold at least once.
+ *
+ * @param list<array<string,mixed>> $groups
+ * @param array<string,array<string,mixed>> $previous
+ * @param callable(array<string,mixed>):bool $reallocate
+ * @param callable(array<string,mixed>,float,int):bool $notify
+ * @return array{state:array<string,array<string,mixed>>,reallocated:int}
+ */
+function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $previous,callable $reallocate,callable $notify,?int $nowTs=null,float $threshold=130.0,int $minimumSeconds=300): array
+{
+    $nowTs=$nowTs??time();$next=$previous;$count=0;
+    foreach($groups as $group){
+        $key=(string)($group['group']??'');if($key==='')continue;$entry=is_array($previous[$key]??null)?$previous[$key]:[];
+        if((bool)($group['stale']??false)){ $next[$key]=$entry;continue; }
+        $instances=is_array($group['instances']??null)?$group['instances']:[];$active=[];
+        foreach($instances as $instance){
+            if(!is_array($instance))continue;$id=trim((string)($instance['id']??''));if($id==='')continue;$state=strtolower((string)($instance['state']??''));$ready=(bool)($instance['ready']??false);$started=(bool)($instance['started']??false);
+            if($ready&&($started||$state==='running'))$active[]=$id;
+        }
+        if(count($active)!==1){$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;$next[$key]=$entry;continue;}
+        $instanceId=$active[0];$hash=(float)($group['metrics']['hashrate_ths']??0);
+        if($hash>=$threshold){
+            $entry['hash_baseline_seen']=true;$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
+            if(($entry['reallocation_requested_instance_id']??null)!==$instanceId)$entry['reallocation_requested_instance_id']=null;
+            $next[$key]=$entry;continue;
+        }
+        if(!($entry['hash_baseline_seen']??false)){ $next[$key]=$entry;continue; }
+        if(($entry['low_hash_instance_id']??null)!==$instanceId||!is_int($entry['low_hash_since']??null)){
+            $entry['low_hash_instance_id']=$instanceId;$entry['low_hash_since']=$nowTs;$next[$key]=$entry;continue;
+        }
+        $lowSeconds=max(0,$nowTs-(int)$entry['low_hash_since']);
+        if($lowSeconds<$minimumSeconds||($entry['reallocation_requested_instance_id']??null)===$instanceId){$next[$key]=$entry;continue;}
+        if($reallocate($group)){
+            $entry['reallocation_requested_instance_id']=$instanceId;$entry['last_reallocated_at']=gmdate(DATE_ATOM,$nowTs);$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;$count++;
+            $notify($group,$hash,$lowSeconds);
+        }
+        $next[$key]=$entry;
+    }
+    return ['state'=>$next,'reallocated'=>$count];
 }
 
 /** @return list<array<string,mixed>> */
