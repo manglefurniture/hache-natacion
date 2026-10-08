@@ -1,4 +1,4 @@
-name: Salad read-only diagnostic of group ocho
+name: Salad read-only diagnostic of group ocho v2
 
 on:
   push:
