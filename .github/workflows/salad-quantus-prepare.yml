@@ -37,7 +37,12 @@ jobs:
               ...(data?{'Content-Type':method==='PATCH'?'application/merge-patch+json':'application/json'}:{})},body:data?JSON.stringify(data):undefined,
               signal:AbortSignal.timeout(25000)});
             if(r.status===404)return {status:404};
-            if(!r.ok)throw Error('Salad '+method+' HTTP '+r.status+' (response suppressed)');
+            if(!r.ok){
+              const issue=await r.json().catch(()=>({}));
+              const label=String(issue?.title||'').replace(/[^a-zA-Z0-9 ._-]/g,'').slice(0,100);
+              const detail=String(issue?.detail||'').replace(/[^a-zA-Z0-9 .:_-]/g,'').slice(0,350);
+              throw Error('Salad '+method+' HTTP '+r.status+' title='+label+' detail='+detail);
+            }
             const responseText=await r.text();
             return {status:r.status,data:responseText?JSON.parse(responseText):null};
           }
