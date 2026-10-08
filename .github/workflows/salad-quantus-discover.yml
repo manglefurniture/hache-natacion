@@ -45,6 +45,19 @@ jobs:
             // Validate the organization with quotas, then inspect only likely project slugs.
             const possibleProjects=['default','prl-tests','prl-test'];
             const projects=[];
+            const gpuCatalog=list(await get('/organizations/'+org+'/gpu-classes'));
+            const candidateGpus=gpuCatalog.filter(x=>/4070 ti super/i.test(x.name||''))
+              .map(x=>({id:x.id,name:x.name,fields:Object.keys(x)}));
+            console.log('READ_ONLY_QTC_GPU_CLASSES',JSON.stringify({count:candidateGpus.length,candidates:candidateGpus}));
+            const pearlTemplate=await get('/organizations/hache/projects/prl-tests/containers/prl-low-4070-experimental');
+            console.log('READ_ONLY_PRL_TEMPLATE',JSON.stringify({priority:pearlTemplate.priority,
+              replicas:pearlTemplate.replicas,autostart_policy:pearlTemplate.autostart_policy,
+              restart_policy:pearlTemplate.restart_policy,group_fields:Object.keys(pearlTemplate),
+              container_fields:Object.keys(pearlTemplate.container||{}),
+              resources:pearlTemplate.container?.resources,
+              env_names:(pearlTemplate.container?.environment_variables||[]).map(v=>v.key||v.name),
+              registry_keys:Object.keys(pearlTemplate.container?.image_authentication||{})
+            }));
             const quota=await get('/organizations/'+org+'/quotas');
             const groupQuota=quota.container_group_quotas||quota.container_groups_quotas||{};
             console.log('READ_ONLY_QUOTAS',JSON.stringify({fields:Object.keys(quota),group_quotas:groupQuota}));
