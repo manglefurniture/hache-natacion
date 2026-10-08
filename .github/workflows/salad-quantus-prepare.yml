@@ -38,7 +38,8 @@ jobs:
               signal:AbortSignal.timeout(25000)});
             if(r.status===404)return {status:404};
             if(!r.ok)throw Error('Salad '+method+' HTTP '+r.status+' (response suppressed)');
-            return {status:r.status,data:await r.json()};
+            const responseText=await r.text();
+            return {status:r.status,data:responseText?JSON.parse(responseText):null};
           }
           (async()=>{
             const quotas=(await request('GET','/organizations/'+org+'/quotas')).data?.container_groups_quotas;
@@ -52,16 +53,23 @@ jobs:
                 p?.container?.image==='ghcr.io/manglefurniture/prl-miner:quantus-exp'&&
                 p?.current_state?.status!=='running';
               if(!safe)throw Error('Existing group unexpected; no mutations performed');
-              if(p.priority!=='low'){
-                if(p.priority!=='high')throw Error('Unexpected priority; refusing to change it');
-                await request('PATCH',route+'/'+group,{container:{priority:'low'}});
-                const after=await request('GET',route+'/'+group);
-                if(after.data?.priority!=='low'||after.data?.autostart_policy!==false)
-                  throw Error('Low priority not confirmed after patch; group remains stopped');
-                console.log('QUANTUS_PRIORITY_FIXED',JSON.stringify({name:group,priority:after.data.priority,autostart:after.data.autostart_policy}));
+              if(p.priority==='low'){
+                console.log('QUANTUS_GROUP_ALREADY_PREPARED',JSON.stringify({name:p.name,state:p.current_state?.status,autostart:p.autostart_policy}));
+                return;
               }
-              console.log('QUANTUS_GROUP_ALREADY_PREPARED',JSON.stringify({name:p.name,state:p.current_state?.status,autostart:p.autostart_policy}));
-              return;
+              if(p.priority!=='high'||!['pending','stopped','deploying'].includes(p.current_state?.status)||
+                 p.container?.environment_variables?.QTC_DRY_RUN!=='true'||
+                 Boolean(p.container?.environment_variables?.QTC_WALLET))
+                throw Error('Only the empty stopped trial with dummy dry-run can be replaced');
+              await request('DELETE',route+'/'+group);
+              let gone=false;
+              for(let n=0;n<12;n++){
+                const next=await request('GET',route+'/'+group);
+                if(next.status===404){gone=true;break;}
+                await new Promise(done=>setTimeout(done,2000));
+              }
+              if(!gone)throw Error('Group deletion is still pending; do not retry create');
+              console.log('QUANTUS_OLD_STOPPED_GROUP_REPLACED',group);
             }
             if(used>=quotas.container_replicas_quota)throw Error('No free replicas; did not create group');
             const catalog=await request('GET','/organizations/'+org+'/gpu-classes');
