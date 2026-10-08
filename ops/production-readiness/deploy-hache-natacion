@@ -169,9 +169,18 @@ create_complete_backup() {
   unset MYSQL_PWD
 
   [[ -s "$destination/database.sql" ]] || fail "el dump de DB quedó vacío."
+  # El libro de minería vive fuera del repositorio y del backup SQL.
+  # Preservarlo en cada backup pre-deploy sin seguir symlinks ni incluir secretos.
+  local mining_cash_file="/var/lib/hache-natacion/mineria-caja.json"
+  if [[ -e "$mining_cash_file" || -L "$mining_cash_file" ]]; then
+    [[ -f "$mining_cash_file" && ! -L "$mining_cash_file" ]] || fail "ruta de caja minera insegura."
+    install -o root -g root -m 0600 "$mining_cash_file" "$destination/mineria-caja.json"
+    [[ -s "$destination/mineria-caja.json" ]] || fail "backup de caja minera vacío."
+  fi
   (
     cd "$destination"
     sha256sum commit.txt database.sql > SHA256SUMS
+    if [[ -f mineria-caja.json ]]; then sha256sum mineria-caja.json >> SHA256SUMS; fi
   )
 
   cat > "$destination/backup-manifest.env" <<EOF
