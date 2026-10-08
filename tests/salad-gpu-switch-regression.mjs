@@ -9,8 +9,8 @@ const classes = { items: [
   { id: 'cccccccc-cccc-4ccc-cccc-cccccccccccc', name: 'RTX 4090 Laptop (16 GB)' },
 ]};
 const group = () => ({
-  name: GROUP, replicas: 1, pending_change: false,
-  container: { priority: 'low', image: 'ghcr.io/example/miner:latest', resources: {gpu_classes: [oldId]} },
+  name: GROUP, priority: 'low', replicas: 1, pending_change: false,
+  container: { image: 'ghcr.io/example/miner:latest', resources: {gpu_classes: [oldId]} },
 });
 test('only GPU list changes, laptop excluded', () => {
   const p = planSwitch(group(), classes);
@@ -27,7 +27,7 @@ test('never touch another group', () => {
   assert.throws(() => planSwitch(g, classes), /Different container group/);
 });
 test('never change non-Low priority', () => {
-  const g = group(); g.container.priority = 'medium';
+  const g = group(); g.priority = 'medium';
   assert.throws(() => planSwitch(g, classes), /Priority/);
 });
 test('never change a group with pending change', () => {
