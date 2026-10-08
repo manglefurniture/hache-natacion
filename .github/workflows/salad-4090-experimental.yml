@@ -1,0 +1,47 @@
+name: Salad experimental 4070 to 4090 (one-time)
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/salad-4090-experimental.yml
+      - ops/salad-gpu-switch.mjs
+      - tests/salad-gpu-switch-regression.mjs
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/salad-4090-experimental.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: salad-4090-experimental-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Verify switch logic and syntax
+        run: |
+          node --check ops/salad-gpu-switch.mjs
+          node --test tests/salad-gpu-switch-regression.mjs
+
+  gpu-only-change:
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Switch only the experimental Container Group GPU
+        env:
+          SALAD_API_KEY: ${{ secrets.SALAD_API_KEY }}
+        run: node ops/salad-gpu-switch.mjs
