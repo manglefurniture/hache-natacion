@@ -62,7 +62,7 @@ button{border:0;border-radius:10px;background:#145a80;color:white;padding:12px 2
 <section aria-labelledby="ledger-heading">
 <div class="actions" style="justify-content:space-between;margin:0 0 10px"><h2 id="ledger-heading" style="margin:0">Historial de movimientos</h2><button type="button" id="export">Exportar CSV</button></div>
 <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Movimiento</th><th>Detalle</th><th>Importe USD</th></tr></thead><tbody id="rows"><tr><td colspan="4" class="empty">Cargando…</td></tr></tbody></table></div>
-<p class="hint">El registro es de solo adición para preservar la trazabilidad. Los saldos y el resultado solo representan lo contabilizado desde la apertura, sin incluir movimientos anteriores.</p>
+<p class="hint">La tabla muestra los últimos 200 asientos, y la exportación CSV incluye el historial completo. El registro es de solo adición para preservar la trazabilidad. Los saldos y el resultado solo representan lo contabilizado desde la apertura, sin incluir movimientos anteriores.</p>
 </section>
 </main><script>
 'use strict';
@@ -90,7 +90,7 @@ async function load(){
     $('estimated').textContent=o.running_4070_low+' RTX 4070 Ti Super Low activas · '+new Intl.NumberFormat('es-MX',{style:'currency',currency:'USD'}).format(o.hourly_usd_estimate)+'/h · '+new Intl.NumberFormat('es-MX',{style:'currency',currency:'USD'}).format(o.daily_usd_estimate)+'/24 h'+(base&&hours!==null?' · Autonomía contable aproximada: '+hours.toFixed(1)+' h':'')+' · '+o.reason;
   }
   const tbody=$('rows');tbody.replaceChildren();
-  for(const e of entries){
+  for(const e of entries.slice(0,200)){
     const tr=document.createElement('tr');
     for(const value of [e.date,types[e.type]||e.type,e.note||'—',money(e.amount_cents)]){
       const td=document.createElement('td');td.textContent=value;tr.appendChild(td);
