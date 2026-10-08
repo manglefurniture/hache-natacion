@@ -102,6 +102,34 @@ function hache_salad_monitor_parse(array $logItems): array
     return $metrics;
 }
 
+/**
+ * Indicador orientativo para RTX 4070 Ti SUPER en Salad Low ($0.13/h).
+ * 140/125 TH/s son referencias basadas en un precio/dificultad puntuales,
+ * NO un cálculo de rentabilidad actual ni una autorización para detener GPUs.
+ * Se usa la media de 15 min y se ignoran grupos con múltiples nodos o datos incompletos.
+ *
+ * @return array{applicable:bool,level:string,hashrate_15m_ths:?float,warning_ths:int,break_even_ths:int}
+ */
+function hache_salad_monitor_profitability(string $name,string $state,array $metrics,array $instances): array
+{
+    $result=['applicable'=>false,'level'=>'unknown','hashrate_15m_ths'=>null,'warning_ths'=>140,'break_even_ths'=>125];
+    $gpu=strtoupper((string)($metrics['gpu']??''));
+    if(!preg_match('/(?:^|[-_])low(?:$|[-_])/',strtolower($name))||!str_contains($gpu,'4070 TI SUPER'))return $result;
+    $result['applicable']=true;
+    $active=0;
+    foreach($instances as $instance){
+        if(!is_array($instance))continue;
+        $instanceState=strtolower((string)($instance['state']??''));
+        if(($instance['ready']??false)===true&&(($instance['started']??false)===true||$instanceState==='running'))$active++;
+    }
+    if(!in_array(strtolower($state),['running','started'],true)||$active!==1)return $result;
+    $average=$metrics['hashrate_15m_ths']??null;
+    if(!is_numeric($average)||!is_finite((float)$average)||(float)$average<=0)return $result;
+    $result['hashrate_15m_ths']=(float)$average;
+    $result['level']=$average<125?'below_break_even':($average<140?'watch':'healthy');
+    return $result;
+}
+
 function hache_salad_monitor_status(string $groupState,array $metrics,?array $instances=null): string
 {
     $state=strtolower($groupState);if(!in_array($state,['running','started'],true))return 'red';
@@ -123,6 +151,11 @@ function hache_salad_monitor_status(string $groupState,array $metrics,?array $in
 function hache_salad_monitor_yellow_reasons(array $metrics): array
 {
     $reasons=[];
+    $profitability=is_array($metrics['profitability']??null)?$metrics['profitability']:[];
+    if(($profitability['applicable']??false)===true){
+        if(($profitability['level']??'')==='below_break_even')$reasons[]='media 15 min bajo 125 TH/s (posible pérdida; referencia estimada)';
+        elseif(($profitability['level']??'')==='watch')$reasons[]='media 15 min bajo 140 TH/s (margen reducido; referencia estimada)';
+    }
     if(($metrics['temperature_c']??0)>=82)$reasons[]='temperatura alta ('.(int)$metrics['temperature_c'].'°C)';
     if(($metrics['fan_percent']??0)>=95)$reasons[]='ventilador alto ('.(int)$metrics['fan_percent'].'%)';
     if(($metrics['shares']['rejected']??0)>0)$reasons[]='shares rechazadas ('.(int)$metrics['shares']['rejected'].')';
@@ -280,6 +313,7 @@ function hache_salad_monitor_collect(): array
             $logs=hache_salad_monitor_http($config,'POST','/organizations/'.rawurlencode($config['organization']).'/log-entries',['sort_order'=>'desc','start_time'=>$start->format('Y-m-d\\TH:i:s\\Z'),'end_time'=>$end->format('Y-m-d\\TH:i:s\\Z'),'page_size'=>100,'query'=>'resource.type = "container" and resource.labels.project_name = "'.$config['project'].'" and resource.labels.container_group_name = "'.$name.'"']);
             $metrics=hache_salad_monitor_parse(is_array($logs['items']??null)?$logs['items']:[]);$safeInstances=[];
             foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)if(is_array($instance))$safeInstances[]=['id'=>(string)($instance['id']??''),'machine_id'=>(string)($instance['machine_id']??''),'state'=>(string)($instance['state']??''),'ready'=>(bool)($instance['ready']??false),'started'=>(bool)($instance['started']??false),'update_time'=>(string)($instance['update_time']??''),'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null];
+            $metrics['profitability']=hache_salad_monitor_profitability($name,$state,$metrics,$safeInstances);
             $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics,$safeInstances),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
         }catch(Throwable $e){
             error_log('[salad-monitor] group '.$name.': '.$e->getMessage());

@@ -52,6 +52,21 @@ El poller envía notificaciones por ntfy únicamente en transiciones de estado p
 - La latencia máxima normal depende del timer de cinco minutos.
 
 
+## Indicador orientativo de rentabilidad: 4070 Ti SUPER Low
+
+Para cada grupo de prioridad **Low** con **una sola instancia operativa** cuya GPU observada sea una **RTX 4070 Ti SUPER**, el monitor calcula una **categoría informativa** con la media de hashrate de 15 minutos:
+
+- **140 TH/s o más:** margen orientativo favorable.
+- **Desde 125 TH/s y menos de 140 TH/s:** aviso amarillo preventivo por margen reducido.
+- **Menos de 125 TH/s:** aviso amarillo por posible pérdida; **no** es una prueba de pérdidas reales.
+- **Sin datos de 15 minutos, instancia no lista o grupos multirréplica:** rentabilidad no evaluable, sin falsas alertas económicas.
+
+Los umbrales de 140/125 TH/s son referencias **provisionales** basadas en la hipótesis de **$0.13 USD/h**, un precio del PRL y dificultad de red de una observación puntual. **No constituyen un cálculo de beneficio en tiempo real**. Para tomar decisiones económicas hay que medir PRL confirmados, precio de venta neto, comisiones y consumo real en Salad. Una caída momentánea del hashrate no implica automáticamente pérdida.
+
+El estado amarillo usa las notificaciones ntfy existentes, sólo al entrar en alerta y sin duplicarlas mientras permanezca amarillo; los datos desactualizados no generan transiciones. El panel muestra la categoría por GPU y aclara que es estimada. El cálculo de costos de la caja reconoce cualquier grupo Low cuya GPU esté validada como 4070 Ti SUPER, aunque su nombre no contenga «4070».
+
+Este indicador **no pausa instancias, no cambia prioridades, no reajusta precios y no altera** la automatización por 130 TH/s descrita abajo.
+
 ## Auto-reallocate por hashrate bajo
 
 La protección de rendimiento se evalúa en cada ciclo del timer de 5 minutos:

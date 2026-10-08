@@ -17,6 +17,36 @@ $newNode=$lowGroup;$newNode['instances'][0]['id']='instance-b';$newNode['metrics
 $newNode['metrics']['hashrate_ths']=120.0;$newLow=hache_salad_monitor_apply_low_hash_reallocations([$newNode],$recoveredHash['state'],$reallocate,$reallocNotify,1900);$newTrigger=hache_salad_monitor_apply_low_hash_reallocations([$newNode],$newLow['state'],$reallocate,$reallocNotify,2200);expect($newTrigger['reallocated']===1&&$reallocations===2,'Una instancia nueva también debe poder reasignarse tras cinco minutos bajos');
 $stale=$newNode;$stale['stale']=true;$staleLow=hache_salad_monitor_apply_low_hash_reallocations([$stale],$newTrigger['state'],$reallocate,$reallocNotify,2600);expect($staleLow['reallocated']===0&&$reallocations===2,'Datos stale nunca deben provocar auto-reallocate');
 
+// La clasificación de rentabilidad es informativa; no altera la regla 130 TH/s / 5 min.
+$profitGroup=$lowGroup;
+$profitGroup['group']='prl-low-profitable-01'; // No requiere "4070" en el nombre.
+$profitGroup['metrics']['hashrate_15m_ths']=160.0;
+$p=hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances']);
+expect($p['applicable']&&$p['level']==='healthy','4070 Low sana debe ser viable');
+$profitGroup['metrics']['hashrate_15m_ths']=139.5;
+$p=hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances']);
+expect($p['level']==='watch','139.5 TH/s debe estar en precaución');
+$profitGroup['metrics']['profitability']=$p;
+expect(hache_salad_monitor_status('running',$profitGroup['metrics'],$profitGroup['instances'])==='yellow','Margen reducido debe alertar en amarillo');
+expect(str_contains(implode(' ',hache_salad_monitor_yellow_reasons($profitGroup['metrics'])),'140 TH/s'),'Debe explicar umbral preventivo');
+$profitGroup['metrics']['hashrate_15m_ths']=125.0;
+expect(hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances'])['level']==='watch','125 TH/s sigue en precaución, no debajo del umbral');
+$profitGroup['metrics']['hashrate_15m_ths']=124.9;
+$p=hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances']);
+expect($p['level']==='below_break_even','124.9 TH/s debe señalar posible pérdida');
+$profitGroup['metrics']['profitability']=$p;
+expect(str_contains(implode(' ',hache_salad_monitor_yellow_reasons($profitGroup['metrics'])),'125 TH/s'),'Debe explicar estimación de pérdida');
+unset($profitGroup['metrics']['hashrate_15m_ths']);
+expect(hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances'])['level']==='unknown','Sin media de 15 min no inferir pérdidas');
+$profitGroup['metrics']['hashrate_15m_ths']=110.0;
+$profitGroup['instances'][]=['id'=>'instance-b','state'=>'running','ready'=>true,'started'=>true];
+expect(hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances'])['level']==='unknown','Varias instancias no permiten atribuir el hash a una sola GPU');
+$profitGroup['instances']=array_slice($profitGroup['instances'],0,1);
+expect(hache_salad_monitor_profitability($profitGroup['group'],'allocating',$profitGroup['metrics'],$profitGroup['instances'])['level']==='unknown','Allocating no debe generar falso aviso económico');
+expect(!hache_salad_monitor_profitability('prl-medium-4070','running',$profitGroup['metrics'],$profitGroup['instances'])['applicable'],'No aplicar precio Low a Medium');
+$profitGroup['metrics']['gpu']='RTX 3090';
+expect(!hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances'])['applicable'],'No aplicar umbrales 4070 a otras GPUs');
+
 $tmp=sys_get_temp_dir().'/hache-salad-monitor-'.bin2hex(random_bytes(6)).'.json';putenv('SALAD_MONITOR_SNAPSHOT_FILE='.$tmp);
 $snapshotGroups=[['group'=>'g1','display_name'=>'G1','state'=>'running','instances'=>[],'metrics'=>['gpu'=>'RTX 4070 Ti SUPER','hashrate_ths'=>167.0,'shares'=>['accepted'=>3,'rejected'=>0,'hardware_errors'=>0]],'health'=>'green','stale'=>false,'observed_at'=>gmdate(DATE_ATOM)]];
 hache_salad_monitor_write_snapshot($snapshotGroups);$snapshot=hache_salad_monitor_read_snapshot();expect($snapshot!==null,'Snapshot no leído');expect(($snapshot['groups'][0]['group']??'')==='g1','Snapshot perdió grupos');$age=hache_salad_monitor_snapshot_age_seconds((string)$snapshot['observed_at']);expect($age!==null&&$age<5,'Edad del snapshot incorrecta');@unlink($tmp);putenv('SALAD_MONITOR_SNAPSHOT_FILE');

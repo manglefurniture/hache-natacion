@@ -133,9 +133,9 @@ function mineria_caja_operational(?array $snapshot,int $now): array {
         if(!is_array($group))continue;
         $name=strtolower((string)($group['group']??''));
         $gpu=strtoupper((string)($group['metrics']['gpu']??''));
-        if(!str_contains($name,'4070')||!str_contains($name,'low'))continue;
+        if(!preg_match('/(?:^|[-_])low(?:$|[-_])/', $name))continue;
+        if(!str_contains($gpu,'4070 TI SUPER')){if($gpu==='')$uncertain=true;continue;}
         if(($group['stale']??false)===true){$uncertain=true;continue;}
-        if(!str_contains($gpu,'4070 TI SUPER')){$uncertain=true;continue;}
         foreach($group['instances']??[] as $i)
             if(is_array($i)&&($i['ready']??false)===true&&(($i['started']??false)===true||strtolower((string)($i['state']??''))==='running'))$count++;
     }
