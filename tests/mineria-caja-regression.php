@@ -60,6 +60,8 @@ check(mineria_caja_path()==='/var/lib/hache-natacion/mineria-caja/ledger.json',
     'Ruta de caja no apunta al directorio privado.');
 check(is_string($deploy)&&str_contains($deploy,'/var/lib/hache-natacion/mineria-caja/ledger.json'),
     'El backup versionado debe incluir el ledger privado.');
+check(!str_contains($deploy,'local root="/var/lib/hache-natacion" dir='),
+    'No debe expandirse una variable local no inicializada bajo Bash set -u.');
 $mergeAt=strpos($deploy,'  git merge --ff-only origin/main');
 $provisionAt=strrpos($deploy,'  ensure_mining_cash_dir');
 check(substr_count($deploy,'ensure_mining_cash_dir')>=3&&$mergeAt!==false&&$provisionAt!==false&&$provisionAt<$mergeAt&&($mergeAt-$provisionAt)<250,
