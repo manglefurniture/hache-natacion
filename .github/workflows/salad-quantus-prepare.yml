@@ -28,7 +28,7 @@ jobs:
           node <<'JS'
           const key=process.env.SALAD_API_KEY||'';
           if(!key)throw Error('Missing Salad credential');
-          const org='interactive',project='default',group='quantus-low-4070-test';
+          const org='interactive',project='default',group='quantus-low-4070-trial-02';
           const gpuName='RTX 4070 Ti Super (16 GB)';
           const api='https://api.salad.com/api/public';
           const route='/organizations/'+org+'/projects/'+project+'/containers';
@@ -84,7 +84,7 @@ jobs:
             const gpu=options[0];
             const lowPrice=Number((gpu.prices||[]).find(p=>p.priority==='low')?.price);
             if(!Number.isFinite(lowPrice)||lowPrice>0.13)throw Error('Low price exceeds budget');
-            const body={name:group,display_name:'Quantus Trial 4070',autostart_policy:false,
+            const body={name:group,display_name:'Quantus Trial 4070 02',autostart_policy:false,
               restart_policy:'never',replicas:1,
               country_codes:[],container:{priority:'low',image:'ghcr.io/manglefurniture/prl-miner:quantus-exp',
                 resources:{cpu:1,memory:8192,shm_size:64,gpu_classes:[gpu.id]},
