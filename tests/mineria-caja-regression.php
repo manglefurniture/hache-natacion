@@ -53,3 +53,11 @@ try{
 }finally{
   @unlink($file);@unlink($file.'.lock');@rmdir($dir);putenv('MINERIA_CAJA_FILE');
 }
+$wrapper=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion-wrapper');
+$deploy=file_get_contents(__DIR__.'/../ops/production-readiness/deploy-hache-natacion');
+check(is_string($wrapper)&&str_contains($wrapper,'ensure_mining_cash_dir')&&str_contains($wrapper,'www-data:www-data:700'),
+    'El deploy debe provisionar el directorio privado de caja.');
+check(mineria_caja_path()==='/var/lib/hache-natacion/mineria-caja/ledger.json',
+    'Ruta de caja no apunta al directorio privado.');
+check(is_string($deploy)&&str_contains($deploy,'/var/lib/hache-natacion/mineria-caja/ledger.json'),
+    'El backup versionado debe incluir el ledger privado.');
