@@ -58,7 +58,7 @@ $sameLog=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$x['state'
 expect($sameLog['reallocated']===0&&$sameLog['state']['prl-low-super']['low_avg_count']===1,'No contar dos veces el mismo log');
 $notLow=$avgGroup;$notLow['priority']='medium';
 $wrongPriority=hache_salad_monitor_apply_low_hash_reallocations([$notLow],[],$realloc,$reallocNotify,3300,130,300,$audit);
-expect($wrongPriority['reallocated']===0&&in_array('skip_priority_not_low',array_column($observed,'decision'),true),'Slug low no equivale a prioridad Low');
+expect($wrongPriority['reallocated']===0&&in_array('skip_gpu_without_validated_policy',array_column($observed,'decision'),true),'Slug low no equivale a prioridad Low');
 $avgGroup['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,3300);
 $y=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$x['state'],$realloc,$reallocNotify,3300,130,300,$audit);
 expect($y['reallocated']===1&&$requests===1,'Media de 120 debe reasignar aunque actual sea 151');
@@ -98,8 +98,8 @@ $boundary['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,6300);
 $boundaryTrigger=hache_salad_monitor_apply_low_hash_reallocations([$boundary],$boundaryStart['state'],$realloc,$reallocNotify,6300,130,300,$audit);
 expect($boundaryTrigger['reallocated']===1,'125 exacto confirmado debe reasignar');
 
-// La clasificación de rentabilidad es informativa; no altera la regla 130 TH/s / 5 min.
-$profitGroup=$lowGroup;
+// La clasificación de referencia económica solo aplica a GPU validadas.
+$profitGroup=$avgGroup;
 $profitGroup['group']='prl-low-profitable-01'; // No requiere "4070" en el nombre.
 $profitGroup['metrics']['hashrate_15m_ths']=160.0;
 $p=hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances']);
