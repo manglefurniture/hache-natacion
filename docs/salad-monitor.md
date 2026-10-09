@@ -71,9 +71,9 @@ La clasificación de 140/125 TH/s sigue siendo orientativa. **No calcula ingreso
 
 El timer consulta Salad cada cinco minutos. Sólo considera una instancia única `ready/running`, con lecturas actuales y un ID válido.
 
-- **RTX 4070 Ti SUPER Low:** requiere dos lecturas consecutivas del **promedio de 15 min por debajo de 125 TH/s**, con al menos 300 segundos entre la primera y la confirmación. La lectura instantánea puede estar por encima de 130 TH/s; no impide actuar si persiste la media baja.
+- **RTX 4070 Ti SUPER Low:** requiere dos **muestras diferentes y recientes** del promedio de 15 min por debajo de 125 TH/s, con al menos 300 segundos entre la primera y la confirmación. Compara la fecha de la línea de hashrate de 15 minutos; si la API repite el mismo log, no cuenta otra muestra. La prioridad real informada por Salad debe ser `low`, además del nombre compatible. La lectura instantánea puede estar por encima de 130 TH/s; no impide actuar si persiste la media baja.
 - **Resto de GPU:** se mantiene la protección histórica: el grupo debe haber registrado al menos 130 TH/s anteriormente y mantenerse por debajo de 130 TH/s instantáneos durante al menos 300 segundos.
-- Si falta la media de 15 min, el grupo está desactualizado, cambia el nodo, hay más de una instancia activa o el promedio se recupera, se reinicia la secuencia para la RTX 4070 Ti SUPER Low.
+- Si falta la media de 15 min, su fecha, la prioridad Low real, el grupo está desactualizado, cambia el nodo, hay más de una instancia activa o el promedio se recupera, se reinicia la secuencia para la RTX 4070 Ti SUPER Low.
 - Una instancia recibe como máximo una solicitud de reasignación. El control se rearma al recibir un `instance_id` nuevo.
 - Si Salad rechaza una solicitud, se registra el fallo y se establece una espera de 15 minutos antes de otro intento.
 - **Importante:** la notificación ntfy es posterior a la aceptación de Salad; si ntfy falla no se repetirá la acción contra el mismo nodo.
