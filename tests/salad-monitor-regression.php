@@ -100,4 +100,6 @@ expect(!hache_salad_monitor_profitability($profitGroup['group'],'running',$profi
 $tmp=sys_get_temp_dir().'/hache-salad-monitor-'.bin2hex(random_bytes(6)).'.json';putenv('SALAD_MONITOR_SNAPSHOT_FILE='.$tmp);
 $snapshotGroups=[['group'=>'g1','display_name'=>'G1','state'=>'running','instances'=>[],'metrics'=>['gpu'=>'RTX 4070 Ti SUPER','hashrate_ths'=>167.0,'shares'=>['accepted'=>3,'rejected'=>0,'hardware_errors'=>0]],'health'=>'green','stale'=>false,'observed_at'=>gmdate(DATE_ATOM)]];
 hache_salad_monitor_write_snapshot($snapshotGroups);$snapshot=hache_salad_monitor_read_snapshot();expect($snapshot!==null,'Snapshot no leído');expect(($snapshot['groups'][0]['group']??'')==='g1','Snapshot perdió grupos');$age=hache_salad_monitor_snapshot_age_seconds((string)$snapshot['observed_at']);expect($age!==null&&$age<5,'Edad del snapshot incorrecta');@unlink($tmp);putenv('SALAD_MONITOR_SNAPSHOT_FILE');
+$dashboard=file_get_contents(__DIR__.'/../public/salad-monitor.php');
+expect(is_string($dashboard)&&substr_count($dashboard,'≤125 TH/s')===2,'La vista ADMIN debe mostrar el límite inclusivo de 125 TH/s');
 echo "SALAD_MONITOR_REGRESSION_OK\n";
