@@ -17,6 +17,18 @@ $newNode=$lowGroup;$newNode['instances'][0]['id']='instance-b';$newNode['metrics
 $newNode['metrics']['hashrate_ths']=120.0;$newLow=hache_salad_monitor_apply_low_hash_reallocations([$newNode],$recoveredHash['state'],$reallocate,$reallocNotify,1900);$newTrigger=hache_salad_monitor_apply_low_hash_reallocations([$newNode],$newLow['state'],$reallocate,$reallocNotify,2200);expect($newTrigger['reallocated']===1&&$reallocations===2,'Una instancia nueva también debe poder reasignarse tras cinco minutos bajos');
 $stale=$newNode;$stale['stale']=true;$staleLow=hache_salad_monitor_apply_low_hash_reallocations([$stale],$newTrigger['state'],$reallocate,$reallocNotify,2600);expect($staleLow['reallocated']===0&&$reallocations===2,'Datos stale nunca deben provocar auto-reallocate');
 
+
+$avgGroup=['group'=>'prl-low-super','state'=>'running','stale'=>false,'instances'=>[['id'=>'id-a','state'=>'running','ready'=>true,'started'=>true]],'metrics'=>['gpu'=>'RTX 4070 Ti SUPER','hashrate_ths'=>151.0,'hashrate_15m_ths'=>120.0]];
+$observed=[];$audit=static function(array $e)use(&$observed):void{$observed[]=$e;};
+$requests=0;$realloc=static function(array $g)use(&$requests):bool{$requests++;return true;};
+$x=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],[],$realloc,$reallocNotify,3000,130,300,$audit);
+expect($x['reallocated']===0,'Media baja necesita dos lecturas');
+$y=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$x['state'],$realloc,$reallocNotify,3300,130,300,$audit);
+expect($y['reallocated']===1&&$requests===1,'Media de 120 debe reasignar aunque actual sea 151');
+$z=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$y['state'],$realloc,$reallocNotify,3600,130,300,$audit);
+expect($z['reallocated']===0&&$requests===1,'No repetir solicitud misma instancia');
+expect(in_array('reallocate_accepted',array_column($observed,'decision'),true),'Auditoría de aceptación');
+
 // La clasificación de rentabilidad es informativa; no altera la regla 130 TH/s / 5 min.
 $profitGroup=$lowGroup;
 $profitGroup['group']='prl-low-profitable-01'; // No requiere "4070" en el nombre.
