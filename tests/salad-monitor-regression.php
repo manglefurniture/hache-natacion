@@ -42,7 +42,7 @@ $armedAgain=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$z['sta
 $nextNode['stale']=true;
 $staleAverage=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$armedAgain['state'],$realloc,$reallocNotify,4200,130,300,$audit);
 expect($staleAverage['reallocated']===0&&$staleAverage['state']['prl-low-super']['low_avg_count']===0,'Stale rompe consecutividad');
-$nextNode['stale']=false;$nextNode['metrics']['hashrate_15m_ths']=125.0;
+$nextNode['stale']=false;$nextNode['metrics']['hashrate_15m_ths']=125.1;
 $restored=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$staleAverage['state'],$realloc,$reallocNotify,4500,130,300,$audit);
 expect($restored['reallocated']===0,'Media igual a 125 no inicia reallocate');
 
@@ -58,6 +58,15 @@ expect(in_array('notification_failed',array_column($observed,'decision'),true),'
 $f3=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$f2['state'],$realloc,$reallocNotify,5400,130,300,$audit);
 expect($f3['reallocated']===0&&$requests===2,'Fallo ntfy no repite solicitud');
 
+
+$boundary=$avgGroup;$boundary['group']='prl-low-boundary';$boundary['instances'][0]['id']='boundary-a';
+$boundary['metrics']['hashrate_15m_ths']=125.0;$boundary['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,6000);
+$boundaryStart=hache_salad_monitor_apply_low_hash_reallocations([$boundary],[],$realloc,$reallocNotify,6000,130,300,$audit);
+expect($boundaryStart['reallocated']===0&&$boundaryStart['state']['prl-low-boundary']['low_avg_count']===1,'125 exacto arma primera lectura');
+$boundary['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,6300);
+$boundaryTrigger=hache_salad_monitor_apply_low_hash_reallocations([$boundary],$boundaryStart['state'],$realloc,$reallocNotify,6300,130,300,$audit);
+expect($boundaryTrigger['reallocated']===1,'125 exacto confirmado debe reasignar');
+
 // La clasificación de rentabilidad es informativa; no altera la regla 130 TH/s / 5 min.
 $profitGroup=$lowGroup;
 $profitGroup['group']='prl-low-profitable-01'; // No requiere "4070" en el nombre.
@@ -71,7 +80,7 @@ $profitGroup['metrics']['profitability']=$p;
 expect(hache_salad_monitor_status('running',$profitGroup['metrics'],$profitGroup['instances'])==='yellow','Margen reducido debe alertar en amarillo');
 expect(str_contains(implode(' ',hache_salad_monitor_yellow_reasons($profitGroup['metrics'])),'140 TH/s'),'Debe explicar umbral preventivo');
 $profitGroup['metrics']['hashrate_15m_ths']=125.0;
-expect(hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances'])['level']==='watch','125 TH/s sigue en precaución, no debajo del umbral');
+expect(hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances'])['level']==='below_break_even','125 TH/s exactos activan prevención');
 $profitGroup['metrics']['hashrate_15m_ths']=124.9;
 $p=hache_salad_monitor_profitability($profitGroup['group'],'running',$profitGroup['metrics'],$profitGroup['instances']);
 expect($p['level']==='below_break_even','124.9 TH/s debe señalar posible pérdida');
