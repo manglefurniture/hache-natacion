@@ -268,6 +268,7 @@ function hache_salad_monitor_audit_reallocation(array $event): void
 {
     $path='/var/lib/hache-natacion/salad-monitor-reallocation-audit.jsonl';
     $record=['at'=>gmdate(DATE_ATOM)]+$event;
+    $previousUmask=umask(0077);
     try{
         if(is_link($path)||is_link($path.'.1'))throw new RuntimeException('ruta de auditoría no segura');
         if(is_file($path)&&filesize($path)>1048576&&!rename($path,$path.'.1'))throw new RuntimeException('rotación de auditoría falló');
@@ -275,6 +276,7 @@ function hache_salad_monitor_audit_reallocation(array $event): void
         if(file_put_contents($path,$line,FILE_APPEND|LOCK_EX)===false)throw new RuntimeException('escritura de auditoría falló');
         chmod($path,0600);
     }catch(Throwable $e){error_log('[salad-auto-reallocate] audit-error: '.$e->getMessage());}
+    finally{umask($previousUmask);}
 }
 
 /**
