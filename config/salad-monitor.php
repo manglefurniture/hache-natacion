@@ -309,7 +309,7 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
             $record(['group'=>$key,'decision'=>$decision]+$details);
         };
         $resetAverage=static function(array &$state):void{
-            $state['low_avg_instance_id']=null;$state['low_avg_since']=null;$state['low_avg_last_at']=null;$state['low_avg_count']=0;
+            $state['low_avg_instance_id']=null;$state['low_avg_since']=null;$state['low_avg_last_at']=null;$state['low_avg_last_sample_at']=null;$state['low_avg_count']=0;
         };
         if((bool)($group['stale']??false)){
             $resetAverage($entry);$emit('skip_stale');$next[$key]=$entry;continue;
@@ -338,6 +338,11 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
         }
         $hash=(float)$metrics['hashrate_ths'];
         $profit=hache_salad_monitor_profitability($key,(string)($group['state']??''),$metrics,$instances);
+        if(($profit['applicable']??false)===true&&strtolower((string)($group['priority']??''))!=='low'){
+            $resetAverage($entry);$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
+            $emit('skip_priority_not_low',['instance_id'=>$instanceId,'priority'=>$group['priority']??null]);
+            $next[$key]=$entry;continue;
+        }
         if(($profit['applicable']??false)===true){
             // Regla económica orientativa solo para RTX 4070 Ti SUPER Low.
             // Dos snapshots nuevos y consecutivos con media 15 min <125 TH/s, separados al menos 5 minutos.
