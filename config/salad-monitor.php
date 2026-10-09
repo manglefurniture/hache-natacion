@@ -133,7 +133,7 @@ function hache_salad_monitor_profitability(string $name,string $state,array $met
     $average=$metrics['hashrate_15m_ths']??null;
     if(!is_numeric($average)||!is_finite((float)$average)||(float)$average<=0)return $result;
     $result['hashrate_15m_ths']=(float)$average;
-    $result['level']=$average<125?'below_break_even':($average<140?'watch':'healthy');
+    $result['level']=$average<=125?'below_break_even':($average<140?'watch':'healthy');
     return $result;
 }
 
@@ -160,7 +160,7 @@ function hache_salad_monitor_yellow_reasons(array $metrics): array
     $reasons=[];
     $profitability=is_array($metrics['profitability']??null)?$metrics['profitability']:[];
     if(($profitability['applicable']??false)===true){
-        if(($profitability['level']??'')==='below_break_even')$reasons[]='media 15 min bajo 125 TH/s (posible pérdida; referencia estimada)';
+        if(($profitability['level']??'')==='below_break_even')$reasons[]='media 15 min en 125 TH/s o menos (umbral preventivo; referencia estimada)';
         elseif(($profitability['level']??'')==='watch')$reasons[]='media 15 min bajo 140 TH/s (margen reducido; referencia estimada)';
     }
     if(($metrics['temperature_c']??0)>=82)$reasons[]='temperatura alta ('.(int)$metrics['temperature_c'].'°C)';
@@ -258,7 +258,7 @@ function hache_salad_monitor_send_reallocation_notification(array $group,float $
     $metrics=is_array($group['metrics']??null)?$group['metrics']:[];
     $profit=hache_salad_monitor_profitability((string)($group['group']??''),(string)($group['state']??''),$metrics,is_array($group['instances']??null)?$group['instances']:[]);
     $reason=($profit['applicable']??false)===true
-        ?'Promedio 15 min: '.number_format($hashrate,2,'.','').' TH/s; 2 lecturas consecutivas bajo 125 TH/s.'
+        ?'Promedio 15 min: '.number_format($hashrate,2,'.','').' TH/s; 2 lecturas consecutivas en 125 TH/s o menos.'
         :'Hashrate actual: '.number_format($hashrate,2,'.','').' TH/s; bajo 130 TH/s durante al menos '.$minutes.' min.';
     $body="♻️ Salad Auto-Reallocate\n".($group['display_name']??$group['group'])."\n".$reason."\nAcción: reallocate aceptado por Salad; esperando nuevo nodo.\nHora: $now";
     $curl=curl_init('https://ntfy.sh/'.rawurlencode($topic));curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$body,CURLOPT_HTTPHEADER=>['Content-Type: text/plain; charset=utf-8','Title: Salad Monitor - AUTO REALLOCATE','Priority: high','Tags: arrows_counterclockwise,computer'],CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15]);$response=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
@@ -345,7 +345,7 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
         }
         if(($profit['applicable']??false)===true){
             // Regla económica orientativa solo para RTX 4070 Ti SUPER Low.
-            // Dos snapshots nuevos y consecutivos con media 15 min <125 TH/s, separados al menos 5 minutos.
+            // Dos snapshots nuevos y consecutivos con media 15 min <=125 TH/s, separados al menos 5 minutos.
             $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
             $average=$profit['hashrate_15m_ths']??null;
             if(($profit['level']??'unknown')!=='below_break_even'||!is_numeric($average)){
