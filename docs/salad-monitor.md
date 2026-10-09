@@ -9,7 +9,7 @@ Si Salad falla temporalmente:
 - un fallo aislado de un Container Group conserva el último dato válido de ese grupo y lo marca como desactualizado;
 - un fallo de la consulta global no borra ni reemplaza el snapshot anterior.
 
-El monitor es de solo lectura salvo una automatización explícita: puede pedir a SaladCloud que **reasigne una instancia**. Para RTX 4070 Ti SUPER en prioridad Low aplica dos lecturas consecutivas de media de 15 minutos por debajo de 125 TH/s, separadas por un mínimo de 5 minutos. Para las demás GPU conserva la regla previa de hashrate instantáneo por debajo de 130 TH/s durante 5 minutos, después de observar una lectura sana. Usa el endpoint oficial de reallocate para que Salad entregue un nodo distinto; no cambia el Container Group, la imagen, el precio ni la cantidad de réplicas.
+El monitor es de solo lectura salvo una automatización explícita: puede pedir a SaladCloud que **reasigne una instancia**. Para RTX 4070 Ti SUPER en prioridad Low aplica dos lecturas consecutivas de media de 15 minutos en 125 TH/s o menos, separadas por un mínimo de 5 minutos. Para las demás GPU conserva la regla previa de hashrate instantáneo por debajo de 130 TH/s durante 5 minutos, después de observar una lectura sana. Usa el endpoint oficial de reallocate para que Salad entregue un nodo distinto; no cambia el Container Group, la imagen, el precio ni la cantidad de réplicas.
 
 ## Configuración de servidor
 
@@ -57,21 +57,21 @@ El poller envía notificaciones por ntfy únicamente en transiciones de estado p
 Para cada grupo de prioridad **Low** con **una sola instancia operativa** cuya GPU observada sea una **RTX 4070 Ti SUPER**, el monitor calcula una **categoría informativa** con la media de hashrate de 15 minutos:
 
 - **140 TH/s o más:** margen orientativo favorable.
-- **Desde 125 TH/s y menos de 140 TH/s:** aviso amarillo preventivo por margen reducido.
-- **Menos de 125 TH/s:** aviso amarillo por posible pérdida; **no** es una prueba de pérdidas reales.
+- **Más de 125 TH/s y menos de 140 TH/s:** aviso amarillo preventivo por margen reducido.
+- **125 TH/s o menos:** aviso amarillo por posible pérdida; **no** es una prueba de pérdidas reales.
 - **Sin datos de 15 minutos, instancia no lista o grupos multirréplica:** rentabilidad no evaluable, sin falsas alertas económicas.
 
 Los umbrales de 140/125 TH/s son referencias **provisionales** basadas en la hipótesis de **$0.13 USD/h**, un precio del PRL y dificultad de red de una observación puntual. **No constituyen un cálculo de beneficio en tiempo real**. Para tomar decisiones económicas hay que medir PRL confirmados, precio de venta neto, comisiones y consumo real en Salad. Una caída momentánea del hashrate no implica automáticamente pérdida.
 
 El estado amarillo usa las notificaciones ntfy existentes, sólo al entrar en alerta y sin duplicarlas mientras permanezca amarillo; los datos desactualizados no generan transiciones. El panel muestra la categoría por GPU y aclara que es estimada. El cálculo de costos de la caja reconoce cualquier grupo Low cuya GPU esté validada como 4070 Ti SUPER, aunque su nombre no contenga «4070».
 
-La clasificación de 140/125 TH/s sigue siendo orientativa. **No calcula ingresos ni pérdidas reales.** En RTX 4070 Ti SUPER Low, la media inferior a 125 TH/s sirve además para la reasignación, siempre con confirmación consecutiva y sin detener el grupo ni cambiar precio o GPU.
+La clasificación de 140/125 TH/s sigue siendo orientativa. **No calcula ingresos ni pérdidas reales.** En RTX 4070 Ti SUPER Low, la media de 125 TH/s o menos sirve además para la reasignación, siempre con confirmación consecutiva y sin detener el grupo ni cambiar precio o GPU.
 
 ## Auto-Reallocate (políticas por GPU)
 
 El timer consulta Salad cada cinco minutos. Sólo considera una instancia única `ready/running`, con lecturas actuales y un ID válido.
 
-- **RTX 4070 Ti SUPER Low:** requiere dos **muestras diferentes y recientes** del promedio de 15 min por debajo de 125 TH/s, con al menos 300 segundos entre la primera y la confirmación. Compara la fecha de la línea de hashrate de 15 minutos; si la API repite el mismo log, no cuenta otra muestra. La prioridad real informada por Salad debe ser `low`, además del nombre compatible. La lectura instantánea puede estar por encima de 130 TH/s; no impide actuar si persiste la media baja.
+- **RTX 4070 Ti SUPER Low:** requiere dos **muestras diferentes y recientes** del promedio de 15 min en 125 TH/s o menos, con al menos 300 segundos entre la primera y la confirmación. Compara la fecha de la línea de hashrate de 15 minutos; si la API repite el mismo log, no cuenta otra muestra. La prioridad real informada por Salad debe ser `low`, además del nombre compatible. La lectura instantánea puede estar por encima de 130 TH/s; no impide actuar si persiste la media baja.
 - **Resto de GPU:** se mantiene la protección histórica: el grupo debe haber registrado al menos 130 TH/s anteriormente y mantenerse por debajo de 130 TH/s instantáneos durante al menos 300 segundos.
 - Si falta la media de 15 min, su fecha, la prioridad Low real, el grupo está desactualizado, cambia el nodo, hay más de una instancia activa o el promedio se recupera, se reinicia la secuencia para la RTX 4070 Ti SUPER Low.
 - Una instancia recibe como máximo una solicitud de reasignación. El control se rearma al recibir un `instance_id` nuevo.
@@ -80,4 +80,4 @@ El timer consulta Salad cada cinco minutos. Sólo considera una instancia única
 
 El registro privado `/var/lib/hache-natacion/salad-monitor-reallocation-audit.jsonl` (modo 0600, rotación acotada) registra cada evaluación y su motivo, junto con solicitudes aceptadas o fallidas. No registra credenciales. Las alertas amarillas continúan siendo independientes del acto de reasignación.
 
-La hipótesis económica de 125 TH/s presupone un precio aproximado de USD 0.13/h para Low y es **provisional**, no una garantía de pérdida real. No ampliar automáticamente a otros precios o GPU sin cálculos propios.
+La hipótesis económica de 125 TH/s (inclusive) presupone un precio aproximado de USD 0.13/h para Low y es **provisional**, no una garantía de pérdida real. No ampliar automáticamente a otros precios o GPU sin cálculos propios.
