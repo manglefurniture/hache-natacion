@@ -155,5 +155,5 @@ $one=hache_salad_monitor_apply_low_hash_reallocations([$simulated],[],$localReal
 $simulated['metrics']['hashrate_ths']=50.0;
 $two=hache_salad_monitor_apply_low_hash_reallocations([$simulated],$one['state'],$localReallocate,$localNotify,1100);
 $three=hache_salad_monitor_apply_low_hash_reallocations([$simulated],$two['state'],$localReallocate,$localNotify,1400);
-expect($three['reallocated']===1&&$localCalls===1,'Healthy then 50 TH/s for 5min must reallocate a properly identified node');
+expect($three['reallocated']===0&&$localCalls===0,'Even a properly identified RTX 3080 Ti falling to 50 TH/s must not inherit the 4070 Ti SUPER threshold');
 echo "SALAD_MONITOR_REGRESSION_OK\n";
