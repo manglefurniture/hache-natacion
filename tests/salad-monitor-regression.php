@@ -29,6 +29,16 @@ $z=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$y['state'],$rea
 expect($z['reallocated']===0&&$requests===1,'No repetir solicitud misma instancia');
 expect(in_array('reallocate_accepted',array_column($observed,'decision'),true),'Auditoría de aceptación');
 
+
+$nextNode=$avgGroup;$nextNode['instances'][0]['id']='id-b';
+$armedAgain=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$z['state'],$realloc,$reallocNotify,3900,130,300,$audit);
+$nextNode['stale']=true;
+$staleAverage=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$armedAgain['state'],$realloc,$reallocNotify,4200,130,300,$audit);
+expect($staleAverage['reallocated']===0&&$staleAverage['state']['prl-low-super']['low_avg_count']===0,'Stale rompe consecutividad');
+$nextNode['stale']=false;$nextNode['metrics']['hashrate_15m_ths']=125.0;
+$restored=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$staleAverage['state'],$realloc,$reallocNotify,4500,130,300,$audit);
+expect($restored['reallocated']===0,'Media igual a 125 no inicia reallocate');
+
 // La clasificación de rentabilidad es informativa; no altera la regla 130 TH/s / 5 min.
 $profitGroup=$lowGroup;
 $profitGroup['group']='prl-low-profitable-01'; // No requiere "4070" en el nombre.
