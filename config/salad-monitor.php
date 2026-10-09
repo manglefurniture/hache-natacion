@@ -434,6 +434,29 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
     return ['state'=>$next,'reallocated'=>$count];
 }
 
+/**
+ * Normaliza la respuesta oficial de SaladCloud (instance_id). La clave id
+ * se conserva como alias interno para el motor actual de auto-reallocate.
+ * No convierte instancias sin ID en elegibles.
+ *
+ * @return array<string,mixed>
+ */
+function hache_salad_monitor_normalize_instance(array $instance): array
+{
+    $state=$instance['state']??'unknown';
+    if(is_array($state))$state=$state['status']??'unknown';
+    return [
+        'id'=>(string)($instance['instance_id']??$instance['id']??''),
+        'machine_id'=>(string)($instance['machine_id']??''),
+        'state'=>is_string($state)?$state:'unknown',
+        'ready'=>($instance['ready']??false)===true,
+        'started'=>($instance['started']??false)===true,
+        'update_time'=>(string)($instance['update_time']??''),
+        'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,
+        'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null,
+    ];
+}
+
 /** @return list<array<string,mixed>> */
 function hache_salad_monitor_collect(): array
 {
@@ -449,7 +472,8 @@ function hache_salad_monitor_collect(): array
             $instances=hache_salad_monitor_http($config,'GET',$base.'/'.rawurlencode($name).'/instances');
             $logs=hache_salad_monitor_http($config,'POST','/organizations/'.rawurlencode($config['organization']).'/log-entries',['sort_order'=>'desc','start_time'=>$start->format('Y-m-d\\TH:i:s\\Z'),'end_time'=>$end->format('Y-m-d\\TH:i:s\\Z'),'page_size'=>100,'query'=>'resource.type = "container" and resource.labels.project_name = "'.$config['project'].'" and resource.labels.container_group_name = "'.$name.'"']);
             $metrics=hache_salad_monitor_parse(is_array($logs['items']??null)?$logs['items']:[]);$safeInstances=[];
-            foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)if(is_array($instance))$safeInstances[]=['id'=>(string)($instance['id']??''),'machine_id'=>(string)($instance['machine_id']??''),'state'=>(string)($instance['state']??''),'ready'=>(bool)($instance['ready']??false),'started'=>(bool)($instance['started']??false),'update_time'=>(string)($instance['update_time']??''),'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null];
+            foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)
+                if(is_array($instance))$safeInstances[]=hache_salad_monitor_normalize_instance($instance);
             $metrics['profitability']=hache_salad_monitor_profitability($name,$state,$metrics,$safeInstances);
             if($priority!=='low'){$metrics['profitability']['applicable']=false;$metrics['profitability']['level']='unknown';}
             $result[]=['group'=>$name,'display_name'=>$display,'priority'=>$priority,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics,$safeInstances),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
