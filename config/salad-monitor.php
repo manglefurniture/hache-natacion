@@ -248,9 +248,33 @@ function hache_salad_monitor_send_reallocation_notification(array $group,float $
 {
     $topic=hache_salad_monitor_ntfy_topic();if($topic==='')throw new RuntimeException('NTFY_TOPIC no está configurado en el servidor.');
     $now=(new DateTimeImmutable('now',new DateTimeZone('America/Cancun')))->format('Y-m-d H:i T');$minutes=max(5,(int)floor($lowSeconds/60));
-    $body="♻️ Salad Auto-Reallocate\n".($group['display_name']??$group['group'])."\nHashrate: ".number_format($hashrate,2,'.','')." TH/s\nBajo 130 TH/s durante al menos ".$minutes." min.\nAcción: reallocate solicitado para obtener un nodo nuevo.\nHora: $now";
+    $metrics=is_array($group['metrics']??null)?$group['metrics']:[];
+    $profit=hache_salad_monitor_profitability((string)($group['group']??''),(string)($group['state']??''),$metrics,is_array($group['instances']??null)?$group['instances']:[]);
+    $reason=($profit['applicable']??false)===true
+        ?'Promedio 15 min: '.number_format($hashrate,2,'.','').' TH/s; 2 lecturas consecutivas bajo 125 TH/s.'
+        :'Hashrate actual: '.number_format($hashrate,2,'.','').' TH/s; bajo 130 TH/s durante al menos '.$minutes.' min.';
+    $body="♻️ Salad Auto-Reallocate\n".($group['display_name']??$group['group'])."\n".$reason."\nAcción: reallocate aceptado por Salad; esperando nuevo nodo.\nHora: $now";
     $curl=curl_init('https://ntfy.sh/'.rawurlencode($topic));curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$body,CURLOPT_HTTPHEADER=>['Content-Type: text/plain; charset=utf-8','Title: Salad Monitor - AUTO REALLOCATE','Priority: high','Tags: arrows_counterclockwise,computer'],CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15]);$response=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
     return is_string($response)&&$status>=200&&$status<300;
+}
+
+/**
+ * Auditoría privada y acotada: el monitor registra decisiones sin exponer la API key.
+ * Nunca bloquea el poller si el disco del registro falla.
+ *
+ * @param array<string,mixed> $event
+ */
+function hache_salad_monitor_audit_reallocation(array $event): void
+{
+    $path='/var/lib/hache-natacion/salad-monitor-reallocation-audit.jsonl';
+    $record=['at'=>gmdate(DATE_ATOM)]+$event;
+    try{
+        if(is_link($path)||is_link($path.'.1'))throw new RuntimeException('ruta de auditoría no segura');
+        if(is_file($path)&&filesize($path)>1048576&&!rename($path,$path.'.1'))throw new RuntimeException('rotación de auditoría falló');
+        $line=json_encode($record,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)."\n";
+        if(file_put_contents($path,$line,FILE_APPEND|LOCK_EX)===false)throw new RuntimeException('escritura de auditoría falló');
+        chmod($path,0600);
+    }catch(Throwable $e){error_log('[salad-auto-reallocate] audit-error: '.$e->getMessage());}
 }
 
 /**
@@ -264,33 +288,120 @@ function hache_salad_monitor_send_reallocation_notification(array $group,float $
  * @param callable(array<string,mixed>,float,int):bool $notify
  * @return array{state:array<string,array<string,mixed>>,reallocated:int}
  */
-function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $previous,callable $reallocate,callable $notify,?int $nowTs=null,float $threshold=130.0,int $minimumSeconds=300): array
+function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $previous,callable $reallocate,callable $notify,?int $nowTs=null,float $threshold=130.0,int $minimumSeconds=300,?callable $audit=null): array
 {
     $nowTs=$nowTs??time();$next=$previous;$count=0;
+    $record=$audit??static function(array $event): void {};
     foreach($groups as $group){
-        $key=(string)($group['group']??'');if($key==='')continue;$entry=is_array($previous[$key]??null)?$previous[$key]:[];
-        if((bool)($group['stale']??false)){ $next[$key]=$entry;continue; }
-        $instances=is_array($group['instances']??null)?$group['instances']:[];$active=[];
+        $key=(string)($group['group']??'');if($key==='')continue;
+        $entry=is_array($previous[$key]??null)?$previous[$key]:[];
+        $metrics=is_array($group['metrics']??null)?$group['metrics']:[];
+        $emit=static function(string $decision,array $details=[])use($record,$key):void{
+            $record(['group'=>$key,'decision'=>$decision]+$details);
+        };
+        $resetAverage=static function(array &$state):void{
+            $state['low_avg_instance_id']=null;$state['low_avg_since']=null;$state['low_avg_last_at']=null;$state['low_avg_count']=0;
+        };
+        if((bool)($group['stale']??false)){
+            $resetAverage($entry);$emit('skip_stale');$next[$key]=$entry;continue;
+        }
+        $instances=is_array($group['instances']??null)?$group['instances']:[];
+        $active=[];
         foreach($instances as $instance){
-            if(!is_array($instance))continue;$id=trim((string)($instance['id']??''));if($id==='')continue;$state=strtolower((string)($instance['state']??''));$ready=(bool)($instance['ready']??false);$started=(bool)($instance['started']??false);
+            if(!is_array($instance))continue;
+            $id=trim((string)($instance['id']??''));if($id==='')continue;
+            $state=strtolower((string)($instance['state']??''));$ready=(bool)($instance['ready']??false);$started=(bool)($instance['started']??false);
             if($ready&&($started||$state==='running'))$active[]=$id;
         }
-        if(count($active)!==1){$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;$next[$key]=$entry;continue;}
-        $instanceId=$active[0];$hash=(float)($group['metrics']['hashrate_ths']??0);
-        if($hash>=$threshold){
-            $entry['hash_baseline_seen']=true;$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
-            if(($entry['reallocation_requested_instance_id']??null)!==$instanceId)$entry['reallocation_requested_instance_id']=null;
+        if(count($active)!==1){
+            $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;$resetAverage($entry);
+            $emit('skip_instance_not_ready',['active_count'=>count($active)]);$next[$key]=$entry;continue;
+        }
+        $instanceId=$active[0];
+        if(($entry['reallocation_requested_instance_id']??null)===$instanceId){
+            $emit('skip_already_requested',['instance_id'=>$instanceId]);$next[$key]=$entry;continue;
+        }
+        if(($entry['reallocation_requested_instance_id']??null)!==null)$entry['reallocation_requested_instance_id']=null;
+        $gpu=(string)($metrics['gpu']??'');
+        if($gpu===''||!is_numeric($metrics['hashrate_ths']??null)||!is_finite((float)$metrics['hashrate_ths'])){
+            $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;$resetAverage($entry);
+            $emit('skip_metrics_missing',['instance_id'=>$instanceId]);$next[$key]=$entry;continue;
+        }
+        $hash=(float)$metrics['hashrate_ths'];
+        $profit=hache_salad_monitor_profitability($key,(string)($group['state']??''),$metrics,$instances);
+        if(($profit['applicable']??false)===true){
+            // Regla económica orientativa solo para RTX 4070 Ti SUPER Low.
+            // Dos snapshots nuevos y consecutivos con media 15 min <125 TH/s, separados al menos 5 minutos.
+            $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
+            $average=$profit['hashrate_15m_ths']??null;
+            if(($profit['level']??'unknown')!=='below_break_even'||!is_numeric($average)){
+                $resetAverage($entry);
+                $emit('skip_average_not_below_125',['instance_id'=>$instanceId,'average_15m_ths'=>$average,'level'=>$profit['level']??'unknown']);
+                $next[$key]=$entry;continue;
+            }
+            $last=$entry['low_avg_last_at']??null;
+            if(($entry['low_avg_instance_id']??null)!==$instanceId||!is_int($last)||$nowTs<=$last||$nowTs-$last>660){
+                $entry['low_avg_instance_id']=$instanceId;$entry['low_avg_since']=$nowTs;$entry['low_avg_last_at']=$nowTs;$entry['low_avg_count']=1;
+                $emit('average_low_first_reading',['instance_id'=>$instanceId,'average_15m_ths'=>(float)$average]);
+                $next[$key]=$entry;continue;
+            }
+            $entry['low_avg_last_at']=$nowTs;$entry['low_avg_count']=min(2,(int)($entry['low_avg_count']??1)+1);
+            $seconds=max(0,$nowTs-(int)($entry['low_avg_since']??$nowTs));
+            if($entry['low_avg_count']<2||$seconds<$minimumSeconds){
+                $emit('average_low_waiting',['instance_id'=>$instanceId,'average_15m_ths'=>(float)$average,'elapsed_seconds'=>$seconds]);
+                $next[$key]=$entry;continue;
+            }
+            $observedHash=(float)$average;$elapsed=$seconds;$policy='average_15m_below_125_two_readings';
+        }else{
+            // Política previa para el resto de GPU: hashrate instantáneo <130 durante 5 min.
+            $resetAverage($entry);
+            if($hash>=$threshold){
+                $entry['hash_baseline_seen']=true;$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
+                $emit('skip_instant_hash_healthy',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
+            }
+            if(!($entry['hash_baseline_seen']??false)){
+                $emit('skip_baseline_not_seen',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
+            }
+            if(($entry['low_hash_instance_id']??null)!==$instanceId||!is_int($entry['low_hash_since']??null)){
+                $entry['low_hash_instance_id']=$instanceId;$entry['low_hash_since']=$nowTs;
+                $emit('instant_low_first_reading',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
+            }
+            $seconds=max(0,$nowTs-(int)$entry['low_hash_since']);
+            if($seconds<$minimumSeconds){
+                $emit('instant_low_waiting',['instance_id'=>$instanceId,'hashrate_ths'=>$hash,'elapsed_seconds'=>$seconds]);
+                $next[$key]=$entry;continue;
+            }
+            $observedHash=$hash;$elapsed=$seconds;$policy='instant_below_130';
+        }
+        // Si Salad rechaza la solicitud, conservar estado y limitar el reintento a 15 min.
+        if($nowTs-(int)($entry['reallocation_failed_at']??0)<900){
+            $emit('skip_failure_cooldown',['instance_id'=>$instanceId,'policy'=>$policy]);$next[$key]=$entry;continue;
+        }
+        try{
+            $accepted=$reallocate($group);
+        }catch(Throwable $e){
+            $entry['reallocation_failed_at']=$nowTs;
+            $emit('reallocate_failed',['instance_id'=>$instanceId,'policy'=>$policy,'reason'=>'salad_api_error']);
+            error_log('[salad-auto-reallocate] request failed group='.$key.' (see private audit)');
             $next[$key]=$entry;continue;
         }
-        if(!($entry['hash_baseline_seen']??false)){ $next[$key]=$entry;continue; }
-        if(($entry['low_hash_instance_id']??null)!==$instanceId||!is_int($entry['low_hash_since']??null)){
-            $entry['low_hash_instance_id']=$instanceId;$entry['low_hash_since']=$nowTs;$next[$key]=$entry;continue;
+        if(!$accepted){
+            $entry['reallocation_failed_at']=$nowTs;
+            $emit('reallocate_failed',['instance_id'=>$instanceId,'policy'=>$policy,'reason'=>'api_not_accepted']);
+            $next[$key]=$entry;continue;
         }
-        $lowSeconds=max(0,$nowTs-(int)$entry['low_hash_since']);
-        if($lowSeconds<$minimumSeconds||($entry['reallocation_requested_instance_id']??null)===$instanceId){$next[$key]=$entry;continue;}
-        if($reallocate($group)){
-            $entry['reallocation_requested_instance_id']=$instanceId;$entry['last_reallocated_at']=gmdate(DATE_ATOM,$nowTs);$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;$count++;
-            $notify($group,$hash,$lowSeconds);
+        $entry['reallocation_requested_instance_id']=$instanceId;
+        $entry['last_reallocated_at']=gmdate(DATE_ATOM,$nowTs);
+        $entry['reallocation_failed_at']=null;
+        $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;$resetAverage($entry);
+        $count++;
+        $emit('reallocate_accepted',['instance_id'=>$instanceId,'policy'=>$policy,'observed_ths'=>$observedHash,'elapsed_seconds'=>$elapsed]);
+        // La notificación no puede deshacer un reallocate que Salad ya aceptó.
+        try{
+            if(!$notify($group,$observedHash,$elapsed))$emit('notification_failed',['instance_id'=>$instanceId,'reason'=>'ntfy_not_accepted']);
+        }catch(Throwable $e){
+            $emit('notification_failed',['instance_id'=>$instanceId,'reason'=>'ntfy_error']);
+            error_log('[salad-auto-reallocate] notification failed group='.$key);
         }
         $next[$key]=$entry;
     }
