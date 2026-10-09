@@ -102,4 +102,27 @@ $snapshotGroups=[['group'=>'g1','display_name'=>'G1','state'=>'running','instanc
 hache_salad_monitor_write_snapshot($snapshotGroups);$snapshot=hache_salad_monitor_read_snapshot();expect($snapshot!==null,'Snapshot no leído');expect(($snapshot['groups'][0]['group']??'')==='g1','Snapshot perdió grupos');$age=hache_salad_monitor_snapshot_age_seconds((string)$snapshot['observed_at']);expect($age!==null&&$age<5,'Edad del snapshot incorrecta');@unlink($tmp);putenv('SALAD_MONITOR_SNAPSHOT_FILE');
 $dashboard=file_get_contents(__DIR__.'/../public/salad-monitor.php');
 expect(is_string($dashboard)&&substr_count($dashboard,'≤125 TH/s')===2,'La vista ADMIN debe mostrar el límite inclusivo de 125 TH/s');
+// Official SaladCloud API sends instance_id, not necessarily id. The legacy
+// monitor previously silently dropped it, so no GPU could be reallocated.
+$official=['instance_id'=>'5ebfa363-6e0b-4db1-b9be-70ed4995d0b1',
+    'machine_id'=>'673ac947-11e7-48e4-9a04-994ace400abc',
+    'state'=>'running','ready'=>true,'started'=>true,
+    'update_time'=>'2026-10-09T19:00:00Z'];
+$normalized=hache_salad_monitor_normalize_instance($official);
+expect($normalized['id']===$official['instance_id'],'Salad official instance_id is required for reallocation');
+expect($normalized['state']==='running'&&$normalized['ready']===true&&$normalized['started']===true,'Official API flags must be preserved');
+expect(hache_salad_monitor_normalize_instance(['id'=>'legacy-id','state'=>'running','ready'=>true,'started'=>true])['id']==='legacy-id','Historic id fallback lost');
+expect(hache_salad_monitor_normalize_instance(['state'=>'running','ready'=>true,'started'=>true])['id']==='','Missing identifier cannot become reallocation eligible');
+expect(hache_salad_monitor_normalize_instance(['instance_id'=>'id','state'=>['status'=>'running'],'ready'=>true,'started'=>true])['state']==='running','Nested state compatibility broken');
+// No real Salad API calls: callback only increments a local counter.
+$simulated=['group'=>'other-gpu','state'=>'running','priority'=>'low','stale'=>false,
+    'instances'=>[$normalized],
+    'metrics'=>['gpu'=>'RTX 3080 Ti','hashrate_ths'=>160.0]];
+$localCalls=0;$localReallocate=static function(array $g)use(&$localCalls):bool{$localCalls++;return true;};
+$localNotify=static fn(array $g,float $h,int $s):bool=>true;
+$one=hache_salad_monitor_apply_low_hash_reallocations([$simulated],[],$localReallocate,$localNotify,1000);
+$simulated['metrics']['hashrate_ths']=50.0;
+$two=hache_salad_monitor_apply_low_hash_reallocations([$simulated],$one['state'],$localReallocate,$localNotify,1100);
+$three=hache_salad_monitor_apply_low_hash_reallocations([$simulated],$two['state'],$localReallocate,$localNotify,1400);
+expect($three['reallocated']===1&&$localCalls===1,'Healthy then 50 TH/s for 5min must reallocate a properly identified node');
 echo "SALAD_MONITOR_REGRESSION_OK\n";
