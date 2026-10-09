@@ -23,6 +23,11 @@ $observed=[];$audit=static function(array $e)use(&$observed):void{$observed[]=$e
 $requests=0;$realloc=static function(array $g)use(&$requests):bool{$requests++;return true;};
 $x=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],[],$realloc,$reallocNotify,3000,130,300,$audit);
 expect($x['reallocated']===0,'Media baja necesita dos lecturas');
+$sameLog=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$x['state'],$realloc,$reallocNotify,3300,130,300,$audit);
+expect($sameLog['reallocated']===0&&$sameLog['state']['prl-low-super']['low_avg_count']===1,'No contar dos veces el mismo log');
+$notLow=$avgGroup;$notLow['priority']='medium';
+$wrongPriority=hache_salad_monitor_apply_low_hash_reallocations([$notLow],[],$realloc,$reallocNotify,3300,130,300,$audit);
+expect($wrongPriority['reallocated']===0&&in_array('skip_priority_not_low',array_column($observed,'decision'),true),'Slug low no equivale a prioridad Low');
 $avgGroup['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,3300);
 $y=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$x['state'],$realloc,$reallocNotify,3300,130,300,$audit);
 expect($y['reallocated']===1&&$requests===1,'Media de 120 debe reasignar aunque actual sea 151');
