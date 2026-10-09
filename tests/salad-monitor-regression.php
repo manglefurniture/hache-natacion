@@ -18,11 +18,12 @@ $newNode['metrics']['hashrate_ths']=120.0;$newLow=hache_salad_monitor_apply_low_
 $stale=$newNode;$stale['stale']=true;$staleLow=hache_salad_monitor_apply_low_hash_reallocations([$stale],$newTrigger['state'],$reallocate,$reallocNotify,2600);expect($staleLow['reallocated']===0&&$reallocations===2,'Datos stale nunca deben provocar auto-reallocate');
 
 
-$avgGroup=['group'=>'prl-low-super','state'=>'running','stale'=>false,'instances'=>[['id'=>'id-a','state'=>'running','ready'=>true,'started'=>true]],'metrics'=>['gpu'=>'RTX 4070 Ti SUPER','hashrate_ths'=>151.0,'hashrate_15m_ths'=>120.0]];
+$avgGroup=['group'=>'prl-low-super','priority'=>'low','state'=>'running','stale'=>false,'instances'=>[['id'=>'id-a','state'=>'running','ready'=>true,'started'=>true]],'metrics'=>['gpu'=>'RTX 4070 Ti SUPER','hashrate_ths'=>151.0,'hashrate_15m_ths'=>120.0,'hashrate_15m_at'=>gmdate(DATE_ATOM,3000)]];
 $observed=[];$audit=static function(array $e)use(&$observed):void{$observed[]=$e;};
 $requests=0;$realloc=static function(array $g)use(&$requests):bool{$requests++;return true;};
 $x=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],[],$realloc,$reallocNotify,3000,130,300,$audit);
 expect($x['reallocated']===0,'Media baja necesita dos lecturas');
+$avgGroup['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,3300);
 $y=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$x['state'],$realloc,$reallocNotify,3300,130,300,$audit);
 expect($y['reallocated']===1&&$requests===1,'Media de 120 debe reasignar aunque actual sea 151');
 $z=hache_salad_monitor_apply_low_hash_reallocations([$avgGroup],$y['state'],$realloc,$reallocNotify,3600,130,300,$audit);
@@ -31,6 +32,7 @@ expect(in_array('reallocate_accepted',array_column($observed,'decision'),true),'
 
 
 $nextNode=$avgGroup;$nextNode['instances'][0]['id']='id-b';
+$nextNode['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,3900);
 $armedAgain=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$z['state'],$realloc,$reallocNotify,3900,130,300,$audit);
 $nextNode['stale']=true;
 $staleAverage=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$armedAgain['state'],$realloc,$reallocNotify,4200,130,300,$audit);
@@ -41,8 +43,10 @@ expect($restored['reallocated']===0,'Media igual a 125 no inicia reallocate');
 
 
 $nextNode['metrics']['hashrate_15m_ths']=120.0;
+$nextNode['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,4800);
 $f1=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$restored['state'],$realloc,$reallocNotify,4800,130,300,$audit);
 $notifyDown=static function(array $g,float $h,int $t):bool{throw new RuntimeException('ntfy down');};
+$nextNode['metrics']['hashrate_15m_at']=gmdate(DATE_ATOM,5100);
 $f2=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$f1['state'],$realloc,$notifyDown,5100,130,300,$audit);
 expect($f2['reallocated']===1&&$f2['state']['prl-low-super']['reallocation_requested_instance_id']==='id-b','Aceptar reallocate aunque ntfy falle');
 expect(in_array('notification_failed',array_column($observed,'decision'),true),'Notificación fallida auditada');
