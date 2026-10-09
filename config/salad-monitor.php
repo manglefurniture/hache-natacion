@@ -92,13 +92,20 @@ function hache_salad_monitor_parse(array $logItems): array
 {
     $lines=[];$latest=null;
     foreach($logItems as $item){$line=hache_salad_monitor_clean_line((string)($item['text_log']??$item['message']??''));if($line!=='')$lines[]=$line;$time=(string)($item['time']??$item['timestamp']??'');if($latest===null&&$time!=='')$latest=$time;}
-    $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_15m_ths'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>hache_salad_monitor_shares($lines),'last_log_at'=>$latest];
+    $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_15m_ths'=>null,'hashrate_15m_at'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>hache_salad_monitor_shares($lines),'last_log_at'=>$latest];
     foreach($lines as $line){
         if(preg_match('/#\d+\s+(?<gpu>.+?)\s+(?<hash>\d+(?:\.\d+)?)\s+TH\/s\s+(?<power>\d+(?:\.\d+)?)W\s+(?<eff>\d+(?:\.\d+)?)\s+(?<fan>\d+)%\s+(?<temp>\d+)C/i',$line,$m)){
             $metrics['gpu']=trim($m['gpu']);$metrics['hashrate_ths']=(float)$m['hash'];$metrics['watts']=(float)$m['power'];$metrics['efficiency_th_per_w']=(float)$m['eff'];$metrics['fan_percent']=(int)$m['fan'];$metrics['temperature_c']=(int)$m['temp'];break;
         }
     }
-    foreach($lines as $line)if(preg_match('/15\s*min\s+(?<hash>\d+(?:\.\d+)?)\s+TH\/s/i',$line,$m)){$metrics['hashrate_15m_ths']=(float)$m['hash'];break;}
+    foreach($logItems as $item){
+        $line=hache_salad_monitor_clean_line((string)($item['text_log']??$item['message']??''));
+        if(preg_match('/15\\s*min\\s+(?<hash>\\d+(?:\\.\\d+)?)\\s+TH\\/s/i',$line,$m)){
+            $metrics['hashrate_15m_ths']=(float)$m['hash'];
+            $metrics['hashrate_15m_at']=(string)($item['time']??$item['timestamp']??'');
+            break;
+        }
+    }
     return $metrics;
 }
 
@@ -433,7 +440,7 @@ function hache_salad_monitor_collect(): array
             if(isset($previousByGroup[$name])){
                 $fallback=$previousByGroup[$name];$fallback['display_name']=$display;$fallback['state']=$state;$fallback['stale']=true;$fallback['update_error']='No se pudo actualizar este grupo.';$result[]=$fallback;
             }else{
-                $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_15m_ths'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>['accepted'=>0,'rejected'=>0,'hardware_errors'=>0],'last_log_at'=>null];
+                $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_15m_ths'=>null,'hashrate_15m_at'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>['accepted'=>0,'rejected'=>0,'hardware_errors'=>0],'last_log_at'=>null];
                 $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>[],'metrics'=>$metrics,'health'=>'red','stale'=>true,'update_error'=>'No se pudo actualizar este grupo.','observed_at'=>$end->format(DATE_ATOM)];
             }
         }
