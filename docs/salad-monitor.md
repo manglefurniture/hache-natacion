@@ -9,7 +9,7 @@ Si Salad falla temporalmente:
 - un fallo aislado de un Container Group conserva el último dato válido de ese grupo y lo marca como desactualizado;
 - un fallo de la consulta global no borra ni reemplaza el snapshot anterior.
 
-El monitor es de solo lectura salvo una automatización explícita: puede pedir a SaladCloud que **reasigne una instancia** cuando un grupo previamente sano permanece por debajo de 130 TH/s durante al menos 5 minutos. Usa el endpoint oficial de reallocate para que Salad entregue un nodo distinto; no cambia el Container Group, la imagen, el precio ni la cantidad de réplicas.
+El monitor es de solo lectura salvo una automatización explícita: puede pedir a SaladCloud que **reasigne una instancia**. Para RTX 4070 Ti SUPER en prioridad Low aplica dos lecturas consecutivas de media de 15 minutos por debajo de 125 TH/s, separadas por un mínimo de 5 minutos. Para las demás GPU conserva la regla previa de hashrate instantáneo por debajo de 130 TH/s durante 5 minutos, después de observar una lectura sana. Usa el endpoint oficial de reallocate para que Salad entregue un nodo distinto; no cambia el Container Group, la imagen, el precio ni la cantidad de réplicas.
 
 ## Configuración de servidor
 
@@ -65,15 +65,19 @@ Los umbrales de 140/125 TH/s son referencias **provisionales** basadas en la hip
 
 El estado amarillo usa las notificaciones ntfy existentes, sólo al entrar en alerta y sin duplicarlas mientras permanezca amarillo; los datos desactualizados no generan transiciones. El panel muestra la categoría por GPU y aclara que es estimada. El cálculo de costos de la caja reconoce cualquier grupo Low cuya GPU esté validada como 4070 Ti SUPER, aunque su nombre no contenga «4070».
 
-Este indicador **no pausa instancias, no cambia prioridades, no reajusta precios y no altera** la automatización por 130 TH/s descrita abajo.
+La clasificación de 140/125 TH/s sigue siendo orientativa. **No calcula ingresos ni pérdidas reales.** En RTX 4070 Ti SUPER Low, la media inferior a 125 TH/s sirve además para la reasignación, siempre con confirmación consecutiva y sin detener el grupo ni cambiar precio o GPU.
 
-## Auto-reallocate por hashrate bajo
+## Auto-Reallocate (políticas por GPU)
 
-La protección de rendimiento se evalúa en cada ciclo del timer de 5 minutos:
+El timer consulta Salad cada cinco minutos. Sólo considera una instancia única `ready/running`, con lecturas actuales y un ID válido.
 
-- El grupo debe haber demostrado previamente al menos una lectura de **130 TH/s o más**. Esto evita reciclar automáticamente pruebas/GPU que nunca estuvieron diseñadas para superar ese umbral.
-- Si una única instancia activa y `ready/running` cae por debajo de **130 TH/s**, se inicia un temporizador persistente.
-- Si sigue por debajo del umbral al menos **300 segundos** después, el poller solicita `POST .../instances/{instance_id}/reallocate` a SaladCloud.
-- La misma instancia nunca recibe dos solicitudes de reallocate; el control se rearma cuando Salad entrega un nuevo `instance_id`.
-- Un snapshot `stale`, un fallo de API o un grupo sin exactamente una instancia activa no dispara la automatización.
-- Tras aceptar Salad la reasignación, se envía una notificación ntfy `Salad Monitor - AUTO REALLOCATE` con el hashrate observado.
+- **RTX 4070 Ti SUPER Low:** requiere dos **muestras diferentes y recientes** del promedio de 15 min por debajo de 125 TH/s, con al menos 300 segundos entre la primera y la confirmación. Compara la fecha de la línea de hashrate de 15 minutos; si la API repite el mismo log, no cuenta otra muestra. La prioridad real informada por Salad debe ser `low`, además del nombre compatible. La lectura instantánea puede estar por encima de 130 TH/s; no impide actuar si persiste la media baja.
+- **Resto de GPU:** se mantiene la protección histórica: el grupo debe haber registrado al menos 130 TH/s anteriormente y mantenerse por debajo de 130 TH/s instantáneos durante al menos 300 segundos.
+- Si falta la media de 15 min, su fecha, la prioridad Low real, el grupo está desactualizado, cambia el nodo, hay más de una instancia activa o el promedio se recupera, se reinicia la secuencia para la RTX 4070 Ti SUPER Low.
+- Una instancia recibe como máximo una solicitud de reasignación. El control se rearma al recibir un `instance_id` nuevo.
+- Si Salad rechaza una solicitud, se registra el fallo y se establece una espera de 15 minutos antes de otro intento.
+- **Importante:** la notificación ntfy es posterior a la aceptación de Salad; si ntfy falla no se repetirá la acción contra el mismo nodo.
+
+El registro privado `/var/lib/hache-natacion/salad-monitor-reallocation-audit.jsonl` (modo 0600, rotación acotada) registra cada evaluación y su motivo, junto con solicitudes aceptadas o fallidas. No registra credenciales. Las alertas amarillas continúan siendo independientes del acto de reasignación.
+
+La hipótesis económica de 125 TH/s presupone un precio aproximado de USD 0.13/h para Low y es **provisional**, no una garantía de pérdida real. No ampliar automáticamente a otros precios o GPU sin cálculos propios.

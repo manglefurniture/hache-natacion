@@ -9,7 +9,7 @@ try{
     $groups=$simulation===''?hache_salad_monitor_collect():[['group'=>'salad-ntfy-simulation','display_name'=>'SIMULACIÓN ntfy Salad','health'=>$simulation==='--simulate=yellow'?'yellow':'green','metrics'=>['gpu'=>'GPU de prueba (sin Salad)','hashrate_ths'=>164.6,'hashrate_15m_ths'=>163.9,'watts'=>285.0,'temperature_c'=>85,'fan_percent'=>100,'shares'=>['accepted'=>0,'rejected'=>0,'hardware_errors'=>0]]]];
     if($simulation==='')hache_salad_monitor_write_snapshot($groups);
     $transition=hache_salad_monitor_apply_alert_transitions($groups,$previous,'hache_salad_monitor_send_notification');
-    $automation=$simulation===''?hache_salad_monitor_apply_low_hash_reallocations($groups,$transition['state'],'hache_salad_monitor_reallocate_instance','hache_salad_monitor_send_reallocation_notification'):['state'=>$transition['state'],'reallocated'=>0];
+    $automation=$simulation===''?hache_salad_monitor_apply_low_hash_reallocations($groups,$transition['state'],'hache_salad_monitor_reallocate_instance','hache_salad_monitor_send_reallocation_notification',null,130.0,300,'hache_salad_monitor_audit_reallocation'):['state'=>$transition['state'],'reallocated'=>0];
     $tmp=tempnam($dir,'salad-state-');file_put_contents($tmp,json_encode($automation['state'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));chmod($tmp,0600);rename($tmp,$stateFile);
     echo "SALAD_MONITOR_POLL_OK groups=".count($groups)." alerts={$transition['sent']} reallocations={$automation['reallocated']}\n";
 }finally{flock($lock,LOCK_UN);fclose($lock);}
