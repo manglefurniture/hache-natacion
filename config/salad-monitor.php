@@ -337,6 +337,22 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
             $emit('skip_metrics_missing',['instance_id'=>$instanceId]);$next[$key]=$entry;continue;
         }
         $hash=(float)$metrics['hashrate_ths'];
+        // Per-GPU fail closed: 80 TH/s is normal for smaller hardware.
+        // Only PRL RTX 4070 Ti SUPER at Low has an authorized threshold.
+        $validatedPolicy=str_starts_with(strtolower($key),'prl-')
+            && preg_match('/(?:^|[-_])low(?:$|[-_])/',strtolower($key))===1
+            && strtolower((string)($group['priority']??''))==='low'
+            && str_contains(strtoupper($gpu),'4070 TI SUPER');
+        if(!$validatedPolicy){
+            $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
+            $entry['hash_baseline_seen']=false;$resetAverage($entry);
+            $emit('skip_gpu_without_validated_policy',[
+                'instance_id'=>$instanceId,
+                'gpu'=>$gpu,
+                'priority'=>(string)($group['priority']??'unknown')
+            ]);
+            $next[$key]=$entry;continue;
+        }
         $profit=hache_salad_monitor_profitability($key,(string)($group['state']??''),$metrics,$instances);
         if(($profit['applicable']??false)===true&&strtolower((string)($group['priority']??''))!=='low'){
             $resetAverage($entry);$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
@@ -379,25 +395,12 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
             }
             $observedHash=(float)$average;$elapsed=$seconds;$policy='average_15m_below_125_two_readings';
         }else{
-            // Política previa para el resto de GPU: hashrate instantáneo <130 durante 5 min.
+            // A missing 15-minute average does not authorize falling back
+            // to an uncalibrated instantaneous threshold.
+            $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
             $resetAverage($entry);
-            if($hash>=$threshold){
-                $entry['hash_baseline_seen']=true;$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
-                $emit('skip_instant_hash_healthy',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
-            }
-            if(!($entry['hash_baseline_seen']??false)){
-                $emit('skip_baseline_not_seen',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
-            }
-            if(($entry['low_hash_instance_id']??null)!==$instanceId||!is_int($entry['low_hash_since']??null)){
-                $entry['low_hash_instance_id']=$instanceId;$entry['low_hash_since']=$nowTs;
-                $emit('instant_low_first_reading',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
-            }
-            $seconds=max(0,$nowTs-(int)$entry['low_hash_since']);
-            if($seconds<$minimumSeconds){
-                $emit('instant_low_waiting',['instance_id'=>$instanceId,'hashrate_ths'=>$hash,'elapsed_seconds'=>$seconds]);
-                $next[$key]=$entry;continue;
-            }
-            $observedHash=$hash;$elapsed=$seconds;$policy='instant_below_130';
+            $emit('skip_profile_incomplete',['instance_id'=>$instanceId]);
+            $next[$key]=$entry;continue;
         }
         // Si Salad rechaza la solicitud, conservar estado y limitar el reintento a 15 min.
         if($nowTs-(int)($entry['reallocation_failed_at']??0)<900){
@@ -434,6 +437,29 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
     return ['state'=>$next,'reallocated'=>$count];
 }
 
+/**
+ * Normaliza la respuesta oficial de SaladCloud (instance_id). La clave id
+ * se conserva como alias interno para el motor actual de auto-reallocate.
+ * No convierte instancias sin ID en elegibles.
+ *
+ * @return array<string,mixed>
+ */
+function hache_salad_monitor_normalize_instance(array $instance): array
+{
+    $state=$instance['state']??'unknown';
+    if(is_array($state))$state=$state['status']??'unknown';
+    return [
+        'id'=>(string)($instance['instance_id']??$instance['id']??''),
+        'machine_id'=>(string)($instance['machine_id']??''),
+        'state'=>is_string($state)?$state:'unknown',
+        'ready'=>($instance['ready']??false)===true,
+        'started'=>($instance['started']??false)===true,
+        'update_time'=>(string)($instance['update_time']??''),
+        'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,
+        'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null,
+    ];
+}
+
 /** @return list<array<string,mixed>> */
 function hache_salad_monitor_collect(): array
 {
@@ -449,7 +475,8 @@ function hache_salad_monitor_collect(): array
             $instances=hache_salad_monitor_http($config,'GET',$base.'/'.rawurlencode($name).'/instances');
             $logs=hache_salad_monitor_http($config,'POST','/organizations/'.rawurlencode($config['organization']).'/log-entries',['sort_order'=>'desc','start_time'=>$start->format('Y-m-d\\TH:i:s\\Z'),'end_time'=>$end->format('Y-m-d\\TH:i:s\\Z'),'page_size'=>100,'query'=>'resource.type = "container" and resource.labels.project_name = "'.$config['project'].'" and resource.labels.container_group_name = "'.$name.'"']);
             $metrics=hache_salad_monitor_parse(is_array($logs['items']??null)?$logs['items']:[]);$safeInstances=[];
-            foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)if(is_array($instance))$safeInstances[]=['id'=>(string)($instance['id']??''),'machine_id'=>(string)($instance['machine_id']??''),'state'=>(string)($instance['state']??''),'ready'=>(bool)($instance['ready']??false),'started'=>(bool)($instance['started']??false),'update_time'=>(string)($instance['update_time']??''),'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null];
+            foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)
+                if(is_array($instance))$safeInstances[]=hache_salad_monitor_normalize_instance($instance);
             $metrics['profitability']=hache_salad_monitor_profitability($name,$state,$metrics,$safeInstances);
             if($priority!=='low'){$metrics['profitability']['applicable']=false;$metrics['profitability']['level']='unknown';}
             $result[]=['group'=>$name,'display_name'=>$display,'priority'=>$priority,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics,$safeInstances),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
