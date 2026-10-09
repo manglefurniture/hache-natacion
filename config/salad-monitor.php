@@ -362,10 +362,15 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
             }
             $last=$entry['low_avg_last_at']??null;
             if(($entry['low_avg_instance_id']??null)!==$instanceId||!is_int($last)||$nowTs<=$last||$nowTs-$last>660){
-                $entry['low_avg_instance_id']=$instanceId;$entry['low_avg_since']=$nowTs;$entry['low_avg_last_at']=$nowTs;$entry['low_avg_count']=1;
+                $entry['low_avg_instance_id']=$instanceId;$entry['low_avg_since']=$nowTs;$entry['low_avg_last_at']=$nowTs;$entry['low_avg_last_sample_at']=$sampleTs;$entry['low_avg_count']=1;
                 $emit('average_low_first_reading',['instance_id'=>$instanceId,'average_15m_ths'=>(float)$average]);
                 $next[$key]=$entry;continue;
             }
+            if($sampleTs<=(int)($entry['low_avg_last_sample_at']??0)){
+                $emit('skip_average_sample_unchanged',['instance_id'=>$instanceId,'average_15m_ths'=>(float)$average]);
+                $next[$key]=$entry;continue;
+            }
+            $entry['low_avg_last_sample_at']=$sampleTs;
             $entry['low_avg_last_at']=$nowTs;$entry['low_avg_count']=min(2,(int)($entry['low_avg_count']??1)+1);
             $seconds=max(0,$nowTs-(int)($entry['low_avg_since']??$nowTs));
             if($entry['low_avg_count']<2||$seconds<$minimumSeconds){
