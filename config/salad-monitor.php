@@ -427,18 +427,19 @@ function hache_salad_monitor_collect(): array
     $end=new DateTimeImmutable('now',new DateTimeZone('UTC'));$start=$end->sub(new DateInterval('PT10M'));$result=[];
     foreach($items as $group){
         if(!is_array($group))continue;$name=trim((string)($group['name']??''));if($name==='')continue;
-        $display=(string)($group['display_name']??$name);$state=(string)($group['current_state']['status']??$group['status']??'unknown');
+        $display=(string)($group['display_name']??$name);$state=(string)($group['current_state']['status']??$group['status']??'unknown');$priority=strtolower((string)($group['priority']??''));
         try{
             $instances=hache_salad_monitor_http($config,'GET',$base.'/'.rawurlencode($name).'/instances');
             $logs=hache_salad_monitor_http($config,'POST','/organizations/'.rawurlencode($config['organization']).'/log-entries',['sort_order'=>'desc','start_time'=>$start->format('Y-m-d\\TH:i:s\\Z'),'end_time'=>$end->format('Y-m-d\\TH:i:s\\Z'),'page_size'=>100,'query'=>'resource.type = "container" and resource.labels.project_name = "'.$config['project'].'" and resource.labels.container_group_name = "'.$name.'"']);
             $metrics=hache_salad_monitor_parse(is_array($logs['items']??null)?$logs['items']:[]);$safeInstances=[];
             foreach(is_array($instances['instances']??null)?$instances['instances']:[] as $instance)if(is_array($instance))$safeInstances[]=['id'=>(string)($instance['id']??''),'machine_id'=>(string)($instance['machine_id']??''),'state'=>(string)($instance['state']??''),'ready'=>(bool)($instance['ready']??false),'started'=>(bool)($instance['started']??false),'update_time'=>(string)($instance['update_time']??''),'cpu_percent'=>isset($instance['cpu_percent'])?(float)$instance['cpu_percent']:null,'memory_usage_mb'=>isset($instance['memory_usage_mb'])?(float)$instance['memory_usage_mb']:null];
             $metrics['profitability']=hache_salad_monitor_profitability($name,$state,$metrics,$safeInstances);
-            $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics,$safeInstances),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
+            if($priority!=='low'){$metrics['profitability']['applicable']=false;$metrics['profitability']['level']='unknown';}
+            $result[]=['group'=>$name,'display_name'=>$display,'priority'=>$priority,'state'=>$state,'instances'=>$safeInstances,'metrics'=>$metrics,'health'=>hache_salad_monitor_status($state,$metrics,$safeInstances),'stale'=>false,'observed_at'=>$end->format(DATE_ATOM)];
         }catch(Throwable $e){
             error_log('[salad-monitor] group '.$name.': '.$e->getMessage());
             if(isset($previousByGroup[$name])){
-                $fallback=$previousByGroup[$name];$fallback['display_name']=$display;$fallback['state']=$state;$fallback['stale']=true;$fallback['update_error']='No se pudo actualizar este grupo.';$result[]=$fallback;
+                $fallback=$previousByGroup[$name];$fallback['display_name']=$display;$fallback['priority']=$priority;$fallback['state']=$state;$fallback['stale']=true;$fallback['update_error']='No se pudo actualizar este grupo.';$result[]=$fallback;
             }else{
                 $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_15m_ths'=>null,'hashrate_15m_at'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>['accepted'=>0,'rejected'=>0,'hardware_errors'=>0],'last_log_at'=>null];
                 $result[]=['group'=>$name,'display_name'=>$display,'state'=>$state,'instances'=>[],'metrics'=>$metrics,'health'=>'red','stale'=>true,'update_error'=>'No se pudo actualizar este grupo.','observed_at'=>$end->format(DATE_ATOM)];
