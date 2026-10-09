@@ -39,6 +39,16 @@ $nextNode['stale']=false;$nextNode['metrics']['hashrate_15m_ths']=125.0;
 $restored=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$staleAverage['state'],$realloc,$reallocNotify,4500,130,300,$audit);
 expect($restored['reallocated']===0,'Media igual a 125 no inicia reallocate');
 
+
+$nextNode['metrics']['hashrate_15m_ths']=120.0;
+$f1=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$restored['state'],$realloc,$reallocNotify,4800,130,300,$audit);
+$notifyDown=static function(array $g,float $h,int $t):bool{throw new RuntimeException('ntfy down');};
+$f2=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$f1['state'],$realloc,$notifyDown,5100,130,300,$audit);
+expect($f2['reallocated']===1&&$f2['state']['prl-low-super']['reallocation_requested_instance_id']==='id-b','Aceptar reallocate aunque ntfy falle');
+expect(in_array('notification_failed',array_column($observed,'decision'),true),'Notificación fallida auditada');
+$f3=hache_salad_monitor_apply_low_hash_reallocations([$nextNode],$f2['state'],$realloc,$reallocNotify,5400,130,300,$audit);
+expect($f3['reallocated']===0&&$requests===2,'Fallo ntfy no repite solicitud');
+
 // La clasificación de rentabilidad es informativa; no altera la regla 130 TH/s / 5 min.
 $profitGroup=$lowGroup;
 $profitGroup['group']='prl-low-profitable-01'; // No requiere "4070" en el nombre.
