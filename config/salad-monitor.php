@@ -353,6 +353,13 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
                 $emit('skip_average_not_below_125',['instance_id'=>$instanceId,'average_15m_ths'=>$average,'level'=>$profit['level']??'unknown']);
                 $next[$key]=$entry;continue;
             }
+            $sampleTime=(string)($metrics['hashrate_15m_at']??'');
+            $sampleTs=$sampleTime!==''?strtotime($sampleTime):false;
+            if($sampleTs===false||$sampleTs>$nowTs+60||$nowTs-$sampleTs>600){
+                $resetAverage($entry);
+                $emit('skip_average_sample_not_fresh',['instance_id'=>$instanceId]);
+                $next[$key]=$entry;continue;
+            }
             $last=$entry['low_avg_last_at']??null;
             if(($entry['low_avg_instance_id']??null)!==$instanceId||!is_int($last)||$nowTs<=$last||$nowTs-$last>660){
                 $entry['low_avg_instance_id']=$instanceId;$entry['low_avg_since']=$nowTs;$entry['low_avg_last_at']=$nowTs;$entry['low_avg_count']=1;
