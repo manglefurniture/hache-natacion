@@ -337,6 +337,22 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
             $emit('skip_metrics_missing',['instance_id'=>$instanceId]);$next[$key]=$entry;continue;
         }
         $hash=(float)$metrics['hashrate_ths'];
+        // Per-GPU fail closed: 80 TH/s is normal for smaller hardware.
+        // Only PRL RTX 4070 Ti SUPER at Low has an authorized threshold.
+        $validatedPolicy=str_starts_with(strtolower($key),'prl-')
+            && preg_match('/(?:^|[-_])low(?:$|[-_])/',strtolower($key))===1
+            && strtolower((string)($group['priority']??''))==='low'
+            && str_contains(strtoupper($gpu),'4070 TI SUPER');
+        if(!$validatedPolicy){
+            $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
+            $entry['hash_baseline_seen']=false;$resetAverage($entry);
+            $emit('skip_gpu_without_validated_policy',[
+                'instance_id'=>$instanceId,
+                'gpu'=>$gpu,
+                'priority'=>(string)($group['priority']??'unknown')
+            ]);
+            $next[$key]=$entry;continue;
+        }
         $profit=hache_salad_monitor_profitability($key,(string)($group['state']??''),$metrics,$instances);
         if(($profit['applicable']??false)===true&&strtolower((string)($group['priority']??''))!=='low'){
             $resetAverage($entry);$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
@@ -379,25 +395,12 @@ function hache_salad_monitor_apply_low_hash_reallocations(array $groups,array $p
             }
             $observedHash=(float)$average;$elapsed=$seconds;$policy='average_15m_below_125_two_readings';
         }else{
-            // Política previa para el resto de GPU: hashrate instantáneo <130 durante 5 min.
+            // A missing 15-minute average does not authorize falling back
+            // to an uncalibrated instantaneous threshold.
+            $entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
             $resetAverage($entry);
-            if($hash>=$threshold){
-                $entry['hash_baseline_seen']=true;$entry['low_hash_since']=null;$entry['low_hash_instance_id']=null;
-                $emit('skip_instant_hash_healthy',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
-            }
-            if(!($entry['hash_baseline_seen']??false)){
-                $emit('skip_baseline_not_seen',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
-            }
-            if(($entry['low_hash_instance_id']??null)!==$instanceId||!is_int($entry['low_hash_since']??null)){
-                $entry['low_hash_instance_id']=$instanceId;$entry['low_hash_since']=$nowTs;
-                $emit('instant_low_first_reading',['instance_id'=>$instanceId,'hashrate_ths'=>$hash]);$next[$key]=$entry;continue;
-            }
-            $seconds=max(0,$nowTs-(int)$entry['low_hash_since']);
-            if($seconds<$minimumSeconds){
-                $emit('instant_low_waiting',['instance_id'=>$instanceId,'hashrate_ths'=>$hash,'elapsed_seconds'=>$seconds]);
-                $next[$key]=$entry;continue;
-            }
-            $observedHash=$hash;$elapsed=$seconds;$policy='instant_below_130';
+            $emit('skip_profile_incomplete',['instance_id'=>$instanceId]);
+            $next[$key]=$entry;continue;
         }
         // Si Salad rechaza la solicitud, conservar estado y limitar el reintento a 15 min.
         if($nowTs-(int)($entry['reallocation_failed_at']??0)<900){
