@@ -22,6 +22,8 @@ jobs:
         run: npm test
       - name: Salad monitor regression
         run: php tests/salad-monitor-regression.php
+      - name: Salad permanent history regression
+        run: php tests/salad-monitor-history-regression.php
       - name: Mining cashflow regression
         run: php tests/mineria-caja-regression.php
       - name: Salad secret provisioning regression
