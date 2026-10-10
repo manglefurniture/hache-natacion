@@ -89,6 +89,7 @@ check_history(hache_salad_history_rows([$oldNode],$time->modify('+31 minutes'))[
 // Un log viejo no equivale a una medición nueva y no debe contar tasa.
 $old=$group;
 $old['metrics']['last_log_at']=$time->modify('-2 hours')->format(DATE_ATOM);
+$old['metrics']['hashrate_at']=$old['metrics']['last_log_at'];
 check_history(hache_salad_history_rows([$old],$six)[0]['hashrate_ths']===null, 'Hashrate antiguo tomado como nuevo');
 $medium=$group;
 $medium['group']='prl-medium-5060ti';
