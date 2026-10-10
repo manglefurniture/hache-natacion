@@ -81,3 +81,13 @@ El timer consulta Salad cada cinco minutos. Sólo considera una instancia única
 El registro privado `/var/lib/hache-natacion/salad-monitor-reallocation-audit.jsonl` (modo 0600, rotación acotada) registra cada evaluación y su motivo, junto con solicitudes aceptadas o fallidas. No registra credenciales. Las alertas amarillas continúan siendo independientes del acto de reasignación.
 
 La hipótesis económica de 125 TH/s (inclusive) presupone un precio aproximado de USD 0.13/h para Low y es **provisional**, no una garantía de pérdida real. No ampliar automáticamente a otros precios o GPU sin cálculos propios.
+
+## Histórico permanente de pruebas (desde su despliegue)
+
+Cada ejecución normal del poller añade una observación en el servidor a `/var/lib/hache-natacion/salad-monitor-history/YYYY-MM-DD.jsonl` (fecha local `America/Cancun`, modo 0600, carpeta 0700). No se escribe histórico al ejecutar simulaciones. El historial **no depende del navegador** y conserva mediciones durante los días siguientes. El informe privado muestra los últimos siete días y permite comparar grupos, GPU y prioridades, incluidas `lowest`, `low` y `medium`.
+
+Se registran: grupo, modelo GPU, prioridad real reportada por Salad, estado, cantidad de réplicas `ready/running`, identificador de instancia/nodo cuando hay exactamente una, hashrate reciente, fecha y contador de shares **como lectura**, no como diferencia acumulada. Para grupos con más de una réplica, los logs recibidos son del grupo y no permiten asignar con seguridad un valor a cada GPU: la lectura no se suma ni se atribuye artificialmente; el informe la señala como ambigua.
+
+`TH/s × horas` es una **medida aproximada de capacidad observada** calculada solo entre lecturas válidas consecutivas separadas por 11 minutos o menos, para el mismo grupo, GPU, prioridad, instancia y día. No equivale a PRL ganados, shares pagados ni ingreso real. La obtención automática de PRL confirmados necesita integración verificable con el pool/wallet; jamás inferir tokens reales a partir del hashrate. No hay facturación automática, modificación de grupos ni nuevas solicitudes a Salad.
+
+El histórico vive fuera del árbol de despliegue; no cambia la caja minera. La retención de archivos no caduca automáticamente; se leen como máximo catorce días y hasta 5 MiB por archivo para mantener la respuesta acotada. **Operación:** incluir el directorio en el respaldo externo de `/var/lib/hache-natacion` para recuperación ante pérdida total del VPS, además de los respaldos existentes de caja. Una falla al escribir histórico se registra en `journalctl` pero no bloquea alertas ni reasignaciones. Permite `SALAD_MONITOR_HISTORY_DIR` para tests.
