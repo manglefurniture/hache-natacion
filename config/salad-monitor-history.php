@@ -33,13 +33,17 @@ function hache_salad_history_rows(array $groups, DateTimeImmutable $now): array
             }
         }
         $metrics = is_array($group['metrics'] ?? null) ? $group['metrics'] : [];
-        $lastLog = (string)($metrics['last_log_at'] ?? '');
-        $lastTs = $lastLog !== '' ? strtotime($lastLog) : false;
+        $hashLog = (string)($metrics['hashrate_at'] ?? '');
+        $hashTs = $hashLog !== '' ? strtotime($hashLog) : false;
+        $instanceUpdated = count($active) === 1 ? (string)($active[0]['update_time'] ?? '') : '';
+        $instanceTs = $instanceUpdated !== '' ? strtotime($instanceUpdated) : false;
         $hash = $metrics['hashrate_ths'] ?? null;
-        // Únicamente una instancia permite asignar la lectura a una GPU.
+        // Sin timestamp de la GPU y del nodo no podemos atribuir una lectura
+        // reciente a la instancia activa (especialmente tras reallocate).
         $valid = !($group['stale'] ?? false) && count($active) === 1 &&
             is_numeric($hash) && is_finite((float)$hash) && (float)$hash > 0 &&
-            $lastTs !== false && $lastTs <= $nowTs + 120 && $nowTs - $lastTs <= 600;
+            $hashTs !== false && $hashTs <= $nowTs + 120 && $nowTs - $hashTs <= 600 &&
+            $instanceTs !== false && $hashTs >= $instanceTs;
         $shares = is_array($metrics['shares'] ?? null) ? $metrics['shares'] : [];
         $rows[] = [
             'at' => $nowUtc->format(DATE_ATOM),
@@ -52,6 +56,7 @@ function hache_salad_history_rows(array $groups, DateTimeImmutable $now): array
             'instance_id' => count($active) === 1 ? substr((string)($active[0]['id'] ?? ''), 0, 100) : null,
             'machine_id' => count($active) === 1 ? substr((string)($active[0]['machine_id'] ?? ''), 0, 100) : null,
             'hashrate_ths' => $valid ? round((float)$hash, 3) : null,
+            'hashrate_source_at' => $valid ? gmdate(DATE_ATOM,$hashTs) : null,
             'reported_ths_unattributed' => count($active) > 1 && is_numeric($hash) ? round((float)$hash, 3) : null,
             'accepted_shares_snapshot' => max(0, (int)($shares['accepted'] ?? 0)),
             'stale' => (bool)($group['stale'] ?? false),
@@ -137,21 +142,32 @@ function hache_salad_history_report(int $days = 7, ?DateTimeImmutable $now = nul
                 $recorded++;
                 $hash = $row['hashrate_ths'] ?? null;
                 $id = (string)($row['instance_id'] ?? '');
+                $source = (string)($row['hashrate_source_at'] ?? '');
+                $sourceTs = $source !== '' ? strtotime($source) : false;
                 $valid = $id !== '' && (int)($row['active'] ?? 0) === 1
                     && !($row['stale'] ?? false) && is_numeric($hash)
-                    && is_finite((float)$hash) && (float)$hash > 0;
+                    && is_finite((float)$hash) && (float)$hash > 0
+                    && $sourceTs !== false && $sourceTs <= $ts + 120;
                 if ($valid && isset($previous[$group])) {
                     $old = $previous[$group];
+                    $sameNode = $old['id'] === $id && $old['key'] === $key && $old['valid'];
+                    // Repetir un mismo log no equivale a otra observación de
+                    // tasa. Conservamos el primer punto como ancla temporal.
+                    if ($sameNode && $sourceTs === $old['source_ts']) {
+                        unset($r);
+                        continue;
+                    }
                     $gap = $ts - $old['ts'];
-                    if ($gap > 0 && $gap <= 660 && $old['id'] === $id &&
-                        $old['key'] === $key && $old['valid']) {
+                    if ($sameNode && $sourceTs > $old['source_ts'] &&
+                        $gap > 0 && $gap <= 660) {
                         $hours = $gap / 3600;
                         $r['capacity_ths_hours'] += (($old['hash'] + (float)$hash) / 2) * $hours;
                         $r['monitored_minutes'] += $gap / 60;
                     }
                 }
                 $previous[$group] = ['ts'=>$ts,'key'=>$key,'id'=>$id,
-                    'valid'=>$valid,'hash'=>$valid?(float)$hash:0.0];
+                    'valid'=>$valid,'source_ts'=>$valid?$sourceTs:0,
+                    'hash'=>$valid?(float)$hash:0.0];
                 unset($r);
             }
         }
