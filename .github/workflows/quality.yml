@@ -24,6 +24,8 @@ jobs:
         run: php tests/salad-monitor-regression.php
       - name: Salad permanent history regression
         run: php tests/salad-monitor-history-regression.php
+      - name: Salad Kryptex PRL pool regression
+        run: php tests/salad-prl-pool-regression.php
       - name: Mining cashflow regression
         run: php tests/mineria-caja-regression.php
       - name: Salad secret provisioning regression
