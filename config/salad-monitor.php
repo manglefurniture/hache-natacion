@@ -92,10 +92,11 @@ function hache_salad_monitor_parse(array $logItems): array
 {
     $lines=[];$latest=null;
     foreach($logItems as $item){$line=hache_salad_monitor_clean_line((string)($item['text_log']??$item['message']??''));if($line!=='')$lines[]=$line;$time=(string)($item['time']??$item['timestamp']??'');if($latest===null&&$time!=='')$latest=$time;}
-    $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_15m_ths'=>null,'hashrate_15m_at'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>hache_salad_monitor_shares($lines),'last_log_at'=>$latest];
-    foreach($lines as $line){
+    $metrics=['gpu'=>null,'hashrate_ths'=>null,'hashrate_at'=>null,'hashrate_15m_ths'=>null,'hashrate_15m_at'=>null,'watts'=>null,'temperature_c'=>null,'fan_percent'=>null,'efficiency_th_per_w'=>null,'shares'=>hache_salad_monitor_shares($lines),'last_log_at'=>$latest];
+    foreach($logItems as $item){
+        $line=hache_salad_monitor_clean_line((string)($item['text_log']??$item['message']??''));
         if(preg_match('/#\d+\s+(?<gpu>.+?)\s+(?<hash>\d+(?:\.\d+)?)\s+TH\/s\s+(?<power>\d+(?:\.\d+)?)W\s+(?<eff>\d+(?:\.\d+)?)\s+(?<fan>\d+)%\s+(?<temp>\d+)C/i',$line,$m)){
-            $metrics['gpu']=trim($m['gpu']);$metrics['hashrate_ths']=(float)$m['hash'];$metrics['watts']=(float)$m['power'];$metrics['efficiency_th_per_w']=(float)$m['eff'];$metrics['fan_percent']=(int)$m['fan'];$metrics['temperature_c']=(int)$m['temp'];break;
+            $metrics['gpu']=trim($m['gpu']);$metrics['hashrate_ths']=(float)$m['hash'];$metrics['hashrate_at']=(string)($item['time']??$item['timestamp']??'');$metrics['watts']=(float)$m['power'];$metrics['efficiency_th_per_w']=(float)$m['eff'];$metrics['fan_percent']=(int)$m['fan'];$metrics['temperature_c']=(int)$m['temp'];break;
         }
     }
     foreach($logItems as $item){
