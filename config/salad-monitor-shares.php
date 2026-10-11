@@ -9,7 +9,7 @@ function hache_salad_shares_report(int $days=2, ?DateTimeImmutable $now=null): a
     $now??=new DateTimeImmutable('now',new DateTimeZone('UTC'));
     $local=$now->setTimezone(new DateTimeZone('America/Cancun'));
     $dir=hache_salad_history_dir();
-    $previous=[]; $summary=[]; $latestEnd=0; $latestDelta=0; $measured=0; $ambiguous=0;
+    $previous=[]; $summary=[]; $measured=0; $ambiguous=0;
     for($day=$days-1;$day>=0;$day--){
         $date=$local->modify("-$day days")->format('Y-m-d');
         $file=$dir.'/'.$date.'.jsonl';
@@ -30,7 +30,7 @@ function hache_salad_shares_report(int $days=2, ?DateTimeImmutable $now=null): a
                     $s=&$summary[$group];
                     $s['gpu']=(string)($row['gpu']??$s['gpu']);
                     $count=$row['accepted_shares_snapshot']??null;
-                    $valid=($row['active']??0)===1 && $id!=='' && !($row['stale']??false) && $row['hashrate_ths']!==null && is_numeric($count);
+                    $valid=($row['active']??0)===1 && $id!=='' && !($row['stale']??false) && ($row['hashrate_ths']??null)!==null && is_numeric($count);
                     if(!$valid){
                         if(($row['active']??0)>1){$s['ambiguous_samples']++;$ambiguous++;}
                         unset($previous[$group]);unset($s);continue;
@@ -44,7 +44,9 @@ function hache_salad_shares_report(int $days=2, ?DateTimeImmutable $now=null): a
                             $s['measured_intervals']++;
                             $s['coverage_minutes']+=round($gap/60,2);
                             $measured++;
-                            if($at>$latestEnd){$latestEnd=$at;}
+                            if($at >= $now->getTimestamp()-300 && $gap<=360){
+                                $s['last_5m']=($s['last_5m']??0)+$delta;
+                            }
                         }
                     }
                     $previous[$group]=['id'=>$id,'at'=>$at,'count'=>$count];
@@ -53,12 +55,5 @@ function hache_salad_shares_report(int $days=2, ?DateTimeImmutable $now=null): a
             }
         } finally {fclose($handle);}
     }
-    // Intervalo global más reciente: solo grupos con una pareja de lecturas válida
-    // terminada en los últimos cinco minutos; no es un contador exacto del pool.
-    $windowStart=$now->getTimestamp()-300;
-    $last=[]; $lastEnd=[];
-    foreach($summary as $key=>&$s){$s['last_5m']=null;}unset($s);
-    // El total diario conserva exclusivamente incrementos observados. El campo
-    // last_5m se calcula en una consulta posterior con muestreo de timestamps.
     return ['days'=>$days,'groups'=>array_values($summary),'measured_intervals'=>$measured,'ambiguous_samples'=>$ambiguous,'note'=>'Incrementos de contadores SRBMiner entre observaciones de una misma instancia; cobertura parcial, no confirmación de Kryptex.'];
 }
