@@ -103,5 +103,4 @@ check_history((fileperms($files[0]) & 0777)===0600, 'Histórico sin permisos pri
 foreach ($files as $file) unlink($file);
 rmdir($dir);
 putenv('SALAD_MONITOR_HISTORY_DIR');
-require __DIR__.'/salad-monitor-shares-regression.php';
 echo "SALAD_MONITOR_HISTORY_REGRESSION_OK\n";
