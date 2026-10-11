@@ -3,7 +3,6 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 $config=require __DIR__.'/../config/database.php';require_once __DIR__.'/../config/auth.php';auth_require(['ADMIN']);require_once __DIR__.'/../config/salad-monitor.php';
 require_once __DIR__.'/../config/salad-monitor-history.php';
-require_once __DIR__.'/../config/salad-monitor-shares.php';
 require_once __DIR__.'/../config/salad-mining-pool.php';
 function salad_out(array $data,int $status=200): never {http_response_code($status);echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
 try{
@@ -13,10 +12,7 @@ try{
     $history=['days'=>7,'rows'=>[],'recorded_samples'=>0];
     try { $history=hache_salad_history_report(7); }
     catch(Throwable $e) { error_log('[salad-history] No se pudo consultar histórico: '.$e->getMessage()); $history['error']='Histórico no disponible'; }
-    $shares=['groups'=>[], 'error'=>'Shares no disponibles'];
-    try { $shares=hache_salad_shares_report(2); }
-    catch(Throwable $e) { error_log('[salad-shares] '.$e->getMessage()); }
-    salad_out(['ok'=>true,'source'=>'snapshot','observed_at'=>$snapshot['observed_at'],'age_seconds'=>$age,'stale'=>$age===null||$age>660,'groups'=>$snapshot['groups'],'history'=>$history,'shares_history'=>$shares,'prl_pool'=>hache_prl_pool_read()]);
+    salad_out(['ok'=>true,'source'=>'snapshot','observed_at'=>$snapshot['observed_at'],'age_seconds'=>$age,'stale'=>$age===null||$age>660,'groups'=>$snapshot['groups'],'history'=>$history,'prl_pool'=>hache_prl_pool_read()]);
 }catch(Throwable $e){
     error_log('[salad-monitor] '.$e->getMessage());
     salad_out(['ok'=>false,'error'=>'No se pudo consultar el monitor de Salad.'],503);
