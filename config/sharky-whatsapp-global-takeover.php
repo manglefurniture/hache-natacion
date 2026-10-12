@@ -6,12 +6,12 @@ const HACHE_SHARKY_WA_GLOBAL_LOCK = 'hache_sharky_whatsapp_global_takeover';
 
 function hache_sharky_wa_global_state(PDO $pdo): array
 {
-    $st=$pdo->prepare('SELECT valor,updated_by,updated_at FROM configuracion WHERE clave=? LIMIT 1');
+    $st=$pdo->prepare('SELECT * FROM configuracion WHERE clave=? LIMIT 1');
     $st->execute([HACHE_SHARKY_WA_GLOBAL_KEY]);
     $row=$st->fetch(PDO::FETCH_ASSOC);
     if(!is_array($row))return ['active'=>false,'updated_by'=>null,'updated_at'=>null];
     if(!in_array((string)$row['valor'],['0','1'],true))throw new RuntimeException('Invalid takeover config');
-    return ['active'=>(string)$row['valor']==='1','updated_by'=>$row['updated_by'],'updated_at'=>$row['updated_at']];
+    return ['active'=>(string)$row['valor']==='1','updated_by'=>$row['updated_by']??null,'updated_at'=>$row['updated_at']??null];
 }
 
 function hache_sharky_wa_global_active(PDO $pdo): bool
