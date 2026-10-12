@@ -10,6 +10,8 @@ require_once __DIR__.'/../config/sharky-brain-diagnostics.php';
 require_once __DIR__.'/../config/sharky-brain-live-router.php';
 require_once __DIR__.'/../config/sharky-contact-naming.php';
 require_once __DIR__.'/../config/sharky-protected-numbers.php';
+require_once __DIR__.'/../config/sharky-whatsapp-global-takeover.php';
+require_once __DIR__.'/../config/sharky-outbox.php';
 
 $me = auth_require(['ADMIN']);
 
@@ -64,6 +66,7 @@ if ($method === 'GET') {
     $brainShadow['canary_pct']=hache_sharky_brain_2ba_canary_percent($brain2ba);
     $brainShadow['live_actions']=hache_sharky_brain_2ba_live_actions();
     $brainShadow['open_conversation_live']=$brainConversationLive;
+    try{$globalTakeover=hache_sharky_wa_global_state($pdo);}catch(Throwable $e){sharky_admin_out(['ok'=>false,'error'=>'No se pudo consultar el takeover general'],503);}
     sharky_admin_out([
         'ok'=>true,
         'admin'=>true,
@@ -71,6 +74,7 @@ if ($method === 'GET') {
         'protected_numbers'=>hache_sharky_protected_list($pdo),
         'configuracion'=>$config,
         'takeovers'=>hache_sharky_takeover_list(),
+        'global_whatsapp_takeover'=>$globalTakeover,
         'metrics'=>$metrics,
         'totals'=>$totals,
         'brain_shadow'=>$brainShadow,
@@ -95,6 +99,17 @@ if ($action === 'PROTECTED_ADD' || $action === 'PROTECTED_REMOVE') {
         if(!hache_sharky_protected_remove($pdo,$phone))sharky_admin_out(['ok'=>false,'error'=>'Número no encontrado'],404);
     }
     sharky_admin_out(['ok'=>true]);
+}
+
+if ($action === 'GLOBAL_WHATSAPP_TAKEOVER') {
+    if(!array_key_exists('enabled',$input)||!is_bool($input['enabled']))sharky_admin_out(['ok'=>false,'error'=>'Estado inválido'],422);
+    try{
+        $result=hache_sharky_wa_global_set($pdo,$input['enabled'],(string)$me['id']);
+        sharky_admin_out(['ok'=>true,'global_whatsapp_takeover'=>$result]);
+    }catch(Throwable $e){
+        error_log('[sharky-admin] global takeover update failed');
+        sharky_admin_out(['ok'=>false,'error'=>'No se pudo actualizar el takeover general. No cambió el estado.'],503);
+    }
 }
 
 if ($action === 'RESUME') {

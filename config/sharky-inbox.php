@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__.'/sharky-orchestrator-store.php';
 require_once __DIR__.'/sharky-contact-book.php';
 require_once __DIR__.'/sharky-protected-numbers.php';
+require_once __DIR__.'/sharky-whatsapp-global-takeover.php';
 
 function hache_sharky_inbox_key(): string
 {
@@ -111,6 +112,10 @@ function hache_sharky_inbox_dispatch(PDO $pdo,callable $processor,int $limit=20,
                 continue;
             }
             if(!hache_sharky_contact_book_capture_event($pdo,$event)){$stats['deferred']++;continue;}
+            if((string)($event['kind']??'')!=='echo'&&hache_sharky_wa_global_active($pdo)){
+                if(hache_sharky_orchestrator_mark_processed($pdo,$id))$stats['processed']++;else$stats['deferred']++;
+                continue;
+            }
             if(in_array((string)($event['type']??''),['image','document'],true)
                 &&(string)($event['kind']??'')!=='member_absence_evidence'){
                 if(hache_sharky_orchestrator_mark_processed($pdo,$id))$stats['processed']++;else$stats['deferred']++;

@@ -21,7 +21,7 @@ function hache_sharky_wa_global_active(PDO $pdo): bool
 
 function hache_sharky_wa_global_operational(array $payload): bool
 {
-    if(is_array($payload['_sharky_payment_reminder']??null))return true;
+    if(is_array($payload['_sharky_payment_reminder']??null)&&($payload['type']??'')==='text')return true;
     if(($payload['type']??'')!=='template')return false;
     return in_array((string)($payload['template']['name']??''),[
         'hache_pago_confirmado','hache_registro_recibido_portal_mx','hache_inicio_curso',
@@ -70,15 +70,19 @@ function hache_sharky_wa_global_set(PDO $pdo,bool $active,string $adminId): arra
                 $up=$pdo->prepare('INSERT INTO configuracion(clave,valor,descripcion,updated_by,updated_at) VALUES(?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE valor=VALUES(valor),updated_by=VALUES(updated_by),updated_at=NOW()');
                 $up->execute([HACHE_SHARKY_WA_GLOBAL_KEY,'1','Pausa general de WhatsApp, solo IA',$adminId]);
             }
-            $cancelled=hache_sharky_wa_global_cancel_pending($pdo);
-            $st=$pdo->prepare("UPDATE sharky_message_receipts SET processed_at=NOW(),lease_until=NULL,last_error='GLOBAL_WHATSAPP_TAKEOVER' WHERE processed_at IS NULL");
-            $st->execute();$discarded=$st->rowCount();
+            $cancelled=0;$discarded=0;
+            if($active||$changed){
+                $cancelled=hache_sharky_wa_global_cancel_pending($pdo);
+                // Human echoes must survive pause changes to retain manual control.
+                $st=$pdo->prepare("UPDATE sharky_message_receipts SET processed_at=NOW(),lease_until=NULL,last_error='GLOBAL_WHATSAPP_TAKEOVER' WHERE processed_at IS NULL AND message_type <> 'echo'");
+                $st->execute();$discarded=$st->rowCount();
+            }
             if(!$active&&$changed){
                 $up=$pdo->prepare('INSERT INTO configuracion(clave,valor,descripcion,updated_by,updated_at) VALUES(?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE valor=VALUES(valor),updated_by=VALUES(updated_by),updated_at=NOW()');
                 $up->execute([HACHE_SHARKY_WA_GLOBAL_KEY,'0','Pausa general de WhatsApp, solo IA',$adminId]);
             }
             if($changed){
-                $audit=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,accion,entidad,detalle,metodo,ruta) VALUES(?,?,'SHARKY_WHATSAPP',?,'POST','/api/sharky-admin.php')");
+                $audit=$pdo->prepare("INSERT INTO auditoria_eventos(usuario_id,usuario_nombre,accion,entidad,detalle,metodo,ruta) VALUES(?,NULL,?,'SHARKY_WHATSAPP',?,'POST','/api/sharky-admin.php')");
                 $audit->execute([$adminId,$active?'TAKEOVER_GLOBAL_ACTIVADO':'TAKEOVER_GLOBAL_DESACTIVADO',json_encode(['canal'=>'whatsapp','cancelled'=>$cancelled,'discarded'=>$discarded],JSON_UNESCAPED_UNICODE)]);
             }
             $pdo->commit();
