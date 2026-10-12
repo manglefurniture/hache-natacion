@@ -6,6 +6,7 @@ header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-runtime.php';
 require_once __DIR__.'/../../config/sharky-start-authority.php';
 require_once __DIR__.'/../../config/sharky-protected-numbers.php';
+require_once __DIR__.'/../../config/sharky-whatsapp-global-takeover.php';
 
 function whatsapp_v2_secret(string $name): string
 {
@@ -194,7 +195,8 @@ function whatsapp_v2_sharky_answer(string $message, array $history): string
 function whatsapp_v2_send_text(string $to, string $body): bool
 {
     $pdo=hache_sharky_pdo();if(!$pdo)return false;
-    try{return hache_sharky_protected_automatic_send($pdo,$to,static function()use($to,$body):bool{
+    try{return hache_sharky_wa_global_guarded_send($pdo,static function()use($pdo,$to,$body):bool{
+        return hache_sharky_protected_automatic_send($pdo,$to,static function()use($to,$body):bool{
     $token = whatsapp_v2_secret('WHATSAPP_ACCESS_TOKEN');
     $phoneNumberId = whatsapp_v2_secret('WHATSAPP_PHONE_NUMBER_ID');
     if ($token === '' || $phoneNumberId === '') return false;
@@ -224,6 +226,7 @@ function whatsapp_v2_send_text(string $to, string $body): bool
     hache_sharky_metric_increment($ok ? 'messages_sent' : 'errors_send');
     if (!$ok) error_log('[whatsapp-webhook-v2] outbound send failed http='.$status);
     return $ok;
+    });
     });}catch(Throwable $e){return false;}
 }
 
@@ -375,6 +378,8 @@ $jobs = [];
 foreach (whatsapp_v2_extract_messages($payload) as $message) {
     if ($configuredPhoneId !== '' && $message['phone_number_id'] !== '' && !hash_equals($configuredPhoneId, $message['phone_number_id'])) continue;
     try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $message['from'])) continue; } catch (Throwable $e) { continue; }
+        // Keep processing of human echoes; never queue conversational work while paused.
+        try{if(hache_sharky_wa_global_active(hache_sharky_pdo()))continue;}catch(Throwable $e){continue;}
     if (hache_sharky_takeover_active($message['from'])) {
         error_log('[whatsapp-webhook-v2] inbound skipped human_takeover=1');
         hache_sharky_metric_increment('messages_skipped_takeover');
@@ -397,6 +402,7 @@ foreach ($jobs as $job) {
         if(!$pdo instanceof PDO)continue;
         $lock=hache_sharky_protected_lock($pdo,$job['from'],0);
         if($lock===null||hache_sharky_is_protected_number($pdo,$job['from']))continue;
+        try{if(hache_sharky_wa_global_active($pdo))continue;}catch(Throwable $e){continue;}
     if (hache_sharky_takeover_active($job['from'])) {
         error_log('[whatsapp-webhook-v2] queued skipped human_takeover=1');
         continue;

@@ -259,6 +259,12 @@ La intervención humana nunca autoriza por sí sola inscripciones, pagos, cancel
 
 Un alumno declarado abandona el funnel de prospecto.
 
+### 16.1 Pausa general exclusiva de WhatsApp
+
+Solo ADMIN puede activar o desactivar desde el panel de Sharky un **takeover global de WhatsApp** separado de los takeovers por contacto y del chat web. No expira a medianoche. Al activarlo se cierran las respuestas IA de WhatsApp y los reenganches conversacionales; el contacto humano y sus ecos se preservan. La recepción de Meta mantiene recibos durables y evita reactivación diferida de turnos antiguos. No se borra información comercial confirmada.
+
+Se mantiene una lista cerrada de plantillas operativas: registro confirmado, pago confirmado, inicio de curso, cancelación, reposición y cambio de horario; también el recordatorio simple de comprobante, sujeto a sus validaciones de pago y caducidad. No se permite promoción, reenganche ni UI interactiva de seguimiento mientras el control esté activo. El último cambio queda registrado para auditoría y es reversible desde el panel; no afecta el chat web.
+
 ## 17. Flows de inscripción
 
 ### Intensivo

@@ -218,6 +218,10 @@ foreach($processing as $event){
             continue;
         }
         if(!hache_sharky_contact_book_capture_event($pdo,$event))continue;
+        if((string)($event['kind']??'')!=='echo'&&hache_sharky_wa_global_active($pdo)){
+            hache_sharky_orchestrator_mark_processed($pdo,(string)($event['id']??''));
+            continue;
+        }
     $identityBefore=sharky_lab_identity_before($pdo,$event);
     if(!hache_sharky_prospect_opportunity_reconcile_durable_student($pdo,$event,$identityBefore))continue;
     if(($event['kind']??'')===HACHE_SHARKY_REGULAR_FLOW_KIND){
