@@ -15,6 +15,8 @@ function hache_sharky_human_cancel_automatic_outbox(PDO $pdo,string $contact): i
         foreach($st->fetchAll(PDO::FETCH_ASSOC) as $row){
             $payload=hache_sharky_outbox_decrypt($row);if(!is_array($payload))continue;
             if(($payload['_sharky_allow_takeover']??false)===true)continue;
+            // In a global pause, staff replies must not cancel operational notices.
+            if(hache_sharky_wa_global_active($pdo)&&hache_sharky_wa_global_operational($payload))continue;
             $update->execute([':id'=>(string)$row['id']]);$cancelled+=$update->rowCount();
         }
     }catch(Throwable $e){error_log('[sharky-human] unable to cancel automatic outbox');}

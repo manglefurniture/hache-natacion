@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 header('Cache-Control: no-store');
 require_once __DIR__.'/../../config/sharky-protected-numbers.php';
+require_once __DIR__.'/../../config/sharky-whatsapp-global-takeover.php';
 require_once __DIR__.'/../../config/sharky-runtime.php';
 
 function whatsapp_secret(string $name): string
@@ -312,7 +313,8 @@ function whatsapp_answer_with_history(string $from, string $message): string
 function whatsapp_send_text(string $to, string $body): bool
 {
     $pdo=hache_sharky_pdo();if(!$pdo)return false;
-    try{return hache_sharky_protected_automatic_send($pdo,$to,static function()use($to,$body):bool{
+    try{return hache_sharky_wa_global_guarded_send($pdo,static function()use($pdo,$to,$body):bool{
+        return hache_sharky_protected_automatic_send($pdo,$to,static function()use($to,$body):bool{
     $token = whatsapp_secret('WHATSAPP_ACCESS_TOKEN');
     $phoneNumberId = whatsapp_secret('WHATSAPP_PHONE_NUMBER_ID');
     if ($token === '' || $phoneNumberId === '') {
@@ -362,6 +364,7 @@ function whatsapp_send_text(string $to, string $body): bool
     }
 
     return true;
+    });
     });}catch(Throwable $e){return false;}
 }
 
@@ -436,6 +439,8 @@ if ($method === 'POST') {
             continue;
         }
         try { if (hache_sharky_is_protected_number(hache_sharky_pdo(), $message['from'])) continue; } catch (Throwable $e) { continue; }
+        // Keep processing of human echoes; never queue conversational work while paused.
+        try{if(hache_sharky_wa_global_active(hache_sharky_pdo()))continue;}catch(Throwable $e){continue;}
         if (whatsapp_human_takeover_active($message['from'])) {
             error_log('[whatsapp-webhook] inbound text skipped human_takeover=1');
             continue;
@@ -456,6 +461,7 @@ if ($method === 'POST') {
             if(!$pdo instanceof PDO)continue;
             $lock=hache_sharky_protected_lock($pdo,$job['from'],0);
             if($lock===null||hache_sharky_is_protected_number($pdo,$job['from']))continue;
+        try{if(hache_sharky_wa_global_active($pdo))continue;}catch(Throwable $e){continue;}
         // Re-check after acknowledging to close the race where a human reply
         // arrives while an inbound message is already queued for Sharky.
         if (whatsapp_human_takeover_active($job['from'])) {

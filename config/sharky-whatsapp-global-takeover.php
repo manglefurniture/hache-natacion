@@ -41,6 +41,22 @@ function hache_sharky_wa_global_unlock(PDO $pdo): void
     catch(Throwable $e){error_log('[sharky-wa-global] failed to release lock');}
 }
 
+/**
+ * Fallback webhooks send directly, so serialize their last send check with
+ * the ADMIN activation lock. Any DB/lock failure fails closed, never replies.
+ */
+function hache_sharky_wa_global_guarded_send(PDO $pdo,callable $send): bool
+{
+    if(!hache_sharky_wa_global_lock($pdo,15))return false;
+    try{
+        if(hache_sharky_wa_global_active($pdo))return false;
+        return $send()===true;
+    }catch(Throwable $e){
+        error_log('[sharky-wa-global] fallback send safety check failed');
+        return false;
+    }finally{hache_sharky_wa_global_unlock($pdo);}
+}
+
 function hache_sharky_wa_global_cancel_pending(PDO $pdo): int
 {
     $cursor='';$total=0;
