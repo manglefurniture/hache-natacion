@@ -9,7 +9,7 @@ Si Salad falla temporalmente:
 - un fallo aislado de un Container Group conserva el último dato válido de ese grupo y lo marca como desactualizado;
 - un fallo de la consulta global no borra ni reemplaza el snapshot anterior.
 
-El monitor es de solo lectura salvo una automatización explícita: puede pedir a SaladCloud que **reasigne una instancia**. Para RTX 4070 Ti SUPER en prioridad Low aplica dos lecturas consecutivas de media de 15 minutos en 125 TH/s o menos, separadas por un mínimo de 5 minutos. Para las demás GPU conserva la regla previa de hashrate instantáneo por debajo de 130 TH/s durante 5 minutos, después de observar una lectura sana. Usa el endpoint oficial de reallocate para que Salad entregue un nodo distinto; no cambia el Container Group, la imagen, el precio ni la cantidad de réplicas.
+**Responsabilidad transferida a HACHE-MINER:** este monitor conserva lectura, snapshots, histórico, pool e informes, además de las alertas ntfy, pero **ya no emite POST de auto-reallocate**. HACHE-MINER es el único supervisor automático para las RTX 4070 Ti SUPER PRL: Low con tres muestras verificadas ≤125 TH/s y Medium con tres muestras <130 TH/s, individualmente y en todas las organizaciones/proyectos registrados y habilitados. La lógica antigua permanece archivada en el código para referencia y pruebas pero no se invoca desde el poller.
 
 ## Configuración de servidor
 
@@ -65,9 +65,13 @@ Los umbrales de 140/125 TH/s son referencias **provisionales** basadas en la hip
 
 El estado amarillo usa las notificaciones ntfy existentes, sólo al entrar en alerta y sin duplicarlas mientras permanezca amarillo; los datos desactualizados no generan transiciones. El panel muestra la categoría por GPU y aclara que es estimada. El cálculo de costos de la caja reconoce cualquier grupo Low cuya GPU esté validada como 4070 Ti SUPER, aunque su nombre no contenga «4070».
 
-La clasificación de 140/125 TH/s sigue siendo orientativa. **No calcula ingresos ni pérdidas reales.** En RTX 4070 Ti SUPER Low, la media de 125 TH/s o menos sirve además para la reasignación, siempre con confirmación consecutiva y sin detener el grupo ni cambiar precio o GPU.
+La clasificación de 140/125 TH/s sigue siendo orientativa. **No calcula ingresos ni pérdidas reales.** La media de este panel es informativa; las acciones automáticas se toman exclusivamente en HACHE-MINER con mediciones individuales verificadas.
 
-## Auto-Reallocate (políticas por GPU)
+## Auto-Reallocate (políticas históricas, ya no ejecutadas aquí)
+
+**Histórico:** la siguiente explicación corresponde a la antigua automatización del monitor HACHE y no constituye su configuración activa. La reasignación global está gestionada ahora por HACHE-MINER.
+
+## Política antigua de este monitor (solo referencia)
 
 El timer consulta Salad cada cinco minutos. Sólo considera una instancia única `ready/running`, con lecturas actuales y un ID válido.
 
