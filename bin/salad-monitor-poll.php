@@ -19,7 +19,10 @@ try{
         catch(Throwable $e) { error_log('[salad-prl-pool] Consulta fallida: '.$e->getMessage()); }
     }
     $transition=hache_salad_monitor_apply_alert_transitions($groups,$previous,'hache_salad_monitor_send_notification');
-    $automation=$simulation===''?hache_salad_monitor_apply_low_hash_reallocations($groups,$transition['state'],'hache_salad_monitor_reallocate_instance','hache_salad_monitor_send_reallocation_notification',null,130.0,300,'hache_salad_monitor_audit_reallocation'):['state'=>$transition['state'],'reallocated'=>0];
+    // Reallocation is now owned by HACHE-MINER per-instance across all
+    // enabled Salad organizations. Keep snapshots/history/pool/ntfy alerts
+    // here, but NEVER request a second reallocation from this legacy poller.
+    $automation=['state'=>$transition['state'],'reallocated'=>0];
     $tmp=tempnam($dir,'salad-state-');file_put_contents($tmp,json_encode($automation['state'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));chmod($tmp,0600);rename($tmp,$stateFile);
     echo "SALAD_MONITOR_POLL_OK groups=".count($groups)." alerts={$transition['sent']} reallocations={$automation['reallocated']}\n";
 }finally{flock($lock,LOCK_UN);fclose($lock);}
