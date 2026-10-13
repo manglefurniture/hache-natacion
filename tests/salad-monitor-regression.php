@@ -156,4 +156,13 @@ $simulated['metrics']['hashrate_ths']=50.0;
 $two=hache_salad_monitor_apply_low_hash_reallocations([$simulated],$one['state'],$localReallocate,$localNotify,1100);
 $three=hache_salad_monitor_apply_low_hash_reallocations([$simulated],$two['state'],$localReallocate,$localNotify,1400);
 expect($three['reallocated']===0&&$localCalls===0,'Even a properly identified RTX 3080 Ti falling to 50 TH/s must not inherit the 4070 Ti SUPER threshold');
+// Operational ownership: preserve alerts but never issue Salad reallocate
+// from Hache Natacion once HACHE-MINER manages all registered organizations.
+$pollSource=file_get_contents(__DIR__.'/../bin/salad-monitor-poll.php');
+expect(is_string($pollSource)&&!str_contains($pollSource,'$simulation===\'\'?hache_salad_monitor_apply_low_hash_reallocations('),
+    'Legacy poll must not call its old automatic reallocation policy');
+expect(str_contains($pollSource,"$". "automation=['state'=>$". "transition['state'],'reallocated'=>0]"),
+    'Legacy poll must keep the transition state without reallocation');
+expect(str_contains($pollSource,"hache_salad_monitor_apply_alert_transitions("),
+    'Legacy poll must preserve state-transition notifications');
 echo "SALAD_MONITOR_REGRESSION_OK\n";
