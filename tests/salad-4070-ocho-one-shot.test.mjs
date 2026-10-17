@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {identifySource} from '../ops/salad-4070-ocho-one-shot.mjs';
 const oldId='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 const newId='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
-const original=()=>({name:'prl-low-4070-ocho',replicas:1,priority:'low',pending_change:false,
+const original=()=>({name:'prl-low-4070-experimental-duplicate',replicas:1,priority:'low',pending_change:false,
  container:{resources:{gpu_classes:[oldId]}}});
 const catalog={items:[{id:oldId,name:'RTX 4070 Ti Super (16 GB)'},{id:newId,name:'RTX 4090 (24 GB)'}]};
 test('identifies 4070 Ti Super desktop without selecting any other group',()=>{

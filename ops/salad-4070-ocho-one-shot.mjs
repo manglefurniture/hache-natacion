@@ -1,9 +1,9 @@
-// One-time, explicitly approved change: hache/prl-tests/prl-low-4070-ocho -> desktop RTX 4090.
+// One-time, explicitly approved change: hache/prl-tests/prl-low-4070-experimental-duplicate -> desktop RTX 4090.
 // Only the existing reusable GPU-only code makes the PATCH.
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {run} from './salad-gpu-switch.mjs';
-const NAME='prl-low-4070-ocho';
+const NAME='prl-low-4070-experimental-duplicate';
 const ROOT='https://api.salad.com/api/public/organizations/hache';
 const path=ROOT+'/projects/prl-tests/containers/'+NAME;
 
